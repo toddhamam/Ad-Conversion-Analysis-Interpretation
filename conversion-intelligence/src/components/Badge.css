@@ -1,0 +1,49 @@
+.badge {
+  display: inline-block;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 4px;
+  text-transform: capitalize;
+}
+
+.badge-winning {
+  background-color: #d1f4e0;
+  color: #047857;
+}
+
+.badge-testing {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-fatigued {
+  background-color: #fed7aa;
+  color: #c2410c;
+}
+
+.badge-high {
+  background-color: #d1f4e0;
+  color: #047857;
+}
+
+.badge-medium {
+  background-color: #fef3c7;
+  color: #b45309;
+}
+
+.badge-low {
+  background-color: #fee2e2;
+  color: #b91c1c;
+}
+
+.badge-coming-soon {
+  background-color: #f3f4f6;
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+.badge-tag {
+  background-color: #f3f4f6;
+  color: #4b5563;
+}
