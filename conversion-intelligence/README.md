@@ -1,73 +1,79 @@
-# React + TypeScript + Vite
+# Conversion Intelligence
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A decision-support system for analyzing ad conversion data through qualitative interpretation.
 
-Currently, two official plugins are available:
+## Running the App on Your Mac
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### First Time Setup (One Time Only)
 
-## React Compiler
+1. **Open Terminal** on your Mac:
+   - Press `Command (⌘) + Space`
+   - Type "Terminal"
+   - Press Enter
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+2. **Install Node.js** (if you haven't already):
+   ```bash
+   brew install node
+   ```
 
-## Expanding the ESLint configuration
+   If you don't have Homebrew, first install it:
+   ```bash
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+   ```
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+3. **Clone the project** (if you haven't already):
+   ```bash
+   git clone https://github.com/toddhamam/Ad-Conversion-Analysis-Interpretation.git
+   cd Ad-Conversion-Analysis-Interpretation/conversion-intelligence
+   ```
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+4. **Install dependencies**:
+   ```bash
+   npm install
+   ```
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Every Time You Want to Run the App
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+1. **Open Terminal**
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+2. **Navigate to the project**:
+   ```bash
+   cd ~/Ad-Conversion-Analysis-Interpretation/conversion-intelligence
+   ```
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+3. **Start the server**:
+   ```bash
+   npm run dev
+   ```
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+4. **Open your browser** and go to:
+   ```
+   http://localhost:5173
+   ```
+
+5. **To stop the server**: Press `Ctrl + C` in the Terminal
+
+## Troubleshooting
+
+### Blank Page?
+- Check the Terminal for any error messages
+- Make sure the server is running (you should see "Local: http://localhost:5173/")
+- Try refreshing the browser
+- Clear browser cache and refresh
+
+### Can't Find Terminal?
+- **Mac**: Press `Command + Space`, type "Terminal", press Enter
+- You can have multiple Terminal windows open
+
+### Lost Your Terminal Window?
+- Press `Command + Tab` to switch between applications
+- Or just open a new Terminal window and run the commands again
+
+## What You'll See
+
+The app includes:
+- **Channels** - View conversions by acquisition channel
+- **Meta Ads** - Traffic filters and creative performance
+- **Concepts** - Psychological frameworks and belief frames
+- **Products** - Product performance with revenue
+- **Insights** - Qualitative analysis and learnings
