@@ -8,56 +8,82 @@
   display: flex;
   gap: 24px;
   padding: 32px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  background: var(--bg-card);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
   align-items: center;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.product-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--gradient-holographic);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
 }
 
 .product-card:hover {
-  border-color: #d1d5db;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border-color: var(--accent-primary);
+  box-shadow: 0 8px 32px rgba(0, 212, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+.product-card:hover::before {
+  opacity: 0.03;
 }
 
 .product-icon {
   font-size: 28px;
-  width: 48px;
-  height: 48px;
-  background: #fef3c7;
+  width: 56px;
+  height: 56px;
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid var(--border-primary);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .product-content {
   flex: 1;
+  position: relative;
+  z-index: 1;
 }
 
 .product-name {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--text-primary);
   margin: 0 0 8px 0;
 }
 
 .product-headline {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--text-secondary);
   margin: 0;
 }
 
 .headline-text {
   font-style: italic;
-  color: #374151;
+  color: var(--text-primary);
 }
 
 .product-stats {
   display: flex;
   align-items: center;
   gap: 24px;
+  position: relative;
+  z-index: 1;
 }
 
 .product-metrics {
@@ -75,18 +101,24 @@
 
 .product-conversions strong,
 .product-revenue strong {
-  font-size: 24px;
-  font-weight: 600;
-  color: #1a1a1a;
+  font-size: 26px;
+  font-weight: 700;
   line-height: 1;
 }
 
+.product-conversions strong {
+  color: var(--accent-primary);
+}
+
 .product-revenue strong {
-  color: #059669;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .metric-label {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-muted);
   text-transform: lowercase;
 }

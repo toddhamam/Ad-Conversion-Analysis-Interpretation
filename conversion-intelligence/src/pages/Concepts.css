@@ -8,32 +8,56 @@
   display: flex;
   gap: 24px;
   padding: 32px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  transition: all 0.2s;
+  background: var(--bg-card);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  transition: all 0.3s ease;
   cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.concept-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--gradient-holographic);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
 }
 
 .concept-card:hover {
-  border-color: #d1d5db;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border-color: var(--accent-primary);
+  box-shadow: 0 8px 32px rgba(0, 212, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+.concept-card:hover::before {
+  opacity: 0.03;
 }
 
 .concept-icon {
   font-size: 28px;
-  width: 48px;
-  height: 48px;
-  background: #fef3c7;
+  width: 56px;
+  height: 56px;
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid var(--border-primary);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .concept-content {
   flex: 1;
+  position: relative;
+  z-index: 1;
 }
 
 .concept-header {
@@ -44,9 +68,9 @@
 }
 
 .concept-name {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -55,39 +79,41 @@
   align-items: center;
   gap: 8px;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .concept-stats strong {
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--accent-primary);
 }
 
 .stat-separator {
-  color: #d1d5db;
+  color: var(--text-muted);
 }
 
 .concept-arrow {
-  color: #d1d5db;
+  color: var(--text-muted);
   font-size: 20px;
   margin-left: 8px;
+  transition: all 0.3s ease;
 }
 
 .concept-card:hover .concept-arrow {
-  color: #d97706;
+  color: var(--accent-primary);
   transform: translateX(4px);
+  filter: drop-shadow(0 0 8px var(--accent-glow));
 }
 
 .concept-description {
   font-size: 15px;
-  color: #374151;
+  color: var(--text-secondary);
   margin: 0 0 12px 0;
   line-height: 1.6;
 }
 
 .concept-quote {
   font-size: 15px;
-  color: #6b7280;
+  color: var(--text-muted);
   font-style: italic;
   margin: 0;
   line-height: 1.6;
