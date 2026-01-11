@@ -1,7 +1,9 @@
 .app-layout {
   display: flex;
   min-height: 100vh;
-  background-color: var(--bg-primary);
+  background-color: transparent;
+  position: relative;
+  z-index: 1;
 }
 
 .main-content {
@@ -9,4 +11,6 @@
   margin-left: 270px;
   padding: 48px 64px;
   max-width: 1600px;
+  position: relative;
+  z-index: 1;
 }

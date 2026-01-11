@@ -11,10 +11,11 @@
   font-weight: 700;
   color: var(--text-primary);
   margin: 0 0 12px 0;
-  background: var(--gradient-cyan);
+  background: var(--gradient-dual-glow);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  filter: drop-shadow(0 0 20px rgba(0, 212, 255, 0.3)) drop-shadow(0 0 40px rgba(168, 85, 247, 0.3));
 }
 
 .page-subtitle {
