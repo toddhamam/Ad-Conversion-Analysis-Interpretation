@@ -6,6 +6,10 @@ const META_GRAPH_API = `https://graph.facebook.com/${META_API_VERSION}`;
 const ACCESS_TOKEN = import.meta.env.VITE_META_ACCESS_TOKEN;
 const AD_ACCOUNT_ID = import.meta.env.VITE_META_AD_ACCOUNT_ID;
 
+// Debug: Log the token being loaded (first and last 10 chars for security)
+console.log('🔑 Loaded Access Token:', ACCESS_TOKEN ? `${ACCESS_TOKEN.substring(0, 10)}...${ACCESS_TOKEN.substring(ACCESS_TOKEN.length - 10)}` : 'MISSING');
+console.log('📊 Loaded Ad Account ID:', AD_ACCOUNT_ID);
+
 interface MetaAdInsight {
   id: string;
   name: string;
