@@ -11,21 +11,23 @@ console.log('🔑 Loaded Access Token:', ACCESS_TOKEN ? `${ACCESS_TOKEN.substrin
 console.log('📊 Loaded Ad Account ID:', AD_ACCOUNT_ID);
 
 interface MetaAdInsight {
+  ad_id: string;
+  ad_name: string;
   campaign_id: string;
   campaign_name: string;
+  adset_id: string;
+  adset_name: string;
   impressions: string;
   clicks: string;
   spend: string;
+  ctr: string;  // Click-through rate
+  cpc: string;  // Cost per click
+  cpp: string;  // Cost per 1000 impressions
+  frequency: string;
   actions?: Array<{
     action_type: string;
     value: string;
   }>;
-  creative?: {
-    id: string;
-    title: string;
-    body: string;
-    image_url?: string;
-  };
 }
 
 export interface AdCreative {
@@ -33,6 +35,9 @@ export interface AdCreative {
   headline: string;
   bodySnippet: string;
   conversions: number;
+  conversionRate: number;  // NEW: Conversion rate %
+  costPerConversion: number;  // NEW: Cost per conversion
+  clickThroughRate: number;  // NEW: CTR %
   concept: string;
   status: 'Winning' | 'Testing' | 'Fatigued';
   confidence: 'High' | 'Medium' | 'Low';
@@ -40,6 +45,8 @@ export interface AdCreative {
   spend: number;
   impressions: number;
   clicks: number;
+  campaignName: string;  // NEW: For context
+  adsetName: string;  // NEW: For context
 }
 
 export interface TrafficType {
@@ -52,21 +59,25 @@ export interface TrafficType {
 /**
  * Fetch ad insights from Meta Marketing API
  */
+/**
+ * Fetch ad-level insights with creative details for conversion intelligence
+ */
 export async function fetchAdInsights(): Promise<MetaAdInsight[]> {
-  console.log('🔍 Fetching Meta Ad Insights...');
+  console.log('🔍 Fetching Ad-Level Insights with Creative Details...');
   console.log('Access Token:', ACCESS_TOKEN ? `${ACCESS_TOKEN.substring(0, 20)}...` : 'MISSING');
   console.log('Ad Account ID:', AD_ACCOUNT_ID);
 
   try {
     const url = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/insights`;
 
-    // Use a simpler time range that Meta accepts (last 30 days)
+    // Fetch AD-LEVEL data with creative details for conversion intelligence
     const params = new URLSearchParams({
       access_token: ACCESS_TOKEN,
-      fields: 'campaign_id,campaign_name,impressions,clicks,spend,actions',  // Added campaign_id for unique keys
-      level: 'campaign',
-      date_preset: 'last_30d',  // Use date preset instead of time_range
-      limit: '50'
+      fields: 'ad_id,ad_name,campaign_id,campaign_name,adset_id,adset_name,impressions,clicks,spend,actions,ctr,cpc,cpp,frequency',
+      level: 'ad',  // Changed from 'campaign' to 'ad' for creative-level insights
+      date_preset: 'last_30d',
+      limit: '100',  // Increased limit to get more ad data
+      filtering: JSON.stringify([{ field: 'impressions', operator: 'GREATER_THAN', value: 0 }])  // Only ads with impressions
     });
 
     const fullUrl = `${url}?${params}`;
@@ -80,7 +91,6 @@ export async function fetchAdInsights(): Promise<MetaAdInsight[]> {
       const errorText = await response.text();
       console.error('❌ API Error Response:', errorText);
 
-      // Parse error for better debugging
       try {
         const errorJson = JSON.parse(errorText);
         console.error('❌ Parsed error:', errorJson);
@@ -91,11 +101,11 @@ export async function fetchAdInsights(): Promise<MetaAdInsight[]> {
     }
 
     const data = await response.json();
-    console.log('✅ Data received:', data);
-    console.log('✅ Number of campaigns:', data.data?.length || 0);
+    console.log('✅ Ad-level data received:', data);
+    console.log('✅ Number of ads:', data.data?.length || 0);
     return data.data || [];
   } catch (error) {
-    console.error('❌ Error fetching Meta ad insights:', error);
+    console.error('❌ Error fetching ad insights:', error);
     throw error;
   }
 }
@@ -115,36 +125,49 @@ export async function fetchAdCreatives(): Promise<AdCreative[]> {
 
       const spend = parseFloat(ad.spend || '0');
       const conversionCount = parseInt(conversions, 10);
+      const clicks = parseInt(ad.clicks || '0', 10);
+      const impressions = parseInt(ad.impressions || '0', 10);
 
-      // Determine status based on performance
+      // CONVERSION INTELLIGENCE CALCULATIONS
+      const conversionRate = clicks > 0 ? (conversionCount / clicks) * 100 : 0;
+      const costPerConversion = conversionCount > 0 ? spend / conversionCount : 0;
+      const clickThroughRate = impressions > 0 ? (clicks / impressions) * 100 : 0;
+
+      // Determine status based on conversion rate (not just volume)
       let status: 'Winning' | 'Testing' | 'Fatigued' = 'Testing';
-      if (conversionCount > 50 && spend > 100) {
-        status = 'Winning';
-      } else if (spend > 200 && conversionCount < 10) {
-        status = 'Fatigued';
+      if (conversionRate > 5 && conversionCount > 10) {
+        status = 'Winning';  // High conversion rate with volume
+      } else if (conversionRate > 2 && conversionCount > 5) {
+        status = 'Testing';  // Moderate performance
+      } else if (spend > 50 && conversionRate < 1) {
+        status = 'Fatigued';  // Low conversion rate despite spend
       }
 
-      // Determine confidence based on data volume
-      const impressions = parseInt(ad.impressions || '0', 10);
+      // Determine confidence based on statistical significance
       let confidence: 'High' | 'Medium' | 'Low' = 'Low';
-      if (impressions > 10000) {
-        confidence = 'High';
-      } else if (impressions > 1000) {
+      if (clicks > 1000 && conversionCount > 20) {
+        confidence = 'High';  // Statistically significant sample
+      } else if (clicks > 100 && conversionCount > 5) {
         confidence = 'Medium';
       }
 
       return {
-        id: ad.campaign_id || `campaign-${index}`,  // Use campaign_id or fallback to index
-        headline: ad.creative?.title || ad.campaign_name || `Ad ${index + 1}`,
-        bodySnippet: ad.creative?.body || 'No description available',
+        id: ad.ad_id || `ad-${index}`,
+        headline: ad.ad_name || `Ad ${index + 1}`,
+        bodySnippet: ad.adset_name || 'No description available',
         conversions: conversionCount,
-        concept: 'Meta Campaign', // You can enhance this with actual campaign categorization
+        conversionRate: parseFloat(conversionRate.toFixed(2)),
+        costPerConversion: parseFloat(costPerConversion.toFixed(2)),
+        clickThroughRate: parseFloat(clickThroughRate.toFixed(2)),
+        concept: ad.campaign_name || 'Meta Campaign',
         status,
         confidence,
-        imageUrl: ad.creative?.image_url,
+        imageUrl: undefined,  // We'll fetch this separately
         spend,
         impressions,
-        clicks: parseInt(ad.clicks || '0', 10)
+        clicks,
+        campaignName: ad.campaign_name,
+        adsetName: ad.adset_name
       };
     });
   } catch (error) {
