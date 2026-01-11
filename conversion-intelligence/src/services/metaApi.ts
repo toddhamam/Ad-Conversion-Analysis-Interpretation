@@ -158,23 +158,30 @@ export async function fetchAdCreatives(): Promise<AdCreative[]> {
  */
 export async function fetchTrafficTypes(): Promise<TrafficType[]> {
   try {
+    console.log('📊 Fetching traffic types...');
     const url = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/insights`;
 
     const params = new URLSearchParams({
       access_token: ACCESS_TOKEN,
       fields: 'campaign_name,spend,actions',
       level: 'campaign',
-      time_range: JSON.stringify({ since: '2024-01-01', until: 'today' }),
+      date_preset: 'last_30d',  // Use date preset instead of time_range
       limit: '50'
     });
 
+    console.log('🌐 Traffic types URL:', `${url}?${params}`.replace(ACCESS_TOKEN, 'TOKEN_HIDDEN'));
     const response = await fetch(`${url}?${params}`);
 
+    console.log('📡 Traffic types response status:', response.status);
+
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Traffic types error:', errorText);
       throw new Error(`Meta API error: ${response.statusText}`);
     }
 
     const data = await response.json();
+    console.log('✅ Traffic types data received:', data);
     const campaigns = data.data || [];
 
     // Add "All" traffic type
