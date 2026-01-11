@@ -131,10 +131,10 @@ const MetaAds = () => {
         {creatives.map((creative) => (
           <div key={creative.id} className="creative-card">
             <div className="creative-badges">
-              <Badge variant={creative.status.toLowerCase() as 'winning' | 'testing' | 'fatigued'}>
+              <Badge key={`status-${creative.id}`} variant={creative.status.toLowerCase() as 'winning' | 'testing' | 'fatigued'}>
                 {creative.status}
               </Badge>
-              <Badge variant={creative.confidence.toLowerCase() as 'high' | 'medium' | 'low'}>
+              <Badge key={`confidence-${creative.id}`} variant={creative.confidence.toLowerCase() as 'high' | 'medium' | 'low'}>
                 {creative.confidence}
               </Badge>
             </div>
