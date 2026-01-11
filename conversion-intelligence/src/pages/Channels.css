@@ -39,13 +39,14 @@
   background: var(--bg-card);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--border-primary);
+  border: 1px solid var(--border-violet);
   border-radius: 12px;
   text-decoration: none;
   color: inherit;
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.1);
 }
 
 .channel-card::before {
