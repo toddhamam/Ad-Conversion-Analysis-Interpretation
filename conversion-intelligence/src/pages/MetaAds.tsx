@@ -18,22 +18,38 @@ const MetaAds = () => {
   }, []);
 
   async function loadMetaData() {
+    console.log('🚀 Starting Meta data load...');
+
     try {
       setLoading(true);
       setError(null);
 
+      // Test connection first
+      const { testMetaConnection } = await import('../services/metaApi');
+      const connectionTest = await testMetaConnection();
+
+      console.log('Connection test result:', connectionTest);
+
+      if (!connectionTest.success) {
+        throw new Error(`API Connection Failed: ${connectionTest.message}`);
+      }
+
       // Fetch real data from Meta API
+      console.log('Fetching creatives and traffic data...');
       const [creativesData, trafficData] = await Promise.all([
         fetchAdCreatives(),
         fetchTrafficTypes()
       ]);
 
+      console.log('✅ Creatives loaded:', creativesData.length);
+      console.log('✅ Traffic types loaded:', trafficData.length);
+
       setCreatives(creativesData);
       setTrafficTypes(trafficData);
       setUsingMockData(false);
-    } catch (err) {
-      console.error('Failed to load Meta data, using mock data:', err);
-      setError('Could not load Meta data. Displaying sample data.');
+    } catch (err: any) {
+      console.error('❌ Failed to load Meta data:', err);
+      setError(`Could not load Meta data: ${err.message}. Displaying sample data.`);
 
       // Fallback to mock data
       setCreatives(mockCreatives as any);
