@@ -111,7 +111,7 @@ export async function fetchAdInsights(): Promise<MetaAdInsight[]> {
 }
 
 /**
- * Fetch actual ad creative content (headline, body, image/video)
+ * Fetch actual ad creative content with HIGH RESOLUTION images and multiple fallbacks
  */
 async function fetchAdCreativeDetails(adId: string): Promise<{
   headline?: string;
@@ -124,28 +124,90 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
     const url = `${META_GRAPH_API}/${adId}`;
     const params = new URLSearchParams({
       access_token: ACCESS_TOKEN,
-      fields: 'creative{title,body,image_url,thumbnail_url,video_id,call_to_action_type,object_story_spec}'
+      // Request extensive creative fields for maximum data coverage
+      fields: 'creative{title,body,image_hash,image_url,thumbnail_url,effective_object_story_id,object_story_spec,asset_feed_spec,video_id,call_to_action_type},adcreatives{title,body,image_hash,image_url,object_story_spec,asset_feed_spec,thumbnail_url}'
     });
 
     const response = await fetch(`${url}?${params}`);
 
     if (!response.ok) {
-      console.warn(`Failed to fetch creative details for ad ${adId}`);
+      console.warn(`❌ Failed to fetch creative for ad ${adId}`);
       return {};
     }
 
     const data = await response.json();
-    const creative = data.creative || {};
+
+    // Try multiple sources for headline, body, and image
+    let headline: string | undefined;
+    let body: string | undefined;
+    let imageUrl: string | undefined;
+    let videoUrl: string | undefined;
+
+    // SOURCE 1: Main creative object
+    if (data.creative) {
+      const c = data.creative;
+
+      headline = c.title ||
+                 c.object_story_spec?.link_data?.name ||
+                 c.object_story_spec?.video_data?.title ||
+                 c.asset_feed_spec?.titles?.[0]?.text;
+
+      body = c.body ||
+             c.object_story_spec?.link_data?.message ||
+             c.object_story_spec?.video_data?.message ||
+             c.object_story_spec?.link_data?.description ||
+             c.asset_feed_spec?.bodies?.[0]?.text ||
+             c.asset_feed_spec?.descriptions?.[0]?.text;
+
+      // HIGH RESOLUTION IMAGE: Use image_hash to get full 1080x1080 image
+      if (c.image_hash) {
+        imageUrl = `https://graph.facebook.com/v21.0/${c.image_hash}/picture?access_token=${ACCESS_TOKEN}`;
+      } else {
+        imageUrl = c.image_url || c.thumbnail_url;
+      }
+
+      if (c.video_id) {
+        videoUrl = `https://www.facebook.com/video.php?v=${c.video_id}`;
+      }
+    }
+
+    // SOURCE 2: Fallback to adcreatives array if main creative was empty
+    if ((!headline || !body || !imageUrl) && data.adcreatives?.data?.[0]) {
+      const ac = data.adcreatives.data[0];
+
+      if (!headline) {
+        headline = ac.title ||
+                   ac.object_story_spec?.link_data?.name ||
+                   ac.object_story_spec?.video_data?.title ||
+                   ac.asset_feed_spec?.titles?.[0]?.text;
+      }
+
+      if (!body) {
+        body = ac.body ||
+               ac.object_story_spec?.link_data?.message ||
+               ac.object_story_spec?.video_data?.message ||
+               ac.object_story_spec?.link_data?.description ||
+               ac.asset_feed_spec?.bodies?.[0]?.text;
+      }
+
+      if (!imageUrl && ac.image_hash) {
+        imageUrl = `https://graph.facebook.com/v21.0/${ac.image_hash}/picture?access_token=${ACCESS_TOKEN}`;
+      } else if (!imageUrl) {
+        imageUrl = ac.image_url || ac.thumbnail_url;
+      }
+    }
+
+    console.log(`✅ Ad ${adId}: headline=${!!headline}, body=${!!body}, image=${!!imageUrl}`);
 
     return {
-      headline: creative.title || creative.object_story_spec?.link_data?.name || creative.object_story_spec?.video_data?.title,
-      body: creative.body || creative.object_story_spec?.link_data?.message || creative.object_story_spec?.video_data?.message,
-      imageUrl: creative.image_url || creative.thumbnail_url,
-      videoUrl: creative.video_id ? `https://www.facebook.com/video.php?v=${creative.video_id}` : undefined,
-      callToAction: creative.call_to_action_type
+      headline,
+      body,
+      imageUrl,
+      videoUrl,
+      callToAction: data.creative?.call_to_action_type
     };
   } catch (error) {
-    console.error(`Error fetching creative for ad ${adId}:`, error);
+    console.error(`❌ Error fetching creative for ad ${adId}:`, error);
     return {};
   }
 }
