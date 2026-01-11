@@ -49,27 +49,39 @@ export interface TrafficType {
  * Fetch ad insights from Meta Marketing API
  */
 export async function fetchAdInsights(): Promise<MetaAdInsight[]> {
+  console.log('🔍 Fetching Meta Ad Insights...');
+  console.log('Access Token:', ACCESS_TOKEN ? `${ACCESS_TOKEN.substring(0, 20)}...` : 'MISSING');
+  console.log('Ad Account ID:', AD_ACCOUNT_ID);
+
   try {
     const url = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/insights`;
 
     const params = new URLSearchParams({
       access_token: ACCESS_TOKEN,
-      fields: 'campaign_name,impressions,clicks,spend,actions,adcreatives{title,body,image_url}',
-      level: 'ad',
-      time_range: JSON.stringify({ since: '2024-01-01', until: 'today' }),
+      fields: 'campaign_name,impressions,clicks,spend,actions',
+      level: 'campaign',
+      time_range: JSON.stringify({ since: '2024-01-01', until: '2026-01-11' }),
       limit: '100'
     });
 
-    const response = await fetch(`${url}?${params}`);
+    const fullUrl = `${url}?${params}`;
+    console.log('🌐 Request URL:', fullUrl.replace(ACCESS_TOKEN, 'TOKEN_HIDDEN'));
+
+    const response = await fetch(fullUrl);
+
+    console.log('📡 Response status:', response.status, response.statusText);
 
     if (!response.ok) {
-      throw new Error(`Meta API error: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error('❌ API Error Response:', errorText);
+      throw new Error(`Meta API error: ${response.statusText} - ${errorText}`);
     }
 
     const data = await response.json();
+    console.log('✅ Data received:', data);
     return data.data || [];
   } catch (error) {
-    console.error('Error fetching Meta ad insights:', error);
+    console.error('❌ Error fetching Meta ad insights:', error);
     throw error;
   }
 }
@@ -196,18 +208,42 @@ export async function fetchTrafficTypes(): Promise<TrafficType[]> {
 /**
  * Test Meta API connection
  */
-export async function testMetaConnection(): Promise<boolean> {
+export async function testMetaConnection(): Promise<{ success: boolean; message: string; data?: any }> {
+  console.log('🧪 Testing Meta API Connection...');
+
   try {
     const url = `${META_GRAPH_API}/${AD_ACCOUNT_ID}`;
     const params = new URLSearchParams({
       access_token: ACCESS_TOKEN,
-      fields: 'name,account_id'
+      fields: 'name,account_id,account_status'
     });
 
-    const response = await fetch(`${url}?${params}`);
-    return response.ok;
-  } catch (error) {
-    console.error('Error testing Meta connection:', error);
-    return false;
+    const fullUrl = `${url}?${params}`;
+    console.log('🌐 Test URL:', fullUrl.replace(ACCESS_TOKEN, 'TOKEN_HIDDEN'));
+
+    const response = await fetch(fullUrl);
+    const data = await response.json();
+
+    if (!response.ok || data.error) {
+      console.error('❌ Connection test failed:', data);
+      return {
+        success: false,
+        message: data.error?.message || 'Unknown error',
+        data
+      };
+    }
+
+    console.log('✅ Connection successful:', data);
+    return {
+      success: true,
+      message: 'Connected successfully',
+      data
+    };
+  } catch (error: any) {
+    console.error('❌ Connection test error:', error);
+    return {
+      success: false,
+      message: error.message || 'Network error'
+    };
   }
 }
