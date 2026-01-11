@@ -111,13 +111,64 @@ export async function fetchAdInsights(): Promise<MetaAdInsight[]> {
 }
 
 /**
+ * Fetch actual ad creative content (headline, body, image/video)
+ */
+async function fetchAdCreativeDetails(adId: string): Promise<{
+  headline?: string;
+  body?: string;
+  imageUrl?: string;
+  videoUrl?: string;
+  callToAction?: string;
+}> {
+  try {
+    const url = `${META_GRAPH_API}/${adId}`;
+    const params = new URLSearchParams({
+      access_token: ACCESS_TOKEN,
+      fields: 'creative{title,body,image_url,thumbnail_url,video_id,call_to_action_type,object_story_spec}'
+    });
+
+    const response = await fetch(`${url}?${params}`);
+
+    if (!response.ok) {
+      console.warn(`Failed to fetch creative details for ad ${adId}`);
+      return {};
+    }
+
+    const data = await response.json();
+    const creative = data.creative || {};
+
+    return {
+      headline: creative.title || creative.object_story_spec?.link_data?.name || creative.object_story_spec?.video_data?.title,
+      body: creative.body || creative.object_story_spec?.link_data?.message || creative.object_story_spec?.video_data?.message,
+      imageUrl: creative.image_url || creative.thumbnail_url,
+      videoUrl: creative.video_id ? `https://www.facebook.com/video.php?v=${creative.video_id}` : undefined,
+      callToAction: creative.call_to_action_type
+    };
+  } catch (error) {
+    console.error(`Error fetching creative for ad ${adId}:`, error);
+    return {};
+  }
+}
+
+/**
  * Fetch ad creatives with performance data
  */
 export async function fetchAdCreatives(): Promise<AdCreative[]> {
   try {
     const insights = await fetchAdInsights();
 
+    console.log('🎨 Fetching creative details for', insights.length, 'ads...');
+
+    // Fetch creative details for each ad in parallel
+    const creativeDetailsPromises = insights.map(ad =>
+      fetchAdCreativeDetails(ad.ad_id)
+    );
+    const creativeDetails = await Promise.all(creativeDetailsPromises);
+
+    console.log('✅ Creative details fetched');
+
     return insights.map((ad, index) => {
+      const creative = creativeDetails[index];
       // Extract conversions from actions array
       const conversions = ad.actions?.find(
         action => action.action_type === 'offsite_conversion.fb_pixel_purchase'
@@ -153,8 +204,8 @@ export async function fetchAdCreatives(): Promise<AdCreative[]> {
 
       return {
         id: ad.ad_id || `ad-${index}`,
-        headline: ad.ad_name || `Ad ${index + 1}`,
-        bodySnippet: ad.adset_name || 'No description available',
+        headline: creative.headline || ad.ad_name || `Ad ${index + 1}`,  // Use actual headline from creative
+        bodySnippet: creative.body || 'No ad copy available',  // Use actual body text
         conversions: conversionCount,
         conversionRate: parseFloat(conversionRate.toFixed(2)),
         costPerConversion: parseFloat(costPerConversion.toFixed(2)),
@@ -162,7 +213,7 @@ export async function fetchAdCreatives(): Promise<AdCreative[]> {
         concept: ad.campaign_name || 'Meta Campaign',
         status,
         confidence,
-        imageUrl: undefined,  // We'll fetch this separately
+        imageUrl: creative.imageUrl || creative.videoUrl,  // Use actual image/video URL
         spend,
         impressions,
         clicks,
