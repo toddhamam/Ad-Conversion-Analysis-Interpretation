@@ -1,13 +1,32 @@
 .page-title {
-  display: flex;
-  align-items: center;
+  display: flex !important;
+  align-items: center !important;
+  font-size: 42px;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-violet) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: title-glow 3s ease-in-out infinite;
+}
+
+@keyframes title-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 20px rgba(0, 212, 255, 0.6)) drop-shadow(0 0 10px rgba(168, 85, 247, 0.3));
+  }
+  50% {
+    filter: drop-shadow(0 0 30px rgba(0, 212, 255, 0.8)) drop-shadow(0 0 15px rgba(168, 85, 247, 0.4));
+  }
 }
 
 .meta-logo {
   height: 40px;
   width: auto;
   margin-right: 16px;
-  filter: brightness(1.2);
+  filter: brightness(1.2) !important;
+  -webkit-text-fill-color: initial !important;
+  flex-shrink: 0;
 }
 
 .traffic-filters {
