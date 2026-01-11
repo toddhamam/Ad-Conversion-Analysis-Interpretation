@@ -7,5 +7,10 @@ export default defineConfig({
   server: {
     port: 5173,
     host: '0.0.0.0', // Expose on all network interfaces
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    },
   },
 })
