@@ -4,12 +4,20 @@ import Badge from '../components/Badge';
 import './MetaAds.css';
 
 const MetaAds = () => {
+  // Meta Ads page with logo
   const [selectedTraffic, setSelectedTraffic] = useState('all');
 
   return (
     <div className="page">
       <div className="page-header">
-        <h1 className="page-title">Meta Ads</h1>
+        <h1 className="page-title">
+          <img
+            src="https://upload.wikimedia.org/wikipedia/commons/a/ab/Meta-Logo.png"
+            alt="Meta"
+            className="meta-logo"
+          />
+          Meta Ads
+        </h1>
         <p className="page-subtitle">Explore converting creatives across traffic types</p>
       </div>
 
