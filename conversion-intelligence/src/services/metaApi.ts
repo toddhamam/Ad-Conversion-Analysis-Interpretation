@@ -11,8 +11,8 @@ console.log('🔑 Loaded Access Token:', ACCESS_TOKEN ? `${ACCESS_TOKEN.substrin
 console.log('📊 Loaded Ad Account ID:', AD_ACCOUNT_ID);
 
 interface MetaAdInsight {
-  id: string;
-  name: string;
+  campaign_id: string;
+  campaign_name: string;
   impressions: string;
   clicks: string;
   spend: string;
@@ -63,7 +63,7 @@ export async function fetchAdInsights(): Promise<MetaAdInsight[]> {
     // Use a simpler time range that Meta accepts (last 30 days)
     const params = new URLSearchParams({
       access_token: ACCESS_TOKEN,
-      fields: 'campaign_name,impressions,clicks,spend,actions',
+      fields: 'campaign_id,campaign_name,impressions,clicks,spend,actions',  // Added campaign_id for unique keys
       level: 'campaign',
       date_preset: 'last_30d',  // Use date preset instead of time_range
       limit: '50'
@@ -134,8 +134,8 @@ export async function fetchAdCreatives(): Promise<AdCreative[]> {
       }
 
       return {
-        id: ad.id,
-        headline: ad.creative?.title || ad.name || `Ad ${index + 1}`,
+        id: ad.campaign_id || `campaign-${index}`,  // Use campaign_id or fallback to index
+        headline: ad.creative?.title || ad.campaign_name || `Ad ${index + 1}`,
         bodySnippet: ad.creative?.body || 'No description available',
         conversions: conversionCount,
         concept: 'Meta Campaign', // You can enhance this with actual campaign categorization
@@ -163,7 +163,7 @@ export async function fetchTrafficTypes(): Promise<TrafficType[]> {
 
     const params = new URLSearchParams({
       access_token: ACCESS_TOKEN,
-      fields: 'campaign_name,spend,actions',
+      fields: 'campaign_id,campaign_name,spend,actions',  // Added campaign_id for consistency
       level: 'campaign',
       date_preset: 'last_30d',  // Use date preset instead of time_range
       limit: '50'
@@ -212,8 +212,8 @@ export async function fetchTrafficTypes(): Promise<TrafficType[]> {
       )?.value || '0';
 
       trafficTypes.push({
-        id: campaign.campaign_name?.toLowerCase().replace(/\s+/g, '-') || `campaign-${campaign.id}`,
-        name: campaign.campaign_name || `Campaign ${campaign.id}`,
+        id: campaign.campaign_id || campaign.campaign_name?.toLowerCase().replace(/\s+/g, '-') || `campaign-${Math.random()}`,
+        name: campaign.campaign_name || `Campaign ${campaign.campaign_id}`,
         conversions: parseInt(conversions, 10),
         spend: parseFloat(campaign.spend || '0')
       });
