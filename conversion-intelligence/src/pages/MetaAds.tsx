@@ -1,11 +1,69 @@
-import { useState } from 'react';
-import { trafficTypes, creatives } from '../data/mockData';
+import { useState, useEffect } from 'react';
+import { trafficTypes as mockTrafficTypes, creatives as mockCreatives } from '../data/mockData';
+import { fetchAdCreatives, fetchTrafficTypes, type AdCreative, type TrafficType } from '../services/metaApi';
 import Badge from '../components/Badge';
 import './MetaAds.css';
 
 const MetaAds = () => {
   // Meta Ads page with logo
   const [selectedTraffic, setSelectedTraffic] = useState('all');
+  const [creatives, setCreatives] = useState<AdCreative[]>([]);
+  const [trafficTypes, setTrafficTypes] = useState<TrafficType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [usingMockData, setUsingMockData] = useState(false);
+
+  useEffect(() => {
+    loadMetaData();
+  }, []);
+
+  async function loadMetaData() {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Fetch real data from Meta API
+      const [creativesData, trafficData] = await Promise.all([
+        fetchAdCreatives(),
+        fetchTrafficTypes()
+      ]);
+
+      setCreatives(creativesData);
+      setTrafficTypes(trafficData);
+      setUsingMockData(false);
+    } catch (err) {
+      console.error('Failed to load Meta data, using mock data:', err);
+      setError('Could not load Meta data. Displaying sample data.');
+
+      // Fallback to mock data
+      setCreatives(mockCreatives as any);
+      setTrafficTypes(mockTrafficTypes as any);
+      setUsingMockData(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="page">
+        <div className="page-header">
+          <h1 className="page-title">
+            <img
+              src="https://upload.wikimedia.org/wikipedia/commons/a/ab/Meta-Logo.png"
+              alt="Meta"
+              className="meta-logo"
+            />
+            Meta Ads
+          </h1>
+          <p className="page-subtitle">Loading your Meta ad data...</p>
+        </div>
+        <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-secondary)' }}>
+          <div className="loading-spinner">⏳ Connecting to Meta API...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page">
@@ -18,8 +76,23 @@ const MetaAds = () => {
           />
           Meta Ads
         </h1>
-        <p className="page-subtitle">Explore converting creatives across traffic types</p>
+        <p className="page-subtitle">
+          {usingMockData ? '⚠️ Sample data (Meta API unavailable)' : '✓ Live data from your Meta account'}
+        </p>
       </div>
+
+      {error && (
+        <div className="error-banner" style={{
+          padding: '12px 20px',
+          marginBottom: '24px',
+          background: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.3)',
+          borderRadius: '8px',
+          color: '#ef4444'
+        }}>
+          {error}
+        </div>
+      )}
 
       <div className="traffic-filters">
         {trafficTypes.map((traffic) => (
