@@ -159,12 +159,11 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
              c.asset_feed_spec?.bodies?.[0]?.text ||
              c.asset_feed_spec?.descriptions?.[0]?.text;
 
-      // HIGH RESOLUTION IMAGE: Use image_hash to get full 1080x1080 image
-      if (c.image_hash) {
-        imageUrl = `https://graph.facebook.com/v21.0/${c.image_hash}/picture?access_token=${ACCESS_TOKEN}`;
-      } else {
-        imageUrl = c.image_url || c.thumbnail_url;
-      }
+      // Use direct image URLs with fallback priority
+      imageUrl = c.image_url ||
+                 c.object_story_spec?.link_data?.picture ||
+                 c.object_story_spec?.video_data?.picture ||
+                 c.thumbnail_url;
 
       if (c.video_id) {
         videoUrl = `https://www.facebook.com/video.php?v=${c.video_id}`;
