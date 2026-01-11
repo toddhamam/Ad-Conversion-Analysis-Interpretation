@@ -9,13 +9,12 @@
 .page-title {
   font-size: 42px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: #a855f7;
   margin: 0 0 12px 0;
-  background: var(--gradient-dual-glow);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  filter: drop-shadow(0 0 20px rgba(0, 212, 255, 0.3)) drop-shadow(0 0 40px rgba(168, 85, 247, 0.3));
+  text-shadow: 0 0 40px #a855f7, 0 0 80px #a855f7;
+  border: 3px solid #a855f7;
+  padding: 10px;
+  border-radius: 8px;
 }
 
 .page-subtitle {

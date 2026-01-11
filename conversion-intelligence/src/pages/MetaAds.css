@@ -3,6 +3,10 @@
   gap: 12px;
   margin-bottom: 32px;
   flex-wrap: wrap;
+  border: 3px solid #a855f7;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 0 30px rgba(168, 85, 247, 0.6);
 }
 
 .traffic-filter {
