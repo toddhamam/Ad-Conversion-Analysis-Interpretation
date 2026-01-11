@@ -9,12 +9,23 @@
 .page-title {
   font-size: 42px;
   font-weight: 700;
-  color: #a855f7;
+  color: #d946ef;
   margin: 0 0 12px 0;
-  text-shadow: 0 0 40px #a855f7, 0 0 80px #a855f7;
-  border: 3px solid #a855f7;
-  padding: 10px;
+  text-shadow: 0 0 60px #d946ef, 0 0 120px #d946ef, 0 0 180px #d946ef;
+  border: 5px solid #d946ef;
+  padding: 20px;
   border-radius: 8px;
+  background: rgba(217, 70, 239, 0.1);
+  animation: violet-pulse 2s ease-in-out infinite;
+}
+
+@keyframes violet-pulse {
+  0%, 100% {
+    box-shadow: 0 0 40px rgba(217, 70, 239, 0.8), 0 0 80px rgba(217, 70, 239, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 60px rgba(217, 70, 239, 1), 0 0 120px rgba(217, 70, 239, 0.8);
+  }
 }
 
 .page-subtitle {

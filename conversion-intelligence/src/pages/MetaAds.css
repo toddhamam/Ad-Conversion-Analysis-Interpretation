@@ -3,10 +3,21 @@
   gap: 12px;
   margin-bottom: 32px;
   flex-wrap: wrap;
-  border: 3px solid #a855f7;
+  border: 6px solid #d946ef;
   padding: 20px;
   border-radius: 12px;
-  box-shadow: 0 0 30px rgba(168, 85, 247, 0.6);
+  box-shadow: 0 0 50px rgba(217, 70, 239, 0.9), 0 0 100px rgba(217, 70, 239, 0.6);
+  background: rgba(217, 70, 239, 0.05);
+  animation: violet-glow 3s ease-in-out infinite;
+}
+
+@keyframes violet-glow {
+  0%, 100% {
+    box-shadow: 0 0 50px rgba(217, 70, 239, 0.9), 0 0 100px rgba(217, 70, 239, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 80px rgba(217, 70, 239, 1), 0 0 150px rgba(217, 70, 239, 0.8);
+  }
 }
 
 .traffic-filter {

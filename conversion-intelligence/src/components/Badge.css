@@ -24,14 +24,15 @@
 }
 
 .badge-testing {
-  background: rgba(168, 85, 247, 0.1);
-  color: var(--accent-violet);
-  border-color: rgba(168, 85, 247, 0.3);
-  box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+  background: rgba(217, 70, 239, 0.2);
+  color: #e879f9;
+  border-color: rgba(217, 70, 239, 0.6);
+  box-shadow: 0 0 20px rgba(217, 70, 239, 0.5);
+  font-weight: 700;
 }
 
 .badge-testing:hover {
-  box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+  box-shadow: 0 0 40px rgba(217, 70, 239, 0.8);
 }
 
 .badge-fatigued {
