@@ -60,12 +60,13 @@ export async function fetchAdInsights(): Promise<MetaAdInsight[]> {
   try {
     const url = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/insights`;
 
+    // Use a simpler time range that Meta accepts (last 30 days)
     const params = new URLSearchParams({
       access_token: ACCESS_TOKEN,
       fields: 'campaign_name,impressions,clicks,spend,actions',
       level: 'campaign',
-      time_range: JSON.stringify({ since: '2024-01-01', until: '2026-01-11' }),
-      limit: '100'
+      date_preset: 'last_30d',  // Use date preset instead of time_range
+      limit: '50'
     });
 
     const fullUrl = `${url}?${params}`;
@@ -78,11 +79,20 @@ export async function fetchAdInsights(): Promise<MetaAdInsight[]> {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('❌ API Error Response:', errorText);
-      throw new Error(`Meta API error: ${response.statusText} - ${errorText}`);
+
+      // Parse error for better debugging
+      try {
+        const errorJson = JSON.parse(errorText);
+        console.error('❌ Parsed error:', errorJson);
+        throw new Error(`Meta API error: ${errorJson.error?.message || response.statusText}`);
+      } catch {
+        throw new Error(`Meta API error: ${response.statusText} - ${errorText}`);
+      }
     }
 
     const data = await response.json();
     console.log('✅ Data received:', data);
+    console.log('✅ Number of campaigns:', data.data?.length || 0);
     return data.data || [];
   } catch (error) {
     console.error('❌ Error fetching Meta ad insights:', error);
