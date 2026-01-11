@@ -17,6 +17,9 @@ const MetaAds = () => {
     loadMetaData();
   }, []);
 
+  // Sort creatives by conversion rate (best performers first)
+  const sortedCreatives = [...creatives].sort((a, b) => b.conversionRate - a.conversionRate);
+
   async function loadMetaData() {
     console.log('🚀 Starting Meta data load...');
 
@@ -128,7 +131,7 @@ const MetaAds = () => {
       </div>
 
       <div className="creative-grid">
-        {creatives.map((creative) => (
+        {sortedCreatives.map((creative) => (
           <div key={creative.id} className="creative-card">
             <div className="creative-badges">
               <Badge variant={creative.status.toLowerCase() as 'winning' | 'testing' | 'fatigued'}>
@@ -137,6 +140,46 @@ const MetaAds = () => {
               <Badge variant={creative.confidence.toLowerCase() as 'high' | 'medium' | 'low'}>
                 {creative.confidence}
               </Badge>
+            </div>
+
+            {/* CONVERSION INTELLIGENCE METRICS */}
+            <div className="conversion-intelligence" style={{
+              padding: '16px',
+              background: 'rgba(0, 212, 255, 0.05)',
+              borderRadius: '8px',
+              marginBottom: '16px'
+            }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '12px',
+                fontSize: '13px'
+              }}>
+                <div>
+                  <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>Conversion Rate</div>
+                  <div style={{
+                    fontSize: '20px',
+                    fontWeight: '700',
+                    color: creative.conversionRate > 5 ? '#10b981' : creative.conversionRate > 2 ? '#f59e0b' : '#ef4444'
+                  }}>
+                    {creative.conversionRate}%
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>Cost/Conv</div>
+                  <div style={{ fontSize: '20px', fontWeight: '700', color: 'var(--accent-primary)' }}>
+                    ${creative.costPerConversion.toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>CTR</div>
+                  <div style={{ fontSize: '16px', fontWeight: '600' }}>{creative.clickThroughRate}%</div>
+                </div>
+                <div>
+                  <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>Conversions</div>
+                  <div style={{ fontSize: '16px', fontWeight: '600' }}>{creative.conversions}</div>
+                </div>
+              </div>
             </div>
 
             <div className="creative-image-placeholder">
@@ -150,13 +193,26 @@ const MetaAds = () => {
             <div className="creative-content">
               <h3 className="creative-headline">{creative.headline}</h3>
               <p className="creative-body">{creative.bodySnippet}</p>
+              <div style={{
+                marginTop: '8px',
+                padding: '8px',
+                background: 'rgba(168, 85, 247, 0.1)',
+                borderRadius: '4px',
+                fontSize: '12px',
+                color: 'var(--text-secondary)'
+              }}>
+                <div><strong>Campaign:</strong> {creative.campaignName}</div>
+                <div><strong>Ad Set:</strong> {creative.adsetName}</div>
+              </div>
             </div>
 
             <div className="creative-footer">
               <div className="creative-conversions">
-                <strong>{creative.conversions.toLocaleString()}</strong> conversions
+                <strong>${creative.spend.toFixed(2)}</strong> spent
               </div>
-              <div className="creative-concept">{creative.concept}</div>
+              <div className="creative-concept">
+                {creative.clicks.toLocaleString()} clicks • {creative.impressions.toLocaleString()} impr
+              </div>
             </div>
           </div>
         ))}
