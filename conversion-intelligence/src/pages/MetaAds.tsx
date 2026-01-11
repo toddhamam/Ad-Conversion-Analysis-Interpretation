@@ -182,21 +182,47 @@ const MetaAds = () => {
               </div>
             </div>
 
-            {/* AD CREATIVE IMAGE/VIDEO */}
-            <div className="creative-image-placeholder" style={{
-              background: creative.imageUrl ? `url(${creative.imageUrl})` : 'var(--surface-secondary)',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              minHeight: creative.imageUrl ? '200px' : '120px'
-            }}>
-              {!creative.imageUrl && (
+            {/* AD CREATIVE IMAGE/VIDEO - 1080x1080 format */}
+            {creative.imageUrl ? (
+              <div style={{
+                width: '100%',
+                aspectRatio: '1 / 1',  // Square format for 1080x1080 images
+                overflow: 'hidden',
+                borderRadius: '8px',
+                marginBottom: '16px'
+              }}>
+                <img
+                  src={creative.imageUrl}
+                  alt={creative.headline}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',  // Crop to fit if needed
+                    display: 'block'
+                  }}
+                  onError={(e) => {
+                    // Fallback if image fails to load
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="creative-image-placeholder" style={{
+                aspectRatio: '1 / 1',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'var(--surface-secondary)',
+                borderRadius: '8px',
+                marginBottom: '16px'
+              }}>
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
                   <circle cx="8.5" cy="8.5" r="1.5"/>
                   <polyline points="21 15 16 10 5 21"/>
                 </svg>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="creative-content">
               <h3 className="creative-headline">{creative.headline}</h3>
