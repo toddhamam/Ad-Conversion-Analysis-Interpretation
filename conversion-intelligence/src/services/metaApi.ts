@@ -1,5 +1,5 @@
 // Meta Marketing API Service
-console.log('🔥🔥🔥 metaApi.ts VERSION 3.1 LOADED AT', new Date().toISOString(), '🔥🔥🔥');
+console.log('🔥🔥🔥 metaApi.ts VERSION 4.0 LOADED AT', new Date().toISOString(), '🔥🔥🔥');
 
 const META_API_VERSION = 'v21.0';
 const META_GRAPH_API = `https://graph.facebook.com/${META_API_VERSION}`;
@@ -111,8 +111,10 @@ export async function fetchAdInsights(): Promise<MetaAdInsight[]> {
   }
 }
 
+let adCounter = 0;
+
 /**
- * Fetch actual ad creative content with HIGH RESOLUTION images and multiple fallbacks
+ * Fetch actual ad creative content
  */
 async function fetchAdCreativeDetails(adId: string): Promise<{
   headline?: string;
@@ -121,164 +123,75 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
   videoUrl?: string;
   callToAction?: string;
 }> {
+  adCounter++;
+  const logThis = adCounter <= 3; // Log first 3 ads completely
+
   try {
     const url = `${META_GRAPH_API}/${adId}`;
     const params = new URLSearchParams({
       access_token: ACCESS_TOKEN,
-      // Request comprehensive creative fields including effective_object_story_id for actual post content
-      fields: 'name,creative{id,name,title,body,image_hash,image_url,thumbnail_url,effective_object_story_id,object_story_spec,asset_feed_spec,video_id,call_to_action_type},adcreatives{image_url,thumbnail_url,object_story_spec}'
+      fields: 'name,creative{name,title,body,image_url,thumbnail_url,object_story_spec,effective_object_story_id}'
     });
 
     const response = await fetch(`${url}?${params}`);
 
     if (!response.ok) {
-      console.warn(`❌ Failed to fetch creative for ad ${adId}:`, response.status);
+      if (logThis) console.warn(`❌ Failed to fetch creative for ad ${adId}:`, response.status);
       return {};
     }
 
     const data = await response.json();
 
-    // Only log first 2 ads to avoid console spam
-    if (Math.random() < 0.03) { // Log ~3% of ads
-      console.log(`📦 Sample ad data:`, JSON.stringify(data, null, 2));
+    if (logThis) {
+      console.log(`📦📦📦 COMPLETE AD DATA FOR ${adId}:`, JSON.stringify(data, null, 2));
     }
 
     let headline: string | undefined;
     let body: string | undefined;
     let imageUrl: string | undefined;
-    let videoUrl: string | undefined;
 
-    // STRATEGY 1: If there's an effective_object_story_id, fetch the actual post
-    if (data.creative?.effective_object_story_id) {
-      const storyId = data.creative.effective_object_story_id;
-      console.log(`📖 Fetching object story: ${storyId}`);
+    const creative = data.creative;
+    const spec = creative?.object_story_spec;
 
-      try {
-        const storyParams = new URLSearchParams({
-          access_token: ACCESS_TOKEN,
-          fields: 'message,name,caption,description,full_picture,picture,attachments{media,media_type,title,description,url,subattachments}'
-        });
+    // Extract headline
+    headline = creative?.title ||
+               creative?.name ||
+               spec?.link_data?.name ||
+               spec?.video_data?.title ||
+               data.name;
 
-        const storyResponse = await fetch(`${META_GRAPH_API}/${storyId}?${storyParams}`);
+    // Extract body
+    body = creative?.body ||
+           spec?.link_data?.message ||
+           spec?.link_data?.description ||
+           spec?.video_data?.message;
 
-        if (storyResponse.ok) {
-          const storyData = await storyResponse.json();
-          console.log(`📖 Story data:`, JSON.stringify(storyData, null, 2));
+    // Extract image
+    imageUrl = creative?.image_url ||
+               spec?.link_data?.picture ||
+               spec?.video_data?.picture ||
+               creative?.thumbnail_url;
 
-          // Extract headline from story
-          headline = storyData.name ||
-                    storyData.attachments?.data?.[0]?.title ||
-                    storyData.attachments?.data?.[0]?.description?.split('\n')?.[0];
-
-          // Extract body from story
-          body = storyData.message ||
-                storyData.description ||
-                storyData.caption ||
-                storyData.attachments?.data?.[0]?.description;
-
-          // Extract high-res image from story
-          imageUrl = storyData.full_picture ||
-                    storyData.attachments?.data?.[0]?.media?.image?.src ||
-                    storyData.picture;
-        }
-      } catch (storyError) {
-        console.warn(`⚠️ Could not fetch object story:`, storyError);
-      }
-    }
-
-    // STRATEGY 2: Extract from creative object_story_spec
-    const c = data.creative;
-    if (c?.object_story_spec) {
-      const spec = c.object_story_spec;
-
-      // Try link_data first (most common for link ads)
-      if (spec.link_data) {
-        if (!headline) headline = spec.link_data.name || spec.link_data.link;
-        if (!body) body = spec.link_data.message || spec.link_data.description;
-        if (!imageUrl) imageUrl = spec.link_data.picture || spec.link_data.image_url;
-      }
-
-      // Try video_data (for video ads)
-      if (spec.video_data) {
-        if (!headline) headline = spec.video_data.title || spec.video_data.name;
-        if (!body) body = spec.video_data.message || spec.video_data.description;
-        if (!imageUrl) imageUrl = spec.video_data.picture || spec.video_data.image_url;
-      }
-
-      // Try photo_data (for image ads)
-      if (spec.photo_data) {
-        if (!body) body = spec.photo_data.message || spec.photo_data.caption;
-        if (!imageUrl) imageUrl = spec.photo_data.picture || spec.photo_data.url;
-      }
-    }
-
-    // STRATEGY 3: Try direct creative fields
-    if (c) {
-      if (!headline) headline = c.title || c.name;
-      if (!body) body = c.body;
-      if (!imageUrl) imageUrl = c.image_url || c.thumbnail_url;
-
-      // Get image from image_hash if we still don't have one
-      // Note: image_hash URLs may require redirect handling, use as last resort
-      if (!imageUrl && c.image_hash) {
-        // Don't use image_hash - it requires redirects and often fails in browsers
-        console.warn(`⚠️ No direct image URL found for ad, image_hash available but skipped: ${c.image_hash}`);
-      }
-
-      if (c.video_id && !videoUrl) {
-        videoUrl = c.thumbnail_url; // Use video thumbnail as image
-      }
-    }
-
-    // STRATEGY 4: Try adcreatives array for images
-    if (!imageUrl && data.adcreatives?.data?.length > 0) {
-      const adCreative = data.adcreatives.data[0];
-      imageUrl = adCreative.image_url ||
-                 adCreative.thumbnail_url ||
-                 adCreative.object_story_spec?.link_data?.picture ||
-                 adCreative.object_story_spec?.video_data?.picture;
-    }
-
-    // STRATEGY 5: Asset feed spec (for dynamic ads)
-    if (c?.asset_feed_spec && (!headline || !body)) {
-      if (!headline && c.asset_feed_spec.titles) {
-        headline = c.asset_feed_spec.titles[0]?.text;
-      }
-      if (!body && c.asset_feed_spec.bodies) {
-        body = c.asset_feed_spec.bodies[0]?.text;
-      } else if (!body && c.asset_feed_spec.descriptions) {
-        body = c.asset_feed_spec.descriptions[0]?.text;
-      }
-    }
-
-    // STRATEGY 6: Use ad name as last resort for headline
-    if (!headline) {
-      headline = data.name;
-    }
-
-    const finalImageUrl = imageUrl || videoUrl;
-
-    // EXPLICIT LOGGING FOR DEBUGGING
-    console.log(`🎯 Ad ${adId} FINAL DATA:`, {
-      headline: headline,
-      body: body?.substring(0, 100),
-      imageUrl: finalImageUrl,
-      imageSource: imageUrl ? 'direct' : (videoUrl ? 'video' : 'none')
-    });
-
-    if (!finalImageUrl) {
-      console.warn(`⚠️ Ad ${adId} has NO IMAGE URL`);
+    if (logThis) {
+      console.log(`✅✅✅ EXTRACTED DATA FOR ${adId}:`, {
+        headline,
+        body: body?.substring(0, 100),
+        imageUrl,
+        hasHeadline: !!headline,
+        hasBody: !!body,
+        hasImage: !!imageUrl
+      });
     }
 
     return {
       headline,
       body,
-      imageUrl: finalImageUrl,
-      videoUrl,
-      callToAction: c?.call_to_action_type
+      imageUrl,
+      videoUrl: undefined,
+      callToAction: undefined
     };
   } catch (error) {
-    console.error(`❌ Error fetching creative for ad ${adId}:`, error);
+    if (logThis) console.error(`❌ Error fetching creative for ad ${adId}:`, error);
     return {};
   }
 }
@@ -287,7 +200,9 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
  * Fetch ad creatives with performance data
  */
 export async function fetchAdCreatives(): Promise<AdCreative[]> {
-  console.log('💥💥💥 fetchAdCreatives() EXECUTING - VERSION 3.1 💥💥💥');
+  console.log('💥💥💥 fetchAdCreatives() EXECUTING - VERSION 4.0 💥💥💥');
+  adCounter = 0; // Reset counter
+
   try {
     const insights = await fetchAdInsights();
 
@@ -301,7 +216,7 @@ export async function fetchAdCreatives(): Promise<AdCreative[]> {
 
     console.log('✅ Creative details fetched');
 
-    return insights.map((ad, index) => {
+    const results = insights.map((ad, index) => {
       const creative = creativeDetails[index];
       // Extract conversions from actions array
       const conversions = ad.actions?.find(
@@ -336,10 +251,10 @@ export async function fetchAdCreatives(): Promise<AdCreative[]> {
         confidence = 'Medium';
       }
 
-      const adCreative = {
+      const result = {
         id: ad.ad_id || `ad-${index}`,
-        headline: creative.headline || ad.ad_name || `Ad ${index + 1}`,  // Use actual headline from creative
-        bodySnippet: creative.body || 'No ad copy available',  // Use actual body text
+        headline: creative.headline || ad.ad_name || `Ad ${index + 1}`,
+        bodySnippet: creative.body || 'No ad copy available',
         conversions: conversionCount,
         conversionRate: parseFloat(conversionRate.toFixed(2)),
         costPerConversion: parseFloat(costPerConversion.toFixed(2)),
@@ -347,7 +262,7 @@ export async function fetchAdCreatives(): Promise<AdCreative[]> {
         concept: ad.campaign_name || 'Meta Campaign',
         status,
         confidence,
-        imageUrl: creative.imageUrl || creative.videoUrl,  // Use actual image/video URL
+        imageUrl: creative.imageUrl,
         spend,
         impressions,
         clicks,
@@ -355,19 +270,15 @@ export async function fetchAdCreatives(): Promise<AdCreative[]> {
         adsetName: ad.adset_name
       };
 
-      // Log first 3 ads to verify data structure
-      if (index < 3) {
-        console.log(`🎨 AdCreative #${index}:`, {
-          id: adCreative.id,
-          headline: adCreative.headline?.substring(0, 40),
-          body: adCreative.bodySnippet?.substring(0, 40),
-          imageUrl: adCreative.imageUrl,
-          hasImage: !!adCreative.imageUrl
-        });
+      if (index < 2) {
+        console.log(`🎯🎯🎯 FINAL AD CREATIVE #${index}:`, result);
       }
 
-      return adCreative;
+      return result;
     });
+
+    console.log(`✅✅✅ RETURNING ${results.length} AD CREATIVES`);
+    return results;
   } catch (error) {
     console.error('Error processing ad creatives:', error);
     throw error;
@@ -375,75 +286,42 @@ export async function fetchAdCreatives(): Promise<AdCreative[]> {
 }
 
 /**
- * Fetch traffic types (campaign breakdown)
+ * Fetch traffic type performance
  */
 export async function fetchTrafficTypes(): Promise<TrafficType[]> {
-  try {
-    console.log('📊 Fetching traffic types...');
-    const url = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/insights`;
+  console.log('Fetching traffic types...');
 
+  try {
+    const url = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/insights`;
     const params = new URLSearchParams({
       access_token: ACCESS_TOKEN,
-      fields: 'campaign_id,campaign_name,spend,actions',  // Added campaign_id for consistency
+      fields: 'campaign_name,spend,actions',
       level: 'campaign',
-      date_preset: 'last_30d',  // Use date preset instead of time_range
-      limit: '50'
+      date_preset: 'last_30d',
+      limit: '100'
     });
 
-    console.log('🌐 Traffic types URL:', `${url}?${params}`.replace(ACCESS_TOKEN, 'TOKEN_HIDDEN'));
     const response = await fetch(`${url}?${params}`);
 
-    console.log('📡 Traffic types response status:', response.status);
-
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Traffic types error:', errorText);
-      throw new Error(`Meta API error: ${response.statusText}`);
+      console.error('Failed to fetch traffic types');
+      return [];
     }
 
     const data = await response.json();
-    console.log('✅ Traffic types data received:', data);
-    const campaigns = data.data || [];
 
-    // Add "All" traffic type
-    const allConversions = campaigns.reduce((total: number, campaign: any) => {
-      const conversions = campaign.actions?.find(
-        (action: any) => action.action_type === 'offsite_conversion.fb_pixel_purchase'
-      )?.value || '0';
-      return total + parseInt(conversions, 10);
-    }, 0);
-
-    const allSpend = campaigns.reduce((total: number, campaign: any) => {
-      return total + parseFloat(campaign.spend || '0');
-    }, 0);
-
-    const trafficTypes: TrafficType[] = [
-      {
-        id: 'all',
-        name: 'All Traffic',
-        conversions: allConversions,
-        spend: allSpend
-      }
-    ];
-
-    // Add individual campaigns
-    campaigns.forEach((campaign: any) => {
-      const conversions = campaign.actions?.find(
-        (action: any) => action.action_type === 'offsite_conversion.fb_pixel_purchase'
-      )?.value || '0';
-
-      trafficTypes.push({
-        id: campaign.campaign_id || campaign.campaign_name?.toLowerCase().replace(/\s+/g, '-') || `campaign-${Math.random()}`,
-        name: campaign.campaign_name || `Campaign ${campaign.campaign_id}`,
-        conversions: parseInt(conversions, 10),
-        spend: parseFloat(campaign.spend || '0')
-      });
-    });
-
-    return trafficTypes;
+    return data.data.map((campaign: any, index: number) => ({
+      id: campaign.campaign_id || `traffic-${index}`,
+      name: campaign.campaign_name || 'Unknown',
+      spend: parseFloat(campaign.spend || '0'),
+      conversions: parseInt(
+        campaign.actions?.find((a: any) => a.action_type === 'offsite_conversion.fb_pixel_purchase')?.value || '0',
+        10
+      )
+    }));
   } catch (error) {
     console.error('Error fetching traffic types:', error);
-    throw error;
+    return [];
   }
 }
 
