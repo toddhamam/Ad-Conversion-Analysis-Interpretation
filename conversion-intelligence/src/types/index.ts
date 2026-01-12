@@ -1,5 +1,4 @@
 // Type definitions for Conversion Intelligence
-// Force module refresh: 2026-01-12T00:30:00Z
 
 export interface Channel {
   id: string;
@@ -62,10 +61,3 @@ export interface Insight {
   linkedCreatives: string[];
 }
 
-// Explicit re-export for module resolution
-export type { Channel as ChannelType };
-export type { Creative as CreativeType };
-export type { TrafficType as TrafficTypeType };
-export type { Concept as ConceptType };
-export type { Product as ProductType };
-export type { Insight as InsightType };
