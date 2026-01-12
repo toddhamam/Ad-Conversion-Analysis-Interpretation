@@ -11,6 +11,14 @@ export interface Creative {
   headline: string;
   bodySnippet: string;
   conversions: number;
+  conversionRate: number;
+  costPerConversion: number;
+  clickThroughRate: number;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  campaignName: string;
+  adsetName: string;
   concept: string;
   status: 'Winning' | 'Testing' | 'Fatigued';
   confidence: 'High' | 'Medium' | 'Low';

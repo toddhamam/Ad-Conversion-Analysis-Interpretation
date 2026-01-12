@@ -168,7 +168,7 @@ const MetaAds = () => {
                 <div>
                   <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>Cost/Conv</div>
                   <div style={{ fontSize: '20px', fontWeight: '700', color: 'var(--accent-primary)' }}>
-                    ${creative.costPerConversion.toFixed(2)}
+                    ${(creative.costPerConversion || 0).toFixed(2)}
                   </div>
                 </div>
                 <div>
@@ -242,10 +242,10 @@ const MetaAds = () => {
 
             <div className="creative-footer">
               <div className="creative-conversions">
-                <strong>${creative.spend.toFixed(2)}</strong> spent
+                <strong>${(creative.spend || 0).toFixed(2)}</strong> spent
               </div>
               <div className="creative-concept">
-                {creative.clicks.toLocaleString()} clicks • {creative.impressions.toLocaleString()} impr
+                {(creative.clicks || 0).toLocaleString()} clicks • {(creative.impressions || 0).toLocaleString()} impr
               </div>
             </div>
           </div>
