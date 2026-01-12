@@ -124,87 +124,130 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
     const url = `${META_GRAPH_API}/${adId}`;
     const params = new URLSearchParams({
       access_token: ACCESS_TOKEN,
-      // Request extensive creative fields for maximum data coverage
-      fields: 'creative{title,body,image_hash,image_url,thumbnail_url,effective_object_story_id,object_story_spec,asset_feed_spec,video_id,call_to_action_type},adcreatives{title,body,image_hash,image_url,object_story_spec,asset_feed_spec,thumbnail_url}'
+      // Request comprehensive creative fields including effective_object_story_id for actual post content
+      fields: 'name,creative{id,name,title,body,image_hash,image_url,thumbnail_url,effective_object_story_id,object_story_spec,asset_feed_spec,video_id,call_to_action_type}'
     });
 
     const response = await fetch(`${url}?${params}`);
 
     if (!response.ok) {
-      console.warn(`❌ Failed to fetch creative for ad ${adId}`);
+      console.warn(`❌ Failed to fetch creative for ad ${adId}:`, response.status);
       return {};
     }
 
     const data = await response.json();
+    console.log(`📦 Raw ad data for ${adId}:`, JSON.stringify(data, null, 2));
 
-    // Try multiple sources for headline, body, and image
     let headline: string | undefined;
     let body: string | undefined;
     let imageUrl: string | undefined;
     let videoUrl: string | undefined;
 
-    // SOURCE 1: Main creative object
-    if (data.creative) {
-      const c = data.creative;
+    // STRATEGY 1: If there's an effective_object_story_id, fetch the actual post
+    if (data.creative?.effective_object_story_id) {
+      const storyId = data.creative.effective_object_story_id;
+      console.log(`📖 Fetching object story: ${storyId}`);
 
-      headline = c.title ||
-                 c.object_story_spec?.link_data?.name ||
-                 c.object_story_spec?.video_data?.title ||
-                 c.asset_feed_spec?.titles?.[0]?.text;
+      try {
+        const storyParams = new URLSearchParams({
+          access_token: ACCESS_TOKEN,
+          fields: 'message,name,caption,description,full_picture,picture,attachments{media,media_type,title,description,url,subattachments}'
+        });
 
-      body = c.body ||
-             c.object_story_spec?.link_data?.message ||
-             c.object_story_spec?.video_data?.message ||
-             c.object_story_spec?.link_data?.description ||
-             c.asset_feed_spec?.bodies?.[0]?.text ||
-             c.asset_feed_spec?.descriptions?.[0]?.text;
+        const storyResponse = await fetch(`${META_GRAPH_API}/${storyId}?${storyParams}`);
 
-      // Use direct image URLs with fallback priority
-      imageUrl = c.image_url ||
-                 c.object_story_spec?.link_data?.picture ||
-                 c.object_story_spec?.video_data?.picture ||
-                 c.thumbnail_url;
+        if (storyResponse.ok) {
+          const storyData = await storyResponse.json();
+          console.log(`📖 Story data:`, JSON.stringify(storyData, null, 2));
 
-      if (c.video_id) {
-        videoUrl = `https://www.facebook.com/video.php?v=${c.video_id}`;
+          // Extract headline from story
+          headline = storyData.name ||
+                    storyData.attachments?.data?.[0]?.title ||
+                    storyData.attachments?.data?.[0]?.description?.split('\n')?.[0];
+
+          // Extract body from story
+          body = storyData.message ||
+                storyData.description ||
+                storyData.caption ||
+                storyData.attachments?.data?.[0]?.description;
+
+          // Extract high-res image from story
+          imageUrl = storyData.full_picture ||
+                    storyData.attachments?.data?.[0]?.media?.image?.src ||
+                    storyData.picture;
+        }
+      } catch (storyError) {
+        console.warn(`⚠️ Could not fetch object story:`, storyError);
       }
     }
 
-    // SOURCE 2: Fallback to adcreatives array if main creative was empty
-    if ((!headline || !body || !imageUrl) && data.adcreatives?.data?.[0]) {
-      const ac = data.adcreatives.data[0];
+    // STRATEGY 2: Extract from creative object_story_spec
+    const c = data.creative;
+    if (c?.object_story_spec) {
+      const spec = c.object_story_spec;
 
-      if (!headline) {
-        headline = ac.title ||
-                   ac.object_story_spec?.link_data?.name ||
-                   ac.object_story_spec?.video_data?.title ||
-                   ac.asset_feed_spec?.titles?.[0]?.text;
+      // Try link_data first (most common for link ads)
+      if (spec.link_data) {
+        if (!headline) headline = spec.link_data.name || spec.link_data.link;
+        if (!body) body = spec.link_data.message || spec.link_data.description;
+        if (!imageUrl) imageUrl = spec.link_data.picture || spec.link_data.image_url;
       }
 
-      if (!body) {
-        body = ac.body ||
-               ac.object_story_spec?.link_data?.message ||
-               ac.object_story_spec?.video_data?.message ||
-               ac.object_story_spec?.link_data?.description ||
-               ac.asset_feed_spec?.bodies?.[0]?.text;
+      // Try video_data (for video ads)
+      if (spec.video_data) {
+        if (!headline) headline = spec.video_data.title || spec.video_data.name;
+        if (!body) body = spec.video_data.message || spec.video_data.description;
+        if (!imageUrl) imageUrl = spec.video_data.picture || spec.video_data.image_url;
       }
 
-      if (!imageUrl) {
-        imageUrl = ac.image_url ||
-                   ac.object_story_spec?.link_data?.picture ||
-                   ac.object_story_spec?.video_data?.picture ||
-                   ac.thumbnail_url;
+      // Try photo_data (for image ads)
+      if (spec.photo_data) {
+        if (!body) body = spec.photo_data.message || spec.photo_data.caption;
+        if (!imageUrl) imageUrl = spec.photo_data.picture || spec.photo_data.url;
       }
     }
 
-    console.log(`✅ Ad ${adId}: headline=${!!headline}, body=${!!body}, image=${!!imageUrl}`);
+    // STRATEGY 3: Try direct creative fields
+    if (c) {
+      if (!headline) headline = c.title || c.name;
+      if (!body) body = c.body;
+      if (!imageUrl) imageUrl = c.image_url || c.thumbnail_url;
+
+      // Get image from image_hash if we still don't have one
+      if (!imageUrl && c.image_hash) {
+        imageUrl = `https://graph.facebook.com/v21.0/${c.image_hash}?access_token=${ACCESS_TOKEN}`;
+      }
+
+      if (c.video_id && !videoUrl) {
+        videoUrl = c.thumbnail_url; // Use video thumbnail as image
+      }
+    }
+
+    // STRATEGY 4: Asset feed spec (for dynamic ads)
+    if (c?.asset_feed_spec && (!headline || !body)) {
+      if (!headline && c.asset_feed_spec.titles) {
+        headline = c.asset_feed_spec.titles[0]?.text;
+      }
+      if (!body && c.asset_feed_spec.bodies) {
+        body = c.asset_feed_spec.bodies[0]?.text;
+      } else if (!body && c.asset_feed_spec.descriptions) {
+        body = c.asset_feed_spec.descriptions[0]?.text;
+      }
+    }
+
+    // STRATEGY 5: Use ad name as last resort for headline
+    if (!headline) {
+      headline = data.name;
+    }
+
+    console.log(`✅ Ad ${adId} final: headline="${headline?.substring(0, 50)}", body="${body?.substring(0, 50)}", image=${!!imageUrl}`);
 
     return {
       headline,
       body,
-      imageUrl,
+      imageUrl: imageUrl || videoUrl,
       videoUrl,
-      callToAction: data.creative?.call_to_action_type
+      callToAction: c?.call_to_action_type
     };
   } catch (error) {
     console.error(`❌ Error fetching creative for ad ${adId}:`, error);
