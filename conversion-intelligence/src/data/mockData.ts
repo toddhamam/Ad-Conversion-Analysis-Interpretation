@@ -1,4 +1,4 @@
-import { Channel, Creative, TrafficType, Concept, Product, Insight } from '../types';
+import type { Channel, Creative, TrafficType, Concept, Product, Insight } from '../types';
 
 export const channels: Channel[] = [
   {
