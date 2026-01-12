@@ -189,10 +189,11 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
                ac.asset_feed_spec?.bodies?.[0]?.text;
       }
 
-      if (!imageUrl && ac.image_hash) {
-        imageUrl = `https://graph.facebook.com/v21.0/${ac.image_hash}/picture?access_token=${ACCESS_TOKEN}`;
-      } else if (!imageUrl) {
-        imageUrl = ac.image_url || ac.thumbnail_url;
+      if (!imageUrl) {
+        imageUrl = ac.image_url ||
+                   ac.object_story_spec?.link_data?.picture ||
+                   ac.object_story_spec?.video_data?.picture ||
+                   ac.thumbnail_url;
       }
     }
 
