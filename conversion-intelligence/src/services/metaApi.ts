@@ -381,11 +381,15 @@ export async function testMetaConnection(): Promise<{ success: boolean; message:
     const response = await fetch(fullUrl);
     const data = await response.json();
 
+    console.log('📡 Response status:', response.status);
+    console.log('📡 Response data:', data);
+
     if (!response.ok || data.error) {
       console.error('❌ Connection test failed:', data);
+      console.error('❌ Error details:', JSON.stringify(data.error, null, 2));
       return {
         success: false,
-        message: data.error?.message || 'Unknown error',
+        message: data.error?.message || `HTTP ${response.status}: ${data.error?.type || 'Unknown error'}`,
         data
       };
     }
@@ -398,6 +402,7 @@ export async function testMetaConnection(): Promise<{ success: boolean; message:
     };
   } catch (error: any) {
     console.error('❌ Connection test error:', error);
+    console.error('❌ Error stack:', error.stack);
     return {
       success: false,
       message: error.message || 'Network error'
