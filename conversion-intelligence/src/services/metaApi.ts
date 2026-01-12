@@ -125,7 +125,7 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
     const params = new URLSearchParams({
       access_token: ACCESS_TOKEN,
       // Request comprehensive creative fields including effective_object_story_id for actual post content
-      fields: 'name,creative{id,name,title,body,image_hash,image_url,thumbnail_url,effective_object_story_id,object_story_spec,asset_feed_spec,video_id,call_to_action_type}'
+      fields: 'name,creative{id,name,title,body,image_hash,image_url,thumbnail_url,effective_object_story_id,object_story_spec,asset_feed_spec,video_id,call_to_action_type},adcreatives{image_url,thumbnail_url,object_story_spec}'
     });
 
     const response = await fetch(`${url}?${params}`);
@@ -136,7 +136,11 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
     }
 
     const data = await response.json();
-    console.log(`📦 Raw ad data for ${adId}:`, JSON.stringify(data, null, 2));
+
+    // Only log first 2 ads to avoid console spam
+    if (Math.random() < 0.03) { // Log ~3% of ads
+      console.log(`📦 Sample ad data:`, JSON.stringify(data, null, 2));
+    }
 
     let headline: string | undefined;
     let body: string | undefined;
@@ -214,8 +218,10 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
       if (!imageUrl) imageUrl = c.image_url || c.thumbnail_url;
 
       // Get image from image_hash if we still don't have one
+      // Note: image_hash URLs may require redirect handling, use as last resort
       if (!imageUrl && c.image_hash) {
-        imageUrl = `https://graph.facebook.com/v21.0/${c.image_hash}?access_token=${ACCESS_TOKEN}`;
+        // Don't use image_hash - it requires redirects and often fails in browsers
+        console.warn(`⚠️ No direct image URL found for ad, image_hash available but skipped: ${c.image_hash}`);
       }
 
       if (c.video_id && !videoUrl) {
@@ -223,7 +229,16 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
       }
     }
 
-    // STRATEGY 4: Asset feed spec (for dynamic ads)
+    // STRATEGY 4: Try adcreatives array for images
+    if (!imageUrl && data.adcreatives?.data?.length > 0) {
+      const adCreative = data.adcreatives.data[0];
+      imageUrl = adCreative.image_url ||
+                 adCreative.thumbnail_url ||
+                 adCreative.object_story_spec?.link_data?.picture ||
+                 adCreative.object_story_spec?.video_data?.picture;
+    }
+
+    // STRATEGY 5: Asset feed spec (for dynamic ads)
     if (c?.asset_feed_spec && (!headline || !body)) {
       if (!headline && c.asset_feed_spec.titles) {
         headline = c.asset_feed_spec.titles[0]?.text;
@@ -235,12 +250,17 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
       }
     }
 
-    // STRATEGY 5: Use ad name as last resort for headline
+    // STRATEGY 6: Use ad name as last resort for headline
     if (!headline) {
       headline = data.name;
     }
 
-    console.log(`✅ Ad ${adId} final: headline="${headline?.substring(0, 50)}", body="${body?.substring(0, 50)}", image=${!!imageUrl}`);
+    console.log(`✅ Ad ${adId} final:`, {
+      headline: headline?.substring(0, 50),
+      body: body?.substring(0, 50),
+      imageUrl: imageUrl,
+      hasImage: !!imageUrl
+    });
 
     return {
       headline,
@@ -307,7 +327,7 @@ export async function fetchAdCreatives(): Promise<AdCreative[]> {
         confidence = 'Medium';
       }
 
-      return {
+      const adCreative = {
         id: ad.ad_id || `ad-${index}`,
         headline: creative.headline || ad.ad_name || `Ad ${index + 1}`,  // Use actual headline from creative
         bodySnippet: creative.body || 'No ad copy available',  // Use actual body text
@@ -325,6 +345,19 @@ export async function fetchAdCreatives(): Promise<AdCreative[]> {
         campaignName: ad.campaign_name,
         adsetName: ad.adset_name
       };
+
+      // Log first 3 ads to verify data structure
+      if (index < 3) {
+        console.log(`🎨 AdCreative #${index}:`, {
+          id: adCreative.id,
+          headline: adCreative.headline?.substring(0, 40),
+          body: adCreative.bodySnippet?.substring(0, 40),
+          imageUrl: adCreative.imageUrl,
+          hasImage: !!adCreative.imageUrl
+        });
+      }
+
+      return adCreative;
     });
   } catch (error) {
     console.error('Error processing ad creatives:', error);
