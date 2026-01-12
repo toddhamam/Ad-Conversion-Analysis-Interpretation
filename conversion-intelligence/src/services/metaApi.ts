@@ -124,7 +124,7 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
   callToAction?: string;
 }> {
   adCounter++;
-  const logThis = adCounter <= 3; // Log first 3 ads completely
+  const logThis = adCounter <= 3; // Log first 3 ads for debugging
 
   try {
     const url = `${META_GRAPH_API}/${adId}`;
@@ -153,20 +153,31 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
     const creative = data.creative;
     const spec = creative?.object_story_spec;
 
-    // Extract headline
-    headline = creative?.title ||
-               creative?.name ||
-               spec?.link_data?.name ||
-               spec?.video_data?.title ||
-               data.name;
+    // Check if this is a dynamic catalog ad (contains template variables like {{product.name}})
+    const isCatalogAd = creative?.name?.includes('{{') || false;
 
-    // Extract body
-    body = creative?.body ||
-           spec?.link_data?.message ||
-           spec?.link_data?.description ||
-           spec?.video_data?.message;
+    // Extract headline - for catalog ads, use the ad name instead of template
+    if (isCatalogAd) {
+      headline = data.name; // Use ad name like "Retargeting - Ad 4" for catalog ads
+    } else {
+      headline = creative?.title ||
+                 creative?.name ||
+                 spec?.link_data?.name ||
+                 spec?.video_data?.title ||
+                 data.name;
+    }
 
-    // Extract image
+    // Extract body - for catalog ads, indicate it's dynamic
+    if (isCatalogAd) {
+      body = 'Dynamic catalog ad - content varies by product shown to each user';
+    } else {
+      body = creative?.body ||
+             spec?.link_data?.message ||
+             spec?.link_data?.description ||
+             spec?.video_data?.message;
+    }
+
+    // Extract image - prefer image_url, fall back to thumbnail_url
     imageUrl = creative?.image_url ||
                spec?.link_data?.picture ||
                spec?.video_data?.picture ||
