@@ -1,4 +1,5 @@
 // Meta Marketing API Service
+console.log('🔥🔥🔥 metaApi.ts VERSION 3.1 LOADED AT', new Date().toISOString(), '🔥🔥🔥');
 
 const META_API_VERSION = 'v21.0';
 const META_GRAPH_API = `https://graph.facebook.com/${META_API_VERSION}`;
@@ -255,17 +256,24 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
       headline = data.name;
     }
 
-    console.log(`✅ Ad ${adId} final:`, {
-      headline: headline?.substring(0, 50),
-      body: body?.substring(0, 50),
-      imageUrl: imageUrl,
-      hasImage: !!imageUrl
+    const finalImageUrl = imageUrl || videoUrl;
+
+    // EXPLICIT LOGGING FOR DEBUGGING
+    console.log(`🎯 Ad ${adId} FINAL DATA:`, {
+      headline: headline,
+      body: body?.substring(0, 100),
+      imageUrl: finalImageUrl,
+      imageSource: imageUrl ? 'direct' : (videoUrl ? 'video' : 'none')
     });
+
+    if (!finalImageUrl) {
+      console.warn(`⚠️ Ad ${adId} has NO IMAGE URL`);
+    }
 
     return {
       headline,
       body,
-      imageUrl: imageUrl || videoUrl,
+      imageUrl: finalImageUrl,
       videoUrl,
       callToAction: c?.call_to_action_type
     };
@@ -279,7 +287,7 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
  * Fetch ad creatives with performance data
  */
 export async function fetchAdCreatives(): Promise<AdCreative[]> {
-  console.log('🚀🚀🚀 NEW CODE VERSION 2.0 LOADED 🚀🚀🚀');
+  console.log('💥💥💥 fetchAdCreatives() EXECUTING - VERSION 3.1 💥💥💥');
   try {
     const insights = await fetchAdInsights();
 
