@@ -279,6 +279,7 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
  * Fetch ad creatives with performance data
  */
 export async function fetchAdCreatives(): Promise<AdCreative[]> {
+  console.log('🚀🚀🚀 NEW CODE VERSION 2.0 LOADED 🚀🚀🚀');
   try {
     const insights = await fetchAdInsights();
 
