@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { creatives as mockCreatives } from '../data/mockData';
 import {
   fetchAdCreatives,
@@ -21,8 +21,7 @@ import {
   getAllCachedImages,
   getTopHighQualityCachedImages,
   storeImageFromUrl,
-  clearLegacyCache,
-  type CachedImage
+  clearLegacyCache
 } from '../services/imageCache';
 import './MetaAds.css';
 

@@ -509,7 +509,7 @@ const AdGenerator = () => {
 
       {/* Step Indicator */}
       <div className="step-indicator">
-        <div className={`step ${currentStep === 'config' ? 'active' : currentStep !== 'config' ? 'completed' : ''}`}>
+        <div className={`step ${currentStep === 'config' ? 'active' : 'completed'}`}>
           <span className="step-number">1</span>
           <span className="step-label">Audience & Concept</span>
         </div>

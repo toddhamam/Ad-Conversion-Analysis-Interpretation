@@ -2,7 +2,7 @@
 console.log('🤖 openaiApi.ts loaded at', new Date().toISOString());
 
 // Import image cache for using captured reference images
-import { getTopCachedImages, getTopHighQualityCachedImages, type CachedImage } from './imageCache';
+import { getTopHighQualityCachedImages } from './imageCache';
 
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
@@ -1520,38 +1520,6 @@ export async function generateAdImage(config: {
     return generateAdImageWithDallE(config);
   } else {
     throw new Error('No image generation API configured. Please add either VITE_GEMINI_API_KEY or VITE_OPENAI_API_KEY.');
-  }
-}
-
-/**
- * Helper function to fetch an image and convert to base64
- */
-async function fetchImageAsBase64(imageUrl: string): Promise<{ data: string; mimeType: string } | null> {
-  try {
-    // Skip Facebook CDN URLs as they require authentication
-    if (imageUrl.includes('fbcdn.net') || imageUrl.includes('facebook.com')) {
-      console.log('⏭️ Skipping Facebook CDN URL (requires auth)');
-      return null;
-    }
-
-    const response = await fetch(imageUrl);
-    if (!response.ok) {
-      console.warn(`⚠️ Failed to fetch image: ${response.status}`);
-      return null;
-    }
-
-    const blob = await response.blob();
-    const arrayBuffer = await blob.arrayBuffer();
-    const base64 = btoa(
-      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-    );
-
-    const mimeType = blob.type || 'image/jpeg';
-    console.log(`✅ Fetched reference image: ${mimeType}, ${Math.round(base64.length / 1024)}KB`);
-    return { data: base64, mimeType };
-  } catch (error) {
-    console.warn('⚠️ Failed to fetch reference image:', error);
-    return null;
   }
 }
 
