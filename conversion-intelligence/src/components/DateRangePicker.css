@@ -1,0 +1,276 @@
+.date-range-picker {
+  position: relative;
+}
+
+.date-range-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.date-range-trigger:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(0, 212, 255, 0.3);
+}
+
+.calendar-icon {
+  width: 18px;
+  height: 18px;
+  color: #00d4ff;
+}
+
+.chevron-icon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.6;
+}
+
+.date-range-label {
+  white-space: nowrap;
+}
+
+.date-range-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: rgba(20, 20, 30, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.date-range-content {
+  display: flex;
+  padding: 16px;
+  gap: 20px;
+}
+
+.presets-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  padding-right: 16px;
+}
+
+.presets-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  padding-left: 12px;
+}
+
+.preset-button {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.preset-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.preset-button.active {
+  background: rgba(0, 212, 255, 0.15);
+  color: #00d4ff;
+}
+
+.calendars-container {
+  display: flex;
+  gap: 24px;
+}
+
+.calendar {
+  width: 280px;
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  margin-bottom: 12px;
+}
+
+.month-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+  flex: 1;
+  text-align: center;
+}
+
+.nav-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nav-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.nav-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.weekday {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  padding: 4px;
+  text-transform: uppercase;
+}
+
+.calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.day:not(.empty):not(.future):hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.day.empty {
+  cursor: default;
+}
+
+.day.future {
+  color: rgba(255, 255, 255, 0.2);
+  cursor: not-allowed;
+}
+
+.day.in-range {
+  background: rgba(0, 212, 255, 0.1);
+  border-radius: 0;
+}
+
+.day.range-start {
+  background: #00d4ff;
+  color: #000;
+  border-radius: 6px 0 0 6px;
+}
+
+.day.range-end {
+  background: #00d4ff;
+  color: #000;
+  border-radius: 0 6px 6px 0;
+}
+
+.day.range-start.range-end {
+  border-radius: 6px;
+}
+
+.day.selected {
+  background: #00d4ff;
+  color: #000;
+  font-weight: 500;
+}
+
+.date-range-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.selected-range {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.footer-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.cancel-button,
+.update-button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cancel-button {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.cancel-button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.update-button {
+  background: #00d4ff;
+  border: none;
+  color: #000;
+}
+
+.update-button:hover:not(:disabled) {
+  background: #00b8db;
+}
+
+.update-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

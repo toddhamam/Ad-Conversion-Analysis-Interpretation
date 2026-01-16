@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
 
   console.log('🔍 Vite loading with mode:', mode)
   console.log('🔍 VITE_META_ACCESS_TOKEN from .env:', env.VITE_META_ACCESS_TOKEN ? 'LOADED ✅' : 'MISSING ❌')
+  console.log('🔍 VITE_OPENAI_API_KEY from .env:', env.VITE_OPENAI_API_KEY ? 'LOADED ✅' : 'MISSING ❌')
 
   return {
     plugins: [react()],
@@ -23,11 +24,13 @@ export default defineConfig(({ mode }) => {
     },
     define: {
       'process.env.BUILD_TIME': JSON.stringify(new Date().toISOString()),
-      // Fallback: If .env doesn't load, hardcode the values
-      'import.meta.env.VITE_META_APP_ID': JSON.stringify(env.VITE_META_APP_ID || '1988473538733760'),
-      'import.meta.env.VITE_META_APP_SECRET': JSON.stringify(env.VITE_META_APP_SECRET || '34e5c0b784961658f3e17b350c8cec37'),
-      'import.meta.env.VITE_META_ACCESS_TOKEN': JSON.stringify(env.VITE_META_ACCESS_TOKEN || 'EAAcQgZALr5sABQbZAczCrfFyaAwhfYNOXoJL0GKBiBa5sW93Ir5yAFLGcraR1aIioNBS8FHg6SoXpWtRZAiDq0xZC3UHQAdebmyqhbNWuhdvaZCi14zznsW6CPG1vAU7FyKPbaU9Wm7il43JfMKuTCI4GZBREgMTltyH1YvHSpQiPLNLQifdNiNAsdu4FQEsCo2xFZBdElylrrQ'),
-      'import.meta.env.VITE_META_AD_ACCOUNT_ID': JSON.stringify(env.VITE_META_AD_ACCOUNT_ID || 'act_998694289081563'),
+      // Load from .env file - no hardcoded secrets
+      'import.meta.env.VITE_META_APP_ID': JSON.stringify(env.VITE_META_APP_ID || ''),
+      'import.meta.env.VITE_META_APP_SECRET': JSON.stringify(env.VITE_META_APP_SECRET || ''),
+      'import.meta.env.VITE_META_ACCESS_TOKEN': JSON.stringify(env.VITE_META_ACCESS_TOKEN || ''),
+      'import.meta.env.VITE_META_AD_ACCOUNT_ID': JSON.stringify(env.VITE_META_AD_ACCOUNT_ID || ''),
+      'import.meta.env.VITE_OPENAI_API_KEY': JSON.stringify(env.VITE_OPENAI_API_KEY || ''),
+      'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY || ''),
     },
   }
 })

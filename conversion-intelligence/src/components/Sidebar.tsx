@@ -37,6 +37,11 @@ const Sidebar = () => {
           <span className="nav-label">Creatives</span>
         </NavLink>
 
+        <NavLink to="/publish" className="nav-item">
+          <span className="nav-icon">🚀</span>
+          <span className="nav-label">Publisher</span>
+        </NavLink>
+
         <NavLink to="/concepts" className="nav-item">
           <span className="nav-icon">💡</span>
           <span className="nav-label">Concepts</span>

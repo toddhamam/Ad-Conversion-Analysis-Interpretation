@@ -13,4 +13,7 @@
   max-width: 1600px;
   position: relative;
   z-index: 1;
+  /* Prevent overflow/ghost content issues */
+  overflow-x: hidden;
+  isolation: isolate;
 }
