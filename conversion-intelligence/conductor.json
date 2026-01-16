@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "setup": "npm install && cp \"$CONDUCTOR_ROOT_PATH/.env\" .env",
+    "setup": "npm install && cp \"$CONDUCTOR_ROOT_PATH/conversion-intelligence/.env\" .env",
     "run": "PORT=$CONDUCTOR_PORT npm run dev"
   },
   "runScriptMode": "nonconcurrent"
