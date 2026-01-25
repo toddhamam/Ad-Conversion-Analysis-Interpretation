@@ -1,5 +1,6 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import MainLayout from './components/MainLayout';
+import Dashboard from './pages/Dashboard';
 import Channels from './pages/Channels';
 import MetaAds from './pages/MetaAds';
 import Concepts from './pages/Concepts';
@@ -14,7 +15,7 @@ function App() {
     <Router>
       <MainLayout>
         <Routes>
-          <Route path="/" element={<Navigate to="/channels" replace />} />
+          <Route path="/" element={<Dashboard />} />
           <Route path="/channels" element={<Channels />} />
           <Route path="/channels/meta-ads" element={<MetaAds />} />
           <Route path="/creatives" element={<AdGenerator />} />

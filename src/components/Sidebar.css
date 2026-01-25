@@ -1,18 +1,15 @@
 .sidebar {
   width: 270px;
   height: 100vh;
-  background: rgba(15, 13, 30, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-right: 3px solid;
-  border-image: linear-gradient(180deg, var(--accent-primary) 0%, var(--accent-violet) 100%) 1;
+  background: var(--bg-card);
+  border-right: 1px solid var(--border-primary);
   display: flex;
   flex-direction: column;
   position: fixed;
   left: 0;
   top: 0;
   z-index: 100;
-  box-shadow: 4px 0 40px rgba(0, 212, 255, 0.4), 8px 0 20px rgba(168, 85, 247, 0.15);
+  box-shadow: 4px 0 20px rgba(168, 85, 247, 0.06);
 }
 
 .sidebar-header {
@@ -25,11 +22,6 @@
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 4px 0;
-  background: var(--gradient-dual-glow);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  filter: drop-shadow(0 0 20px rgba(0, 212, 255, 0.5)) drop-shadow(0 0 8px rgba(168, 85, 247, 0.25));
 }
 
 .sidebar-subtitle {
@@ -91,13 +83,13 @@
   top: 0;
   bottom: 0;
   width: 3px;
-  background: var(--gradient-cyan);
+  background: var(--accent-primary);
   opacity: 0;
   transition: opacity 0.3s ease;
 }
 
 .nav-item:hover {
-  background-color: rgba(0, 212, 255, 0.05);
+  background-color: rgba(168, 85, 247, 0.04);
   color: var(--text-primary);
 }
 
@@ -106,8 +98,8 @@
 }
 
 .nav-item.active {
-  background-color: rgba(0, 212, 255, 0.1);
-  color: var(--accent-primary);
+  background-color: rgba(212, 225, 87, 0.15);
+  color: var(--text-primary);
   font-weight: 500;
 }
 
@@ -143,7 +135,7 @@
 
 .nav-submenu {
   padding: 4px 0 8px;
-  background-color: rgba(0, 212, 255, 0.03);
+  background-color: var(--bg-secondary);
 }
 
 .nav-subitem {
@@ -159,18 +151,17 @@
 }
 
 .nav-subitem:hover {
-  background-color: rgba(0, 212, 255, 0.05);
+  background-color: rgba(168, 85, 247, 0.04);
   color: var(--text-primary);
 }
 
 .nav-subitem.active {
-  background-color: rgba(0, 212, 255, 0.1);
+  background-color: rgba(212, 225, 87, 0.15);
   font-weight: 500;
-  color: var(--accent-primary);
+  color: var(--text-primary);
 }
 
 .nav-bullet {
   font-size: 8px;
-  color: var(--accent-primary);
-  filter: drop-shadow(0 0 4px var(--accent-glow));
+  color: var(--accent-violet);
 }

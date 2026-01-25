@@ -7,24 +7,24 @@
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
   border-radius: 8px;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .date-range-trigger:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(0, 212, 255, 0.3);
+  background: var(--bg-card-hover);
+  border-color: var(--border-violet);
 }
 
 .calendar-icon {
   width: 18px;
   height: 18px;
-  color: #00d4ff;
+  color: var(--accent-violet);
 }
 
 .chevron-icon {
@@ -41,11 +41,10 @@
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  background: rgba(20, 20, 30, 0.95);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
   border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
   z-index: 1000;
   overflow: hidden;
 }
@@ -61,13 +60,13 @@
   flex-direction: column;
   gap: 4px;
   min-width: 140px;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: 1px solid var(--border-primary);
   padding-right: 16px;
 }
 
 .presets-label {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 8px;
@@ -81,7 +80,7 @@
   background: transparent;
   border: none;
   border-radius: 6px;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
   text-align: left;
@@ -89,13 +88,13 @@
 }
 
 .preset-button:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .preset-button.active {
-  background: rgba(0, 212, 255, 0.15);
-  color: #00d4ff;
+  background: rgba(212, 225, 87, 0.15);
+  color: var(--text-primary);
 }
 
 .calendars-container {
@@ -118,7 +117,7 @@
 .month-label {
   font-size: 14px;
   font-weight: 500;
-  color: #fff;
+  color: var(--text-primary);
   flex: 1;
   text-align: center;
 }
@@ -132,14 +131,14 @@
   background: transparent;
   border: none;
   border-radius: 6px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .nav-button:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .nav-button svg {
@@ -156,7 +155,7 @@
 
 .weekday {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-muted);
   text-align: center;
   padding: 4px;
   text-transform: uppercase;
@@ -174,14 +173,14 @@
   justify-content: center;
   height: 36px;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-secondary);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .day:not(.empty):not(.future):hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-secondary);
 }
 
 .day.empty {
@@ -189,24 +188,24 @@
 }
 
 .day.future {
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--text-muted);
   cursor: not-allowed;
 }
 
 .day.in-range {
-  background: rgba(0, 212, 255, 0.1);
+  background: rgba(212, 225, 87, 0.15);
   border-radius: 0;
 }
 
 .day.range-start {
-  background: #00d4ff;
-  color: #000;
+  background: var(--accent-primary);
+  color: var(--text-primary);
   border-radius: 6px 0 0 6px;
 }
 
 .day.range-end {
-  background: #00d4ff;
-  color: #000;
+  background: var(--accent-primary);
+  color: var(--text-primary);
   border-radius: 0 6px 6px 0;
 }
 
@@ -215,8 +214,8 @@
 }
 
 .day.selected {
-  background: #00d4ff;
-  color: #000;
+  background: var(--accent-primary);
+  color: var(--text-primary);
   font-weight: 500;
 }
 
@@ -225,13 +224,13 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.2);
+  border-top: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
 }
 
 .selected-range {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-secondary);
 }
 
 .footer-buttons {
@@ -251,23 +250,23 @@
 
 .cancel-button {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--border-primary);
+  color: var(--text-secondary);
 }
 
 .cancel-button:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: var(--bg-secondary);
+  border-color: var(--border-violet);
 }
 
 .update-button {
-  background: #00d4ff;
+  background: var(--accent-primary);
   border: none;
-  color: #000;
+  color: var(--text-primary);
 }
 
 .update-button:hover:not(:disabled) {
-  background: #00b8db;
+  background: var(--accent-secondary);
 }
 
 .update-button:disabled {
