@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="arrow-gradient" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#d4e157"/>
+      <stop offset="40%" stop-color="#c0ca33"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+  </defs>
+  <!-- V shape with upward arrow - matching the logo -->
+  <!-- Left leg of V -->
+  <path d="M8 28 L22 48 L30 48 L16 28 Z" fill="#d4e157"/>
+  <!-- Right leg going up to arrow -->
+  <path d="M22 48 L30 48 L54 14 L46 14 Z" fill="url(#arrow-gradient)"/>
+  <!-- Arrow head -->
+  <path d="M42 4 L58 4 L58 20 L52 14 L46 14 L42 10 Z" fill="#a855f7"/>
+</svg>
