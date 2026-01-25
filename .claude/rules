@@ -1,0 +1,27 @@
+# Development Workflow Rules
+
+## Dev Server Management
+- When the dev server port is in use, try alternative ports (5176, 5177, etc.)
+- Always verify which workspace a running dev server belongs to before assuming changes are visible
+- Check the `cwd` (current working directory) of running processes when debugging
+
+## Troubleshooting Steps
+- For visual changes not appearing: suggest hard refresh (Cmd+Shift+R / Ctrl+Shift+R)
+- Browser caching is a common cause of "changes not visible" issues
+- Before concluding a change failed, verify the correct server is running for this workspace
+
+## Communication Patterns
+- When making visual/styling changes, explicitly state what changed and the file/line number
+- After visual changes, offer to adjust if styling intensity needs tweaking
+- Guide users through troubleshooting steps to empower self-resolution
+
+## React Patterns Used in This Codebase
+- Conditional rendering: `condition ? (...) : (...)` for show/hide
+- NavLink with automatic `.active` class styling for navigation
+- useEffect for data fetching on component mount
+- Array.reduce() for aggregating campaign statistics
+
+## Git Workflow
+- Use descriptive commit messages summarizing actual changes
+- `gh pr create` for automated PR creation
+- Always check `git status` and `git diff` before committing
