@@ -412,6 +412,20 @@ npm run lint   # ESLint with TypeScript rules
 
 ---
 
+## UI Design Guidelines
+
+### User Preferences
+- **Subtle styling** - Use "very light" glows and effects; avoid aggressive visual enhancements
+- **Symmetrical layouts** - Maintain even spacing and margins; avoid asymmetric empty space
+- **Clean and minimal** - Prefer uncluttered interfaces; less is more
+
+### When Making Visual Changes
+- State exactly what was changed and where (e.g., "Updated line 34 in Sidebar.css")
+- Offer to adjust if styling is "stronger or softer than desired"
+- Always include responsive design considerations (media queries for different screen sizes)
+
+---
+
 ## Things to Avoid
 
 - Don't use Redux/Context - keep state local
@@ -487,6 +501,11 @@ The Convertra sales landing follows this architecture:
 - Use mock data in `src/data/` for UI development
 - Dev server: `http://localhost:5175`
 - Sales landing: `http://localhost:5175/landing`
+
+### Dev Server Troubleshooting
+- Port 5175 may be in use by other processes/workspaces - try 5176, 5177 if needed
+- Verify the running server is for the correct workspace (check `cwd` of process)
+- For client-side rendering issues, try hard refresh (Cmd+Shift+R / Ctrl+Shift+R) or clear cache
 
 ---
 
