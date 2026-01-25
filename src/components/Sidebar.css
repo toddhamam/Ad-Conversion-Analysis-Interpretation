@@ -10,7 +10,7 @@
   top: 12px;
   z-index: 100;
   border-radius: 20px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 0 20px rgba(212, 225, 87, 0.15);
   overflow: hidden;
   transition: width 0.3s ease;
 }

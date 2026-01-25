@@ -31,7 +31,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
         ) : (
           <>
             <img src="/convertra-logo.png" alt="Convertra" className="sidebar-logo" />
-            <p className="sidebar-subtitle">Conversion Intelligence</p>
+            <p className="sidebar-subtitle">ConversionIQ™ Intelligence</p>
           </>
         )}
       </div>
