@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchCampaignSummaries } from '../services/metaApi';
 import type { CampaignSummary } from '../services/metaApi';
+import Loading from '../components/Loading';
 import './Dashboard.css';
 
 interface AggregatedStats {
@@ -81,10 +82,7 @@ const Dashboard = () => {
       )}
 
       {loading ? (
-        <div className="dashboard-loading">
-          <div className="loading-spinner"></div>
-          <p>Loading performance data...</p>
-        </div>
+        <Loading size="large" message="ConversionIQ™ extracting insights..." />
       ) : (
         <>
           {/* Stats Grid */}

@@ -23,6 +23,7 @@ import {
   storeImageFromUrl,
   clearLegacyCache
 } from '../services/imageCache';
+import Loading from '../components/Loading';
 import './MetaAds.css';
 
 // Helper to calculate dates from preset
@@ -321,11 +322,9 @@ const MetaAds = () => {
       <div className="page">
         <div className="page-header">
           <h1 className="page-title">Meta Ads</h1>
-          <p className="page-subtitle">Loading your Meta ad data...</p>
+          <p className="page-subtitle">Syncing your ad data...</p>
         </div>
-        <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-secondary)' }}>
-          <div className="loading-spinner">⏳ Connecting to Meta API...</div>
-        </div>
+        <Loading size="large" message="ConversionIQ™ syncing channels..." />
       </div>
     );
   }
