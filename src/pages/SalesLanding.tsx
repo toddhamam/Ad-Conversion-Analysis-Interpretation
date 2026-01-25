@@ -65,7 +65,7 @@ function SalesLanding() {
       <nav className={`sales-nav ${isScrolled ? 'scrolled' : ''}`}>
         <div className="nav-container">
           <a href="#hero" className="nav-logo">
-            <span className="logo-text">Convertra</span>
+            <img src="/convertra-logo.png" alt="Convertra" className="logo-image" />
           </a>
 
           {/* Desktop Navigation */}
