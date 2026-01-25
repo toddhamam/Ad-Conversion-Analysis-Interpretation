@@ -97,11 +97,12 @@
 
 /* Configuration Panel - Scoped to AdGenerator */
 .ad-generator-page .config-panel {
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
   border-radius: 16px;
   padding: 32px;
   margin-bottom: 32px;
+  box-shadow: var(--shadow-sm);
 }
 
 .config-title {
@@ -138,20 +139,20 @@
   align-items: center;
   gap: 8px;
   padding: 24px 20px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 2px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-card);
+  border: 2px solid var(--border-primary);
   border-radius: 12px;
   cursor: pointer;
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .ad-type-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--bg-card-hover);
+  border-color: var(--border-violet);
 }
 
 .ad-type-btn.active {
-  background: rgba(0, 212, 255, 0.1);
+  background: rgba(212, 225, 87, 0.15);
   border-color: var(--accent-primary);
 }
 
@@ -403,10 +404,10 @@
   gap: 12px;
   width: 100%;
   padding: 18px 32px;
-  background: linear-gradient(135deg, #00d4ff 0%, #a855f7 100%);
+  background: var(--accent-primary);
   border: none;
   border-radius: 12px;
-  color: white;
+  color: var(--text-primary);
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
@@ -415,7 +416,7 @@
 
 .generate-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 212, 255, 0.3);
+  box-shadow: var(--shadow-glow);
 }
 
 .generate-btn:disabled {
@@ -611,8 +612,8 @@
   justify-content: center;
   padding: 80px 20px;
   text-align: center;
-  background: rgba(15, 23, 42, 0.4);
-  border: 1px dashed rgba(255, 255, 255, 0.1);
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border-primary);
   border-radius: 16px;
   margin-top: 32px;
 }

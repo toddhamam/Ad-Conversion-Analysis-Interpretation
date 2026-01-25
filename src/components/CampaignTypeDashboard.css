@@ -1,10 +1,10 @@
 .campaign-dashboard {
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
   border-radius: 16px;
   padding: 24px;
   margin-bottom: 32px;
+  box-shadow: var(--shadow-sm);
 }
 
 .campaign-dashboard.loading {
@@ -46,10 +46,10 @@
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -57,14 +57,14 @@
 }
 
 .type-button:hover:not(.disabled) {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--bg-card-hover);
+  border-color: var(--border-violet);
 }
 
 .type-button.active {
-  background: rgba(0, 212, 255, 0.15);
-  border-color: var(--type-color, #00d4ff);
-  color: var(--type-color, #00d4ff);
+  background: rgba(212, 225, 87, 0.15);
+  border-color: var(--type-color, var(--accent-primary));
+  color: var(--text-primary);
 }
 
 .type-button.disabled {
@@ -114,10 +114,11 @@
 }
 
 .metric-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
   border-radius: 12px;
   padding: 16px;
+  box-shadow: var(--shadow-sm);
 }
 
 .metric-card.summary {
@@ -125,8 +126,8 @@
 }
 
 .metric-card.highlight {
-  background: rgba(0, 212, 255, 0.08);
-  border-color: rgba(0, 212, 255, 0.2);
+  background: rgba(212, 225, 87, 0.08);
+  border-color: rgba(212, 225, 87, 0.3);
 }
 
 .metric-label {
@@ -135,14 +136,14 @@
   justify-content: center;
   gap: 6px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 8px;
 }
 
 .label-text {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
 .info-icon {
@@ -151,10 +152,10 @@
   justify-content: center;
   width: 14px;
   height: 14px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-secondary);
   border-radius: 50%;
   font-size: 9px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-muted);
   cursor: help;
 }
 
@@ -165,12 +166,12 @@
 }
 
 .metric-value.roas {
-  color: #00d4ff;
+  color: var(--accent-violet);
 }
 
 .metric-subtext {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-muted);
   margin-top: 4px;
 }
 
@@ -194,16 +195,17 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-left: 3px solid var(--type-color, #00d4ff);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-left: 3px solid var(--type-color, var(--accent-primary));
   border-radius: 8px;
   transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
 }
 
 .type-row:hover {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--bg-card-hover);
+  box-shadow: var(--shadow-md);
 }
 
 .type-info {
@@ -224,9 +226,9 @@
 
 .campaign-count {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-muted);
   padding: 4px 8px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-secondary);
   border-radius: 4px;
 }
 
@@ -265,7 +267,7 @@
 
 .type-metric .label {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.3px;
   margin-bottom: 4px;
@@ -278,11 +280,11 @@
 }
 
 .type-metric.highlight .value {
-  color: #00d4ff;
+  color: var(--accent-violet);
 }
 
 .type-metric .value.roas {
-  color: #00d4ff;
+  color: var(--accent-violet);
 }
 
 /* Single type detail view */

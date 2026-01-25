@@ -1,7 +1,7 @@
 .app-layout {
   display: flex;
   min-height: 100vh;
-  background-color: transparent;
+  background-color: var(--bg-secondary);
   position: relative;
   z-index: 1;
 }
@@ -13,7 +13,6 @@
   max-width: 1600px;
   position: relative;
   z-index: 1;
-  /* Prevent overflow/ghost content issues */
   overflow-x: hidden;
   isolation: isolate;
 }

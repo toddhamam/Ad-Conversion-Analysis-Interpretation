@@ -13,6 +13,11 @@ const Sidebar = () => {
       </div>
 
       <nav className="sidebar-nav">
+        <NavLink to="/" className="nav-item" end>
+          <span className="nav-icon">📊</span>
+          <span className="nav-label">Dashboard</span>
+        </NavLink>
+
         <div className="nav-section">
           <button
             className={`nav-item nav-item-expandable ${channelsExpanded ? 'expanded' : ''}`}
