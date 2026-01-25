@@ -12,6 +12,36 @@ A SaaS platform for CMOs and media buyers solving ad creative fatigue through au
 
 **Logo**: `public/convertra-logo.png` - "Convertra" wordmark with stylized "v" as upward arrow featuring lime-to-violet gradient
 
+**Favicon**: `public/favicon.svg` - Stylized "V" arrow icon with lime-to-violet gradient
+
+### Loading States & ConversionIQ™ Branding
+
+All loading indicators and data fetching states should use **ConversionIQ™** branded messaging. Use the `Loading` component (`src/components/Loading.tsx`) with on-brand messages:
+
+```tsx
+import Loading from '../components/Loading';
+
+// Examples of on-brand loading messages:
+<Loading size="large" message="ConversionIQ™ extracting insights..." />
+<Loading size="medium" message="ConversionIQ™ syncing channels..." />
+<Loading size="small" message="ConversionIQ™ analyzing..." />
+
+// For fullscreen loading overlay:
+<Loading fullScreen size="large" message="ConversionIQ™ initializing..." />
+```
+
+**Approved loading message patterns:**
+- "ConversionIQ™ extracting insights..."
+- "ConversionIQ™ syncing channels..."
+- "ConversionIQ™ analyzing..."
+- "ConversionIQ™ generating..."
+- "ConversionIQ™ processing..."
+
+**Never use generic messages like:**
+- "Loading..."
+- "Please wait..."
+- "Connecting to API..."
+
 ## Quick Context
 
 - **Stack**: React 19 + TypeScript + Vite
@@ -46,6 +76,8 @@ public/
 | `src/pages/Insights.tsx` | Channel-level AI analysis with health scores |
 | `src/pages/SalesLanding.tsx` | Convertra sales/marketing landing page |
 | `src/pages/SalesLanding.css` | Sales landing page styles with animations |
+| `src/components/Loading.tsx` | Branded loading component with animated logo |
+| `src/components/Sidebar.tsx` | Collapsible sidebar navigation |
 
 ## Routes
 
