@@ -63,6 +63,12 @@
   letter-spacing: -0.5px;
 }
 
+.logo-image {
+  height: 32px;
+  width: auto;
+  display: block;
+}
+
 /* Desktop Navigation */
 .desktop-nav {
   display: flex;
@@ -1099,6 +1105,10 @@
 
   .logo-text {
     font-size: 18px;
+  }
+
+  .logo-image {
+    height: 26px;
   }
 
   .section {
