@@ -105,56 +105,56 @@ function SalesLanding() {
       <section id="hero" className="section hero-section">
         <div className="hero-content">
           <h1 className="hero-headline animate-on-scroll">
-            Winning Ads on Repeat—Without the Wasted Spend or the Bloated Team
+            <span className="headline-main">Winning Ads on Autopilot</span>
+            <span className="headline-sub">Without the Wasted Spend or the Bloated Team</span>
           </h1>
           <p className="hero-subhead animate-on-scroll delay-1">
-            <span className="highlight">ConversionIQ™</span> extracts what's working from your data,
-            interprets why it converts, and generates winning ads—automatically.
+            Our <span className="highlight">ConversionIQ™</span> technology extracts the full conversion story from your data... Then uses it to generate winning ads - on autopilot.
           </p>
           <p className="hero-supporting animate-on-scroll delay-2">
-            The conversion intelligence platform for enterprise brands who refuse to waste ad spend.
+            The #1 conversion intelligence & creative platform for enterprise brands who refuse to waste ad any more spend.
           </p>
-          <div className="hero-cta-group animate-on-scroll delay-3">
+          {/* Hero Demo Placeholder */}
+          <div className="hero-demo animate-on-scroll delay-3">
+            <div className="demo-container">
+              <div className="demo-placeholder">
+                <div className="demo-gradient-border"></div>
+                <div className="demo-inner">
+                  {/* Placeholder for video/animation */}
+                  <div className="demo-preview">
+                    <div className="demo-screen">
+                      <div className="screen-header">
+                        <span className="screen-dot"></span>
+                        <span className="screen-dot"></span>
+                        <span className="screen-dot"></span>
+                      </div>
+                      <div className="screen-content">
+                        <div className="screen-chart"></div>
+                        <div className="screen-metrics">
+                          <div className="metric-bar"></div>
+                          <div className="metric-bar"></div>
+                          <div className="metric-bar"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <button className="play-button" aria-label="Play demo video">
+                    <span className="play-pulse"></span>
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M8 5v14l11-7z"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <p className="demo-caption">See ConversionIQ™ in action</p>
+            </div>
+          </div>
+
+          <div className="hero-cta-group animate-on-scroll delay-4">
             <a href={calendarUrl} className="cta-primary">
               Schedule Custom Demo
             </a>
             <p className="cta-subtext">Limited availability. Bespoke implementation only.</p>
-          </div>
-        </div>
-
-        {/* Hero Demo Placeholder */}
-        <div className="hero-demo animate-on-scroll delay-4">
-          <div className="demo-container">
-            <div className="demo-placeholder">
-              <div className="demo-gradient-border"></div>
-              <div className="demo-inner">
-                {/* Placeholder for video/animation */}
-                <div className="demo-preview">
-                  <div className="demo-screen">
-                    <div className="screen-header">
-                      <span className="screen-dot"></span>
-                      <span className="screen-dot"></span>
-                      <span className="screen-dot"></span>
-                    </div>
-                    <div className="screen-content">
-                      <div className="screen-chart"></div>
-                      <div className="screen-metrics">
-                        <div className="metric-bar"></div>
-                        <div className="metric-bar"></div>
-                        <div className="metric-bar"></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <button className="play-button" aria-label="Play demo video">
-                  <span className="play-pulse"></span>
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M8 5v14l11-7z"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <p className="demo-caption">See ConversionIQ™ in action</p>
           </div>
         </div>
 
@@ -169,8 +169,8 @@ function SalesLanding() {
       <section id="problem" className="section problem-section">
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">
-            You're Spending Six Figures on Ads.<br />
-            <span className="header-emphasis">But Do You Actually Know Why Your Best Ones Work?</span>
+            You're Spending Millions on Ads.<br />
+            <span className="header-emphasis">But Do You Actually Know <span className="brush-underline">Why</span> Your Best Ads Convert?</span>
           </h2>
 
           {/* Visual Demo Placeholder - Dashboard comparison */}
@@ -223,9 +223,94 @@ function SalesLanding() {
             <p>
               Without the why, you're trapped in an endless loop:
             </p>
-            <p className="problem-loop">
-              Launch creative. Wait for data. Guess what worked. Test again. Burn more budget. Repeat.
-            </p>
+            <div className="problem-loop-visual">
+              <div className="loop-track">
+                <div className="loop-step">
+                  <div className="loop-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="17 8 12 3 7 8"/>
+                      <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                  </div>
+                  <span className="loop-text">Launch creative</span>
+                </div>
+                <div className="loop-arrow">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  </svg>
+                </div>
+                <div className="loop-step">
+                  <div className="loop-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                  </div>
+                  <span className="loop-text">Wait for data</span>
+                </div>
+                <div className="loop-arrow">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  </svg>
+                </div>
+                <div className="loop-step">
+                  <div className="loop-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M9 9c0-1.66 1.34-3 3-3s3 1.34 3 3c0 1.3-.84 2.4-2 2.82V14"/>
+                      <circle cx="12" cy="17" r="1" fill="currentColor"/>
+                    </svg>
+                  </div>
+                  <span className="loop-text">Guess what worked</span>
+                </div>
+                <div className="loop-arrow">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  </svg>
+                </div>
+                <div className="loop-step">
+                  <div className="loop-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="23 4 23 10 17 10"/>
+                      <polyline points="1 20 1 14 7 14"/>
+                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                    </svg>
+                  </div>
+                  <span className="loop-text">Test again</span>
+                </div>
+                <div className="loop-arrow">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  </svg>
+                </div>
+                <div className="loop-step">
+                  <div className="loop-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 2v6"/>
+                      <path d="M12 22v-6"/>
+                      <circle cx="12" cy="12" r="4"/>
+                      <path d="M8 12H2"/>
+                      <path d="M22 12h-6"/>
+                      <path d="M6 6l3 3"/>
+                      <path d="M15 15l3 3"/>
+                      <path d="M6 18l3-3"/>
+                      <path d="M15 9l3-3"/>
+                    </svg>
+                  </div>
+                  <span className="loop-text">Burn more budget</span>
+                </div>
+                <div className="loop-arrow loop-back">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M17 1l4 4-4 4"/>
+                    <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+                    <path d="M7 23l-4-4 4-4"/>
+                    <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                  </svg>
+                </div>
+              </div>
+              <div className="loop-label">The Endless Wastage Cycle $$$</div>
+            </div>
             <div className="problem-pain">
               <p>Every failed test costs you money.</p>
               <p>Every week spent "optimizing" is a week your competitors are pulling ahead.</p>
@@ -245,7 +330,7 @@ function SalesLanding() {
           </h2>
           <p className="mechanism-intro animate-on-scroll delay-1">
             ConversionIQ™ is our proprietary technology that does what dashboards can't.<br />
-            <strong>It doesn't just show you data. It interprets it.</strong>
+            <strong>It doesn't just show you data. It interprets it... And Then Generates.</strong>
           </p>
 
           {/* Animated Workflow Visualization */}
@@ -426,7 +511,7 @@ function SalesLanding() {
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">
             This Isn't Software.<br />
-            <span className="header-emphasis">It's a System Built Around You.</span>
+            <span className="header-emphasis">It's a System Built Around Your Company.</span>
           </h2>
 
           <div className="bespoke-intro animate-on-scroll delay-1">
