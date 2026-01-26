@@ -9,6 +9,7 @@ interface SidebarProps {
 
 const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
   const [channelsExpanded, setChannelsExpanded] = useState(true);
+  const [insightsExpanded, setInsightsExpanded] = useState(true);
 
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
@@ -98,21 +99,37 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
           <span className="nav-label">Publisher</span>
         </NavLink>
 
-        <NavLink to="/concepts" className="nav-item" title="Concepts">
-          <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-          </svg>
-          <span className="nav-label">Concepts</span>
-        </NavLink>
-
-        <NavLink to="/insights" className="nav-item" title="Insights">
-          <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="20" x2="18" y2="10"/>
-            <line x1="12" y1="20" x2="12" y2="4"/>
-            <line x1="6" y1="20" x2="6" y2="14"/>
-          </svg>
-          <span className="nav-label">Insights</span>
-        </NavLink>
+        <div className="nav-section">
+          <button
+            className={`nav-item nav-item-expandable ${insightsExpanded ? 'expanded' : ''}`}
+            onClick={() => !collapsed && setInsightsExpanded(!insightsExpanded)}
+            title="Insights"
+          >
+            <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10"/>
+              <line x1="12" y1="20" x2="12" y2="4"/>
+              <line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+            <span className="nav-label">Insights</span>
+            {!collapsed && (
+              <svg className="nav-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            )}
+          </button>
+          {insightsExpanded && !collapsed && (
+            <div className="nav-submenu">
+              <NavLink to="/insights" className="nav-subitem">
+                <span className="nav-bullet"></span>
+                <span>Overview</span>
+              </NavLink>
+              <NavLink to="/concepts" className="nav-subitem">
+                <span className="nav-bullet"></span>
+                <span>Concepts</span>
+              </NavLink>
+            </div>
+          )}
+        </div>
       </nav>
 
       <div className="sidebar-footer">
