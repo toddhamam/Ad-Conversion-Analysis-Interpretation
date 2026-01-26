@@ -78,11 +78,22 @@ public/
 | `src/pages/SalesLanding.css` | Sales landing page styles with animations |
 | `src/components/Loading.tsx` | Branded loading component with animated logo |
 | `src/components/Sidebar.tsx` | Collapsible sidebar navigation |
+| `src/components/ProtectedRoute.tsx` | Auth guard for protected routes |
+| `src/pages/Login.tsx` | Authentication login page |
+| `src/pages/Register.tsx` | Company registration/signup page |
 
 ## Routes
 
+### Public Routes (no auth required)
 ```
-/               → Dashboard overview
+/               → Sales landing page (Convertra marketing)
+/login          → User authentication
+/signup         → Company registration
+```
+
+### Protected Routes (auth required)
+```
+/dashboard      → Dashboard overview
 /channels       → Channel overview
 /channels/meta-ads  → Meta Ads dashboard (main view)
 /creatives      → AI ad generation
@@ -90,7 +101,6 @@ public/
 /concepts       → Concepts management
 /products       → Products management
 /insights       → Channel AI analysis
-/landing        → Sales landing page (standalone, no sidebar)
 ```
 
 ## Architecture Decisions
@@ -99,7 +109,8 @@ public/
 2. **Service layer abstraction** - All API calls go through `src/services/`
 3. **Campaign type detection** - Naming conventions: `[P]`/`Prospecting`, `[R]`/`Retargeting`, `[RT]`/`Retention`
 4. **Image caching** - Top 20 performing images cached by conversion rate
-5. **Standalone pages** - Sales landing page has no sidebar, separate from MainLayout
+5. **Public/Protected route separation** - Sales & login are public; app routes require auth
+6. **Stub authentication** - Uses localStorage flag; ready for real auth provider (Clerk, Auth0, etc.)
 
 ---
 
@@ -241,7 +252,7 @@ Clean, professional light theme with lime green primary accent and violet second
 
 ### Sales Landing Page Components
 
-The sales landing (`/landing`) uses these specific patterns:
+The sales landing (`/`) uses these specific patterns:
 
 #### Pill Navigation
 ```css
@@ -386,16 +397,22 @@ npm run lint   # ESLint with TypeScript rules
 2. Add route in `src/App.tsx`
 3. Add nav item in `src/components/Sidebar.tsx` (for app pages)
 
-### Adding a Standalone Page (like Sales Landing)
+### Adding a Public Page (like Sales Landing or Login)
 1. Create `src/pages/NewPage.tsx` and `NewPage.css`
-2. Add route OUTSIDE MainLayout in `src/App.tsx`:
+2. Add route in the public section of `src/App.tsx`:
 ```tsx
 <Routes>
-  {/* Standalone page - no sidebar */}
-  <Route path="/new-page" element={<NewPage />} />
+  {/* Public Routes - no auth required */}
+  <Route path="/" element={<SalesLanding />} />
+  <Route path="/login" element={<Login />} />
+  <Route path="/new-page" element={<NewPage />} />  {/* Add here */}
 
-  {/* App Routes - with MainLayout sidebar */}
-  <Route path="/*" element={<MainLayout>...</MainLayout>} />
+  {/* Protected App Routes - auth required */}
+  <Route path="/*" element={
+    <ProtectedRoute>
+      <MainLayout>...</MainLayout>
+    </ProtectedRoute>
+  } />
 </Routes>
 ```
 
@@ -500,7 +517,10 @@ The Convertra sales landing follows this architecture:
 - Manual testing against live Meta API
 - Use mock data in `src/data/` for UI development
 - Dev server: `http://localhost:5175`
-- Sales landing: `http://localhost:5175/landing`
+- Sales landing: `http://localhost:5175` (root)
+- Login: `http://localhost:5175/login`
+- Signup: `http://localhost:5175/signup`
+- Dashboard: `http://localhost:5175/dashboard` (requires auth)
 
 ### Dev Server Troubleshooting
 - Port 5175 may be in use by other processes/workspaces - try 5176, 5177 if needed
