@@ -956,3 +956,126 @@
   font-weight: 500;
   color: var(--accent-primary);
 }
+
+/* ==================== Additional Responsive Styles ==================== */
+
+/* Tablet breakpoint - 768px */
+@media (max-width: 768px) {
+  .ad-generator-page .config-panel {
+    padding: 24px;
+  }
+
+  .ad-type-options {
+    grid-template-columns: 1fr;
+  }
+
+  .ad-type-btn {
+    flex-direction: row;
+    padding: 16px 20px;
+    gap: 16px;
+    text-align: left;
+    align-items: flex-start;
+  }
+
+  .ad-type-icon {
+    font-size: 28px;
+  }
+
+  .selection-summary {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .summary-divider {
+    display: none;
+  }
+
+  .generated-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .section-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .publish-ads-btn,
+  .clear-ads-btn {
+    flex: 1;
+    min-width: 120px;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .generate-btn {
+    min-height: 48px;
+  }
+
+  .variation-options {
+    flex-wrap: wrap;
+  }
+
+  .variation-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .cost-estimate {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .empty-state {
+    padding: 60px 20px;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Mobile breakpoint - 480px */
+@media (max-width: 480px) {
+  .ad-generator-page .config-panel {
+    padding: 16px;
+  }
+
+  .config-title {
+    font-size: 16px;
+  }
+
+  .generate-btn {
+    padding: 14px 24px;
+    font-size: 15px;
+  }
+
+  .analysis-status {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .storage-warning {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .warning-action-btn {
+    margin-left: 0;
+    margin-top: 8px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .empty-state h3 {
+    font-size: 18px;
+  }
+}

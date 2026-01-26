@@ -21,3 +21,25 @@
 .app-layout.sidebar-collapsed .main-content {
   margin-left: 96px;
 }
+
+/* ==================== Responsive Layout ==================== */
+
+/* Tablet breakpoint - 768px */
+@media (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+    padding: 88px 24px 24px 24px;
+    max-width: 100%;
+  }
+
+  .app-layout.sidebar-collapsed .main-content {
+    margin-left: 0;
+  }
+}
+
+/* Mobile breakpoint - 480px */
+@media (max-width: 480px) {
+  .main-content {
+    padding: 72px 16px 16px 16px;
+  }
+}

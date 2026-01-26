@@ -468,3 +468,91 @@
 .recommendation-category li:last-child {
   margin-bottom: 0;
 }
+
+/* ==================== Responsive Styles ==================== */
+
+/* Tablet breakpoint - 768px */
+@media (max-width: 768px) {
+  .analysis-panel {
+    max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 32px);
+  }
+
+  .analysis-panel-header {
+    padding: 16px 20px;
+  }
+
+  .analysis-panel-title {
+    font-size: 16px;
+  }
+
+  .analysis-score-section {
+    flex-direction: column;
+    text-align: center;
+    gap: 16px;
+  }
+
+  .score-summary {
+    text-align: center;
+  }
+
+  .analysis-ad-info {
+    padding: 16px 20px;
+  }
+
+  .analysis-ad-metrics {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .analysis-results {
+    padding: 16px;
+  }
+
+  .analysis-section {
+    padding: 16px;
+  }
+
+  .analysis-close-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Mobile breakpoint - 480px */
+@media (max-width: 480px) {
+  .analysis-panel-overlay {
+    padding: 8px;
+  }
+
+  .analysis-panel {
+    max-width: calc(100vw - 16px);
+    border-radius: 12px;
+  }
+
+  .analysis-start-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .analysis-error {
+    flex-direction: column;
+    align-items: flex-start;
+    margin: 16px;
+  }
+
+  .retry-btn {
+    margin-left: 0;
+    width: 100%;
+    text-align: center;
+  }
+
+  .score-circle {
+    width: 70px;
+    height: 70px;
+  }
+
+  .score-value {
+    font-size: 24px;
+  }
+}

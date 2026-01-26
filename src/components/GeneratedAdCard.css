@@ -532,3 +532,99 @@
     justify-content: center;
   }
 }
+
+/* ==================== Additional Responsive Styles ==================== */
+
+/* Tablet breakpoint - 768px */
+@media (max-width: 768px) {
+  .generated-ad-card {
+    padding: 20px;
+  }
+
+  .ad-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .ad-card-meta {
+    flex-wrap: wrap;
+  }
+
+  .images-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .storyboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ad-copy-section {
+    gap: 16px;
+  }
+
+  .images-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .toggle-images-btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .action-btn {
+    min-height: 44px;
+  }
+}
+
+/* Mobile breakpoint - 480px */
+@media (max-width: 480px) {
+  .generated-ad-card {
+    padding: 16px;
+  }
+
+  .ad-card-header {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+  }
+
+  .ad-type-badge,
+  .audience-badge {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+
+  .ad-images-section,
+  .storyboard-section,
+  .ad-copy-section {
+    margin-bottom: 20px;
+  }
+
+  .copy-column {
+    padding: 12px;
+  }
+
+  .scene-card {
+    border-radius: 8px;
+  }
+
+  .scene-header {
+    padding: 8px 12px;
+  }
+
+  .scene-content {
+    padding: 10px 12px;
+  }
+
+  .why-it-works {
+    padding: 14px 16px;
+  }
+
+  .cta-tag {
+    padding: 6px 12px;
+    font-size: 11px;
+  }
+}
