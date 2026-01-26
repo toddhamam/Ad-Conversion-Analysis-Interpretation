@@ -1,0 +1,561 @@
+.billing-page {
+  max-width: 1200px;
+}
+
+.billing-header {
+  margin-bottom: 32px;
+}
+
+.billing-title {
+  font-size: 42px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  color: var(--text-primary);
+}
+
+.billing-subtitle {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Alerts */
+.billing-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.billing-alert-success {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+}
+
+.billing-alert-warning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+}
+
+.billing-alert-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+/* Current Plan Card */
+.current-plan-card {
+  padding: 28px;
+  margin-bottom: 32px;
+}
+
+.current-plan-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.current-plan-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tier-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  width: fit-content;
+}
+
+.tier-badge-free {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.tier-badge-pro {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  color: #1e293b;
+}
+
+.tier-badge-enterprise {
+  background: linear-gradient(135deg, var(--accent-violet) 0%, #7c3aed 100%);
+  color: white;
+}
+
+.current-plan-name {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.current-plan-period {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.manage-payment-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.manage-payment-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-violet);
+  box-shadow: var(--shadow-sm);
+}
+
+.payment-method-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-primary);
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+/* Section Title */
+.section-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 20px 0;
+}
+
+/* Usage Section */
+.usage-section {
+  margin-bottom: 48px;
+}
+
+.usage-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+.usage-card {
+  padding: 24px;
+}
+
+.usage-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+
+.usage-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.usage-values {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.usage-current {
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.usage-limit {
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.progress-bar {
+  height: 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-primary) 0%, var(--accent-violet) 100%);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* Pricing Section */
+.pricing-section {
+  margin-bottom: 48px;
+}
+
+.pricing-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.billing-toggle {
+  display: flex;
+  background: var(--bg-secondary);
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toggle-btn.active {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.save-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+/* Plan Cards */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.plan-card {
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.plan-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+}
+
+.plan-card.plan-popular {
+  border-color: var(--accent-violet);
+}
+
+.plan-card.plan-current {
+  border-color: var(--accent-primary);
+}
+
+.popular-badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  background: var(--accent-violet);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 100px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.plan-header {
+  margin-bottom: 20px;
+}
+
+.plan-name {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+  color: var(--text-primary);
+}
+
+.plan-description {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.plan-price {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 24px;
+}
+
+.price-amount {
+  font-size: 40px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.price-interval {
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.plan-features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 24px 0;
+  flex: 1;
+}
+
+.plan-features li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.plan-features li svg {
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.plan-features li.feature-unavailable {
+  color: var(--text-muted);
+}
+
+.plan-features li.feature-unavailable svg {
+  color: var(--text-muted);
+}
+
+.plan-cta {
+  width: 100%;
+  padding: 14px 24px;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: 10px;
+  color: #1e293b;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.plan-cta:hover:not(:disabled) {
+  background: var(--accent-secondary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+.plan-cta:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.plan-cta.plan-cta-current {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.spinner-small {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-top-color: #1e293b;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Invoices Section */
+.invoices-section {
+  margin-bottom: 48px;
+}
+
+.invoices-table {
+  overflow: hidden;
+}
+
+.invoice-header,
+.invoice-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 100px 100px 80px;
+  gap: 16px;
+  padding: 16px 24px;
+  align-items: center;
+}
+
+.invoice-header {
+  background: var(--bg-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.invoice-row {
+  border-top: 1px solid var(--border-primary);
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.invoice-status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.invoice-status-paid {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.invoice-status-open {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.invoice-status-draft {
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+}
+
+.invoice-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent-violet);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.invoice-link:hover {
+  text-decoration: underline;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .pricing-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .billing-title {
+    font-size: 32px;
+  }
+
+  .current-plan-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .manage-payment-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .usage-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pricing-header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .billing-toggle {
+    justify-content: center;
+  }
+
+  .pricing-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-header,
+  .invoice-row {
+    grid-template-columns: 100px 1fr 80px;
+  }
+
+  .invoice-header span:nth-child(4),
+  .invoice-header span:nth-child(5),
+  .invoice-row span:nth-child(4),
+  .invoice-row span:nth-child(5) {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .billing-title {
+    font-size: 28px;
+  }
+
+  .current-plan-card,
+  .usage-card,
+  .plan-card {
+    padding: 20px;
+  }
+
+  .usage-current {
+    font-size: 28px;
+  }
+
+  .price-amount {
+    font-size: 32px;
+  }
+
+  .toggle-btn {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+}
