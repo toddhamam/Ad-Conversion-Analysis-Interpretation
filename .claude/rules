@@ -15,6 +15,11 @@
 - After visual changes, offer to adjust if styling intensity needs tweaking
 - Guide users through troubleshooting steps to empower self-resolution
 
+## TypeScript Patterns
+- **Type-only imports**: Use `import type { MyType }` for types when using `verbatimModuleSyntax` to avoid runtime import overhead
+- **Non-null assertions**: Use `process.env.VAR_NAME!` in serverless functions where env vars are guaranteed to exist
+- **Strict typing for API responses**: Define interfaces for all API response shapes in `src/types/`
+
 ## React Patterns Used in This Codebase
 - Conditional rendering: `condition ? (...) : (...)` for show/hide
 - NavLink with automatic `.active` class styling for navigation
@@ -47,6 +52,11 @@
 - Hidden overlay click interception: `opacity: 0` does NOT prevent click events. Always add `pointer-events: none` to hidden overlays to prevent them from blocking interactions with elements beneath
 - Inconsistent breakpoints: Standardize media query breakpoints across the codebase (900px for tablet, 600px for mobile)
 
+### Stripe Integration Mistakes
+- **Don't call `stripe.redirectToCheckout` without a session**: Always create a Checkout Session via backend API first, then pass the `sessionId` to `redirectToCheckout`
+- **Don't expose secret keys**: Stripe secret key (`sk_*`) must only be used in backend serverless functions, never in frontend code
+- **Don't skip configuration checks**: Always check `isStripeConfigured()` before attempting Stripe operations to handle gracefully when keys are missing
+
 ## Git Workflow
 - Use descriptive commit messages summarizing actual changes
 - `gh pr create` for automated PR creation
@@ -66,3 +76,21 @@
 - Use `localStorage` for authentication state (`'convertra_authenticated'`, `'convertra_user'`)
 - Use `setTimeout` to simulate API calls in `Login.tsx` and `Register.tsx`
 - These stubs enable quick demonstrations without a full backend
+
+## API Route Conventions
+- Backend API routes live in `api/[feature_area]/[specific_route].ts`
+- Use `@vercel/node` types (`VercelRequest`, `VercelResponse`) for serverless functions
+- Frontend calls backend via `fetch('/api/[feature]/[action]')`
+- Always return JSON responses with consistent error shapes
+
+## External Library Patterns
+- **Lazy-loading**: For heavy third-party libraries (Stripe.js, etc.), use lazy initialization pattern:
+  ```typescript
+  let libPromise: Promise<Lib | null> | null = null;
+  export const getLib = () => {
+    if (!libPromise) { libPromise = loadLib(config); }
+    return libPromise;
+  };
+  ```
+- **Configuration guards**: Always provide `isConfigured()` helpers that check env vars before attempting operations
+- **Fallback data**: Provide `getDefaultData()` functions for graceful degradation when APIs are unavailable
