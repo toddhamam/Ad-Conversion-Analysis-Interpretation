@@ -380,6 +380,18 @@ VITE_OPENAI_API_KEY=        # GPT-4o access
 VITE_GEMINI_API_KEY=        # Image generation (optional)
 ```
 
+## Deployment (Vercel)
+
+This is a Single Page Application (SPA) deployed on Vercel. The `vercel.json` configuration includes a rewrite rule to ensure client-side routing works correctly:
+
+```json
+{
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}
+```
+
+This is required for `react-router-dom` to handle direct deep links and page refreshes on non-root paths (e.g., `/login`, `/signup`, `/dashboard`).
+
 ## Development Commands
 
 ```bash
@@ -387,6 +399,9 @@ npm run dev    # Start dev server (port 5175)
 npm run build  # TypeScript check + Vite build
 npm run lint   # ESLint with TypeScript rules
 ```
+
+### Starting the Dev Server
+Always run `npm run dev` to start the development server before testing URLs. The server must be running for pages to be accessible.
 
 ---
 
