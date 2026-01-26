@@ -1,0 +1,247 @@
+.user-profile-dropdown {
+  position: relative;
+}
+
+/* ==================== Trigger Button ==================== */
+
+.user-profile-trigger {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 200px;
+}
+
+.user-profile-trigger:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-violet);
+  box-shadow: var(--shadow-sm);
+}
+
+.user-profile-trigger.active {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-violet);
+  box-shadow: var(--shadow-md);
+}
+
+/* ==================== Company Logo ==================== */
+
+.company-logo-container {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+}
+
+.company-logo-img {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: var(--bg-secondary);
+}
+
+.company-logo-placeholder {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-violet) 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+/* ==================== User Info ==================== */
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 1;
+  min-width: 0;
+}
+
+.user-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.company-name {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+/* ==================== Dropdown Chevron ==================== */
+
+.dropdown-chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.dropdown-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+/* ==================== Dropdown Menu ==================== */
+
+.user-profile-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 240px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  z-index: 1000;
+  overflow: hidden;
+  animation: dropdownFadeIn 0.15s ease;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ==================== Menu Header ==================== */
+
+.menu-header {
+  padding: 16px;
+  background: var(--bg-secondary);
+}
+
+.menu-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menu-user-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.menu-user-email {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.menu-user-role {
+  font-size: 11px;
+  color: var(--accent-violet);
+  margin-top: 4px;
+}
+
+/* ==================== Menu Divider ==================== */
+
+.menu-divider {
+  height: 1px;
+  background: var(--border-primary);
+}
+
+/* ==================== Menu Items ==================== */
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.menu-item:hover {
+  background: var(--bg-secondary);
+}
+
+.menu-item svg {
+  width: 18px;
+  height: 18px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.menu-item span {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.menu-item-danger:hover {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.menu-item-danger svg {
+  color: #ef4444;
+}
+
+.menu-item-danger span {
+  color: #ef4444;
+}
+
+/* ==================== Responsive ==================== */
+
+@media (max-width: 768px) {
+  .user-profile-trigger {
+    min-width: auto;
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .user-info {
+    display: none;
+  }
+
+  .dropdown-chevron {
+    display: none;
+  }
+
+  .user-profile-menu {
+    right: -8px;
+    min-width: 220px;
+  }
+}
+
+@media (max-width: 480px) {
+  .company-logo-container {
+    width: 32px;
+    height: 32px;
+  }
+
+  .company-logo-img,
+  .company-logo-placeholder {
+    width: 32px;
+    height: 32px;
+    font-size: 11px;
+  }
+}

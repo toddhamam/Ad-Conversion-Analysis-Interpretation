@@ -22,6 +22,26 @@ function Login() {
       // Store auth state (replace with real token storage)
       localStorage.setItem('convertra_authenticated', 'true');
 
+      // Check if user data exists, if not create default from email
+      const existingUser = localStorage.getItem('convertra_user');
+      if (!existingUser) {
+        // Extract name from email for demo purposes
+        const namePart = email.split('@')[0];
+        const formattedName = namePart
+          .replace(/[._-]/g, ' ')
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+        const domain = email.split('@')[1]?.split('.')[0] || 'Company';
+        const companyName = domain.charAt(0).toUpperCase() + domain.slice(1);
+
+        localStorage.setItem('convertra_user', JSON.stringify({
+          fullName: formattedName,
+          companyName: companyName,
+          email: email,
+        }));
+      }
+
       navigate('/dashboard');
     } catch {
       setError('Invalid email or password');

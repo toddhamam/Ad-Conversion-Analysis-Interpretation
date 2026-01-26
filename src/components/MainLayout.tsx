@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import UserProfileDropdown from './UserProfileDropdown';
 import './MainLayout.css';
 
 interface MainLayoutProps {
@@ -44,7 +45,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           <span className="hamburger-line"></span>
         </button>
         <img src="/convertra-logo.png" alt="Convertra" className="mobile-logo" />
-        <div className="mobile-header-spacer" aria-hidden="true"></div>
+        <UserProfileDropdown />
       </header>
 
       <Sidebar
@@ -53,9 +54,15 @@ const MainLayout = ({ children }: MainLayoutProps) => {
         mobileOpen={mobileNavOpen}
         onCloseMobile={() => setMobileNavOpen(false)}
       />
-      <main className="main-content">
-        {children}
-      </main>
+      <div className="main-area">
+        <header className="top-bar">
+          <div className="top-bar-spacer"></div>
+          <UserProfileDropdown />
+        </header>
+        <main className="main-content">
+          {children}
+        </main>
+      </div>
     </div>
   );
 };
