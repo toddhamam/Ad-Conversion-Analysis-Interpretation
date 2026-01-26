@@ -13,6 +13,18 @@ The user prefers a standard SaaS URL structure:
 - Sales landing navigation should include a "Log in" button styled as a secondary link
 - Place "Log in" next to the primary CTA ("Schedule Demo")
 - Log in button styling: subtle lime green outline, becoming more prominent on hover
+- Navigation dropdowns should be collapsed by default on page load
+- Sidebar supports collapsible sections for Channels and Insights
+
+## Design & Branding Preferences
+
+- **Visual polish**: User prefers "professional" and "nicer" looks for UI elements; focus on aesthetic quality
+- **ConversionIQ™ branding**: Integrate throughout the UI, especially for loading states and data processing
+- **CreativeIQ™ branding**: The "hero action" for AI creative generation; should be visually distinct and prominent
+- **Hero action prominence**: The Creative Generator (CreativeIQ™) should be styled as a prominent CTA button, not a regular nav item
+- **Iterative design approach**: Make small, focused changes and gather feedback for refinement
+- **Clean navigation**: Remove redundant navigation items if they create confusion or duplicate workflows
+- Use meaningful `title` attributes on navigation items and buttons for accessibility and discoverability
 
 ## Form Design Requirements
 
