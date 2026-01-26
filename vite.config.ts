@@ -16,6 +16,16 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    build: {
+      // Exclude serverless functions from client build
+      rollupOptions: {
+        external: [/^\/api\//],
+      },
+    },
+    // Exclude api folder from being processed by Vite
+    optimizeDeps: {
+      exclude: ['api'],
+    },
     server: {
       port,
       host: '0.0.0.0',
@@ -24,6 +34,9 @@ export default defineConfig(({ mode }) => {
         'Pragma': 'no-cache',
         'Expires': '0',
         'Surrogate-Control': 'no-store',
+      },
+      watch: {
+        ignored: ['**/api/**'],
       },
     },
     define: {
