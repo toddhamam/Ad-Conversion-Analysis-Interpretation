@@ -23,27 +23,26 @@
 .channel-grid {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 
 .channel-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 32px;
+  padding: 36px;
   background: var(--bg-card);
-  border: 1px solid var(--border-primary);
-  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   text-decoration: none;
   color: inherit;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   position: relative;
   overflow: hidden;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-card);
 }
 
 .channel-card:not(.disabled):hover {
-  border-color: var(--border-violet);
   box-shadow: var(--shadow-md);
   transform: translateY(-2px);
 }
@@ -87,12 +86,9 @@
 }
 
 .channel-conversions {
-  font-size: 36px;
-  font-weight: 700;
-  background: var(--gradient-cyan);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 40px;
+  font-weight: 600;
+  color: var(--text-primary);
   line-height: 1;
 }
 
@@ -131,7 +127,7 @@
   }
 
   .channel-card {
-    padding: 24px;
+    padding: 28px;
   }
 
   .channel-card-header {
@@ -149,7 +145,7 @@
   }
 
   .channel-conversions {
-    font-size: 28px;
+    font-size: 32px;
   }
 
   .channel-arrow {
@@ -179,7 +175,7 @@
   }
 
   .channel-card {
-    padding: 20px;
+    padding: 24px;
   }
 
   .channel-name {
@@ -191,6 +187,6 @@
   }
 
   .channel-conversions {
-    font-size: 24px;
+    font-size: 28px;
   }
 }
