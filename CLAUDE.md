@@ -56,9 +56,13 @@ import Loading from '../components/Loading';
 src/
 ├── pages/           # Route-level components (Channels, MetaAds, AdGenerator, Insights, SalesLanding)
 ├── components/      # Reusable UI (DateRangePicker, CampaignTypeDashboard, etc.)
-├── services/        # API integrations (metaApi.ts, openaiApi.ts, imageCache.ts)
+├── services/        # API integrations (metaApi.ts, openaiApi.ts, imageCache.ts, stripeApi.ts)
 ├── types/           # TypeScript interfaces
 └── data/            # Mock data for development
+
+api/
+├── billing/         # Stripe billing API routes (checkout.ts, portal.ts, webhook.ts)
+└── [feature]/       # Feature-specific API routes
 
 public/
 ├── convertra-logo.png  # Convertra brand logo
@@ -84,6 +88,10 @@ public/
 | `src/pages/Register.tsx` | Company registration/signup page |
 | `src/components/UserProfileDropdown.tsx` | User profile dropdown with company branding, sign out, account actions |
 | `src/components/MainLayout.tsx` | App shell with sidebar, header, and responsive navigation |
+| `src/services/stripeApi.ts` | Stripe integration - checkout, portal, subscription management |
+| `src/pages/Billing.tsx` | Billing portal page with plan management |
+| `api/billing/checkout.ts` | Vercel serverless function for Stripe Checkout sessions |
+| `api/billing/portal.ts` | Vercel serverless function for Stripe Customer Portal |
 
 ## Routes
 
@@ -114,6 +122,78 @@ public/
 4. **Image caching** - Top 20 performing images cached by conversion rate
 5. **Public/Protected route separation** - Sales & login are public; app routes require auth
 6. **Stub authentication** - Uses localStorage flag; ready for real auth provider (Clerk, Auth0, etc.)
+7. **Frontend/Backend API separation** - Sensitive operations (Stripe, Supabase) handled by backend serverless functions
+8. **Vercel serverless functions** - API routes in `api/` directory using `@vercel/node` (`VercelRequest`, `VercelResponse`)
+
+---
+
+## Stripe Billing Integration
+
+### Architecture
+- **Frontend**: `src/services/stripeApi.ts` handles UI-facing billing operations
+- **Backend**: `api/billing/*.ts` serverless functions for sensitive Stripe operations
+- **Stripe.js**: Loaded lazily on first use to minimize bundle impact
+
+### Stripe Patterns
+
+#### Lazy-loading Stripe.js
+```typescript
+import { loadStripe, Stripe } from '@stripe/stripe-js';
+
+let stripePromise: Promise<Stripe | null> | null = null;
+
+export const getStripe = () => {
+  if (!stripePromise) {
+    stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+  }
+  return stripePromise;
+};
+```
+
+#### Configuration Check
+```typescript
+export const isStripeConfigured = (): boolean => {
+  return !!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+};
+```
+
+#### Checkout Flow
+1. Frontend calls `POST /api/billing/checkout` with plan info
+2. Backend creates Stripe Checkout Session and returns `sessionId`
+3. Frontend redirects via `stripe.redirectToCheckout({ sessionId })`
+
+#### Customer Portal
+1. Frontend calls `POST /api/billing/portal`
+2. Backend creates portal session and returns `url`
+3. Frontend redirects to Stripe-hosted portal
+
+### API Route Pattern
+```typescript
+// api/billing/checkout.ts
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import Stripe from 'stripe';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2023-10-16' });
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Handle request...
+}
+```
+
+---
+
+## Supabase Integration
+
+For data persistence, use Supabase with inline client creation in serverless functions:
+
+```typescript
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+```
 
 ---
 
@@ -384,11 +464,24 @@ const analysis = await analyzeAdCreative(adId, {
 
 ## Environment Variables
 
+### Frontend (VITE_ prefix required)
 ```bash
 VITE_META_ACCESS_TOKEN=     # Facebook API token
 VITE_META_AD_ACCOUNT_ID=    # Format: act_XXXXXXXXX
 VITE_OPENAI_API_KEY=        # GPT-4o access
 VITE_GEMINI_API_KEY=        # Image generation (optional)
+VITE_STRIPE_PUBLISHABLE_KEY= # Stripe publishable key (pk_live_* or pk_test_*)
+```
+
+### Backend (Vercel serverless functions)
+```bash
+STRIPE_SECRET_KEY=          # Stripe secret key (sk_live_* or sk_test_*)
+STRIPE_WEBHOOK_SECRET=      # Stripe webhook signing secret (whsec_*)
+STRIPE_PRICE_STARTER=       # Stripe Price ID for Starter plan
+STRIPE_PRICE_GROWTH=        # Stripe Price ID for Growth plan
+STRIPE_PRICE_ENTERPRISE=    # Stripe Price ID for Enterprise plan
+SUPABASE_URL=               # Supabase project URL
+SUPABASE_SERVICE_ROLE_KEY=  # Supabase service role key (for server-side access)
 ```
 
 ## Deployment (Vercel)
