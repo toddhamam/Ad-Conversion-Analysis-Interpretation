@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { CampaignTypeMetrics, CampaignType } from '../services/metaApi';
+import { Target, RefreshCw, Gem, BarChart3, type LucideIcon } from 'lucide-react';
 import './CampaignTypeDashboard.css';
 
 interface CampaignTypeDashboardProps {
@@ -7,11 +8,11 @@ interface CampaignTypeDashboardProps {
   loading?: boolean;
 }
 
-const CAMPAIGN_TYPE_LABELS: Record<CampaignType, { label: string; icon: string; color: string }> = {
-  Prospecting: { label: 'Prospecting', icon: '🎯', color: '#00d4ff' },
-  Retargeting: { label: 'Retargeting', icon: '🔄', color: '#a855f7' },
-  Retention: { label: 'Retention', icon: '💎', color: '#10b981' },
-  Other: { label: 'Other', icon: '📊', color: '#f59e0b' },
+const CAMPAIGN_TYPE_LABELS: Record<CampaignType, { label: string; Icon: LucideIcon; color: string }> = {
+  Prospecting: { label: 'Prospecting', Icon: Target, color: '#00d4ff' },
+  Retargeting: { label: 'Retargeting', Icon: RefreshCw, color: '#a855f7' },
+  Retention: { label: 'Retention', Icon: Gem, color: '#10b981' },
+  Other: { label: 'Other', Icon: BarChart3, color: '#f59e0b' },
 };
 
 function formatCurrency(value: number): string {
@@ -81,15 +82,16 @@ export default function CampaignTypeDashboard({ metrics, loading }: CampaignType
           {(['Prospecting', 'Retargeting', 'Retention'] as CampaignType[]).map(type => {
             const typeMetrics = metrics.find(m => m.campaignType === type);
             const hasData = typeMetrics && typeMetrics.campaignCount > 0;
+            const { Icon, label, color } = CAMPAIGN_TYPE_LABELS[type];
             return (
               <button
                 key={type}
                 className={`type-button ${selectedType === type ? 'active' : ''} ${!hasData ? 'disabled' : ''}`}
                 onClick={() => hasData && setSelectedType(type)}
-                style={{ '--type-color': CAMPAIGN_TYPE_LABELS[type].color } as React.CSSProperties}
+                style={{ '--type-color': color } as React.CSSProperties}
               >
-                <span className="type-icon">{CAMPAIGN_TYPE_LABELS[type].icon}</span>
-                {CAMPAIGN_TYPE_LABELS[type].label}
+                <span className="type-icon"><Icon size={14} strokeWidth={1.5} /></span>
+                {label}
               </button>
             );
           })}
@@ -114,7 +116,7 @@ export default function CampaignTypeDashboard({ metrics, loading }: CampaignType
             </div>
             <div className="metric-card summary highlight">
               <div className="metric-label">Overall ROAS</div>
-              <div className="metric-value roas">{formatRoas(totalRoas)}</div>
+              <div className="metric-value">{formatRoas(totalRoas)}</div>
             </div>
           </div>
 
@@ -136,15 +138,17 @@ export default function CampaignTypeDashboard({ metrics, loading }: CampaignType
 
           {/* Breakdown by type */}
           <div className="type-breakdown">
-            {filteredMetrics.map(m => (
+            {filteredMetrics.map(m => {
+              const { Icon, label, color } = CAMPAIGN_TYPE_LABELS[m.campaignType];
+              return (
               <div
                 key={m.campaignType}
                 className="type-row"
-                style={{ '--type-color': CAMPAIGN_TYPE_LABELS[m.campaignType].color } as React.CSSProperties}
+                style={{ '--type-color': color } as React.CSSProperties}
               >
                 <div className="type-info">
-                  <span className="type-icon">{CAMPAIGN_TYPE_LABELS[m.campaignType].icon}</span>
-                  <span className="type-name">{CAMPAIGN_TYPE_LABELS[m.campaignType].label}</span>
+                  <span className="type-icon"><Icon size={18} strokeWidth={1.5} /></span>
+                  <span className="type-name">{label}</span>
                   <span className="campaign-count">{m.campaignCount} campaigns</span>
                 </div>
                 <div className="type-metrics">
@@ -174,11 +178,12 @@ export default function CampaignTypeDashboard({ metrics, loading }: CampaignType
                   </div>
                   <div className="type-metric highlight">
                     <span className="label">ROAS</span>
-                    <span className="value roas">{formatRoas(m.roas)}</span>
+                    <span className="value">{formatRoas(m.roas)}</span>
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </>
       ) : (
@@ -220,7 +225,7 @@ export default function CampaignTypeDashboard({ metrics, loading }: CampaignType
                     <span className="label-text">ROAS</span>
                     <span className="info-icon" title="Return on Ad Spend (Revenue / Spend)">i</span>
                   </div>
-                  <div className="metric-value large roas">{formatRoas(m.roas)}</div>
+                  <div className="metric-value large">{formatRoas(m.roas)}</div>
                   <div className="metric-subtext">
                     {m.roas > 1 ? (
                       <span className="positive">Profitable</span>

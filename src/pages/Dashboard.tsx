@@ -3,6 +3,20 @@ import { Link } from 'react-router-dom';
 import { fetchCampaignSummaries } from '../services/metaApi';
 import type { CampaignSummary } from '../services/metaApi';
 import Loading from '../components/Loading';
+import {
+  DollarSign,
+  TrendingUp,
+  Target,
+  ShoppingCart,
+  Banknote,
+  BarChart3,
+  Smartphone,
+  Search,
+  Music,
+  Sparkles,
+  LineChart,
+  Crosshair
+} from 'lucide-react';
 import './Dashboard.css';
 
 interface AggregatedStats {
@@ -87,41 +101,71 @@ const Dashboard = () => {
         <>
           {/* Stats Grid */}
           <div className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-label">Total Spend</div>
-            <div className="stat-value">{formatCurrency(stats.totalSpend)}</div>
-            <div className="stat-period">Last 30 days</div>
-          </div>
+            <div className="stat-card">
+              <div className="stat-icon">
+                <DollarSign size={24} strokeWidth={1.5} />
+              </div>
+              <div className="stat-content">
+                <div className="stat-label">Total Spend</div>
+                <div className="stat-value">{formatCurrency(stats.totalSpend)}</div>
+                <div className="stat-period">Last 30 days</div>
+              </div>
+            </div>
 
-          <div className="stat-card">
-            <div className="stat-label">Total Revenue</div>
-            <div className="stat-value revenue">{formatCurrency(stats.totalRevenue)}</div>
-            <div className="stat-period">Last 30 days</div>
-          </div>
+            <div className="stat-card">
+              <div className="stat-icon">
+                <TrendingUp size={24} strokeWidth={1.5} />
+              </div>
+              <div className="stat-content">
+                <div className="stat-label">Total Revenue</div>
+                <div className="stat-value">{formatCurrency(stats.totalRevenue)}</div>
+                <div className="stat-period">Last 30 days</div>
+              </div>
+            </div>
 
-          <div className="stat-card">
-            <div className="stat-label">Overall ROAS</div>
-            <div className="stat-value roas">{stats.overallRoas.toFixed(2)}x</div>
-            <div className="stat-period">Return on ad spend</div>
-          </div>
+            <div className="stat-card">
+              <div className="stat-icon">
+                <Target size={24} strokeWidth={1.5} />
+              </div>
+              <div className="stat-content">
+                <div className="stat-label">Overall ROAS</div>
+                <div className="stat-value">{stats.overallRoas.toFixed(2)}x</div>
+                <div className="stat-period">Return on ad spend</div>
+              </div>
+            </div>
 
-          <div className="stat-card">
-            <div className="stat-label">Total Conversions</div>
-            <div className="stat-value">{formatNumber(stats.totalPurchases)}</div>
-            <div className="stat-period">Purchases</div>
-          </div>
+            <div className="stat-card">
+              <div className="stat-icon">
+                <ShoppingCart size={24} strokeWidth={1.5} />
+              </div>
+              <div className="stat-content">
+                <div className="stat-label">Total Conversions</div>
+                <div className="stat-value">{formatNumber(stats.totalPurchases)}</div>
+                <div className="stat-period">Purchases</div>
+              </div>
+            </div>
 
-          <div className="stat-card">
-            <div className="stat-label">Avg. CPA</div>
-            <div className="stat-value">{formatCurrency(stats.averageCpa)}</div>
-            <div className="stat-period">Cost per acquisition</div>
-          </div>
+            <div className="stat-card">
+              <div className="stat-icon">
+                <Banknote size={24} strokeWidth={1.5} />
+              </div>
+              <div className="stat-content">
+                <div className="stat-label">Avg. CPA</div>
+                <div className="stat-value">{formatCurrency(stats.averageCpa)}</div>
+                <div className="stat-period">Cost per acquisition</div>
+              </div>
+            </div>
 
-          <div className="stat-card">
-            <div className="stat-label">Avg. CVR</div>
-            <div className="stat-value">{stats.averageCvr.toFixed(2)}%</div>
-            <div className="stat-period">Conversion rate</div>
-          </div>
+            <div className="stat-card">
+              <div className="stat-icon">
+                <BarChart3 size={24} strokeWidth={1.5} />
+              </div>
+              <div className="stat-content">
+                <div className="stat-label">Avg. CVR</div>
+                <div className="stat-value">{stats.averageCvr.toFixed(2)}%</div>
+                <div className="stat-period">Conversion rate</div>
+              </div>
+            </div>
           </div>
 
           {/* Channel Breakdown */}
@@ -134,7 +178,9 @@ const Dashboard = () => {
             <Link to="/channels/meta-ads" className="channel-card-dashboard active">
               <div className="channel-card-header-dashboard">
                 <div className="channel-info">
-                  <span className="channel-icon-dashboard">📱</span>
+                  <span className="channel-icon-dashboard">
+                    <Smartphone size={24} strokeWidth={1.5} />
+                  </span>
                   <div>
                     <h3 className="channel-name-dashboard">Meta Ads</h3>
                     <span className="channel-status connected">Connected</span>
@@ -152,7 +198,7 @@ const Dashboard = () => {
                   <span className="channel-metric-label">Conversions</span>
                 </div>
                 <div className="channel-metric">
-                  <span className="channel-metric-value roas">{stats.overallRoas.toFixed(2)}x</span>
+                  <span className="channel-metric-value">{stats.overallRoas.toFixed(2)}x</span>
                   <span className="channel-metric-label">ROAS</span>
                 </div>
               </div>
@@ -161,7 +207,9 @@ const Dashboard = () => {
             <div className="channel-card-dashboard disabled">
               <div className="channel-card-header-dashboard">
                 <div className="channel-info">
-                  <span className="channel-icon-dashboard">🔍</span>
+                  <span className="channel-icon-dashboard">
+                    <Search size={24} strokeWidth={1.5} />
+                  </span>
                   <div>
                     <h3 className="channel-name-dashboard">Google Ads</h3>
                     <span className="channel-status coming-soon">Coming Soon</span>
@@ -173,7 +221,9 @@ const Dashboard = () => {
             <div className="channel-card-dashboard disabled">
               <div className="channel-card-header-dashboard">
                 <div className="channel-info">
-                  <span className="channel-icon-dashboard">🎵</span>
+                  <span className="channel-icon-dashboard">
+                    <Music size={24} strokeWidth={1.5} />
+                  </span>
                   <div>
                     <h3 className="channel-name-dashboard">TikTok Ads</h3>
                     <span className="channel-status coming-soon">Coming Soon</span>
@@ -191,7 +241,9 @@ const Dashboard = () => {
 
           <div className="quick-actions">
             <Link to="/creatives" className="quick-action-card">
-              <span className="quick-action-icon">✨</span>
+              <span className="quick-action-icon">
+                <Sparkles size={24} strokeWidth={1.5} />
+              </span>
               <div className="quick-action-content">
                 <h3 className="quick-action-title">Generate New Ads</h3>
                 <p className="quick-action-description">Create AI-powered ad creatives from your top performers</p>
@@ -200,7 +252,9 @@ const Dashboard = () => {
             </Link>
 
             <Link to="/insights" className="quick-action-card">
-              <span className="quick-action-icon">📈</span>
+              <span className="quick-action-icon">
+                <LineChart size={24} strokeWidth={1.5} />
+              </span>
               <div className="quick-action-content">
                 <h3 className="quick-action-title">View Insights</h3>
                 <p className="quick-action-description">AI analysis of your creative performance patterns</p>
@@ -209,7 +263,9 @@ const Dashboard = () => {
             </Link>
 
             <Link to="/channels/meta-ads" className="quick-action-card">
-              <span className="quick-action-icon">🎯</span>
+              <span className="quick-action-icon">
+                <Crosshair size={24} strokeWidth={1.5} />
+              </span>
               <div className="quick-action-content">
                 <h3 className="quick-action-title">Analyze Creatives</h3>
                 <p className="quick-action-description">Deep dive into individual ad performance</p>

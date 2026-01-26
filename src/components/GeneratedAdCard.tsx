@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import type { GeneratedAdPackage } from '../services/openaiApi';
+import { Image, Video, AlertTriangle, Clock, Lightbulb, Timer, Ruler, Download, Loader } from 'lucide-react';
 import './GeneratedAdCard.css';
 
 interface GeneratedAdCardProps {
@@ -55,14 +56,14 @@ function LazyImage({ src, alt, onLoad }: { src: string; alt: string; onLoad?: ()
     <div ref={imgRef} className="lazy-image-wrapper">
       {!isVisible ? (
         <div className="image-placeholder">
-          <span className="placeholder-icon">🖼️</span>
+          <span className="placeholder-icon"><Image size={24} strokeWidth={1.5} /></span>
           <span className="placeholder-text">Loading...</span>
         </div>
       ) : (
         <>
           {!isLoaded && (
             <div className="image-placeholder">
-              <span className="placeholder-icon">⏳</span>
+              <span className="placeholder-icon"><Clock size={24} strokeWidth={1.5} /></span>
               <span className="placeholder-text">Loading image...</span>
             </div>
           )}
@@ -160,7 +161,9 @@ export default function GeneratedAdCard({ ad }: GeneratedAdCardProps) {
       {/* Header */}
       <div className="ad-card-header">
         <div className="ad-card-meta">
-          <span className="ad-type-badge">{ad.adType === 'image' ? '🖼️ Image Ad' : '🎬 Video Ad'}</span>
+          <span className="ad-type-badge">
+            {ad.adType === 'image' ? <><Image size={14} strokeWidth={1.5} /> Image Ad</> : <><Video size={14} strokeWidth={1.5} /> Video Ad</>}
+          </span>
           <span className="audience-badge">{getAudienceLabel(ad.audienceType)}</span>
         </div>
         <span className="ad-timestamp">{formatDate(ad.generatedAt)}</span>
@@ -169,7 +172,7 @@ export default function GeneratedAdCard({ ad }: GeneratedAdCardProps) {
       {/* Image Error Message */}
       {ad.adType === 'image' && ad.imageError && (
         <div className="image-error-banner">
-          <span className="error-icon">⚠️</span>
+          <span className="error-icon"><AlertTriangle size={16} strokeWidth={1.5} /></span>
           <span className="error-message">{ad.imageError}</span>
         </div>
       )}
@@ -177,7 +180,7 @@ export default function GeneratedAdCard({ ad }: GeneratedAdCardProps) {
       {/* Video Error Message */}
       {ad.adType === 'video' && ad.videoError && (
         <div className="video-error-banner">
-          <span className="error-icon">⚠️</span>
+          <span className="error-icon"><AlertTriangle size={16} strokeWidth={1.5} /></span>
           <span className="error-message">{ad.videoError}</span>
         </div>
       )}
@@ -199,8 +202,8 @@ export default function GeneratedAdCard({ ad }: GeneratedAdCardProps) {
             </div>
             <div className="video-info">
               <div className="video-meta">
-                <span className="video-duration">⏱️ {ad.video.duration}</span>
-                <span className="video-aspect">📐 {ad.video.aspectRatio}</span>
+                <span className="video-duration"><Timer size={14} strokeWidth={1.5} /> {ad.video.duration}</span>
+                <span className="video-aspect"><Ruler size={14} strokeWidth={1.5} /> {ad.video.aspectRatio}</span>
               </div>
               <div className="video-actions">
                 <button
@@ -208,7 +211,7 @@ export default function GeneratedAdCard({ ad }: GeneratedAdCardProps) {
                   onClick={() => handleDownloadVideo(ad.video!.videoUrl)}
                   disabled={downloadingVideo}
                 >
-                  {downloadingVideo ? '⏳' : '📥'} Download Video
+                  {downloadingVideo ? <Loader size={14} strokeWidth={1.5} className="spinning" /> : <Download size={14} strokeWidth={1.5} />} Download Video
                 </button>
               </div>
             </div>
@@ -345,7 +348,7 @@ export default function GeneratedAdCard({ ad }: GeneratedAdCardProps) {
 
       {/* Why It Works */}
       <div className="why-it-works">
-        <h4 className="section-label">💡 Why This Should Work</h4>
+        <h4 className="section-label"><Lightbulb size={16} strokeWidth={1.5} /> Why This Should Work</h4>
         <p>{ad.whyItWorks}</p>
       </div>
     </div>

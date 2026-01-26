@@ -7,6 +7,17 @@ import {
   type ChannelAnalysisResult,
 } from '../services/openaiApi';
 import ChannelInsightsPanel from '../components/ChannelInsightsPanel';
+import {
+  Smartphone,
+  Search,
+  Music,
+  Mail,
+  ScanSearch,
+  AlertTriangle,
+  BarChart3,
+  Construction
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import './Insights.css';
 
 type Channel = 'meta' | 'google' | 'tiktok' | 'email';
@@ -14,15 +25,15 @@ type Channel = 'meta' | 'google' | 'tiktok' | 'email';
 interface ChannelConfig {
   id: Channel;
   name: string;
-  icon: string;
+  Icon: LucideIcon;
   available: boolean;
 }
 
 const CHANNELS: ChannelConfig[] = [
-  { id: 'meta', name: 'Meta', icon: '📘', available: true },
-  { id: 'google', name: 'Google Ads', icon: '🔍', available: false },
-  { id: 'tiktok', name: 'TikTok', icon: '🎵', available: false },
-  { id: 'email', name: 'Email', icon: '📧', available: false },
+  { id: 'meta', name: 'Meta', Icon: Smartphone, available: true },
+  { id: 'google', name: 'Google Ads', Icon: Search, available: false },
+  { id: 'tiktok', name: 'TikTok', Icon: Music, available: false },
+  { id: 'email', name: 'Email', Icon: Mail, available: false },
 ];
 
 // Convert AdCreative to AdCreativeData for OpenAI analysis
@@ -161,7 +172,7 @@ const Insights = () => {
             className={`channel-tab ${selectedChannel === channel.id ? 'active' : ''} ${!channel.available ? 'disabled' : ''}`}
             onClick={() => channel.available && setSelectedChannel(channel.id)}
           >
-            <span className="channel-icon">{channel.icon}</span>
+            <span className="channel-icon"><channel.Icon size={18} strokeWidth={1.5} /></span>
             <span className="channel-name">{channel.name}</span>
             {!channel.available && <span className="coming-soon-badge">Coming Soon</span>}
           </button>
@@ -182,7 +193,7 @@ const Insights = () => {
             </>
           ) : (
             <>
-              <span className="btn-icon">🔍</span>
+              <span className="btn-icon"><ScanSearch size={18} strokeWidth={1.5} /></span>
               Run Channel Analysis
             </>
           )}
@@ -198,7 +209,7 @@ const Insights = () => {
       {/* Error Display */}
       {error && (
         <div className="insights-error">
-          <span className="error-icon">⚠️</span>
+          <span className="error-icon"><AlertTriangle size={18} strokeWidth={1.5} /></span>
           {error}
         </div>
       )}
@@ -216,7 +227,7 @@ const Insights = () => {
       {/* Empty State - No analysis yet */}
       {!loading && !analysis && !error && selectedChannelConfig?.available && (
         <div className="insights-empty">
-          <div className="empty-icon">📊</div>
+          <div className="empty-icon"><BarChart3 size={48} strokeWidth={1} /></div>
           <h3>No Analysis Yet</h3>
           <p>Click "Run Channel Analysis" to generate AI-powered insights for your {selectedChannelConfig.name} advertising account.</p>
           <p className="empty-note">This will analyze all your ads and identify patterns, winning elements, and strategic recommendations.</p>
@@ -226,7 +237,7 @@ const Insights = () => {
       {/* Coming Soon State */}
       {!selectedChannelConfig?.available && (
         <div className="insights-empty coming-soon">
-          <div className="empty-icon">🚧</div>
+          <div className="empty-icon"><Construction size={48} strokeWidth={1} /></div>
           <h3>{selectedChannelConfig?.name} Integration Coming Soon</h3>
           <p>We're working on integrating {selectedChannelConfig?.name} data. In the meantime, try analyzing your Meta ads!</p>
         </div>

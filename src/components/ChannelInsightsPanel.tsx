@@ -1,4 +1,5 @@
 import type { ChannelAnalysisResult } from '../services/openaiApi';
+import { Rocket, CalendarDays, Target, Palette } from 'lucide-react';
 import './ChannelInsightsPanel.css';
 
 interface ChannelInsightsPanelProps {
@@ -385,7 +386,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
         <div className="recommendations-grid">
           <div className="recommendation-card immediate">
             <div className="recommendation-header">
-              <span className="recommendation-icon">🚀</span>
+              <span className="recommendation-icon"><Rocket size={18} strokeWidth={1.5} /></span>
               <h4>Immediate Actions</h4>
             </div>
             <ul>
@@ -396,7 +397,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
           </div>
           <div className="recommendation-card short-term">
             <div className="recommendation-header">
-              <span className="recommendation-icon">📅</span>
+              <span className="recommendation-icon"><CalendarDays size={18} strokeWidth={1.5} /></span>
               <h4>Short-Term (2 weeks)</h4>
             </div>
             <ul>
@@ -407,7 +408,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
           </div>
           <div className="recommendation-card strategic">
             <div className="recommendation-header">
-              <span className="recommendation-icon">🎯</span>
+              <span className="recommendation-icon"><Target size={18} strokeWidth={1.5} /></span>
               <h4>Strategic (Long-term)</h4>
             </div>
             <ul>
@@ -416,11 +417,11 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
               ))}
             </ul>
           </div>
-          {/* NEW: Creative Direction */}
+          {/* Creative Direction */}
           {analysis.recommendations.creativeDirection && analysis.recommendations.creativeDirection.length > 0 && (
             <div className="recommendation-card creative-direction">
               <div className="recommendation-header">
-                <span className="recommendation-icon">🎨</span>
+                <span className="recommendation-icon"><Palette size={18} strokeWidth={1.5} /></span>
                 <h4>Creative Direction</h4>
               </div>
               <ul>

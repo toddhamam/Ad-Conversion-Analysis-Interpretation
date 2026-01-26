@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { analyzeAdCreative, isOpenAIConfigured, type AdCreativeData, type AdAnalysisResult } from '../services/openaiApi';
+import { Bot, Sparkles, AlertTriangle, Palette, PenLine, BarChart3, Lightbulb } from 'lucide-react';
 import './AdAnalysisPanel.css';
 
 interface AdAnalysisPanelProps {
@@ -47,7 +48,7 @@ export default function AdAnalysisPanel({ ad, onClose }: AdAnalysisPanelProps) {
       <div className="analysis-panel" onClick={(e) => e.stopPropagation()}>
         <div className="analysis-panel-header">
           <div className="analysis-panel-title">
-            <span className="analysis-icon">🤖</span>
+            <span className="analysis-icon"><Bot size={20} strokeWidth={1.5} /></span>
             AI Ad Analysis
           </div>
           <button className="analysis-close-btn" onClick={onClose}>×</button>
@@ -67,7 +68,7 @@ export default function AdAnalysisPanel({ ad, onClose }: AdAnalysisPanelProps) {
           <div className="analysis-start-section">
             <p>Click below to get AI-powered insights on this ad's creative, copy, and performance.</p>
             <button className="analysis-start-btn" onClick={runAnalysis}>
-              <span className="btn-icon">✨</span>
+              <span className="btn-icon"><Sparkles size={18} strokeWidth={1.5} /></span>
               Analyze Ad
             </button>
           </div>
@@ -83,7 +84,7 @@ export default function AdAnalysisPanel({ ad, onClose }: AdAnalysisPanelProps) {
 
         {error && (
           <div className="analysis-error">
-            <span className="error-icon">⚠️</span>
+            <span className="error-icon"><AlertTriangle size={18} strokeWidth={1.5} /></span>
             {error}
             <button className="retry-btn" onClick={runAnalysis}>Try Again</button>
           </div>
@@ -108,7 +109,7 @@ export default function AdAnalysisPanel({ ad, onClose }: AdAnalysisPanelProps) {
             {/* Creative Analysis */}
             <div className="analysis-section">
               <h4>
-                <span className="section-icon">🎨</span>
+                <span className="section-icon"><Palette size={18} strokeWidth={1.5} /></span>
                 Creative Analysis
               </h4>
               <div className="analysis-grid">
@@ -140,7 +141,7 @@ export default function AdAnalysisPanel({ ad, onClose }: AdAnalysisPanelProps) {
             {/* Copy Analysis */}
             <div className="analysis-section">
               <h4>
-                <span className="section-icon">✍️</span>
+                <span className="section-icon"><PenLine size={18} strokeWidth={1.5} /></span>
                 Copy Analysis
               </h4>
               <div className="analysis-detail">
@@ -169,7 +170,7 @@ export default function AdAnalysisPanel({ ad, onClose }: AdAnalysisPanelProps) {
             {/* Performance Insights */}
             <div className="analysis-section">
               <h4>
-                <span className="section-icon">📊</span>
+                <span className="section-icon"><BarChart3 size={18} strokeWidth={1.5} /></span>
                 Performance Insights
               </h4>
               <div className="analysis-grid">
@@ -198,7 +199,7 @@ export default function AdAnalysisPanel({ ad, onClose }: AdAnalysisPanelProps) {
             {/* Recommendations */}
             <div className="analysis-section recommendations">
               <h4>
-                <span className="section-icon">💡</span>
+                <span className="section-icon"><Lightbulb size={18} strokeWidth={1.5} /></span>
                 Recommendations
               </h4>
               <div className="recommendations-grid">

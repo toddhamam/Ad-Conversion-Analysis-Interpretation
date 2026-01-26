@@ -24,6 +24,7 @@ import {
   clearLegacyCache
 } from '../services/imageCache';
 import Loading from '../components/Loading';
+import { AlertTriangle, Check } from 'lucide-react';
 import './MetaAds.css';
 
 // Helper to calculate dates from preset
@@ -335,7 +336,11 @@ const MetaAds = () => {
         <div className="page-header-left">
           <h1 className="page-title">Meta Ads</h1>
           <p className="page-subtitle">
-            {usingMockData ? '⚠️ Sample data (Meta API unavailable)' : '✓ Live data from your Meta account'}
+            {usingMockData ? (
+              <><AlertTriangle size={14} strokeWidth={1.5} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Sample data (Meta API unavailable)</>
+            ) : (
+              <><Check size={14} strokeWidth={1.5} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Live data from your Meta account</>
+            )}
           </p>
         </div>
         <div className="page-header-right">

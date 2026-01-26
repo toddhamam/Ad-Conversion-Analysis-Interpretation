@@ -26,43 +26,41 @@
 
 .traffic-filters {
   display: flex;
-  gap: 12px;
+  gap: 16px;
   margin-bottom: 32px;
   flex-wrap: wrap;
-  border: 1px solid var(--border-primary);
-  padding: 20px;
-  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  padding: 24px;
+  border-radius: var(--radius-card);
   background: var(--bg-card);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-card);
 }
 
 .traffic-filter {
-  padding: 12px 20px;
+  padding: 14px 22px;
   background: var(--bg-card);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--border-primary);
-  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   font-size: 14px;
   color: var(--text-secondary);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
-}
-
-.traffic-filter:hover {
-  border-color: var(--border-violet);
-  background: var(--bg-card-hover);
   box-shadow: var(--shadow-sm);
 }
 
+.traffic-filter:hover {
+  background: var(--bg-card-hover);
+  box-shadow: var(--shadow-md);
+}
+
 .traffic-filter.active {
-  background: rgba(212, 225, 87, 0.15);
+  background: rgba(212, 225, 87, 0.1);
   color: var(--text-primary);
-  border-color: var(--accent-primary);
+  border-color: rgba(212, 225, 87, 0.4);
 }
 
 .traffic-name {
@@ -77,25 +75,24 @@
 .creative-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 24px;
+  gap: 28px;
 }
 
 .creative-card {
   background: var(--bg-card);
-  border: 1px solid var(--border-primary);
-  border-radius: 12px;
-  padding: 20px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  transition: all 0.3s ease;
+  gap: 18px;
+  transition: all 0.2s ease;
   position: relative;
   overflow: hidden;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-card);
 }
 
 .creative-card:hover {
-  border-color: var(--border-violet);
   box-shadow: var(--shadow-md);
   transform: translateY(-2px);
 }
@@ -109,8 +106,8 @@
 
 .creative-image-placeholder {
   background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
-  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   aspect-ratio: 16 / 9;
   display: flex;
   align-items: center;
@@ -169,10 +166,10 @@
 /* Analyze Button */
 .analyze-btn {
   width: 100%;
-  padding: 12px 20px;
-  background: rgba(168, 85, 247, 0.1);
-  border: 1px solid rgba(168, 85, 247, 0.3);
-  border-radius: 8px;
+  padding: 14px 20px;
+  background: rgba(168, 85, 247, 0.08);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 14px;
   font-weight: 600;
@@ -181,17 +178,17 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   margin-top: 4px;
   position: relative;
   z-index: 1;
 }
 
 .analyze-btn:hover {
-  background: rgba(168, 85, 247, 0.15);
-  border-color: rgba(168, 85, 247, 0.5);
+  background: rgba(168, 85, 247, 0.12);
+  border-color: rgba(168, 85, 247, 0.35);
   transform: translateY(-1px);
-  box-shadow: var(--shadow-glow);
+  box-shadow: var(--shadow-md);
 }
 
 .analyze-btn:active {
@@ -217,10 +214,10 @@
 /* Reference Button */
 .reference-btn {
   flex: 1;
-  padding: 12px 16px;
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  border-radius: 8px;
+  padding: 14px 16px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: var(--radius-md);
   color: #10b981;
   font-size: 13px;
   font-weight: 600;
@@ -233,8 +230,8 @@
 }
 
 .reference-btn:hover:not(:disabled) {
-  background: rgba(16, 185, 129, 0.2);
-  border-color: rgba(16, 185, 129, 0.5);
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.35);
 }
 
 .reference-btn:disabled {

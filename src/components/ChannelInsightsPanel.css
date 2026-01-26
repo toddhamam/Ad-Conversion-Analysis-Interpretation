@@ -6,11 +6,11 @@
 
 /* Section Base Styles */
 .insights-section {
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   padding: 24px;
+  box-shadow: var(--shadow-card);
 }
 
 .insights-section h3 {
@@ -52,34 +52,36 @@
 
 .health-score {
   flex-shrink: 0;
-  width: 100px;
-  height: 100px;
+  width: 120px;
+  height: 120px;
   border-radius: 50%;
   border: 4px solid;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-secondary);
+  gap: 2px;
 }
 
 .health-score .score-value {
   font-size: 36px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
 }
 
 .health-score .score-label {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-secondary);
+  line-height: 1;
 }
 
 .health-score .score-title {
-  font-size: 10px;
-  color: var(--text-secondary);
+  font-size: 9px;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .summary-text {
@@ -114,28 +116,28 @@
 }
 
 .metric-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   padding: 16px;
   text-align: center;
 }
 
 .metric-card.highlight {
-  background: rgba(0, 212, 255, 0.08);
-  border-color: rgba(0, 212, 255, 0.2);
+  background: rgba(168, 85, 247, 0.06);
+  border-color: rgba(168, 85, 247, 0.15);
 }
 
 .metric-card .metric-value {
   display: block;
   font-size: 24px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 4px;
 }
 
 .metric-card.highlight .metric-value {
-  color: #00d4ff;
+  color: var(--accent-violet);
 }
 
 .metric-card .metric-label {
@@ -194,8 +196,8 @@
 }
 
 .pattern-card.winning {
-  background: rgba(16, 185, 129, 0.05);
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  background: rgba(16, 185, 129, 0.04);
+  border: 1px solid rgba(16, 185, 129, 0.15);
 }
 
 .pattern-card.winning h4 {
@@ -203,8 +205,8 @@
 }
 
 .pattern-card.losing {
-  background: rgba(239, 68, 68, 0.05);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.04);
+  border: 1px solid rgba(239, 68, 68, 0.15);
 }
 
 .pattern-card.losing h4 {
@@ -261,9 +263,9 @@
 }
 
 .tag.cta {
-  background: rgba(0, 212, 255, 0.15);
-  color: #00d4ff;
-  border: 1px solid rgba(0, 212, 255, 0.3);
+  background: rgba(168, 85, 247, 0.1);
+  color: var(--accent-violet);
+  border: 1px solid rgba(168, 85, 247, 0.25);
 }
 
 /* Audience Section */
@@ -281,9 +283,9 @@
 
 .audience-card {
   padding: 16px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
 }
 
 .audience-card.resonates {
@@ -303,11 +305,11 @@
 }
 
 .audience-card.targeting {
-  border-left: 3px solid #00d4ff;
+  border-left: 3px solid var(--accent-violet);
 }
 
 .audience-card.targeting h4 {
-  color: #00d4ff;
+  color: var(--accent-violet);
 }
 
 .audience-card ul {
@@ -341,8 +343,8 @@
 }
 
 .performers-card.top {
-  background: rgba(16, 185, 129, 0.05);
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  background: rgba(16, 185, 129, 0.04);
+  border: 1px solid rgba(16, 185, 129, 0.15);
 }
 
 .performers-card.top h4 {
@@ -350,8 +352,8 @@
 }
 
 .performers-card.bottom {
-  background: rgba(239, 68, 68, 0.05);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.04);
+  border: 1px solid rgba(239, 68, 68, 0.15);
 }
 
 .performers-card.bottom h4 {
@@ -362,7 +364,7 @@
   display: flex;
   gap: 12px;
   padding: 12px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .performer-item:last-child {
@@ -374,7 +376,8 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -436,9 +439,9 @@
 
 .recommendation-card {
   padding: 20px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
 }
 
 .recommendation-card.immediate {
@@ -450,7 +453,7 @@
 }
 
 .recommendation-card.strategic {
-  border-top: 3px solid #00d4ff;
+  border-top: 3px solid var(--accent-violet);
 }
 
 .recommendation-header {
@@ -470,7 +473,7 @@
 
 .recommendation-card.immediate h4 { color: #10b981; }
 .recommendation-card.short-term h4 { color: #f59e0b; }
-.recommendation-card.strategic h4 { color: #00d4ff; }
+.recommendation-card.strategic h4 { color: var(--accent-violet); }
 
 .recommendation-card ul {
   margin: 0;
@@ -490,8 +493,8 @@
 
 /* NEW: Visual Analysis Section */
 .visual-analysis-section {
-  background: linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%);
-  border-color: rgba(168, 85, 247, 0.2);
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.04) 0%, var(--bg-card) 100%);
+  border-color: rgba(168, 85, 247, 0.15);
 }
 
 .visual-analysis-grid {
@@ -514,9 +517,9 @@
 
 .visual-card {
   padding: 16px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
 }
 
 .visual-card h4 {
@@ -569,11 +572,11 @@
 }
 
 .visual-card.imagery-patterns {
-  border-left: 3px solid #00d4ff;
+  border-left: 3px solid var(--accent-violet);
 }
 
 .visual-card.imagery-patterns h4 {
-  color: #00d4ff;
+  color: var(--accent-violet);
 }
 
 .visual-card.in-image-messaging {
@@ -601,8 +604,8 @@
 
 /* NEW: Same Headline, Different Image Section */
 .headline-image-section {
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.05) 0%, rgba(15, 23, 42, 0.6) 100%);
-  border-color: rgba(0, 212, 255, 0.2);
+  background: linear-gradient(135deg, rgba(212, 225, 87, 0.04) 0%, var(--bg-card) 100%);
+  border-color: rgba(212, 225, 87, 0.15);
 }
 
 .section-description {
@@ -619,9 +622,9 @@
 }
 
 .headline-image-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   padding: 20px;
 }
 
@@ -631,20 +634,21 @@
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .headline-image-header h4 {
   margin: 0;
   font-size: 15px;
-  color: #00d4ff;
+  color: var(--accent-violet);
   font-style: italic;
 }
 
 .variation-count {
   font-size: 12px;
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
   padding: 4px 10px;
   border-radius: 12px;
 }
@@ -658,8 +662,8 @@
 
 .variation-item {
   padding: 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
 }
 
 .variation-item.high-performer {
@@ -727,9 +731,9 @@
 }
 
 .key-differentiator {
-  background: rgba(0, 212, 255, 0.08);
-  border: 1px solid rgba(0, 212, 255, 0.2);
-  border-radius: 8px;
+  background: rgba(212, 225, 87, 0.08);
+  border: 1px solid rgba(212, 225, 87, 0.2);
+  border-radius: var(--radius-sm);
   padding: 12px;
 }
 
@@ -737,7 +741,7 @@
   display: block;
   font-size: 11px;
   font-weight: 600;
-  color: #00d4ff;
+  color: var(--accent-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 6px;
@@ -757,7 +761,7 @@
 .suggested-fix {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .analysis-label,
