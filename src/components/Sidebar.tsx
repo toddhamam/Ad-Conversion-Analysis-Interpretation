@@ -105,15 +105,6 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
           <span className="nav-label">Concepts</span>
         </NavLink>
 
-        <NavLink to="/products" className="nav-item" title="Products">
-          <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-            <line x1="12" y1="22.08" x2="12" y2="12"/>
-          </svg>
-          <span className="nav-label">Products</span>
-        </NavLink>
-
         <NavLink to="/insights" className="nav-item" title="Insights">
           <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="20" x2="18" y2="10"/>
