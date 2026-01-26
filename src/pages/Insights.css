@@ -401,3 +401,108 @@
   color: var(--accent-primary);
   box-shadow: 0 0 15px rgba(0, 212, 255, 0.2);
 }
+
+/* ==================== Responsive Styles ==================== */
+
+/* Tablet breakpoint - 768px */
+@media (max-width: 768px) {
+  .channel-tabs {
+    gap: 8px;
+  }
+
+  .channel-tab {
+    padding: 10px 16px;
+    font-size: 13px;
+    min-height: 44px;
+  }
+
+  .analysis-controls {
+    gap: 12px;
+  }
+
+  .run-analysis-btn {
+    padding: 12px 24px;
+    font-size: 14px;
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .insight-card {
+    padding: 24px;
+    gap: 20px;
+  }
+
+  .insight-conditions {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .insight-belief {
+    font-size: 18px;
+  }
+
+  .insight-analysis {
+    font-size: 14px;
+  }
+
+  .insight-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .insights-empty,
+  .insights-loading {
+    padding: 60px 20px;
+  }
+}
+
+/* Mobile breakpoint - 480px */
+@media (max-width: 480px) {
+  .channel-tabs {
+    gap: 6px;
+  }
+
+  .channel-tab {
+    padding: 8px 12px;
+    flex: 1;
+    justify-content: center;
+    min-width: calc(50% - 3px);
+  }
+
+  .channel-tab .channel-name {
+    display: none;
+  }
+
+  .channel-icon {
+    font-size: 20px;
+  }
+
+  .insight-card {
+    padding: 20px;
+    gap: 16px;
+  }
+
+  .insight-belief {
+    font-size: 16px;
+  }
+
+  .condition-box {
+    padding: 16px;
+  }
+
+  .linked-creatives {
+    gap: 8px;
+  }
+
+  .linked-creative-button {
+    padding: 6px 12px;
+    font-size: 12px;
+    min-height: 36px;
+  }
+
+  .insights-empty h3,
+  .insights-loading h3 {
+    font-size: 18px;
+  }
+}

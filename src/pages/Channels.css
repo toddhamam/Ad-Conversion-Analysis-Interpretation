@@ -117,3 +117,80 @@
   transform: translateY(-50%) translateX(4px);
   color: var(--accent-violet);
 }
+
+/* ==================== Responsive Styles ==================== */
+
+/* Tablet breakpoint - 768px */
+@media (max-width: 768px) {
+  .page-title {
+    font-size: 32px;
+  }
+
+  .page-subtitle {
+    font-size: 15px;
+  }
+
+  .channel-card {
+    padding: 24px;
+  }
+
+  .channel-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .channel-name {
+    font-size: 22px;
+  }
+
+  .channel-stats {
+    align-items: flex-start;
+  }
+
+  .channel-conversions {
+    font-size: 28px;
+  }
+
+  .channel-arrow {
+    position: static;
+    transform: none;
+    margin-top: 8px;
+    font-size: 24px;
+  }
+
+  .channel-card:not(.disabled):hover .channel-arrow {
+    transform: translateX(4px);
+  }
+}
+
+/* Mobile breakpoint - 480px */
+@media (max-width: 480px) {
+  .page-header {
+    margin-bottom: 24px;
+  }
+
+  .page-title {
+    font-size: 28px;
+  }
+
+  .channel-grid {
+    gap: 16px;
+  }
+
+  .channel-card {
+    padding: 20px;
+  }
+
+  .channel-name {
+    font-size: 20px;
+  }
+
+  .channel-description {
+    font-size: 14px;
+  }
+
+  .channel-conversions {
+    font-size: 24px;
+  }
+}

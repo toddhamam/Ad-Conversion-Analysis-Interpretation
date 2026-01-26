@@ -5,16 +5,26 @@ import './Sidebar.css';
 interface SidebarProps {
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
-const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
+const Sidebar = ({ collapsed = false, onToggleCollapse, mobileOpen = false, onCloseMobile }: SidebarProps) => {
   const [channelsExpanded, setChannelsExpanded] = useState(false);
   const [insightsExpanded, setInsightsExpanded] = useState(false);
 
   return (
-    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+    <>
+      {/* Mobile overlay */}
+      <div
+        className={`sidebar-overlay ${mobileOpen ? 'visible' : ''}`}
+        onClick={onCloseMobile}
+        aria-hidden="true"
+      />
+
+      <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
       <div className="sidebar-header">
-        <Link to="/dashboard" className="sidebar-logo-link">
+        <Link to="/dashboard" className="sidebar-logo-link" onClick={onCloseMobile}>
           {collapsed ? (
             <div className="sidebar-logo-icon">
               <svg viewBox="0 0 64 64" className="logo-icon">
@@ -37,10 +47,17 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
             </>
           )}
         </Link>
+        {/* Mobile close button */}
+        <button className="mobile-close-btn" onClick={onCloseMobile} aria-label="Close menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
 
       <nav className="sidebar-nav">
-        <NavLink to="/dashboard" className="nav-item" end title="Dashboard">
+        <NavLink to="/dashboard" className="nav-item" end title="Dashboard" onClick={onCloseMobile}>
           <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="7" height="7" rx="1"/>
             <rect x="14" y="3" width="7" height="7" rx="1"/>
@@ -69,7 +86,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
           </button>
           {channelsExpanded && !collapsed && (
             <div className="nav-submenu">
-              <NavLink to="/channels/meta-ads" className="nav-subitem">
+              <NavLink to="/channels/meta-ads" className="nav-subitem" onClick={onCloseMobile}>
                 <span className="nav-bullet"></span>
                 <span>Meta Ads</span>
               </NavLink>
@@ -77,7 +94,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
           )}
         </div>
 
-        <NavLink to="/funnels" className="nav-item" title="Funnels">
+        <NavLink to="/funnels" className="nav-item" title="Funnels" onClick={onCloseMobile}>
           <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>
           </svg>
@@ -104,11 +121,11 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
           </button>
           {insightsExpanded && !collapsed && (
             <div className="nav-submenu">
-              <NavLink to="/insights" className="nav-subitem">
+              <NavLink to="/insights" className="nav-subitem" onClick={onCloseMobile}>
                 <span className="nav-bullet"></span>
                 <span>Overview</span>
               </NavLink>
-              <NavLink to="/concepts" className="nav-subitem">
+              <NavLink to="/concepts" className="nav-subitem" onClick={onCloseMobile}>
                 <span className="nav-bullet"></span>
                 <span>Concepts</span>
               </NavLink>
@@ -118,7 +135,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
       </nav>
 
       <div className="sidebar-cta">
-        <NavLink to="/creatives" className="creative-cta" title="CreativeIQ™">
+        <NavLink to="/creatives" className="creative-cta" title="CreativeIQ™" onClick={onCloseMobile}>
           <svg className="creative-cta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
           </svg>
@@ -139,6 +156,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
         </button>
       </div>
     </aside>
+    </>
   );
 };
 
