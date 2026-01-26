@@ -21,17 +21,31 @@
 - NavLink `end` prop: Use on parent routes (e.g., `/dashboard`) to prevent active state on child routes
 - useState for toggles: Manage expanded/collapsed states (e.g., `channelsExpanded`, `insightsExpanded`)
 - useEffect for data fetching on component mount
+- useEffect for side effects: Manage body overflow when mobile nav is open, close mobile nav on route changes
+- useLocation for route change triggers: Detect route changes to trigger side effects (e.g., closing mobile nav)
 - Array.reduce() for aggregating campaign statistics
 - `collapsed` prop propagation: Pass down to child components for consistent collapsed sidebar behavior
 - Flexbox for sidebar and navigation layouts
 - `overflow-y: auto` for scrollable navigation content
 
+## Sidebar & Mobile Navigation Implementation
+- Sidebar collapse: Uses CSS class `.collapsed` toggled by JavaScript state and prop from `MainLayout`
+- Mobile navigation: Combines `position: fixed` sidebar (off-screen by default), overlay, and hamburger button in fixed mobile header
+- Clicking nav items in mobile drawer should close the drawer
+
 ## Mistakes to Avoid
 - Initial state defaulting: Set correct initial values for toggles (e.g., `useState(false)` for collapsed-by-default)
 - Overly broad active states: Use NavLink `end` prop to avoid unintended highlighting on child routes
 - Redundant navigation: Don't create duplicate entry points; keep workflows clear (e.g., Publisher accessed only after generation)
+- Hidden overlay click interception: `opacity: 0` does NOT prevent click events. Always add `pointer-events: none` to hidden overlays to prevent them from blocking interactions with elements beneath
+- Inconsistent breakpoints: Standardize media query breakpoints across the codebase (900px for tablet, 600px for mobile)
 
 ## Git Workflow
 - Use descriptive commit messages summarizing actual changes
 - `gh pr create` for automated PR creation
 - Always check `git status` and `git diff` before committing
+
+## Best Practices for Larger Tasks
+- **Phased implementation**: Break responsiveness/layout tasks into phases (Core Layout, Page-Level, Component-Level, Polish)
+- **Plan documentation**: Document goals, specific file changes, and verification checklist before coding
+- **Test across viewports**: Use Chrome DevTools to test at various breakpoints (desktop, tablet, mobile)
