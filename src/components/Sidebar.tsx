@@ -115,6 +115,13 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
           </svg>
           <span className="nav-label">Insights</span>
         </NavLink>
+
+        <NavLink to="/funnels" className="nav-item" title="Funnels">
+          <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>
+          </svg>
+          <span className="nav-label">Funnels</span>
+        </NavLink>
       </nav>
 
       <div className="sidebar-footer">
