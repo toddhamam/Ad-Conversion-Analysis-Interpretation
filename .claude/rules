@@ -27,6 +27,13 @@
 - `collapsed` prop propagation: Pass down to child components for consistent collapsed sidebar behavior
 - Flexbox for sidebar and navigation layouts
 - `overflow-y: auto` for scrollable navigation content
+- Dynamic class toggling: Classes like `sidebar-collapsed`, `expanded`, `mobile-open` toggled in `.tsx`, defined in `.css`
+
+## SVG Icon Conventions
+- Use inline SVGs for icons (not icon fonts or separate image files)
+- Standard attributes: `viewBox`, `fill`, `stroke`, `strokeWidth`, `strokeLinecap`, `strokeLinejoin`
+- Add `aria-hidden="true"` on decorative icons
+- Common sizes: 16px (small), 20px (medium), 24px (large)
 
 ## Sidebar & Mobile Navigation Implementation
 - Sidebar collapse: Uses CSS class `.collapsed` toggled by JavaScript state and prop from `MainLayout`
@@ -49,3 +56,13 @@
 - **Phased implementation**: Break responsiveness/layout tasks into phases (Core Layout, Page-Level, Component-Level, Polish)
 - **Plan documentation**: Document goals, specific file changes, and verification checklist before coding
 - **Test across viewports**: Use Chrome DevTools to test at various breakpoints (desktop, tablet, mobile)
+
+## Component Structure
+- Each component should have both a `.tsx` and corresponding `.css` file (e.g., `UserProfileDropdown.tsx` + `UserProfileDropdown.css`)
+- Clear component separation promotes modularity: `Sidebar`, `MainLayout`, `ProtectedRoute`, `UserProfileDropdown`, etc.
+- Use meaningful class names (e.g., `sidebar-collapsed`, `nav-item-expandable`, `mobile-menu-btn`)
+
+## Demo Stubbing Patterns
+- Use `localStorage` for authentication state (`'convertra_authenticated'`, `'convertra_user'`)
+- Use `setTimeout` to simulate API calls in `Login.tsx` and `Register.tsx`
+- These stubs enable quick demonstrations without a full backend
