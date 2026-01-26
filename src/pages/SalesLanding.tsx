@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import './SalesLanding.css';
 
 function SalesLanding() {
@@ -76,6 +77,7 @@ function SalesLanding() {
           </div>
 
           <div className="nav-actions">
+            <Link to="/login" className="nav-login">Log in</Link>
             <a href={calendarUrl} className="nav-cta">Schedule Demo</a>
 
             {/* Mobile Menu Button */}
@@ -97,6 +99,7 @@ function SalesLanding() {
           <a href="#mechanism">How It Works</a>
           <a href="#offer">What You Get</a>
           <a href="#credibility">About</a>
+          <Link to="/login" className="mobile-login">Log in</Link>
           <a href={calendarUrl} className="mobile-cta">Schedule Demo</a>
         </div>
       </nav>

@@ -135,6 +135,23 @@
   outline-offset: 2px;
 }
 
+.nav-login {
+  padding: 9px 18px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 100px;
+  border: 1px solid var(--lime-primary);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.nav-login:hover {
+  color: var(--text-primary);
+  background: rgba(212, 225, 87, 0.1);
+  border-color: var(--lime-secondary);
+}
+
 /* Mobile Menu Button */
 .mobile-menu-btn {
   display: none;
@@ -241,6 +258,21 @@
 .mobile-nav a:focus-visible {
   outline: 2px solid var(--lime-primary);
   outline-offset: 2px;
+}
+
+.mobile-login {
+  margin-top: 8px;
+  padding: 12px 24px !important;
+  color: var(--text-secondary) !important;
+  font-weight: 500 !important;
+  text-align: center;
+  border-radius: 100px !important;
+  border: 1px solid var(--border-primary) !important;
+}
+
+.mobile-login:hover {
+  color: var(--text-primary) !important;
+  background: rgba(0, 0, 0, 0.04) !important;
 }
 
 .mobile-cta {
@@ -1362,7 +1394,8 @@
     border-radius: 20px;
   }
 
-  /* Hide CTA button in header on mobile - it's in the mobile menu */
+  /* Hide login and CTA buttons in header on mobile - they're in the mobile menu */
+  .nav-actions .nav-login,
   .nav-actions .nav-cta {
     display: none;
   }
