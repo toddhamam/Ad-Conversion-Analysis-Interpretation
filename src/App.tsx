@@ -9,6 +9,7 @@ import Products from './pages/Products';
 import Insights from './pages/Insights';
 import AdGenerator from './pages/AdGenerator';
 import AdPublisher from './pages/AdPublisher';
+import Funnels from './pages/Funnels';
 import SalesLanding from './pages/SalesLanding';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -36,6 +37,7 @@ function App() {
                 <Route path="/concepts" element={<Concepts />} />
                 <Route path="/products" element={<Products />} />
                 <Route path="/insights" element={<Insights />} />
+                <Route path="/funnels" element={<Funnels />} />
               </Routes>
             </MainLayout>
           </ProtectedRoute>
