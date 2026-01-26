@@ -25,6 +25,18 @@ The user prefers a standard SaaS URL structure:
 - **Iterative design approach**: Make small, focused changes and gather feedback for refinement
 - **Clean navigation**: Remove redundant navigation items if they create confusion or duplicate workflows
 - Use meaningful `title` attributes on navigation items and buttons for accessibility and discoverability
+- **Pill style UI**: Rounded corners and spacing away from screen edges for a "floating" aesthetic (especially for mobile navigation and headers)
+- **CSS-only solutions**: Prefer CSS for layout and responsiveness whenever possible; minimize JavaScript state changes for these aspects
+
+## Code Quality Principles (Karpathy-inspired)
+
+The user prefers code adhering to these principles:
+- **Simplicity**: Keep implementations straightforward; avoid unnecessary complexity
+- **Consistency**: Follow established patterns across the codebase
+- **Clarity**: Code should be self-explanatory; favor readability
+- **Incremental changes**: Make small, focused changes rather than large refactors
+- **Avoid over-engineering**: Build only what's needed now, not hypothetical future needs
+- **Minimal abstraction**: Don't abstract prematurely; concrete code is often clearer
 
 ## Form Design Requirements
 

@@ -359,6 +359,8 @@ const analysis = await analyzeAdCreative(adId, {
 
 ## Responsive Breakpoints
 
+**Approach**: Desktop-down (media queries use `max-width`)
+
 | Breakpoint | Target |
 |------------|--------|
 | `900px` | Tablet - hide desktop nav, show mobile menu |
@@ -369,6 +371,12 @@ const analysis = await analyzeAdCreative(adId, {
 - Hero headline: `32px` (from `56px`)
 - Section padding: `60px 16px` (from `100px 32px`)
 - Logo: `height: 26px` (from `32px`)
+
+### CSS Techniques for Responsiveness
+- **`calc()` for dynamic sizing**: Use for viewport-relative dimensions (e.g., `calc(100vh - 24px)`, `calc(100% - 24px)`)
+- **`transition` for smoothness**: Apply to UI state changes (sidebar collapse, hover effects, mobile menu animations)
+- **`isolation: isolate`**: Use on `.main-content` to prevent style bleed in complex layouts
+- **CSS-only when possible**: Prefer CSS for layout and responsiveness over JavaScript state changes
 
 ---
 
