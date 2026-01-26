@@ -82,6 +82,8 @@ public/
 | `src/components/ProtectedRoute.tsx` | Auth guard for protected routes |
 | `src/pages/Login.tsx` | Authentication login page |
 | `src/pages/Register.tsx` | Company registration/signup page |
+| `src/components/UserProfileDropdown.tsx` | User profile dropdown with company branding, sign out, account actions |
+| `src/components/MainLayout.tsx` | App shell with sidebar, header, and responsive navigation |
 
 ## Routes
 
@@ -561,3 +563,6 @@ The Convertra sales landing follows this architecture:
 - All interactive elements have hover/focus states
 - Color contrast meets WCAG AA standards
 - Mobile navigation accessible via hamburger menu
+- Use `aria-label` on icon-only buttons (e.g., `aria-label="Open menu"`)
+- Use `aria-hidden="true"` on decorative icons and SVGs
+- User profile dropdown accessible in both desktop header and mobile navigation

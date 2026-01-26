@@ -19,6 +19,7 @@ The user prefers a standard SaaS URL structure:
 ## Design & Branding Preferences
 
 - **Visual polish**: User prefers "professional" and "nicer" looks for UI elements; focus on aesthetic quality
+- **"White glove" enterprise feel**: The portal should feel personalized with company branding, high-quality UI, and attention to detail
 - **ConversionIQ™ branding**: Integrate throughout the UI, especially for loading states and data processing
 - **CreativeIQ™ branding**: The "hero action" for AI creative generation; should be visually distinct and prominent
 - **Hero action prominence**: The Creative Generator (CreativeIQ™) should be styled as a prominent CTA button, not a regular nav item
@@ -27,6 +28,14 @@ The user prefers a standard SaaS URL structure:
 - Use meaningful `title` attributes on navigation items and buttons for accessibility and discoverability
 - **Pill style UI**: Rounded corners and spacing away from screen edges for a "floating" aesthetic (especially for mobile navigation and headers)
 - **CSS-only solutions**: Prefer CSS for layout and responsiveness whenever possible; minimize JavaScript state changes for these aspects
+
+## User Profile & Company Branding
+
+- **User profile prominence**: The user profile area in the top right is a key branding and navigation element
+- **Company branding display**: Show company logo or gradient-colored initials as a placeholder when logo isn't available
+- **User profile dropdown actions**: Must include "Sign out", "Account details", and "Reset password"
+- **Mobile accessibility**: User profile dropdown must be accessible on mobile devices (include in mobile header)
+- **Progressive enhancement**: Features like user profile dropdown should work across all breakpoints (desktop, tablet, mobile)
 
 ## Code Quality Principles (Karpathy-inspired)
 
