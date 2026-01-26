@@ -18,8 +18,18 @@
 ## React Patterns Used in This Codebase
 - Conditional rendering: `condition ? (...) : (...)` for show/hide
 - NavLink with automatic `.active` class styling for navigation
+- NavLink `end` prop: Use on parent routes (e.g., `/dashboard`) to prevent active state on child routes
+- useState for toggles: Manage expanded/collapsed states (e.g., `channelsExpanded`, `insightsExpanded`)
 - useEffect for data fetching on component mount
 - Array.reduce() for aggregating campaign statistics
+- `collapsed` prop propagation: Pass down to child components for consistent collapsed sidebar behavior
+- Flexbox for sidebar and navigation layouts
+- `overflow-y: auto` for scrollable navigation content
+
+## Mistakes to Avoid
+- Initial state defaulting: Set correct initial values for toggles (e.g., `useState(false)` for collapsed-by-default)
+- Overly broad active states: Use NavLink `end` prop to avoid unintended highlighting on child routes
+- Redundant navigation: Don't create duplicate entry points; keep workflows clear (e.g., Publisher accessed only after generation)
 
 ## Git Workflow
 - Use descriptive commit messages summarizing actual changes

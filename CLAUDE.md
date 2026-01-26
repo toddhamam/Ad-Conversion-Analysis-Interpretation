@@ -9,6 +9,7 @@ A SaaS platform for CMOs and media buyers solving ad creative fatigue through au
 | Product/App | Conversion Intelligence (CI) | Internal dashboard, app UI |
 | Sales/Marketing | Convertra | Sales landing page, external marketing |
 | Proprietary Technology | ConversionIQ™ | The unique mechanism—Extract, Interpret, Generate, Repeat |
+| AI Creative Feature | CreativeIQ™ | AI-powered ad creative generation (the "hero action" of the app) |
 
 **Logo**: `public/convertra-logo.png` - "Convertra" wordmark with stylized "v" as upward arrow featuring lime-to-violet gradient
 
@@ -77,7 +78,7 @@ public/
 | `src/pages/SalesLanding.tsx` | Convertra sales/marketing landing page |
 | `src/pages/SalesLanding.css` | Sales landing page styles with animations |
 | `src/components/Loading.tsx` | Branded loading component with animated logo |
-| `src/components/Sidebar.tsx` | Collapsible sidebar navigation |
+| `src/components/Sidebar.tsx` | Collapsible sidebar navigation with expandable sections |
 | `src/components/ProtectedRoute.tsx` | Auth guard for protected routes |
 | `src/pages/Login.tsx` | Authentication login page |
 | `src/pages/Register.tsx` | Company registration/signup page |
@@ -450,6 +451,8 @@ Always run `npm run dev` to start the development server before testing URLs. Th
 - **Subtle styling** - Use "very light" glows and effects; avoid aggressive visual enhancements
 - **Symmetrical layouts** - Maintain even spacing and margins; avoid asymmetric empty space
 - **Clean and minimal** - Prefer uncluttered interfaces; less is more
+- **Iterative refinement** - Make small, focused changes and gather feedback before continuing
+- **Professional polish** - UI elements should look refined and high-quality
 
 ### When Making Visual Changes
 - State exactly what was changed and where (e.g., "Updated line 34 in Sidebar.css")
