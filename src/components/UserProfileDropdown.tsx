@@ -78,6 +78,11 @@ const UserProfileDropdown = () => {
     alert('Reset Password - Coming soon');
   };
 
+  const handleBillingDetails = () => {
+    setIsOpen(false);
+    navigate('/billing');
+  };
+
   // Generate initials from company name for the logo placeholder
   const getCompanyInitials = (name: string) => {
     return name
@@ -152,6 +157,14 @@ const UserProfileDropdown = () => {
               <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
             </svg>
             <span>Reset Password</span>
+          </button>
+
+          <button className="menu-item" onClick={handleBillingDetails}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+              <line x1="1" y1="10" x2="23" y2="10"/>
+            </svg>
+            <span>Billing Details</span>
           </button>
 
           <div className="menu-divider"></div>
