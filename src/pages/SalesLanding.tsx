@@ -329,9 +329,9 @@ function SalesLanding() {
       {/* Mechanism Reveal Section */}
       <section id="mechanism" className="section mechanism-section">
         <div className="section-container">
-          <h2 className="section-header animate-on-scroll">
-            Introducing <span className="highlight">ConversionIQ™</span>—<br />
-            The Intelligence Layer Your Ad Stack Is Missing
+          <h2 className="section-header mechanism-header animate-on-scroll">
+            <span className="mechanism-title">Introducing <span className="highlight">ConversionIQ™</span></span>
+            <span className="mechanism-subtitle">The Intelligence Layer Your Ad Stack Is Missing</span>
           </h2>
           <p className="mechanism-intro animate-on-scroll delay-1">
             ConversionIQ™ is our proprietary technology that does what dashboards can't.<br />
