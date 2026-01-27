@@ -73,6 +73,7 @@ function SalesLanding() {
           <div className="nav-links desktop-nav">
             <a href="#mechanism">How It Works</a>
             <a href="#offer">What You Get</a>
+            <a href="#pricing">Pricing</a>
             <a href="#credibility">About</a>
           </div>
 
@@ -98,6 +99,7 @@ function SalesLanding() {
         <div className={`mobile-nav ${isMobileMenuOpen ? 'open' : ''}`}>
           <a href="#mechanism">How It Works</a>
           <a href="#offer">What You Get</a>
+          <a href="#pricing">Pricing</a>
           <a href="#credibility">About</a>
           <Link to="/login" className="mobile-login">Log in</Link>
           <a href={calendarUrl} className="mobile-cta">Schedule Demo</a>
@@ -881,6 +883,107 @@ function SalesLanding() {
         </div>
       </section>
 
+      {/* Pricing Section */}
+      <section id="pricing" className="section pricing-section">
+        <div className="section-container">
+          <h2 className="section-header animate-on-scroll">
+            Enterprise Pricing Only—<br />
+            <span className="header-emphasis">For Now</span>
+          </h2>
+          <p className="pricing-intro animate-on-scroll delay-1">
+            Convertra isn't a self-serve tool you sign up for and figure out on your own.<br />
+            <strong>It's a partnership.</strong>
+          </p>
+
+          <div className="pricing-card gradient-border-card animate-on-scroll delay-2">
+            <div className="card-gradient-border"></div>
+            <div className="card-inner">
+              <div className="pricing-badge">Enterprise</div>
+              <h3 className="pricing-title">White-Glove Implementation & Management</h3>
+
+              <p className="pricing-description">
+                When you partner with Convertra, you don't just get software—you get a dedicated team
+                member who becomes an extension of your organization.
+              </p>
+
+              <div className="pricing-features">
+                <div className="pricing-feature">
+                  <div className="pricing-feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                      <circle cx="9" cy="7" r="4"/>
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                  </div>
+                  <div className="pricing-feature-content">
+                    <h4>Dedicated Partnership</h4>
+                    <p>A team member who partners with you to install, set up, and customize your solution—not a support ticket.</p>
+                  </div>
+                </div>
+
+                <div className="pricing-feature">
+                  <div className="pricing-feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                    </svg>
+                  </div>
+                  <div className="pricing-feature-content">
+                    <h4>Custom Software Solution</h4>
+                    <p>Your own custom-built system configured to your unique business needs, channels, and conversion goals.</p>
+                  </div>
+                </div>
+
+                <div className="pricing-feature">
+                  <div className="pricing-feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                      <path d="M2 17l10 5 10-5"/>
+                      <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                  </div>
+                  <div className="pricing-feature-content">
+                    <h4>Managed Integration</h4>
+                    <p>We handle every integration, becoming a seamless extension of your team—so you focus on results, not setup.</p>
+                  </div>
+                </div>
+
+                <div className="pricing-feature">
+                  <div className="pricing-feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                  </div>
+                  <div className="pricing-feature-content">
+                    <h4>Ongoing White-Glove Service</h4>
+                    <p>Continuous optimization, monitoring, and evolution of your system—without lifting a finger.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pricing-why">
+                <p className="pricing-why-title">Why enterprise only—for now?</p>
+                <p className="pricing-why-text">
+                  Because every implementation is fully custom and bespoke. We study your business,
+                  configure the system to your patterns, and manage it end-to-end. This level of
+                  white-glove service requires dedicated attention and expertise that doesn't scale
+                  with self-serve signups—at least not yet.
+                </p>
+              </div>
+
+              <div className="pricing-cta">
+                <a href={calendarUrl} className="cta-primary cta-large">
+                  Schedule a Demo
+                </a>
+                <p className="pricing-cta-note">
+                  Let's discuss your needs and see if we're the right fit.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Risk Reversal / Urgency Section */}
       <section id="urgency" className="section urgency-section">
         <div className="section-container">
@@ -960,6 +1063,7 @@ function SalesLanding() {
             <a href="#hero">Home</a>
             <a href="#mechanism">How It Works</a>
             <a href="#offer">What You Get</a>
+            <a href="#pricing">Pricing</a>
             <a href={calendarUrl}>Contact</a>
           </div>
           <p className="footer-copyright">
