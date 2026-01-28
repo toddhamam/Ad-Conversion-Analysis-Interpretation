@@ -3,7 +3,19 @@
 }
 
 .dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
   margin-bottom: 32px;
+}
+
+.dashboard-header-left {
+  flex: 1;
+}
+
+.dashboard-header-right {
+  flex-shrink: 0;
 }
 
 .dashboard-title {
@@ -129,6 +141,66 @@
 .stat-period {
   font-size: 13px;
   color: var(--text-muted);
+}
+
+/* Editable Stat Card */
+.stat-card-editable {
+  border-color: var(--accent-violet-glow);
+}
+
+.stat-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stat-input-prefix {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.stat-input {
+  width: 100%;
+  max-width: 140px;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--border-primary);
+  padding: 0 0 4px 0;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.stat-input:focus {
+  border-bottom-color: var(--accent-violet);
+}
+
+.stat-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Hide number input spinners */
+.stat-input::-webkit-outer-spin-button,
+.stat-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.stat-input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* Sortable stat cards */
+.stat-card-sortable {
+  cursor: grab;
+  touch-action: none;
+}
+
+.stat-card-sortable:active {
+  cursor: grabbing;
 }
 
 /* Metric Focus Section */
