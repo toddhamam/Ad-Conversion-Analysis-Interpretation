@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { DashboardMetrics } from '../types/funnel';
-import { fetchCampaignSummaries, type CampaignSummary } from '../services/metaApi';
+import { fetchCampaignSummaries, type CampaignSummary, type DatePreset } from '../services/metaApi';
 import Loading from '../components/Loading';
+import DateRangePicker from '../components/DateRangePicker';
 import DashboardCustomizer from '../components/DashboardCustomizer';
 import type { MetricConfig } from '../components/DashboardCustomizer';
 import {
@@ -91,17 +92,18 @@ const METRIC_LABELS: Record<string, string> = {
   cac: 'CAC',
 };
 
-const METRIC_PERIODS: Record<string, string> = {
-  totalRevenue: 'Last 30 days',
+// Metric periods - some are dynamic based on date range
+const STATIC_PERIODS: Record<string, string> = {
   totalPurchases: 'Purchases',
   conversionRate: 'Sessions to purchase',
   aov: 'Per customer',
-  uniqueCustomers: 'Last 30 days',
   sessions: 'Unique visitors',
-  adSpend: 'Last 30 days',
   roas: 'Return on ad spend',
   cac: 'Cost per customer',
 };
+
+// Metrics that should show the date range
+const DATE_RANGE_METRICS = ['totalRevenue', 'uniqueCustomers', 'adSpend'];
 
 // Load metrics config from localStorage
 function loadMetricsConfig(): MetricConfig[] {
@@ -137,6 +139,7 @@ function saveMetricsConfig(metrics: MetricConfig[]) {
 interface SortableStatCardProps {
   id: string;
   stats: DashboardStats;
+  dateRangeLabel: string;
   formatCurrency: (value: number) => string;
   formatNumber: (value: number) => string;
 }
@@ -144,6 +147,7 @@ interface SortableStatCardProps {
 function SortableStatCard({
   id,
   stats,
+  dateRangeLabel,
   formatCurrency,
   formatNumber,
 }: SortableStatCardProps) {
@@ -201,10 +205,66 @@ function SortableStatCard({
       <div className="stat-content">
         <div className="stat-label">{METRIC_LABELS[id]}</div>
         <div className="stat-value">{formatValue()}</div>
-        <div className="stat-period">{METRIC_PERIODS[id]}</div>
+        <div className="stat-period">
+          {DATE_RANGE_METRICS.includes(id) ? dateRangeLabel : STATIC_PERIODS[id]}
+        </div>
       </div>
     </div>
   );
+}
+
+// Helper to calculate dates from preset
+function getPresetDates(preset: DatePreset): { startDate: Date; endDate: Date } {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const endDate = new Date(today);
+  let startDate = new Date(today);
+
+  switch (preset) {
+    case 'today':
+      break;
+    case 'yesterday':
+      startDate.setDate(startDate.getDate() - 1);
+      endDate.setDate(endDate.getDate() - 1);
+      break;
+    case 'last_7d':
+      startDate.setDate(startDate.getDate() - 6);
+      break;
+    case 'last_14d':
+      startDate.setDate(startDate.getDate() - 13);
+      break;
+    case 'last_28d':
+      startDate.setDate(startDate.getDate() - 27);
+      break;
+    case 'last_30d':
+      startDate.setDate(startDate.getDate() - 29);
+      break;
+    case 'this_week':
+      startDate.setDate(startDate.getDate() - startDate.getDay());
+      break;
+    case 'last_week':
+      startDate.setDate(startDate.getDate() - startDate.getDay() - 7);
+      endDate.setDate(endDate.getDate() - endDate.getDay() - 1);
+      break;
+    case 'this_month':
+      startDate.setDate(1);
+      break;
+    case 'last_month':
+      startDate.setDate(1);
+      startDate.setMonth(startDate.getMonth() - 1);
+      endDate.setDate(0);
+      break;
+    case 'maximum':
+      startDate.setFullYear(startDate.getFullYear() - 2);
+      break;
+  }
+
+  return { startDate, endDate };
+}
+
+// Format date for API (YYYY-MM-DD)
+function formatDateForApi(date: Date): string {
+  return date.toISOString().split('T')[0];
 }
 
 const Dashboard = () => {
@@ -218,6 +278,19 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [metricsConfig, setMetricsConfig] = useState<MetricConfig[]>(loadMetricsConfig);
+
+  // Date range state - default to last 30 days
+  const defaultPreset: DatePreset = 'last_30d';
+  const defaultDates = getPresetDates(defaultPreset);
+  const [dateRange, setDateRange] = useState<{
+    preset?: DatePreset;
+    startDate: Date;
+    endDate: Date;
+  }>({
+    preset: defaultPreset,
+    startDate: defaultDates.startDate,
+    endDate: defaultDates.endDate,
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -234,13 +307,25 @@ const Dashboard = () => {
     const loadData = async () => {
       try {
         setLoading(true);
-        const endDate = new Date().toISOString();
-        const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Build date parameters
+        const startDateStr = dateRange.startDate.toISOString();
+        const endDateStr = dateRange.endDate.toISOString();
+
+        // Build Meta API date options
+        const metaDateOptions = dateRange.preset
+          ? { datePreset: dateRange.preset }
+          : {
+              timeRange: {
+                since: formatDateForApi(dateRange.startDate),
+                until: formatDateForApi(dateRange.endDate),
+              },
+            };
 
         // Fetch both funnel metrics and Meta API data in parallel
         const [funnelResponse, campaigns] = await Promise.all([
-          fetch(`/api/funnel/metrics?startDate=${startDate}&endDate=${endDate}`),
-          fetchCampaignSummaries({ datePreset: 'last_30d' }).catch((err) => {
+          fetch(`/api/funnel/metrics?startDate=${startDateStr}&endDate=${endDateStr}`),
+          fetchCampaignSummaries(metaDateOptions).catch((err) => {
             console.error('Failed to fetch Meta data:', err);
             return [] as CampaignSummary[];
           }),
@@ -274,7 +359,12 @@ const Dashboard = () => {
       }
     };
     loadData();
-  }, []);
+  }, [dateRange]);
+
+  // Handle date range change
+  const handleDateRangeChange = (newDateRange: { preset?: DatePreset; startDate: Date; endDate: Date }) => {
+    setDateRange(newDateRange);
+  };
 
   // Handle metrics config change
   const handleMetricsConfigChange = (newConfig: MetricConfig[]) => {
@@ -332,6 +422,33 @@ const Dashboard = () => {
     return new Intl.NumberFormat('en-US').format(value);
   };
 
+  // Get date range label for display
+  const getDateRangeLabel = () => {
+    if (dateRange.preset) {
+      const presetLabels: Record<DatePreset, string> = {
+        today: 'Today',
+        yesterday: 'Yesterday',
+        last_7d: 'Last 7 days',
+        last_14d: 'Last 14 days',
+        last_28d: 'Last 28 days',
+        last_30d: 'Last 30 days',
+        this_week: 'This week',
+        last_week: 'Last week',
+        this_month: 'This month',
+        last_month: 'Last month',
+        maximum: 'All time',
+      };
+      return presetLabels[dateRange.preset];
+    }
+    // Custom date range
+    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+    const start = dateRange.startDate.toLocaleDateString('en-US', options);
+    const end = dateRange.endDate.toLocaleDateString('en-US', options);
+    return `${start} - ${end}`;
+  };
+
+  const dateRangeLabel = getDateRangeLabel();
+
   // Get visible metrics for rendering
   const visibleMetrics = metricsConfig.filter((m) => m.visible);
 
@@ -343,6 +460,10 @@ const Dashboard = () => {
           <p className="dashboard-subtitle">Your ad performance at a glance</p>
         </div>
         <div className="dashboard-header-right">
+          <DateRangePicker
+            value={dateRange}
+            onChange={handleDateRangeChange}
+          />
           <DashboardCustomizer
             metrics={metricsConfig}
             onMetricsChange={handleMetricsConfigChange}
@@ -377,6 +498,7 @@ const Dashboard = () => {
                     key={metric.id}
                     id={metric.id}
                     stats={stats}
+                    dateRangeLabel={dateRangeLabel}
                     formatCurrency={formatCurrency}
                     formatNumber={formatNumber}
                   />
