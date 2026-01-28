@@ -94,7 +94,7 @@ const METRIC_LABELS: Record<string, string> = {
 
 // Metric periods - some are dynamic based on date range
 const STATIC_PERIODS: Record<string, string> = {
-  totalPurchases: 'Purchases',
+  totalPurchases: 'Conversions',
   conversionRate: 'Sessions to purchase',
   aov: 'Per customer',
   sessions: 'Unique visitors',
@@ -273,6 +273,7 @@ const Dashboard = () => {
     totalSpend: number;
     totalPurchases: number;
     totalPurchaseValue: number;
+    totalClicks: number;
     roas: number;
   } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -342,12 +343,14 @@ const Dashboard = () => {
           const totalSpend = campaigns.reduce((sum, c) => sum + c.spend, 0);
           const totalPurchases = campaigns.reduce((sum, c) => sum + c.purchases, 0);
           const totalPurchaseValue = campaigns.reduce((sum, c) => sum + c.purchaseValue, 0);
+          const totalClicks = campaigns.reduce((sum, c) => sum + c.clicks, 0);
           const roas = totalSpend > 0 ? totalPurchaseValue / totalSpend : 0;
 
           setMetaData({
             totalSpend,
             totalPurchases,
             totalPurchaseValue,
+            totalClicks,
             roas,
           });
         }
@@ -394,19 +397,50 @@ const Dashboard = () => {
     }
   };
 
-  // Calculate stats from funnel metrics and Meta API data
-  // Use Meta API data for ad spend, ROAS, and purchases when available
+  // Calculate stats from funnel metrics (Supabase) and Meta API data
+  //
+  // Data source strategy:
+  // - Ad Spend, ROAS: From Meta API (ad platform metrics)
+  // - Total Revenue, Total Purchases (conversions): From Meta API for ad attribution
+  // - Unique Customers, AOV, CAC, Conversion Rate: From Supabase funnel data (per-customer metrics)
+  //   This is important because Meta counts every pixel fire as a purchase, which would
+  //   inflate numbers if upsells/downsells fire separate purchase events.
+  //   Supabase tracks unique funnel_session_id to count actual unique buyers.
+
   const adSpend = metaData?.totalSpend || 0;
+
+  // For ad attribution metrics, use Meta data
+  const totalPurchases = metaData?.totalPurchases || metrics?.summary.purchases || 0;
+  const totalRevenue = metaData?.totalPurchaseValue || metrics?.summary.totalRevenue || 0;
+  const totalClicks = metaData?.totalClicks || 0;
+
+  // For per-customer metrics, prefer Supabase funnel data (tracks unique buyers)
+  // Fall back to Meta data if funnel data isn't available
+  const uniqueCustomers = metrics?.summary.uniqueCustomers || metaData?.totalPurchases || 0;
+
+  // AOV: Use funnel data (total revenue / unique customers) for accurate per-customer value
+  // The funnel API already calculates this correctly including upsells/downsells
+  const aov = metrics?.summary.aovPerCustomer ||
+    (uniqueCustomers > 0 ? totalRevenue / uniqueCustomers : 0);
+
+  // CAC: Ad Spend / Unique Customers (not total purchase events)
+  const cac = uniqueCustomers > 0 && adSpend > 0 ? adSpend / uniqueCustomers : 0;
+
+  // Conversion Rate: Use funnel data (sessions to purchase) for accurate funnel conversion
+  // Fall back to clicks-to-purchase from Meta if funnel data unavailable
+  const conversionRate = metrics?.summary.conversionRate ||
+    (totalClicks > 0 && totalPurchases > 0 ? (totalPurchases / totalClicks) * 100 : 0);
+
   const stats: DashboardStats = {
-    totalRevenue: metaData?.totalPurchaseValue || metrics?.summary.totalRevenue || 0,
-    totalPurchases: metaData?.totalPurchases || metrics?.summary.purchases || 0,
-    conversionRate: metrics?.summary.conversionRate || 0,
-    aov: metrics?.summary.aovPerCustomer || 0,
-    uniqueCustomers: metrics?.summary.uniqueCustomers || 0,
+    totalRevenue,
+    totalPurchases,
+    conversionRate,
+    aov,
+    uniqueCustomers,
     sessions: metrics?.summary.sessions || 0,
-    adSpend: adSpend,
+    adSpend,
     roas: metaData?.roas || 0,
-    cac: metrics?.summary.uniqueCustomers && adSpend > 0 ? adSpend / metrics.summary.uniqueCustomers : 0,
+    cac,
   };
 
   const formatCurrency = (value: number) => {
