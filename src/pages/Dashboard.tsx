@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { DashboardMetrics } from '../types/funnel';
+import { fetchCampaignSummaries, type CampaignSummary } from '../services/metaApi';
 import Loading from '../components/Loading';
 import DashboardCustomizer from '../components/DashboardCustomizer';
 import type { MetricConfig } from '../components/DashboardCustomizer';
@@ -97,7 +98,7 @@ const METRIC_PERIODS: Record<string, string> = {
   aov: 'Per customer',
   uniqueCustomers: 'Last 30 days',
   sessions: 'Unique visitors',
-  adSpend: 'Enter your ad spend',
+  adSpend: 'Last 30 days',
   roas: 'Return on ad spend',
   cac: 'Cost per customer',
 };
@@ -136,8 +137,6 @@ function saveMetricsConfig(metrics: MetricConfig[]) {
 interface SortableStatCardProps {
   id: string;
   stats: DashboardStats;
-  adSpend: number;
-  onAdSpendChange: (value: number) => void;
   formatCurrency: (value: number) => string;
   formatNumber: (value: number) => string;
 }
@@ -145,8 +144,6 @@ interface SortableStatCardProps {
 function SortableStatCard({
   id,
   stats,
-  adSpend,
-  onAdSpendChange,
   formatCurrency,
   formatNumber,
 }: SortableStatCardProps) {
@@ -181,6 +178,8 @@ function SortableStatCard({
         return formatNumber(stats.uniqueCustomers);
       case 'sessions':
         return formatNumber(stats.sessions);
+      case 'adSpend':
+        return stats.adSpend > 0 ? formatCurrency(stats.adSpend) : '—';
       case 'roas':
         return stats.roas > 0 ? `${stats.roas.toFixed(2)}x` : '—';
       case 'cac':
@@ -189,40 +188,6 @@ function SortableStatCard({
         return '—';
     }
   };
-
-  // Special handling for editable ad spend
-  if (id === 'adSpend') {
-    return (
-      <div
-        ref={setNodeRef}
-        style={style}
-        className="stat-card stat-card-editable stat-card-sortable"
-        {...attributes}
-        {...listeners}
-      >
-        <div className="stat-icon">{METRIC_ICONS[id]}</div>
-        <div className="stat-content">
-          <div className="stat-label">{METRIC_LABELS[id]}</div>
-          <div className="stat-input-wrapper">
-            <span className="stat-input-prefix">$</span>
-            <input
-              type="number"
-              value={adSpend || ''}
-              onChange={(e) => {
-                e.stopPropagation();
-                onAdSpendChange(Number(e.target.value));
-              }}
-              onClick={(e) => e.stopPropagation()}
-              onPointerDown={(e) => e.stopPropagation()}
-              placeholder="0"
-              className="stat-input"
-            />
-          </div>
-          <div className="stat-period">{METRIC_PERIODS[id]}</div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div
@@ -244,15 +209,14 @@ function SortableStatCard({
 
 const Dashboard = () => {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [metaData, setMetaData] = useState<{
+    totalSpend: number;
+    totalPurchases: number;
+    totalPurchaseValue: number;
+    roas: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [adSpend, setAdSpend] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('dashboard_ad_spend');
-      return saved ? parseFloat(saved) : 0;
-    }
-    return 0;
-  });
   const [metricsConfig, setMetricsConfig] = useState<MetricConfig[]>(loadMetricsConfig);
 
   const sensors = useSensors(
@@ -273,12 +237,35 @@ const Dashboard = () => {
         const endDate = new Date().toISOString();
         const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-        const response = await fetch(`/api/funnel/metrics?startDate=${startDate}&endDate=${endDate}`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch metrics');
+        // Fetch both funnel metrics and Meta API data in parallel
+        const [funnelResponse, campaigns] = await Promise.all([
+          fetch(`/api/funnel/metrics?startDate=${startDate}&endDate=${endDate}`),
+          fetchCampaignSummaries({ datePreset: 'last_30d' }).catch((err) => {
+            console.error('Failed to fetch Meta data:', err);
+            return [] as CampaignSummary[];
+          }),
+        ]);
+
+        // Process funnel data
+        if (funnelResponse.ok) {
+          const data = await funnelResponse.json();
+          setMetrics(data);
         }
-        const data = await response.json();
-        setMetrics(data);
+
+        // Aggregate Meta campaign data
+        if (campaigns.length > 0) {
+          const totalSpend = campaigns.reduce((sum, c) => sum + c.spend, 0);
+          const totalPurchases = campaigns.reduce((sum, c) => sum + c.purchases, 0);
+          const totalPurchaseValue = campaigns.reduce((sum, c) => sum + c.purchaseValue, 0);
+          const roas = totalSpend > 0 ? totalPurchaseValue / totalSpend : 0;
+
+          setMetaData({
+            totalSpend,
+            totalPurchases,
+            totalPurchaseValue,
+            roas,
+          });
+        }
       } catch (err) {
         console.error('Failed to load dashboard data:', err);
         setError('Failed to load performance data');
@@ -288,14 +275,6 @@ const Dashboard = () => {
     };
     loadData();
   }, []);
-
-  // Handle ad spend change with localStorage persistence
-  const handleAdSpendChange = (value: number) => {
-    setAdSpend(value);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('dashboard_ad_spend', value.toString());
-    }
-  };
 
   // Handle metrics config change
   const handleMetricsConfigChange = (newConfig: MetricConfig[]) => {
@@ -325,16 +304,18 @@ const Dashboard = () => {
     }
   };
 
-  // Calculate stats from funnel metrics
+  // Calculate stats from funnel metrics and Meta API data
+  // Use Meta API data for ad spend, ROAS, and purchases when available
+  const adSpend = metaData?.totalSpend || 0;
   const stats: DashboardStats = {
-    totalRevenue: metrics?.summary.totalRevenue || 0,
-    totalPurchases: metrics?.summary.purchases || 0,
+    totalRevenue: metaData?.totalPurchaseValue || metrics?.summary.totalRevenue || 0,
+    totalPurchases: metaData?.totalPurchases || metrics?.summary.purchases || 0,
     conversionRate: metrics?.summary.conversionRate || 0,
     aov: metrics?.summary.aovPerCustomer || 0,
     uniqueCustomers: metrics?.summary.uniqueCustomers || 0,
     sessions: metrics?.summary.sessions || 0,
     adSpend: adSpend,
-    roas: adSpend > 0 && metrics ? metrics.summary.totalRevenue / adSpend : 0,
+    roas: metaData?.roas || 0,
     cac: metrics?.summary.uniqueCustomers && adSpend > 0 ? adSpend / metrics.summary.uniqueCustomers : 0,
   };
 
@@ -396,8 +377,6 @@ const Dashboard = () => {
                     key={metric.id}
                     id={metric.id}
                     stats={stats}
-                    adSpend={adSpend}
-                    onAdSpendChange={handleAdSpendChange}
                     formatCurrency={formatCurrency}
                     formatNumber={formatNumber}
                   />
