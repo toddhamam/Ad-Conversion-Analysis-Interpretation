@@ -90,7 +90,7 @@ public/
 | `src/components/MainLayout.tsx` | App shell with sidebar, header, and responsive navigation |
 | `src/services/stripeApi.ts` | Stripe integration - checkout, portal, subscription management |
 | `src/pages/Billing.tsx` | Billing portal page with plan management |
-| `src/pages/Dashboard.tsx` | Main dashboard with customizable stat cards, fetches from funnel API |
+| `src/pages/Dashboard.tsx` | Main dashboard with customizable stat cards, date range picker, fetches from both Meta API and Supabase funnel API |
 | `src/pages/Funnels.tsx` | Funnel metrics page with ad spend configuration |
 | `src/components/DashboardCustomizer.tsx` | Drag-and-drop dashboard layout customization |
 | `src/components/StatCard.tsx` | Reusable stat card component for metrics display |
@@ -613,7 +613,7 @@ Always run `npm run dev` to start the development server before testing URLs. Th
 - Don't skip TypeScript types - all API responses need interfaces
 - Don't use inline styles - create/extend CSS files
 - Don't use dark theme colors - this is a light theme (no cyan #00d4ff, no dark backgrounds)
-- Don't confuse API endpoints - Dashboard metrics come from `/api/funnel/metrics` (Supabase), not Meta API
+- Don't confuse API endpoints - Dashboard uses BOTH Meta API (ad spend, ROAS, conversions) AND Supabase funnel API (unique customers, AOV, conversion rate, CAC)
 - Don't hardcode date ranges - make them configurable when user-facing
 
 ---
@@ -646,13 +646,25 @@ The ad generator uses these frameworks:
 
 ## Performance Metrics Glossary
 
-| Metric | Calculation |
-|--------|-------------|
-| CVR | conversions / clicks |
-| CPA | spend / conversions |
-| ROAS | revenue / spend |
-| CTR | clicks / impressions |
-| Health Score | AI-generated 0-100 based on trends |
+| Metric | Calculation | Data Source |
+|--------|-------------|-------------|
+| CVR | conversions / clicks | Meta API |
+| CPA | spend / conversions | Meta API |
+| ROAS | revenue / spend | Meta API |
+| CTR | clicks / impressions | Meta API |
+| AOV | total revenue / unique customers | Supabase funnel (per-customer, includes upsells) |
+| CAC | ad spend / unique customers | Meta spend ÷ Supabase unique customers |
+| Conversion Rate | sessions to purchase | Supabase funnel |
+| Health Score | AI-generated 0-100 based on trends | Calculated |
+
+### Dashboard Data Source Strategy
+
+The Dashboard uses a hybrid data approach to ensure accurate metrics:
+
+- **Ad Platform Metrics** (from Meta API): Ad Spend, ROAS, Total Conversions, Total Revenue
+- **Per-Customer Metrics** (from Supabase funnel): Unique Customers, AOV, Conversion Rate, CAC
+
+This separation is important because Meta's pixel may fire multiple purchase events per customer (front-end, upsells, downsells), which would inflate metrics if used for per-customer calculations. The Supabase funnel tracks unique `funnel_session_id` to count actual unique buyers.
 
 ---
 
