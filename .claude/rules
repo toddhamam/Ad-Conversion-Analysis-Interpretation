@@ -16,7 +16,9 @@
 - Guide users through troubleshooting steps to empower self-resolution
 
 ## TypeScript Patterns
-- **Type-only imports**: Use `import type { MyType }` for types when using `verbatimModuleSyntax` to avoid runtime import overhead
+- **Type-only imports**: Use `import type { MyType }` for types when using `verbatimModuleSyntax` to avoid runtime import overhead and build failures
+  - Common types requiring `import type`: `ReactNode`, `MetricConfig`, `DragEndEvent`, `VercelRequest`, `VercelResponse`
+  - Build will fail if regular imports are used for types with `verbatimModuleSyntax` enabled
 - **Non-null assertions**: Use `process.env.VAR_NAME!` in serverless functions where env vars are guaranteed to exist
 - **Strict typing for API responses**: Define interfaces for all API response shapes in `src/types/`
 
@@ -51,6 +53,8 @@
 - Redundant navigation: Don't create duplicate entry points; keep workflows clear (e.g., Publisher accessed only after generation)
 - Hidden overlay click interception: `opacity: 0` does NOT prevent click events. Always add `pointer-events: none` to hidden overlays to prevent them from blocking interactions with elements beneath
 - Inconsistent breakpoints: Standardize media query breakpoints across the codebase (900px for tablet, 600px for mobile)
+- **Wrong API endpoint**: Dashboard metrics must come from `/api/funnel/metrics` (Supabase), NOT the Meta API. Using the wrong data source leads to zero/incorrect data
+- **Missing type-only imports**: When `verbatimModuleSyntax` is enabled, failing to use `import type` for types causes build failures
 
 ### Stripe Integration Mistakes
 - **Don't call `stripe.redirectToCheckout` without a session**: Always create a Checkout Session via backend API first, then pass the `sessionId` to `redirectToCheckout`
@@ -77,6 +81,18 @@
 - Use `setTimeout` to simulate API calls in `Login.tsx` and `Register.tsx`
 - These stubs enable quick demonstrations without a full backend
 
+## localStorage Persistence Patterns
+- **User preferences**: Store user-configurable values like ad spend, dashboard layout in localStorage
+- **State initialization**: Use lazy initialization to load from localStorage:
+  ```tsx
+  const [value, setValue] = useState(() => {
+    const saved = localStorage.getItem('key');
+    return saved ? parseFloat(saved) : defaultValue;
+  });
+  ```
+- **Dashboard customization**: Store selected metrics and layout order for persistence across sessions
+- **Common keys**: `'dashboard_ad_spend'`, `'dashboard_metrics'`, `'dashboard_layout'`
+
 ## API Route Conventions
 - Backend API routes live in `api/[feature_area]/[specific_route].ts`
 - Use `@vercel/node` types (`VercelRequest`, `VercelResponse`) for serverless functions
@@ -94,3 +110,17 @@
   ```
 - **Configuration guards**: Always provide `isConfigured()` helpers that check env vars before attempting operations
 - **Fallback data**: Provide `getDefaultData()` functions for graceful degradation when APIs are unavailable
+
+## Data Formatting Standards
+- **Currency**: Use `Intl.NumberFormat` for consistent, localized currency display:
+  ```tsx
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
+  ```
+- **Numbers**: Use `Intl.NumberFormat` for large numbers with proper separators
+- **Percentages**: Format as `value.toFixed(2)%` for metrics like CVR, CTR
+
+## Drag-and-Drop Implementation
+- **Library**: Use `@dnd-kit` for modern drag-and-drop functionality
+- **Common imports**: `DndContext`, `closestCenter`, `SortableContext`, `useSortable`, `arrayMove`
+- **Type imports**: `import type { DragEndEvent }` (must be type-only import)
+- **Pattern**: Wrap sortable items in `SortableContext`, use `useSortable` hook in child components
