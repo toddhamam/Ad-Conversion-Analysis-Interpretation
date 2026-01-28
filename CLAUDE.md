@@ -90,8 +90,13 @@ public/
 | `src/components/MainLayout.tsx` | App shell with sidebar, header, and responsive navigation |
 | `src/services/stripeApi.ts` | Stripe integration - checkout, portal, subscription management |
 | `src/pages/Billing.tsx` | Billing portal page with plan management |
+| `src/pages/Dashboard.tsx` | Main dashboard with customizable stat cards, fetches from funnel API |
+| `src/pages/Funnels.tsx` | Funnel metrics page with ad spend configuration |
+| `src/components/DashboardCustomizer.tsx` | Drag-and-drop dashboard layout customization |
+| `src/components/StatCard.tsx` | Reusable stat card component for metrics display |
 | `api/billing/checkout.ts` | Vercel serverless function for Stripe Checkout sessions |
 | `api/billing/portal.ts` | Vercel serverless function for Stripe Customer Portal |
+| `api/funnel/metrics.ts` | Supabase funnel metrics API endpoint |
 
 ## Routes
 
@@ -411,6 +416,7 @@ The sales landing (`/`) uses these specific patterns:
 ```tsx
 const [data, setData] = useState<DataType[]>([]);
 const [loading, setLoading] = useState(true);
+const [error, setError] = useState<string | null>(null);
 
 useEffect(() => {
   const fetchData = async () => {
@@ -419,12 +425,47 @@ useEffect(() => {
       setData(result);
     } catch (error) {
       console.error('Failed to fetch:', error);
+      setError('Failed to load data. Please try again.');
     } finally {
       setLoading(false);
     }
   };
   fetchData();
 }, []);
+```
+
+### User-Configurable State with localStorage
+```tsx
+// For values users can configure (like Ad Spend), persist to localStorage
+const [adSpend, setAdSpend] = useState<number>(() => {
+  const saved = localStorage.getItem('dashboard_ad_spend');
+  return saved ? parseFloat(saved) : 1000;
+});
+
+const handleAdSpendChange = (value: number) => {
+  setAdSpend(value);
+  localStorage.setItem('dashboard_ad_spend', value.toString());
+};
+```
+
+### Centralized Configuration for UI Elements
+```tsx
+// Define default configurations for reusable UI elements
+const DEFAULT_METRICS = ['revenue', 'conversions', 'cpa', 'roas'];
+const METRIC_ICONS: Record<string, JSX.Element> = { /* ... */ };
+const METRIC_LABELS: Record<string, string> = { /* ... */ };
+const METRIC_PERIODS: Record<string, string> = { /* ... */ };
+```
+
+### URLSearchParams for API Requests
+```tsx
+// Clean way to construct API URLs with query parameters
+const params = new URLSearchParams({
+  date_preset: 'last_30d',
+  fields: 'spend,impressions,clicks,conversions',
+  access_token: token,
+});
+const url = `${baseUrl}?${params.toString()}`;
 ```
 
 ### AI Analysis Pattern
@@ -572,6 +613,8 @@ Always run `npm run dev` to start the development server before testing URLs. Th
 - Don't skip TypeScript types - all API responses need interfaces
 - Don't use inline styles - create/extend CSS files
 - Don't use dark theme colors - this is a light theme (no cyan #00d4ff, no dark backgrounds)
+- Don't confuse API endpoints - Dashboard metrics come from `/api/funnel/metrics` (Supabase), not Meta API
+- Don't hardcode date ranges - make them configurable when user-facing
 
 ---
 

@@ -29,6 +29,13 @@ The user prefers a standard SaaS URL structure:
 - **Pill style UI**: Rounded corners and spacing away from screen edges for a "floating" aesthetic (especially for mobile navigation and headers)
 - **CSS-only solutions**: Prefer CSS for layout and responsiveness whenever possible; minimize JavaScript state changes for these aspects
 
+## Dashboard & Metrics Preferences
+
+- **Visual clarity**: User wants metrics that are "very nice, very nice" - clear, well-presented data
+- **Customization**: Strong preference for ability to "build their own custom dashboard" by choosing metrics
+- **Data accuracy**: Dashboard metrics must be accurate - verify API endpoints and data sources
+- **Prioritization**: Fix existing issues first, then build new features (e.g., fix metrics before adding customization)
+
 ## User Profile & Company Branding
 
 - **User profile prominence**: The user profile area in the top right is a key branding and navigation element
