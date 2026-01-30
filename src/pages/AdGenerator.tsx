@@ -12,10 +12,12 @@ import {
   type ChannelAnalysisResult,
   type GeneratedAdPackage,
   type CopyOption,
+  type ReasoningEffort,
 } from '../services/openaiApi';
 import { getCacheStats as getImageCacheStats, uploadBrandImages, clearImageCache } from '../services/imageCache';
 import GeneratedAdCard from '../components/GeneratedAdCard';
 import CopySelectionPanel from '../components/CopySelectionPanel';
+import IQSelector from '../components/IQSelector';
 import './AdGenerator.css';
 
 const CACHE_KEY = 'channel_analysis_cache';
@@ -138,6 +140,7 @@ const AdGenerator = () => {
   const [conceptType, setConceptType] = useState<ConceptType>('auto');
   const [variationCount, setVariationCount] = useState(2);
   const [analysisData, setAnalysisData] = useState<ChannelAnalysisResult | null>(null);
+  const [iqLevel, setIqLevel] = useState<ReasoningEffort>('medium');
 
   // Multi-step workflow state
   const [currentStep, setCurrentStep] = useState<WorkflowStep>('config');
@@ -315,13 +318,14 @@ const AdGenerator = () => {
 
     setIsGeneratingCopy(true);
     setError(null);
-    setGenerationProgress('Generating headline and body copy options...');
+    setGenerationProgress('ConversionIQ™ generating headline and body copy options...');
 
     try {
       const result = await generateCopyOptions({
         audienceType,
         conceptType,
         analysisData,
+        reasoningEffort: iqLevel,
       });
 
       setCopyOptions(result);
@@ -367,7 +371,7 @@ const AdGenerator = () => {
 
     setIsGeneratingCreatives(true);
     setError(null);
-    setGenerationProgress(adType === 'image' ? 'Generating images and finalizing copy...' : 'Creating video storyboard...');
+    setGenerationProgress(adType === 'image' ? 'ConversionIQ™ generating images and finalizing copy...' : 'ConversionIQ™ creating video storyboard...');
 
     try {
       const result = await generateAdPackage({
@@ -382,6 +386,7 @@ const AdGenerator = () => {
           callToActions: selectedCTATexts,
         },
         similarityLevel: similarityValue, // 0 = identical to references, 100 = completely different
+        reasoningEffort: iqLevel,
       });
 
       setGeneratedAds(prev => [result, ...prev]);
@@ -575,6 +580,15 @@ const AdGenerator = () => {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* ConversionIQ Level Selection */}
+          <div className="config-section">
+            <IQSelector
+              value={iqLevel}
+              onChange={setIqLevel}
+              disabled={isGeneratingCopy}
+            />
           </div>
 
           {/* Generate Copy Options Button */}

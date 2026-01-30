@@ -15,12 +15,78 @@ const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models'
 // =============================================================================
 // MODEL CONFIGURATION - Always use the latest available models
 // =============================================================================
-// GPT-4o is OpenAI's most capable model for text and vision analysis
-const DEFAULT_CHAT_MODEL = 'gpt-4o-2024-11-20'; // Latest GPT-4o snapshot
-const DEFAULT_VISION_MODEL = 'gpt-4o-2024-11-20'; // GPT-4o has best vision capabilities
+// GPT-5.2 is OpenAI's flagship model - reasoning is controlled via the reasoning.effort parameter
+const DEFAULT_CHAT_MODEL = 'gpt-5.2'; // Latest GPT-5.2 with reasoning capabilities
+const DEFAULT_VISION_MODEL = 'gpt-5.2'; // GPT-5.2 has multimodal vision support
+
+// Reasoning configuration for GPT-5.2 Thinking
+// Options: 'none' | 'low' | 'medium' | 'high' | 'xhigh'
+export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'medium';
+
+// ConversionIQ™ branded reasoning levels for UI
+// Timing estimates based on GPT-5.2 reasoning behavior for typical ad analysis tasks
+export const IQ_LEVELS: Record<ReasoningEffort, {
+  name: string;
+  tagline: string;
+  description: string;
+  timing: string;
+  tokenLabel: string;
+  tokenUsage: 'low' | 'medium' | 'high';
+  icon: string;
+}> = {
+  none: {
+    name: 'IQ Off',
+    tagline: 'Basic processing',
+    description: 'No AI reasoning applied',
+    timing: '~5 sec',
+    tokenLabel: 'Low',
+    tokenUsage: 'low',
+    icon: '○'
+  },
+  low: {
+    name: 'IQ Quick',
+    tagline: 'Fast analysis',
+    description: 'Light reasoning for simple tasks',
+    timing: '~10 sec',
+    tokenLabel: 'Low',
+    tokenUsage: 'low',
+    icon: '◔'
+  },
+  medium: {
+    name: 'IQ Standard',
+    tagline: 'Smart & efficient',
+    description: 'Balanced insights with quick turnaround. Great for everyday analysis.',
+    timing: '10-20 sec',
+    tokenLabel: 'Standard',
+    tokenUsage: 'medium',
+    icon: '◑'
+  },
+  high: {
+    name: 'IQ Deep',
+    tagline: 'Thorough analysis',
+    description: 'Extended reasoning for nuanced insights. Ideal for strategic decisions.',
+    timing: '20-40 sec',
+    tokenLabel: '2x Standard',
+    tokenUsage: 'medium',
+    icon: '◕'
+  },
+  xhigh: {
+    name: 'IQ Maximum',
+    tagline: 'Ultra-intelligent',
+    description: 'Maximum reasoning depth. Best for complex, high-stakes creative strategy.',
+    timing: '30-90 sec',
+    tokenLabel: '3-5x Standard',
+    tokenUsage: 'high',
+    icon: '●'
+  }
+};
+
+// User-facing levels (exclude 'none' and 'low' for standard users)
+export const USER_IQ_LEVELS: ReasoningEffort[] = ['medium', 'high', 'xhigh'];
 
 // Image Generation - Using Google Gemini Nano Banana Pro
-const DEFAULT_IMAGE_MODEL = 'gemini-2.0-flash-exp'; // Nano Banana Pro for professional ad assets
+const DEFAULT_IMAGE_MODEL = 'gemini-3-pro-image-preview'; // Nano Banana Pro for professional ad assets
 const USE_GEMINI_FOR_IMAGES = true; // Switch to use Gemini instead of DALL-E
 
 // Video Generation - Using Google Veo 3.1
@@ -267,6 +333,7 @@ export interface CopyOptionsResult {
 
 /**
  * Make a request to OpenAI API (supports both text and vision)
+ * For GPT-5.2 Thinking, includes reasoning effort configuration
  */
 async function callOpenAI(
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
@@ -274,18 +341,39 @@ async function callOpenAI(
     model?: string;
     temperature?: number;
     maxTokens?: number;
+    reasoningEffort?: ReasoningEffort;
   } = {}
 ): Promise<string> {
   if (!isOpenAIConfigured()) {
     throw new Error('OpenAI API key not configured. Please add your API key to the configuration.');
   }
 
-  const { model = DEFAULT_CHAT_MODEL, temperature = 0.7, maxTokens = 2000 } = options;
+  const {
+    model = DEFAULT_CHAT_MODEL,
+    temperature = 0.7,
+    maxTokens = 2000,
+    reasoningEffort = DEFAULT_REASONING_EFFORT
+  } = options;
 
   console.log('🤖 Calling OpenAI API with model:', model);
+  console.log('🧠 Reasoning effort:', reasoningEffort);
   console.log('🔑 API Key present:', !!OPENAI_API_KEY);
   console.log('🔑 API Key length:', OPENAI_API_KEY?.length || 0);
   console.log('🔑 API Key prefix:', OPENAI_API_KEY?.substring(0, 7) || 'NONE');
+
+  // Build request body - include reasoning config for GPT-5.2 Thinking models
+  const isReasoningModel = model.includes('5.2') || model.includes('5.1');
+  const requestBody: Record<string, unknown> = {
+    model,
+    messages,
+    temperature,
+    max_tokens: maxTokens,
+  };
+
+  // Add reasoning effort for GPT-5.2 Thinking models
+  if (isReasoningModel && reasoningEffort !== 'none') {
+    requestBody.reasoning = { effort: reasoningEffort };
+  }
 
   const response = await fetch(OPENAI_API_URL, {
     method: 'POST',
@@ -293,12 +381,7 @@ async function callOpenAI(
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${OPENAI_API_KEY}`,
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature,
-      max_tokens: maxTokens,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
@@ -331,6 +414,7 @@ async function callOpenAI(
 
 /**
  * Make a request to OpenAI API with vision/image support
+ * For GPT-5.2 Thinking, includes reasoning effort configuration
  */
 async function callOpenAIWithVision(
   messages: ChatMessage[],
@@ -338,17 +422,38 @@ async function callOpenAIWithVision(
     model?: string;
     temperature?: number;
     maxTokens?: number;
+    reasoningEffort?: ReasoningEffort;
   } = {}
 ): Promise<string> {
   if (!isOpenAIConfigured()) {
     throw new Error('OpenAI API key not configured. Please add your API key to the configuration.');
   }
 
-  // Use the latest GPT-4o for vision - it's the most capable model for image analysis
-  const { model = DEFAULT_VISION_MODEL, temperature = 0.7, maxTokens = 4000 } = options;
+  // Use GPT-5.2 Thinking for vision - it has multimodal capabilities with extended reasoning
+  const {
+    model = DEFAULT_VISION_MODEL,
+    temperature = 0.7,
+    maxTokens = 4000,
+    reasoningEffort = DEFAULT_REASONING_EFFORT
+  } = options;
 
   console.log('🖼️ Calling OpenAI Vision API with model:', model);
+  console.log('🧠 Reasoning effort:', reasoningEffort);
   console.log('📸 Processing images for analysis...');
+
+  // Build request body - include reasoning config for GPT-5.2 Thinking models
+  const isReasoningModel = model.includes('5.2') || model.includes('5.1');
+  const requestBody: Record<string, unknown> = {
+    model,
+    messages,
+    temperature,
+    max_tokens: maxTokens,
+  };
+
+  // Add reasoning effort for GPT-5.2 Thinking models
+  if (isReasoningModel && reasoningEffort !== 'none') {
+    requestBody.reasoning = { effort: reasoningEffort };
+  }
 
   const response = await fetch(OPENAI_API_URL, {
     method: 'POST',
@@ -356,12 +461,7 @@ async function callOpenAIWithVision(
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${OPENAI_API_KEY}`,
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature,
-      max_tokens: maxTokens,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
@@ -393,9 +493,15 @@ async function callOpenAIWithVision(
 
 /**
  * Analyze a single ad creative
+ * @param ad - The ad creative data to analyze
+ * @param options - Optional configuration including reasoning effort level
  */
-export async function analyzeAdCreative(ad: AdCreativeData): Promise<AdAnalysisResult> {
-  console.log('🔍 Analyzing ad:', ad.id);
+export async function analyzeAdCreative(
+  ad: AdCreativeData,
+  options?: { reasoningEffort?: ReasoningEffort }
+): Promise<AdAnalysisResult> {
+  const reasoningEffort = options?.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
+  console.log('🔍 Analyzing ad:', ad.id, '| IQ Level:', reasoningEffort);
 
   const systemPrompt = `You are an expert digital marketing analyst specializing in Facebook/Meta advertising.
 Your role is to analyze ad creatives and provide actionable insights based on performance data and creative elements.
@@ -455,7 +561,7 @@ Return ONLY the JSON object, no additional text.`;
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { temperature: 0.5 });
+  ], { temperature: 0.5, reasoningEffort });
 
   try {
     // Clean the response - remove markdown code blocks if present
@@ -736,13 +842,18 @@ interface ChatMessage {
 
 /**
  * Analyze all ads for a channel with comprehensive IMAGE ANALYSIS
- * Uses GPT-4o vision to analyze ad creatives visually
+ * Uses GPT-5.2 Thinking vision to analyze ad creatives visually
+ * @param ads - Array of ad creatives to analyze
+ * @param channelName - Name of the advertising channel
+ * @param options - Optional configuration including reasoning effort level
  */
 export async function analyzeChannelPerformance(
   ads: AdCreativeData[],
-  channelName: string = 'Meta'
+  channelName: string = 'Meta',
+  options?: { reasoningEffort?: ReasoningEffort }
 ): Promise<ChannelAnalysisResult> {
-  console.log(`📊 Running channel-wide VISUAL analysis for ${channelName} with ${ads.length} ads`);
+  const reasoningEffort = options?.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
+  console.log(`📊 Running channel-wide VISUAL analysis for ${channelName} with ${ads.length} ads | IQ Level: ${reasoningEffort}`);
 
   if (ads.length === 0) {
     throw new Error('No ads to analyze');
@@ -1028,7 +1139,8 @@ Return ONLY the JSON object, no additional text.`;
 
   const response = await callOpenAIWithVision(messages, {
     temperature: 0.5,
-    maxTokens: 8000
+    maxTokens: 8000,
+    reasoningEffort
   });
 
   try {
@@ -1158,12 +1270,14 @@ export async function generateCopyOptions(config: {
   audienceType: AudienceType;
   conceptType: ConceptType;
   analysisData: ChannelAnalysisResult | null;
+  reasoningEffort?: ReasoningEffort;
 }): Promise<CopyOptionsResult> {
   if (!isOpenAIConfigured()) {
     throw new Error('OpenAI API key not configured');
   }
 
-  console.log(`📝 Generating copy options for ${config.audienceType} audience with ${config.conceptType} concept`);
+  const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
+  console.log(`📝 Generating copy options for ${config.audienceType} audience with ${config.conceptType} concept | IQ Level: ${reasoningEffort}`);
   console.log('📊 Analysis data available:', !!config.analysisData);
 
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
@@ -1356,7 +1470,7 @@ Return JSON only:
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { temperature: 0.85, maxTokens: 3500 }); // Increased tokens for comprehensive responses
+  ], { temperature: 0.85, maxTokens: 3500, reasoningEffort }); // Increased tokens for comprehensive responses
 
   try {
     let cleanedResponse = response.trim();
@@ -1430,7 +1544,7 @@ Respond in JSON format with these exact fields:
 
 Be EXTREMELY specific - your descriptions will be used to generate new images that match this exact style.`;
 
-  const apiUrl = `${GEMINI_API_URL}/gemini-2.0-flash-exp:generateContent`;
+  const apiUrl = `${GEMINI_API_URL}/${DEFAULT_IMAGE_MODEL}:generateContent`;
 
   const requestParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
 
@@ -2197,6 +2311,7 @@ export async function generateAdVideoWithVeo(config: {
 /**
  * Generate a complete ad package (images + copy or storyboard + copy)
  * If selectedCopy is provided, uses pre-selected copy instead of generating new
+ * @param config - Configuration including ad type, audience, variations, and reasoning effort
  */
 export async function generateAdPackage(config: {
   adType: AdType;
@@ -2212,9 +2327,12 @@ export async function generateAdPackage(config: {
   };
   // Creative variation level: 0 = identical to references, 100 = completely different
   similarityLevel?: number;
+  // ConversionIQ reasoning effort level
+  reasoningEffort?: ReasoningEffort;
 }): Promise<GeneratedAdPackage> {
   const conceptName = config.conceptType ? CONCEPT_ANGLES[config.conceptType].name : 'general';
-  console.log(`🚀 Generating ${config.adType} ad package for ${config.audienceType} with ${conceptName} concept (${config.variationCount} variations)`);
+  const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
+  console.log(`🚀 Generating ${config.adType} ad package for ${config.audienceType} with ${conceptName} concept (${config.variationCount} variations) | IQ Level: ${reasoningEffort}`);
 
   const id = `ad_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const generatedAt = new Date().toISOString();

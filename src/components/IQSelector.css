@@ -1,0 +1,275 @@
+/* ConversionIQ™ Level Selector */
+.iq-selector {
+  margin-bottom: 20px;
+}
+
+.iq-selector-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.iq-selector-icon {
+  color: var(--accent-violet);
+  display: flex;
+  align-items: center;
+}
+
+.iq-selector-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.iq-selector-options {
+  display: flex;
+  gap: 12px;
+}
+
+/* Individual option card */
+.iq-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 16px;
+  background: var(--bg-card);
+  border: 2px solid var(--border-primary);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 1;
+  min-width: 160px;
+  text-align: left;
+}
+
+.iq-option:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  border-color: var(--border-violet);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.iq-option.active {
+  background: rgba(212, 225, 87, 0.12);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 1px var(--accent-primary);
+}
+
+/* Premium option (IQ Maximum) gets a subtle gradient border effect */
+.iq-option.premium {
+  position: relative;
+}
+
+.iq-option.premium::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-violet));
+  border-radius: 14px;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.iq-option.premium:hover::before,
+.iq-option.premium.active::before {
+  opacity: 0.3;
+}
+
+.iq-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Header: Icon + Name + Tagline */
+.iq-option-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+}
+
+.iq-option-icon {
+  font-size: 24px;
+  line-height: 1;
+  color: var(--accent-violet);
+  transition: color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.iq-option.active .iq-option-icon {
+  color: var(--accent-primary);
+}
+
+.iq-option-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.iq-option-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.iq-option.active .iq-option-name {
+  color: var(--accent-primary);
+}
+
+.iq-option-tagline {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-violet);
+  line-height: 1.2;
+}
+
+.iq-option.active .iq-option-tagline {
+  color: var(--accent-secondary);
+}
+
+/* Description */
+.iq-option-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Meta info: Timing + Token usage */
+.iq-option-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-secondary);
+  margin-top: auto;
+  flex-wrap: wrap;
+}
+
+.iq-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.iq-meta-item svg {
+  color: var(--accent-violet);
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+.iq-option.active .iq-meta-item svg {
+  color: var(--accent-primary);
+}
+
+.iq-meta-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.iq-meta-value {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+/* ========================================
+   Compact variant for inline use
+   ======================================== */
+.iq-selector-compact .iq-selector-header {
+  margin-bottom: 10px;
+}
+
+.iq-selector-compact .iq-selector-options {
+  gap: 10px;
+}
+
+.iq-selector-compact .iq-option {
+  padding: 12px 14px;
+  min-width: 140px;
+  gap: 8px;
+}
+
+.iq-selector-compact .iq-option-icon {
+  font-size: 20px;
+}
+
+.iq-selector-compact .iq-option-name {
+  font-size: 13px;
+}
+
+.iq-selector-compact .iq-option-tagline {
+  font-size: 11px;
+}
+
+.iq-selector-compact .iq-option-meta {
+  padding-top: 6px;
+  gap: 10px;
+}
+
+.iq-selector-compact .iq-meta-item {
+  font-size: 10px;
+}
+
+/* Disabled state for entire selector */
+.iq-selector-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* ========================================
+   Responsive - stack on mobile
+   ======================================== */
+@media (max-width: 768px) {
+  .iq-selector-options {
+    flex-direction: column;
+  }
+
+  .iq-option {
+    min-width: auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .iq-option {
+    padding: 14px;
+  }
+
+  .iq-option-icon {
+    font-size: 22px;
+  }
+
+  .iq-option-name {
+    font-size: 13px;
+  }
+
+  .iq-option-desc {
+    font-size: 11px;
+  }
+
+  /* Compact on mobile - smaller but still readable */
+  .iq-selector-compact .iq-selector-options {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .iq-selector-compact .iq-option {
+    flex: 1;
+    min-width: 100px;
+  }
+
+  .iq-selector-compact .iq-option-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}
