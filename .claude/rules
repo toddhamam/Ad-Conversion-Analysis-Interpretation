@@ -124,3 +124,41 @@
 - **Common imports**: `DndContext`, `closestCenter`, `SortableContext`, `useSortable`, `arrayMove`
 - **Type imports**: `import type { DragEndEvent }` (must be type-only import)
 - **Pattern**: Wrap sortable items in `SortableContext`, use `useSortable` hook in child components
+
+## AI API Integration Patterns
+
+### Model Configuration
+- **Centralize model IDs**: Define model IDs and API URLs as constants at the top of service files (e.g., `src/services/openaiApi.ts`)
+  ```typescript
+  const OPENAI_MODEL = 'gpt-5.2';
+  const GEMINI_MODEL = 'gemini-3-pro-image-preview';
+  ```
+- **Feature flags**: Use boolean constants to switch between API providers
+  ```typescript
+  const USE_GEMINI_FOR_IMAGES = true;
+  ```
+
+### API Key Validation
+- Check env vars for existence and length before use
+- Provide specific error feedback: "Key rejected", "Key expired", "Model not found" rather than generic "API error"
+- Consider creating diagnostic tools to help verify API key validity and model accessibility
+
+### Error Handling for AI APIs
+- Parse error messages from API responses for user-friendly feedback
+- Implement progressive fallbacks to older/alternative models if newer ones fail
+- Show clear loading states with accurate timing estimates during AI operations
+
+### OpenAI GPT-5.2 Reasoning
+- Use `reasoning.effort` parameter for depth control: `none`, `low`, `medium`, `high`, `xhigh`
+- Higher effort = more tokens = increased API costs
+- Request format: `{ reasoning: { effort: "medium" } }`
+
+### Image Generation Limitations
+- Some image URLs (e.g., Facebook CDN) may require authentication that AI APIs cannot handle
+- Consider proxying or caching images locally before sending to AI APIs
+
+## AI API Mistakes to Avoid
+- **Don't hardcode model IDs**: Use centralized constants defined at service layer
+- **Don't assume model ID accuracy**: Verify model IDs exist via API calls or documentation before implementing
+- **Don't provide generic API errors**: Parse and surface specific error reasons to users
+- **Don't skip configuration checks**: Always verify API keys are present and valid before operations

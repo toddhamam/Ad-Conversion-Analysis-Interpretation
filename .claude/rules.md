@@ -80,6 +80,27 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 };
 ```
 
+## AI Feature Preferences
+
+### User Control over AI Depth
+- User strongly prefers having control over AI reasoning levels via a dedicated UI element (IQ Selector)
+- Offer three levels: **IQ Standard** (fast), **IQ Deep** (balanced), **IQ Maximum** (comprehensive)
+- Display the selector **before** each major AI process (ad analysis, channel analysis, ad generation)
+- This allows fine-grained control over token usage and processing time
+
+### AI UI/UX Requirements
+- **Clear descriptions**: Each reasoning level should have a clear, non-technical description
+- **Visual cues**: Include icons, estimated timing, and token usage indicators
+- **Intuitive design**: UI elements should be aesthetically pleasing and easy for non-technical users
+- **Accurate timing**: Provide realistic time estimates for different processing levels
+- **Branding consistency**: Use branded names ("ConversionIQ™", "IQ Standard") to align with product identity
+
+### Loading States for AI Operations
+- Always show branded loading messages ("ConversionIQ™ analyzing...")
+- Display the selected reasoning level during processing
+- Provide progress feedback for longer operations
+- Never show generic "Loading..." or "Please wait..."
+
 ## Git Workflow
 
 - Commit changes before creating Pull Requests

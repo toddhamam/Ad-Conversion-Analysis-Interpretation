@@ -46,7 +46,7 @@ import Loading from '../components/Loading';
 ## Quick Context
 
 - **Stack**: React 19 + TypeScript + Vite
-- **APIs**: Meta Marketing API, OpenAI GPT-4o, Google Gemini/Veo
+- **APIs**: Meta Marketing API, OpenAI GPT-5.2, Google Gemini 3 Pro
 - **Styling**: Enterprise Light theme, subtle depth, CSS variables
 - **State**: React hooks + localStorage caching (no Redux/Context)
 
@@ -97,6 +97,7 @@ public/
 | `api/billing/checkout.ts` | Vercel serverless function for Stripe Checkout sessions |
 | `api/billing/portal.ts` | Vercel serverless function for Stripe Customer Portal |
 | `api/funnel/metrics.ts` | Supabase funnel metrics API endpoint |
+| `src/components/IQSelector.tsx` | ConversionIQ™ reasoning level selector for AI operations |
 
 ## Routes
 
@@ -620,10 +621,34 @@ Always run `npm run dev` to start the development server before testing URLs. Th
 
 ## AI Integration Details
 
-### GPT-4o Usage
-- Vision: Analyze ad images for creative elements
-- Text: Generate copy variations, analyze performance
-- Structured output: JSON responses for UI rendering
+### Model Configuration
+
+| Provider | Model ID | Purpose |
+|----------|----------|---------|
+| OpenAI | `gpt-5.2` | Ad analysis, copy generation, creative evaluation |
+| Google | `gemini-3-pro-image-preview` | Professional image asset generation |
+| Google | Veo | Video variant generation |
+
+**Important**: Model IDs and API URLs should be defined as constants at the top of `src/services/openaiApi.ts` for easy management and updates.
+
+### ConversionIQ™ Reasoning Levels
+
+The `IQSelector` component (`src/components/IQSelector.tsx`) allows users to control AI reasoning depth before major AI operations:
+
+| Level | Parameter | Description | Est. Time |
+|-------|-----------|-------------|-----------|
+| IQ Standard | `reasoning.effort: "low"` | Fast analysis, essential insights | ~10 sec |
+| IQ Deep | `reasoning.effort: "medium"` | Balanced depth and speed | ~30 sec |
+| IQ Maximum | `reasoning.effort: "high"` or `"xhigh"` | Comprehensive analysis, highest token usage | ~60 sec |
+
+**Usage**: Display the IQ selector before ad analysis, channel analysis, and ad generation workflows to give users control over processing depth and API costs.
+
+### GPT-5.2 Reasoning API
+
+The `gpt-5.2` model supports reasoning through the `reasoning.effort` parameter:
+- Available levels: `none`, `low`, `medium`, `high`, `xhigh`
+- Higher effort = more tokens consumed = increased API costs
+- Pass via request body: `{ reasoning: { effort: "medium" } }`
 
 ### Psychological Concepts for Copy
 The ad generator uses these frameworks:
@@ -637,10 +662,11 @@ The ad generator uses these frameworks:
 
 ### Creative Generation Flow
 1. User selects source ads (top performers)
-2. GPT-4o analyzes creative patterns
-3. Gemini generates new images
-4. Veo generates video variants
-5. User reviews and exports to Meta
+2. User selects ConversionIQ™ reasoning level
+3. GPT-5.2 analyzes creative patterns with selected depth
+4. Gemini 3 Pro generates new images
+5. Veo generates video variants
+6. User reviews and exports to Meta
 
 ---
 
