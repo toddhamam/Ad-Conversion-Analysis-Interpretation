@@ -3,10 +3,13 @@ import { fetchAdCreatives, type AdCreative } from '../services/metaApi';
 import {
   analyzeChannelPerformance,
   isOpenAIConfigured,
+  IQ_LEVELS,
   type AdCreativeData,
   type ChannelAnalysisResult,
+  type ReasoningEffort,
 } from '../services/openaiApi';
 import ChannelInsightsPanel from '../components/ChannelInsightsPanel';
+import IQSelector from '../components/IQSelector';
 import {
   Smartphone,
   Search,
@@ -90,6 +93,7 @@ const Insights = () => {
   const [loadingMessage, setLoadingMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [adsCount, setAdsCount] = useState(0);
+  const [iqLevel, setIqLevel] = useState<ReasoningEffort>('medium');
 
   // Load cached analysis when channel changes
   useEffect(() => {
@@ -135,10 +139,10 @@ const Insights = () => {
         return;
       }
 
-      setLoadingMessage(`Analyzing ${ads.length} ads with AI...`);
+      setLoadingMessage(`ConversionIQ™ analyzing ${ads.length} ads with ${IQ_LEVELS[iqLevel].name}...`);
 
-      // Run the analysis
-      const result = await analyzeChannelPerformance(ads, channelConfig.name);
+      // Run the analysis with selected reasoning effort
+      const result = await analyzeChannelPerformance(ads, channelConfig.name, { reasoningEffort: iqLevel });
 
       // Cache the result
       setCachedAnalysis(selectedChannel, result);
@@ -151,7 +155,7 @@ const Insights = () => {
       setLoading(false);
       setLoadingMessage('');
     }
-  }, [selectedChannel]);
+  }, [selectedChannel, iqLevel]);
 
   const selectedChannelConfig = CHANNELS.find(c => c.id === selectedChannel);
 
@@ -178,6 +182,14 @@ const Insights = () => {
           </button>
         ))}
       </div>
+
+      {/* ConversionIQ Level Selector */}
+      <IQSelector
+        value={iqLevel}
+        onChange={setIqLevel}
+        disabled={loading}
+        compact={true}
+      />
 
       {/* Analysis Controls */}
       <div className="analysis-controls">
