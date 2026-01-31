@@ -15,6 +15,7 @@ import AdGenerator from './pages/AdGenerator';
 import AdPublisher from './pages/AdPublisher';
 import Funnels from './pages/Funnels';
 import Billing from './pages/Billing';
+import AccountSettings from './pages/AccountSettings';
 import SalesLanding from './pages/SalesLanding';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -78,6 +79,7 @@ function App() {
             <Route path="/insights" element={<Insights />} />
             <Route path="/funnels" element={<Funnels />} />
             <Route path="/billing" element={<Billing />} />
+            <Route path="/account" element={<AccountSettings />} />
           </Route>
         </Routes>
       </AuthProvider>
