@@ -35,12 +35,85 @@
 - Flexbox for sidebar and navigation layouts
 - `overflow-y: auto` for scrollable navigation content
 - Dynamic class toggling: Classes like `sidebar-collapsed`, `expanded`, `mobile-open` toggled in `.tsx`, defined in `.css`
+- **useSearchParams cleanup**: When reading from `useSearchParams` for initial state, clear the params after consumption to prevent stale data on subsequent renders:
+  ```tsx
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const initialValue = searchParams.get('value');
+    if (initialValue) {
+      // Use the value...
+      searchParams.delete('value');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, []);
+  ```
 
 ## SVG Icon Conventions
 - Use inline SVGs for icons (not icon fonts or separate image files)
 - Standard attributes: `viewBox`, `fill`, `stroke`, `strokeWidth`, `strokeLinecap`, `strokeLinejoin`
 - Add `aria-hidden="true"` on decorative icons
 - Common sizes: 16px (small), 20px (medium), 24px (large)
+
+## React Router Patterns
+
+### Version & Stability
+- **Recommended version**: `react-router-dom@6.28.0` (stable v6, not v7)
+- React Router v7's `createBrowserRouter` can have issues with nested route re-renders, especially with context providers
+- Prefer standard `BrowserRouter` with `<Outlet />` within layout components over `createBrowserRouter`
+
+### Nested Route Structure
+- Define parent routes that render layout components (e.g., `AdminLayout`, `MainLayout`)
+- Use `<Outlet />` **within** layout components to render child routes
+- **Never** pass `<Outlet />` as children to layout components—layouts should render it internally:
+  ```tsx
+  // ✓ Correct: Outlet inside layout
+  const AdminLayout = () => (
+    <div className="admin-layout">
+      <AdminSidebar />
+      <main><Outlet /></main>
+    </div>
+  );
+
+  // Route config
+  <Route path="/admin" element={<AdminLayout />}>
+    <Route index element={<AdminDashboard />} />
+    <Route path="users" element={<UsersList />} />
+  </Route>
+  ```
+
+### Forcing Re-renders on Route Changes
+- If `Outlet` or components aren't re-rendering correctly on nested route changes, add `key={location.pathname}` to force remount:
+  ```tsx
+  const location = useLocation();
+  return <Outlet key={location.pathname} />;
+  ```
+- This is especially useful when route changes within nested routes don't trigger expected updates
+
+## Admin Portal Patterns
+
+### Codebase Separation
+- Maintain strict separation between admin (CRM-like) and customer-facing application code:
+  - **Routing**: `/admin/*` vs `/` for customer app
+  - **Layouts**: `AdminLayout` vs `MainLayout`
+  - **CSS**: Separate stylesheets for admin vs customer UI
+  - **Contexts**: Separate where applicable; shared contexts (Auth, Organization) are acceptable when logically required
+
+### Admin Navigation UX
+- **Clickable table rows**: Make entire rows clickable for better UX and keyboard navigation
+- **Hover/active states**: Implement clear visual feedback for interactive elements
+- **Breadcrumbs**: Add breadcrumbs to detail and creation pages for orientation
+- **Active link feedback**: Ensure navigation links have clear visual feedback when active
+
+### Dev Mode Mocking for Admin
+- In development, mock data in contexts (like `OrganizationContext`) should simulate necessary states:
+  ```tsx
+  // Mock super admin access for testing
+  const mockUser = {
+    ...baseUser,
+    is_super_admin: import.meta.env.DEV ? true : user.is_super_admin
+  };
+  ```
+- This enables testing of admin-specific features without full backend setup
 
 ## Sidebar & Mobile Navigation Implementation
 - Sidebar collapse: Uses CSS class `.collapsed` toggled by JavaScript state and prop from `MainLayout`
@@ -55,6 +128,9 @@
 - Inconsistent breakpoints: Standardize media query breakpoints across the codebase (900px for tablet, 600px for mobile)
 - **Wrong API endpoint**: Dashboard metrics must come from `/api/funnel/metrics` (Supabase), NOT the Meta API. Using the wrong data source leads to zero/incorrect data
 - **Missing type-only imports**: When `verbatimModuleSyntax` is enabled, failing to use `import type` for types causes build failures
+- **React Router v7 instability**: Avoid `createBrowserRouter` (v7 API) with nested routes and context providers—use standard `BrowserRouter` with `<Outlet />` in layouts instead
+- **Stale search params**: When using `useSearchParams` for initial state, clear the params after reading to avoid stale behavior on re-renders
+- **Passing Outlet as children**: Never pass `<Outlet />` as children to layout components; layouts should render `<Outlet />` internally
 
 ### Stripe Integration Mistakes
 - **Don't call `stripe.redirectToCheckout` without a session**: Always create a Checkout Session via backend API first, then pass the `sessionId` to `redirectToCheckout`
@@ -79,6 +155,8 @@
 ## Demo Stubbing Patterns
 - Use `localStorage` for authentication state (`'convertra_authenticated'`, `'convertra_user'`)
 - Use `setTimeout` to simulate API calls in `Login.tsx` and `Register.tsx`
+- Use context mocking for admin/permission states (e.g., `is_super_admin: true` in dev mode)
+- Check `import.meta.env.DEV` for dev-only behavior
 - These stubs enable quick demonstrations without a full backend
 
 ## localStorage Persistence Patterns
