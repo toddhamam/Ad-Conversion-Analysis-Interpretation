@@ -65,15 +65,21 @@ export const PRICING_PLANS: PricingPlan[] = [
 ];
 
 // Get user's billing data from API
-export async function fetchBillingData(): Promise<BillingData> {
+export async function fetchBillingData(organizationId?: string): Promise<BillingData> {
   try {
-    // Get customer ID from localStorage user data if available
+    // Get customer ID from localStorage user data if available (fallback)
     const userData = localStorage.getItem('convertra_user');
     const customerId = userData ? JSON.parse(userData).stripeCustomerId : null;
 
-    const url = customerId
-      ? `/api/billing/subscription?customerId=${customerId}`
-      : '/api/billing/subscription';
+    const params = new URLSearchParams();
+    if (organizationId) {
+      params.set('organizationId', organizationId);
+    }
+    if (customerId) {
+      params.set('customerId', customerId);
+    }
+
+    const url = `/api/billing/subscription${params.toString() ? `?${params.toString()}` : ''}`;
 
     const response = await fetch(url);
     if (!response.ok) {
@@ -110,16 +116,21 @@ function getDefaultBillingData(): BillingData {
 // Create checkout session and redirect to Stripe Checkout
 export async function redirectToCheckout(
   planTier: PlanTier,
-  billingInterval: BillingInterval
+  billingInterval: BillingInterval,
+  organizationId?: string
 ): Promise<void> {
-  // Get customer ID from localStorage if available
+  // Get customer ID from localStorage if available (fallback)
   const userData = localStorage.getItem('convertra_user');
   const customerId = userData ? JSON.parse(userData).stripeCustomerId : null;
+
+  if (!organizationId) {
+    throw new Error('Organization ID is required for checkout');
+  }
 
   const response = await fetch('/api/billing/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ planTier, billingInterval, customerId }),
+    body: JSON.stringify({ planTier, billingInterval, customerId, organizationId }),
   });
 
   if (!response.ok) {
@@ -138,10 +149,12 @@ export async function redirectToCheckout(
 }
 
 // Create portal session for managing payment methods
-export async function createPortalSession(): Promise<string> {
-  // Get customer ID from localStorage
-  const userData = localStorage.getItem('convertra_user');
-  const customerId = userData ? JSON.parse(userData).stripeCustomerId : null;
+export async function createPortalSession(organizationId?: string, customerId?: string): Promise<string> {
+  // Get customer ID from localStorage if not provided (fallback)
+  if (!customerId) {
+    const userData = localStorage.getItem('convertra_user');
+    customerId = userData ? JSON.parse(userData).stripeCustomerId : null;
+  }
 
   if (!customerId) {
     throw new Error('No customer ID found. Please upgrade to a paid plan first.');
@@ -150,7 +163,7 @@ export async function createPortalSession(): Promise<string> {
   const response = await fetch('/api/billing/portal', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ customerId }),
+    body: JSON.stringify({ customerId, organizationId }),
   });
 
   if (!response.ok) {
@@ -163,8 +176,8 @@ export async function createPortalSession(): Promise<string> {
 }
 
 // Redirect to Stripe Customer Portal
-export async function redirectToPortal(): Promise<void> {
-  const url = await createPortalSession();
+export async function redirectToPortal(organizationId?: string, customerId?: string): Promise<void> {
+  const url = await createPortalSession(organizationId, customerId);
   window.location.href = url;
 }
 

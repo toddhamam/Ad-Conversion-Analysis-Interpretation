@@ -1,18 +1,15 @@
 import { useState, useEffect } from 'react';
-import type { ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import UserProfileDropdown from './UserProfileDropdown';
+import { useOrganization } from '../contexts/OrganizationContext';
 import './MainLayout.css';
 
-interface MainLayoutProps {
-  children: ReactNode;
-}
-
-const MainLayout = ({ children }: MainLayoutProps) => {
+const MainLayout = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
+  const { organization } = useOrganization();
 
   // Close mobile nav on route change
   useEffect(() => {
@@ -31,6 +28,10 @@ const MainLayout = ({ children }: MainLayoutProps) => {
     };
   }, [mobileNavOpen]);
 
+  // Determine which logo to show (tenant logo or default Convertra logo)
+  const logoUrl = organization?.logo_url || '/convertra-logo.png';
+  const logoAlt = organization?.name || 'Convertra';
+
   return (
     <div className={`app-layout ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       {/* Mobile Header */}
@@ -44,7 +45,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           <span className="hamburger-line"></span>
           <span className="hamburger-line"></span>
         </button>
-        <img src="/convertra-logo.png" alt="Convertra" className="mobile-logo" />
+        <img src={logoUrl} alt={logoAlt} className="mobile-logo" />
         <UserProfileDropdown />
       </header>
 
@@ -53,6 +54,8 @@ const MainLayout = ({ children }: MainLayoutProps) => {
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         mobileOpen={mobileNavOpen}
         onCloseMobile={() => setMobileNavOpen(false)}
+        logoUrl={logoUrl}
+        logoAlt={logoAlt}
       />
       <div className="main-area">
         <header className="top-bar">
@@ -60,7 +63,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           <UserProfileDropdown />
         </header>
         <main className="main-content">
-          {children}
+          <Outlet key={location.pathname} />
         </main>
       </div>
     </div>

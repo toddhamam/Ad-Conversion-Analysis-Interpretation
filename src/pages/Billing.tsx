@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Loading from '../components/Loading';
+import { useOrganization } from '../contexts/OrganizationContext';
 import {
   fetchBillingData,
   redirectToCheckout,
@@ -29,6 +30,7 @@ import './Billing.css';
 
 const Billing = () => {
   const [searchParams] = useSearchParams();
+  const { organization } = useOrganization();
   const [billingData, setBillingData] = useState<BillingData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,12 +43,12 @@ const Billing = () => {
 
   useEffect(() => {
     loadBillingData();
-  }, []);
+  }, [organization?.id]);
 
   const loadBillingData = async () => {
     try {
       setLoading(true);
-      const data = await fetchBillingData();
+      const data = await fetchBillingData(organization?.id);
       setBillingData(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load billing data';
@@ -62,10 +64,15 @@ const Billing = () => {
       return;
     }
 
+    if (!organization?.id) {
+      setError('Organization not found. Please refresh the page.');
+      return;
+    }
+
     try {
       setUpgrading(planTier);
       setError(null);
-      await redirectToCheckout(planTier, billingInterval);
+      await redirectToCheckout(planTier, billingInterval, organization.id);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to start checkout';
       setError(message);
@@ -81,14 +88,15 @@ const Billing = () => {
 
     try {
       setError(null);
-      await redirectToPortal();
+      await redirectToPortal(organization?.id, organization?.stripe_customer_id || undefined);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to open payment portal';
       setError(message);
     }
   };
 
-  const currentPlanTier: PlanTier = billingData?.subscription?.planTier || 'free';
+  // Use organization plan tier if available, fallback to billing data
+  const currentPlanTier: PlanTier = organization?.plan_tier || billingData?.subscription?.planTier || 'free';
 
   const getTierIcon = (tier: PlanTier) => {
     switch (tier) {

@@ -7,9 +7,18 @@ interface SidebarProps {
   onToggleCollapse?: () => void;
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
+  logoUrl?: string;
+  logoAlt?: string;
 }
 
-const Sidebar = ({ collapsed = false, onToggleCollapse, mobileOpen = false, onCloseMobile }: SidebarProps) => {
+const Sidebar = ({
+  collapsed = false,
+  onToggleCollapse,
+  mobileOpen = false,
+  onCloseMobile,
+  logoUrl = '/convertra-logo.png',
+  logoAlt = 'Convertra',
+}: SidebarProps) => {
   const [channelsExpanded, setChannelsExpanded] = useState(false);
   const [insightsExpanded, setInsightsExpanded] = useState(false);
 
@@ -42,7 +51,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse, mobileOpen = false, onCl
             </div>
           ) : (
             <>
-              <img src="/convertra-logo.png" alt="Convertra" className="sidebar-logo" />
+              <img src={logoUrl} alt={logoAlt} className="sidebar-logo" />
               <p className="sidebar-subtitle">ConversionIQ™ Intelligence</p>
             </>
           )}

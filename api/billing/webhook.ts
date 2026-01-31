@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
 
 // Initialize Stripe
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
@@ -7,6 +8,11 @@ const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 const stripe = stripeSecretKey
   ? new Stripe(stripeSecretKey, { apiVersion: '2024-12-18.acacia' })
+  : null;
+
+// Initialize Supabase for organization updates
+const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
   : null;
 
 // Disable body parsing to get raw body for webhook verification
@@ -59,48 +65,119 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
+        const organizationId = session.metadata?.organizationId;
+        const planTier = session.metadata?.planTier;
+        const billingInterval = session.metadata?.billingInterval;
+
         console.log('[Billing Webhook] Checkout completed:', {
           sessionId: session.id,
           customerId: session.customer,
           subscriptionId: session.subscription,
-          planTier: session.metadata?.planTier,
+          organizationId,
+          planTier,
         });
-        // TODO: Update user record with Stripe customer ID and subscription status
-        // This would typically update a database record
+
+        // Update organization with Stripe customer and subscription info
+        if (supabase && organizationId) {
+          const { error: updateError } = await supabase
+            .from('organizations')
+            .update({
+              stripe_customer_id: session.customer as string,
+              subscription_id: session.subscription as string,
+              subscription_status: 'active',
+              plan_tier: planTier || 'pro',
+              billing_interval: billingInterval || 'monthly',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', organizationId);
+
+          if (updateError) {
+            console.error('[Billing Webhook] Failed to update organization:', updateError);
+          } else {
+            console.log('[Billing Webhook] Organization updated successfully:', organizationId);
+          }
+        }
         break;
       }
 
       case 'customer.subscription.created': {
         const subscription = event.data.object as Stripe.Subscription;
+        const organizationId = subscription.metadata?.organizationId;
+
         console.log('[Billing Webhook] Subscription created:', {
           subscriptionId: subscription.id,
           customerId: subscription.customer,
           status: subscription.status,
-          planTier: subscription.metadata?.planTier,
+          organizationId,
         });
-        // TODO: Sync subscription to database
+
+        // Sync subscription to organization
+        if (supabase && organizationId) {
+          await supabase
+            .from('organizations')
+            .update({
+              subscription_id: subscription.id,
+              subscription_status: subscription.status,
+              current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+              current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', organizationId);
+        }
         break;
       }
 
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription;
+        const organizationId = subscription.metadata?.organizationId;
+
         console.log('[Billing Webhook] Subscription updated:', {
           subscriptionId: subscription.id,
           customerId: subscription.customer,
           status: subscription.status,
           cancelAtPeriodEnd: subscription.cancel_at_period_end,
+          organizationId,
         });
-        // TODO: Sync subscription changes to database
+
+        // Sync subscription changes to organization
+        if (supabase && organizationId) {
+          await supabase
+            .from('organizations')
+            .update({
+              subscription_status: subscription.cancel_at_period_end ? 'canceling' : subscription.status,
+              current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+              current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', organizationId);
+        }
         break;
       }
 
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
+        const organizationId = subscription.metadata?.organizationId;
+
         console.log('[Billing Webhook] Subscription canceled:', {
           subscriptionId: subscription.id,
           customerId: subscription.customer,
+          organizationId,
         });
-        // TODO: Mark subscription as canceled in database, revert to free tier
+
+        // Revert organization to free tier
+        if (supabase && organizationId) {
+          await supabase
+            .from('organizations')
+            .update({
+              subscription_status: 'canceled',
+              plan_tier: 'free',
+              subscription_id: null,
+              current_period_start: null,
+              current_period_end: null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', organizationId);
+        }
         break;
       }
 
@@ -111,18 +188,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           customerId: invoice.customer,
           amountPaid: invoice.amount_paid,
         });
-        // TODO: Record payment in database
+        // Payment recorded via subscription events
         break;
       }
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice;
+        const subscriptionId = invoice.subscription as string;
+
         console.log('[Billing Webhook] Payment failed:', {
           invoiceId: invoice.id,
           customerId: invoice.customer,
           attemptCount: invoice.attempt_count,
+          subscriptionId,
         });
-        // TODO: Handle failed payment (send notification, mark subscription as past_due)
+
+        // Mark organization subscription as past_due
+        if (supabase && subscriptionId) {
+          await supabase
+            .from('organizations')
+            .update({
+              subscription_status: 'past_due',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('subscription_id', subscriptionId);
+        }
         break;
       }
 

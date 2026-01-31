@@ -1,6 +1,10 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { OrganizationProvider } from './contexts/OrganizationContext';
 import MainLayout from './components/MainLayout';
+import AdminLayout from './components/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
+import SuperAdminRoute from './components/SuperAdminRoute';
 import Dashboard from './pages/Dashboard';
 import Channels from './pages/Channels';
 import MetaAds from './pages/MetaAds';
@@ -14,38 +18,70 @@ import Billing from './pages/Billing';
 import SalesLanding from './pages/SalesLanding';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import OrganizationsList from './pages/admin/OrganizationsList';
+import CreateOrganization from './pages/admin/CreateOrganization';
+import OrganizationDetail from './pages/admin/OrganizationDetail';
 import './App.css';
+
+// Layout wrapper for admin section
+function AdminWrapper() {
+  return (
+    <ProtectedRoute>
+      <OrganizationProvider>
+        <SuperAdminRoute>
+          <AdminLayout />
+        </SuperAdminRoute>
+      </OrganizationProvider>
+    </ProtectedRoute>
+  );
+}
+
+// Layout wrapper for main app
+function AppWrapper() {
+  return (
+    <ProtectedRoute>
+      <OrganizationProvider>
+        <MainLayout />
+      </OrganizationProvider>
+    </ProtectedRoute>
+  );
+}
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        {/* Public Routes - no authentication required */}
-        <Route path="/" element={<SalesLanding />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Register />} />
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<SalesLanding />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Register />} />
 
-        {/* Protected App Routes - authentication required */}
-        <Route path="/*" element={
-          <ProtectedRoute>
-            <MainLayout>
-              <Routes>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/channels" element={<Channels />} />
-                <Route path="/channels/meta-ads" element={<MetaAds />} />
-                <Route path="/creatives" element={<AdGenerator />} />
-                <Route path="/publish" element={<AdPublisher />} />
-                <Route path="/concepts" element={<Concepts />} />
-                <Route path="/products" element={<Products />} />
-                <Route path="/insights" element={<Insights />} />
-                <Route path="/funnels" element={<Funnels />} />
-                <Route path="/billing" element={<Billing />} />
-              </Routes>
-            </MainLayout>
-          </ProtectedRoute>
-        } />
-      </Routes>
-    </Router>
+          {/* Admin Routes */}
+          <Route path="/admin" element={<AdminWrapper />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="organizations" element={<OrganizationsList />} />
+            <Route path="organizations/new" element={<CreateOrganization />} />
+            <Route path="organizations/:id" element={<OrganizationDetail />} />
+          </Route>
+
+          {/* Protected App Routes */}
+          <Route element={<AppWrapper />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/channels" element={<Channels />} />
+            <Route path="/channels/meta-ads" element={<MetaAds />} />
+            <Route path="/creatives" element={<AdGenerator />} />
+            <Route path="/publish" element={<AdPublisher />} />
+            <Route path="/concepts" element={<Concepts />} />
+            <Route path="/products" element={<Products />} />
+            <Route path="/insights" element={<Insights />} />
+            <Route path="/funnels" element={<Funnels />} />
+            <Route path="/billing" element={<Billing />} />
+          </Route>
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 
