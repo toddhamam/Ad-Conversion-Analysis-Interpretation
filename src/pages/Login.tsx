@@ -1,50 +1,36 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import './Login.css';
 
 function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Get the redirect destination (if user was redirected from a protected route)
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
-    // Stub authentication - replace with real auth provider
-    // For now, accept any credentials to demo the flow
     try {
-      await new Promise(resolve => setTimeout(resolve, 800));
+      const { error: signInError } = await signIn(email, password);
 
-      // Store auth state (replace with real token storage)
-      localStorage.setItem('convertra_authenticated', 'true');
-
-      // Check if user data exists, if not create default from email
-      const existingUser = localStorage.getItem('convertra_user');
-      if (!existingUser) {
-        // Extract name from email for demo purposes
-        const namePart = email.split('@')[0];
-        const formattedName = namePart
-          .replace(/[._-]/g, ' ')
-          .split(' ')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
-        const domain = email.split('@')[1]?.split('.')[0] || 'Company';
-        const companyName = domain.charAt(0).toUpperCase() + domain.slice(1);
-
-        localStorage.setItem('convertra_user', JSON.stringify({
-          fullName: formattedName,
-          companyName: companyName,
-          email: email,
-        }));
+      if (signInError) {
+        setError(signInError.message || 'Invalid email or password');
+        return;
       }
 
-      navigate('/dashboard');
+      navigate(from, { replace: true });
     } catch {
-      setError('Invalid email or password');
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }

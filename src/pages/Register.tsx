@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import './Register.css';
 
 function Register() {
   const navigate = useNavigate();
+  const { signUp } = useAuth();
   const [formData, setFormData] = useState({
     companyName: '',
     fullName: '',
@@ -39,22 +41,20 @@ function Register() {
 
     setIsLoading(true);
 
-    // Stub registration - replace with real auth provider
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const { error: signUpError } = await signUp(formData.email, formData.password, {
+        full_name: formData.fullName,
+        company_name: formData.companyName,
+      });
 
-      // Store auth state (replace with real registration API)
-      localStorage.setItem('convertra_authenticated', 'true');
-      localStorage.setItem('convertra_user', JSON.stringify({
-        companyName: formData.companyName,
-        fullName: formData.fullName,
-        role: formData.role,
-        email: formData.email,
-      }));
+      if (signUpError) {
+        setError(signUpError.message || 'Registration failed. Please try again.');
+        return;
+      }
 
       navigate('/dashboard');
     } catch {
-      setError('Registration failed. Please try again.');
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }

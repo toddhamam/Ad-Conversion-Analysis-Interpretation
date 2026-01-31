@@ -1,0 +1,222 @@
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
+import { getTenantSlug } from '../lib/tenant';
+import { useAuth } from './AuthContext';
+import type { Organization, User as AppUser, OrganizationContextValue } from '../types/organization';
+
+const OrganizationContext = createContext<OrganizationContextValue | undefined>(undefined);
+
+export function OrganizationProvider({ children }: { children: React.ReactNode }) {
+  const { user: authUser, loading: authLoading, isConfigured } = useAuth();
+  const [organization, setOrganization] = useState<Organization | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadOrganizationData = useCallback(async () => {
+    if (!authUser) {
+      setOrganization(null);
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
+    if (!isConfigured) {
+      // Fallback: Load from localStorage for backwards compatibility
+      const userData = localStorage.getItem('convertra_user');
+      if (userData) {
+        const parsed = JSON.parse(userData);
+        // Create mock organization from localStorage data
+        setOrganization({
+          id: 'local-org',
+          name: parsed.companyName || 'My Company',
+          slug: 'local',
+          logo_url: parsed.companyLogo || null,
+          primary_color: '#d4e157',
+          secondary_color: '#a855f7',
+          stripe_customer_id: parsed.stripeCustomerId || null,
+          plan_tier: 'free',
+          billing_interval: 'monthly',
+          subscription_status: 'active',
+          subscription_id: null,
+          current_period_start: null,
+          current_period_end: null,
+          setup_mode: 'self_service',
+          setup_completed: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+        setUser({
+          id: 'local-user',
+          auth_id: authUser.id,
+          email: parsed.email || authUser.email || '',
+          full_name: parsed.fullName || 'User',
+          avatar_url: null,
+          organization_id: 'local-org',
+          role: 'owner',
+          is_super_admin: true, // Enable admin access in dev mode (no Supabase)
+          status: 'active',
+          last_login_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      }
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Check if we're on a tenant subdomain
+      const tenantSlug = getTenantSlug();
+
+      if (tenantSlug) {
+        // Load organization by slug (subdomain routing)
+        const { data: org, error: orgError } = await supabase
+          .from('organizations')
+          .select('*')
+          .eq('slug', tenantSlug)
+          .single();
+
+        if (orgError || !org) {
+          setError(`Organization "${tenantSlug}" not found`);
+          setLoading(false);
+          return;
+        }
+
+        // Load user's membership in this organization
+        const { data: appUser, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('auth_id', authUser.id)
+          .eq('organization_id', org.id)
+          .single();
+
+        if (userError || !appUser) {
+          setError('You do not have access to this organization');
+          setLoading(false);
+          return;
+        }
+
+        setOrganization(org as Organization);
+        setUser(appUser as AppUser);
+      } else {
+        // Load user's primary organization
+        const { data: appUser, error: userError } = await supabase
+          .from('users')
+          .select(`
+            *,
+            organization:organizations(*)
+          `)
+          .eq('auth_id', authUser.id)
+          .single();
+
+        if (userError || !appUser) {
+          // User exists in auth but not in users table yet
+          // This can happen if signup succeeded but org creation failed
+          setError('Account setup incomplete. Please contact support.');
+          setLoading(false);
+          return;
+        }
+
+        setOrganization(appUser.organization as Organization);
+        setUser({
+          ...appUser,
+          organization: undefined, // Remove nested org from user object
+        } as AppUser);
+      }
+
+      // Apply organization branding to CSS variables
+      if (organization) {
+        applyBranding(organization);
+      }
+    } catch (err) {
+      console.error('Failed to load organization:', err);
+      setError('Failed to load organization data');
+    } finally {
+      setLoading(false);
+    }
+  }, [authUser, isConfigured, organization]);
+
+  // Load organization data when auth user changes
+  useEffect(() => {
+    if (!authLoading) {
+      loadOrganizationData();
+    }
+  }, [authUser, authLoading, loadOrganizationData]);
+
+  // Apply branding when organization changes
+  useEffect(() => {
+    if (organization) {
+      applyBranding(organization);
+    }
+  }, [organization]);
+
+  const value: OrganizationContextValue = {
+    organization,
+    user,
+    isOwner: user?.role === 'owner',
+    isAdmin: user?.role === 'owner' || user?.role === 'admin',
+    isSuperAdmin: user?.is_super_admin ?? false,
+    loading: authLoading || loading,
+    error,
+    refresh: loadOrganizationData,
+  };
+
+  return (
+    <OrganizationContext.Provider value={value}>
+      {children}
+    </OrganizationContext.Provider>
+  );
+}
+
+export function useOrganization() {
+  const context = useContext(OrganizationContext);
+  if (context === undefined) {
+    throw new Error('useOrganization must be used within an OrganizationProvider');
+  }
+  return context;
+}
+
+/**
+ * Apply organization branding to CSS custom properties
+ */
+function applyBranding(org: Organization): void {
+  const root = document.documentElement;
+
+  // Only apply custom branding if organization has non-default colors
+  if (org.primary_color && org.primary_color !== '#d4e157') {
+    root.style.setProperty('--accent-primary', org.primary_color);
+    root.style.setProperty('--accent-secondary', adjustBrightness(org.primary_color, -10));
+    root.style.setProperty('--accent-glow', hexToRgba(org.primary_color, 0.3));
+  }
+
+  if (org.secondary_color && org.secondary_color !== '#a855f7') {
+    root.style.setProperty('--accent-violet', org.secondary_color);
+    root.style.setProperty('--accent-violet-glow', hexToRgba(org.secondary_color, 0.15));
+  }
+}
+
+/**
+ * Adjust hex color brightness
+ */
+function adjustBrightness(hex: string, percent: number): string {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const amt = Math.round(2.55 * percent);
+  const R = Math.max(0, Math.min(255, (num >> 16) + amt));
+  const G = Math.max(0, Math.min(255, ((num >> 8) & 0x00FF) + amt));
+  const B = Math.max(0, Math.min(255, (num & 0x0000FF) + amt));
+  return `#${(0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1)}`;
+}
+
+/**
+ * Convert hex color to rgba
+ */
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
