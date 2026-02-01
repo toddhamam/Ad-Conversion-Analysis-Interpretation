@@ -259,3 +259,57 @@
 - **Don't assume parameter universality**: Parameters supported by one endpoint (e.g., `reasoning` for chat) may not work on another (e.g., vision API)
 - **Don't do incomplete API scans**: When fixing an API parameter issue, check ALL related API functions (e.g., `callOpenAI` AND `callOpenAIWithVision`), not just the one that triggered the error
 - **Don't skip build checks**: Always run `npm run build` or TypeScript checks after API-related modifications to catch regressions
+
+## React StrictMode & Async Operations
+
+React's StrictMode causes components to render twice in development. Combined with async data loading and localStorage, this can lead to duplicate rendering or mounting issues.
+
+### Mitigation Patterns
+- **mountedRef pattern**: Track component mount state to prevent state updates after unmount:
+  ```tsx
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // In async callbacks:
+  if (mountedRef.current) {
+    setData(result);
+  }
+  ```
+- **Unique keys for DOM cleanup**: Use `key={location.pathname}` or `data-instance` attributes to help React manage component instances correctly when duplicate rendering occurs
+- **Deferred operations**: Use `requestIdleCallback` or `setTimeout` to defer heavy operations, preventing race conditions during double-render
+
+## localStorage Performance Patterns
+
+Large amounts of data in localStorage can significantly impact performance, especially during synchronous JSON parsing which blocks the main thread.
+
+### Best Practices
+- **Async parsing**: Parse large localStorage data asynchronously to prevent main thread blocking:
+  ```tsx
+  requestIdleCallback(() => {
+    const data = JSON.parse(localStorage.getItem('large_key') || '[]');
+    if (mountedRef.current) setData(data);
+  });
+  ```
+- **Size limits**: Implement limits on stored data (e.g., `MAX_VISIBLE_ADS` pattern) to prevent unbounded growth
+- **Progressive loading**: For lists with many items, implement lazy loading or virtualization - render only visible items
+- **Feature flags for debugging**: Use flags like `SKIP_LOCALSTORAGE` or `DEBUG_MODE` to isolate localStorage-related issues:
+  ```tsx
+  const SKIP_LOCALSTORAGE = false; // Set to true to bypass localStorage during debugging
+  ```
+
+## CSS Isolation & Performance
+
+### Containment Properties
+- **`isolation: isolate`**: Use on containers like `.main-content` to create new stacking contexts and prevent style bleed
+- **`contain: layout style paint`**: Use on complex components to improve rendering performance by isolating layout recalculations
+
+### Component-Scoped Selectors
+- Use component-scoped class names to prevent global style conflicts:
+  ```css
+  /* Scoped to specific page */
+  .ad-generator-page .step-indicator { ... }
+  .publisher-steps .step-item { ... }
+  ```
+- Prefix page-specific styles with page class names to avoid unintended cascade effects

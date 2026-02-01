@@ -109,3 +109,28 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 - PR numbers increment sequentially
 - **Separate PRs for distinct fixes**: When iterating on a solution, create separate PRs for each distinct fix rather than bundling unrelated changes
 - Use clear commit messages and PR titles that accurately reflect the changes
+
+## Theme & Visual Clarity
+
+### Light Theme Enforcement
+- **Strong preference for light UI**: All components must adhere to the light theme
+- **Never use**: Dark backgrounds, dark text on dark backgrounds, cyan (#00d4ff), or any dark-mode-style colors
+- **Color conflicts**: Text and backgrounds must have proper contrast; hard-to-see text is unacceptable
+- **Use CSS variables**: Always use theme variables (`var(--bg-card)`, `var(--border-primary)`, `var(--text-primary)`) for consistency
+
+### UI Cleanliness
+- **Remove visual clutter**: Stray decorative graphics that obscure content should be removed
+- **Readability first**: Visual clarity and readability are paramount
+- **Minimal decorative elements**: Only include decorations that enhance rather than obstruct the UI
+
+## Application Stability
+
+### Demo & Production Readiness
+- **Stability is critical**: Crashes and glitches during demos are unacceptable and need immediate resolution
+- **Thorough testing**: Test across different states, data sizes, and user flows before considering a feature complete
+- **Progressive degradation**: Implement graceful fallbacks when errors occur rather than crashing
+
+### Debugging Support
+- **Console logging**: Add meaningful console logs for debugging critical operations
+- **Feature flags**: Implement debug flags to isolate issues (e.g., `SKIP_LOCALSTORAGE`, `DEBUG_MODE`)
+- **Clear error messages**: Surface specific, actionable error information to help with troubleshooting
