@@ -367,7 +367,7 @@ async function callOpenAI(
     model,
     messages,
     temperature,
-    max_tokens: maxTokens,
+    max_completion_tokens: maxTokens,
   };
 
   // Add reasoning effort for GPT-5.2 Thinking models
@@ -446,7 +446,7 @@ async function callOpenAIWithVision(
     model,
     messages,
     temperature,
-    max_tokens: maxTokens,
+    max_completion_tokens: maxTokens,
   };
 
   const response = await fetch(OPENAI_API_URL, {
