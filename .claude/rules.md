@@ -117,6 +117,7 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 - **Never use**: Dark backgrounds, dark text on dark backgrounds, cyan (#00d4ff), or any dark-mode-style colors
 - **Color conflicts**: Text and backgrounds must have proper contrast; hard-to-see text is unacceptable
 - **Use CSS variables**: Always use theme variables (`var(--bg-card)`, `var(--border-primary)`, `var(--text-primary)`) for consistency
+- **Readability over decoration**: Prioritize clear text readability over complex visual elements; use contrasting colors for text and backgrounds
 
 ### UI Cleanliness
 - **Remove visual clutter**: Stray decorative graphics that obscure content should be removed
@@ -134,3 +135,11 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 - **Console logging**: Add meaningful console logs for debugging critical operations
 - **Feature flags**: Implement debug flags to isolate issues (e.g., `SKIP_LOCALSTORAGE`, `DEBUG_MODE`)
 - **Clear error messages**: Surface specific, actionable error information to help with troubleshooting
+
+### Performance & Crash Debugging
+When encountering performance issues or crashes (especially in Chrome), investigate:
+- Large `localStorage` parsing blocking the main thread
+- Synchronous operations that don't yield to the browser
+- Rendering too many DOM elements without virtualization or pagination
+- Duplicate component mounts (potentially due to React StrictMode in development)
+- Memory pressure from handling large data (images, API responses)

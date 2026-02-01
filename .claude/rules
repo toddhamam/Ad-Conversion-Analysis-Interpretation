@@ -35,6 +35,9 @@
 - Flexbox for sidebar and navigation layouts
 - `overflow-y: auto` for scrollable navigation content
 - Dynamic class toggling: Classes like `sidebar-collapsed`, `expanded`, `mobile-open` toggled in `.tsx`, defined in `.css`
+- **useMemo and useCallback**: Use to prevent unnecessary re-renders when passing objects/functions as props or dependencies
+- **useRef for non-render values**: Use `useRef` for mutable values that shouldn't trigger re-renders (instance IDs, DOM refs, cancel flags)
+- **Unique keys for lists**: Always use stable, unique `key={item.id}` for list items to help React's reconciliation
 - **useSearchParams cleanup**: When reading from `useSearchParams` for initial state, clear the params after consumption to prevent stale data on subsequent renders:
   ```tsx
   const [searchParams, setSearchParams] = useSearchParams();
@@ -131,6 +134,7 @@
 - **React Router v7 instability**: Avoid `createBrowserRouter` (v7 API) with nested routes and context providers—use standard `BrowserRouter` with `<Outlet />` in layouts instead
 - **Stale search params**: When using `useSearchParams` for initial state, clear the params after reading to avoid stale behavior on re-renders
 - **Passing Outlet as children**: Never pass `<Outlet />` as children to layout components; layouts should render `<Outlet />` internally
+- **Unused imports causing build failures**: Remove unused imports before committing, especially when commenting out code that used them (e.g., `StrictMode` in `main.tsx`). TypeScript strict mode will fail the build on unused declared variables
 
 ### Stripe Integration Mistakes
 - **Don't call `stripe.redirectToCheckout` without a session**: Always create a Checkout Session via backend API first, then pass the `sessionId` to `redirectToCheckout`
@@ -138,9 +142,10 @@
 - **Don't skip configuration checks**: Always check `isStripeConfigured()` before attempting Stripe operations to handle gracefully when keys are missing
 
 ## Git Workflow
-- Use descriptive commit messages summarizing actual changes
+- Use descriptive commit messages summarizing actual changes; mention PR number if applicable
 - `gh pr create` for automated PR creation
 - Always check `git status` and `git diff` before committing
+- **Build verification**: Always run `npm run build` before committing to catch TypeScript errors (unused variables, type mismatches) that would fail Vercel deployment
 
 ## Best Practices for Larger Tasks
 - **Phased implementation**: Break responsiveness/layout tasks into phases (Core Layout, Page-Level, Component-Level, Polish)
@@ -277,8 +282,28 @@ React's StrictMode causes components to render twice in development. Combined wi
     setData(result);
   }
   ```
+- **isCancelled flag for async cleanup**: Use a local flag in effects to prevent state updates after cleanup:
+  ```tsx
+  useEffect(() => {
+    let isCancelled = false;
+    const fetchData = async () => {
+      const result = await apiCall();
+      if (!isCancelled) setData(result);
+    };
+    fetchData();
+    return () => { isCancelled = true; };
+  }, [dependency]);
+  ```
+- **clearTimeout cleanup**: Always clear timeouts in effect cleanup to prevent memory leaks:
+  ```tsx
+  useEffect(() => {
+    const timer = setTimeout(() => { /* ... */ }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
+  ```
 - **Unique keys for DOM cleanup**: Use `key={location.pathname}` or `data-instance` attributes to help React manage component instances correctly when duplicate rendering occurs
-- **Deferred operations**: Use `requestIdleCallback` or `setTimeout` to defer heavy operations, preventing race conditions during double-render
+- **data-instance debugging**: Add `data-instance={instanceId}` attributes and render count logs to debug component lifecycle issues during development
+- **Deferred operations**: Use `requestIdleCallback` or `setTimeout` to defer heavy operations, preventing race conditions during double-render. `setTimeout` is a fallback when `requestIdleCallback` is unavailable
 
 ## localStorage Performance Patterns
 
@@ -292,11 +317,13 @@ Large amounts of data in localStorage can significantly impact performance, espe
     if (mountedRef.current) setData(data);
   });
   ```
+- **Extract metadata first**: For large datasets, extract only necessary metadata initially; load full data (images, resources) only when strictly needed (e.g., at publish time, not during selection)
 - **Size limits**: Implement limits on stored data (e.g., `MAX_VISIBLE_ADS` pattern) to prevent unbounded growth
-- **Progressive loading**: For lists with many items, implement lazy loading or virtualization - render only visible items
+- **Progressive loading**: For lists with many items, implement lazy loading or virtualization - render only visible items to prevent DOM bottlenecks
 - **Feature flags for debugging**: Use flags like `SKIP_LOCALSTORAGE` or `DEBUG_MODE` to isolate localStorage-related issues:
   ```tsx
   const SKIP_LOCALSTORAGE = false; // Set to true to bypass localStorage during debugging
+  const DEBUG_MODE = false; // Set to true for verbose logging
   ```
 
 ## CSS Isolation & Performance
