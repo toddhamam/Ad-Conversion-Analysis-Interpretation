@@ -194,20 +194,20 @@
   align-items: center;
   gap: 6px;
   padding: 20px 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 2px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-card);
+  border: 2px solid var(--border-primary);
   border-radius: 12px;
   cursor: pointer;
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .audience-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--bg-card-hover);
+  border-color: var(--border-violet);
 }
 
 .audience-btn.active {
-  background: rgba(0, 212, 255, 0.1);
+  background: rgba(212, 225, 87, 0.12);
   border-color: var(--accent-primary);
 }
 
@@ -244,8 +244,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.03);
-  border: 2px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-card);
+  border: 2px solid var(--border-primary);
   border-radius: 10px;
   font-size: 16px;
   font-weight: 600;
@@ -255,14 +255,14 @@
 }
 
 .variation-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--bg-card-hover);
+  border-color: var(--border-violet);
 }
 
 .variation-btn.active {
-  background: rgba(0, 212, 255, 0.15);
+  background: rgba(212, 225, 87, 0.15);
   border-color: var(--accent-primary);
-  color: var(--accent-primary);
+  color: var(--accent-secondary);
 }
 
 .variation-btn:disabled {
@@ -355,7 +355,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 10px 16px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
@@ -646,8 +647,10 @@
   gap: 0;
   margin-bottom: 28px;
   padding: 20px;
-  background: rgba(15, 23, 42, 0.4);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
   border-radius: 12px;
+  box-shadow: var(--shadow-sm);
 }
 
 .ad-generator-page .step {
@@ -660,7 +663,7 @@
 }
 
 .ad-generator-page .step.active {
-  background: rgba(0, 212, 255, 0.1);
+  background: rgba(212, 225, 87, 0.15);
 }
 
 .ad-generator-page .step.completed {
@@ -673,8 +676,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.1);
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-primary);
   border-radius: 50%;
   font-size: 13px;
   font-weight: 600;
@@ -706,7 +709,7 @@
 .ad-generator-page .step-connector {
   width: 40px;
   height: 2px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--border-primary);
   margin: 0 8px;
 }
 
@@ -767,45 +770,45 @@
   align-items: flex-start;
   gap: 8px;
   padding: 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 2px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-card);
+  border: 2px solid var(--border-primary);
   border-radius: 12px;
   cursor: pointer;
   text-align: left;
 }
 
 .concept-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--bg-card-hover);
+  border-color: var(--border-violet);
 }
 
 .concept-btn.active {
-  background: rgba(0, 212, 255, 0.1);
+  background: rgba(212, 225, 87, 0.12);
   border-color: var(--accent-primary);
 }
 
 /* Special styling for the C.I. Intelligence (auto) concept */
 .concept-btn.auto-concept {
-  background: rgba(0, 212, 255, 0.06);
-  border-color: rgba(0, 212, 255, 0.3);
+  background: rgba(168, 85, 247, 0.06);
+  border-color: var(--border-violet);
 }
 
 .concept-btn.auto-concept:hover {
-  background: rgba(0, 212, 255, 0.1);
-  border-color: rgba(0, 212, 255, 0.4);
+  background: rgba(168, 85, 247, 0.1);
+  border-color: var(--accent-violet);
 }
 
 .concept-btn.auto-concept.active {
-  background: rgba(0, 212, 255, 0.12);
-  border-color: var(--accent-primary);
+  background: rgba(168, 85, 247, 0.12);
+  border-color: var(--accent-violet);
 }
 
 .concept-btn.auto-concept .concept-name {
-  color: #00d4ff;
+  color: var(--accent-violet);
 }
 
 .concept-btn.auto-concept .concept-desc {
-  color: rgba(0, 212, 255, 0.7);
+  color: rgba(168, 85, 247, 0.8);
 }
 
 .concept-header {
@@ -821,7 +824,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-secondary);
   border-radius: 6px;
   flex-shrink: 0;
 }
@@ -865,8 +868,8 @@
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
   border-radius: 8px;
   color: var(--text-secondary);
   font-size: 13px;
@@ -876,8 +879,8 @@
 }
 
 .ad-generator-page .back-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.25);
+  background: var(--bg-card-hover);
+  border-color: var(--border-violet);
   color: var(--text-primary);
 }
 
@@ -887,8 +890,8 @@
   align-items: center;
   gap: 16px;
   padding: 14px 20px;
-  background: rgba(0, 212, 255, 0.05);
-  border: 1px solid rgba(0, 212, 255, 0.15);
+  background: rgba(212, 225, 87, 0.08);
+  border: 1px solid rgba(212, 225, 87, 0.2);
   border-radius: 10px;
   margin-bottom: 24px;
 }
@@ -905,7 +908,7 @@
 }
 
 .summary-divider {
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--border-primary);
 }
 
 /* Copy Selection Step */
@@ -938,8 +941,8 @@
   flex-direction: column;
   gap: 4px;
   padding: 14px 16px;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
   border-radius: 10px;
 }
 

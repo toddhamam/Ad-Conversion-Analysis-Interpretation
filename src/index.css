@@ -75,28 +75,7 @@ body {
   position: relative;
 }
 
-body::before {
-  content: '';
-  position: fixed;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle at 20% 30%, rgba(168, 85, 247, 0.05) 0%, transparent 40%),
-              radial-gradient(circle at 80% 70%, rgba(212, 225, 87, 0.08) 0%, transparent 40%);
-  pointer-events: none;
-  z-index: -1;
-  animation: glow-pulse 8s ease-in-out infinite;
-}
-
-@keyframes glow-pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
-}
+/* Decorative background gradient removed for cleaner UI */
 
 h1, h2, h3, h4, h5, h6 {
   font-weight: 600;

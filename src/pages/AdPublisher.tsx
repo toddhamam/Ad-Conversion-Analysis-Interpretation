@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   publishAds,
@@ -12,6 +12,15 @@ import {
   type CampaignObjective,
 } from '../services/metaApi';
 import './AdPublisher.css';
+
+// Debug flag - set to true to enable verbose logging
+const DEBUG_MODE = true;
+const debugLog = (...args: any[]) => {
+  if (DEBUG_MODE) console.log('[AdPublisher]', ...args);
+};
+
+// TEMPORARY: Set to true to skip localStorage loading for debugging
+const SKIP_LOCALSTORAGE = false;
 
 // Storage key for generated ads (shared with AdGenerator)
 const GENERATED_ADS_STORAGE_KEY = 'conversion_intelligence_generated_ads';
@@ -107,99 +116,159 @@ function formatDate(isoString: string): string {
   }
 }
 
-// SIMPLE synchronous metadata extraction - minimal version
-function extractMetadataSimple(): AdMetadata[] {
-  try {
-    const stored = localStorage.getItem(GENERATED_ADS_STORAGE_KEY);
-    if (!stored) {
-      console.log('[AdPublisher] No stored ads found');
-      return [];
-    }
-
-    console.log('[AdPublisher] localStorage data size:', stored.length, 'bytes');
-
-    const packages = JSON.parse(stored);
-    if (!Array.isArray(packages)) {
-      console.log('[AdPublisher] Data is not an array');
-      return [];
-    }
-
-    console.log('[AdPublisher] Found', packages.length, 'packages');
-
-    const items: AdMetadata[] = [];
-
-    for (let pkgIndex = 0; pkgIndex < packages.length; pkgIndex++) {
-      const pkg = packages[pkgIndex];
-      if (!pkg) continue;
-
-      const images = pkg.images || [];
-      console.log(`[AdPublisher] Package ${pkgIndex}: ${images.length} images, audienceType=${pkg.audienceType}`);
-
-      // Skip packages with no images
-      if (!Array.isArray(images) || images.length === 0) continue;
-
-      const copy = pkg.copy || {};
-      const headlines = Array.isArray(copy.headlines) ? copy.headlines : ['Ad Creative'];
-      const bodyTexts = Array.isArray(copy.bodyTexts) ? copy.bodyTexts : [''];
-      const ctas = Array.isArray(copy.callToActions) ? copy.callToActions : ['Learn More'];
-
-      for (let imgIndex = 0; imgIndex < images.length; imgIndex++) {
-        items.push({
-          id: `${pkg.id || pkgIndex}_${imgIndex}`,
-          packageIndex: pkgIndex,
-          imageIndex: imgIndex,
-          headline: headlines[imgIndex % headlines.length] || 'Ad Creative',
-          bodyText: bodyTexts[imgIndex % bodyTexts.length] || '',
-          cta: ctas[imgIndex % ctas.length] || 'Learn More',
-          audienceType: pkg.audienceType || 'prospecting',
-          conceptType: pkg.conceptType || 'auto',
-          generatedAt: pkg.generatedAt || new Date().toISOString(),
-        });
+// ASYNC metadata extraction - non-blocking to prevent Chrome crashes
+async function extractMetadataAsync(): Promise<AdMetadata[]> {
+  return new Promise((resolve) => {
+    // Use requestIdleCallback for browser cooperation, with setTimeout fallback
+    const scheduleWork = (callback: () => void) => {
+      if ('requestIdleCallback' in window) {
+        (window as any).requestIdleCallback(callback, { timeout: 2000 });
+      } else {
+        setTimeout(callback, 50);
       }
-    }
+    };
 
-    console.log('[AdPublisher] Extracted', items.length, 'ad metadata items');
-    return items;
-  } catch (err) {
-    console.error('[AdPublisher] Error extracting metadata:', err);
-    return [];
-  }
+    scheduleWork(() => {
+      try {
+        const stored = localStorage.getItem(GENERATED_ADS_STORAGE_KEY);
+        if (!stored) {
+          console.log('[AdPublisher] No stored ads found');
+          resolve([]);
+          return;
+        }
+
+        const sizeInMB = (stored.length / (1024 * 1024)).toFixed(2);
+        console.log(`[AdPublisher] localStorage data size: ${sizeInMB}MB`);
+
+        // For very large data, warn and parse carefully
+        if (stored.length > 3 * 1024 * 1024) {
+          console.warn('[AdPublisher] Large localStorage detected, parsing may be slow');
+        }
+
+        let packages: any[];
+        try {
+          packages = JSON.parse(stored);
+        } catch (parseErr) {
+          console.error('[AdPublisher] JSON parse error:', parseErr);
+          resolve([]);
+          return;
+        }
+
+        if (!Array.isArray(packages)) {
+          console.log('[AdPublisher] Data is not an array');
+          resolve([]);
+          return;
+        }
+
+        console.log('[AdPublisher] Found', packages.length, 'packages');
+
+        const items: AdMetadata[] = [];
+
+        for (let pkgIndex = 0; pkgIndex < packages.length; pkgIndex++) {
+          const pkg = packages[pkgIndex];
+          if (!pkg) continue;
+
+          const images = pkg.images || [];
+
+          // Skip packages with no images
+          if (!Array.isArray(images) || images.length === 0) continue;
+
+          const copy = pkg.copy || {};
+          const headlines = Array.isArray(copy.headlines) ? copy.headlines : ['Ad Creative'];
+          const bodyTexts = Array.isArray(copy.bodyTexts) ? copy.bodyTexts : [''];
+          const ctas = Array.isArray(copy.callToActions) ? copy.callToActions : ['Learn More'];
+
+          for (let imgIndex = 0; imgIndex < images.length; imgIndex++) {
+            items.push({
+              id: `${pkg.id || pkgIndex}_${imgIndex}`,
+              packageIndex: pkgIndex,
+              imageIndex: imgIndex,
+              headline: headlines[imgIndex % headlines.length] || 'Ad Creative',
+              bodyText: bodyTexts[imgIndex % bodyTexts.length] || '',
+              cta: ctas[imgIndex % ctas.length] || 'Learn More',
+              audienceType: pkg.audienceType || 'prospecting',
+              conceptType: pkg.conceptType || 'auto',
+              generatedAt: pkg.generatedAt || new Date().toISOString(),
+            });
+          }
+        }
+
+        console.log('[AdPublisher] Extracted', items.length, 'ad metadata items');
+        resolve(items);
+      } catch (err) {
+        console.error('[AdPublisher] Error extracting metadata:', err);
+        resolve([]);
+      }
+    });
+  });
 }
 
 // Load full image data ONLY when publishing (not during selection)
-function loadImageDataForPublish(metadata: AdMetadata[]): { imageUrl: string; headline: string; bodyText: string; cta: string }[] {
-  try {
-    const stored = localStorage.getItem(GENERATED_ADS_STORAGE_KEY);
-    if (!stored) return [];
+// Returns a promise to handle large data more gracefully
+async function loadImageDataForPublish(metadata: AdMetadata[]): Promise<{ imageUrl: string; headline: string; bodyText: string; cta: string }[]> {
+  return new Promise((resolve) => {
+    try {
+      const stored = localStorage.getItem(GENERATED_ADS_STORAGE_KEY);
+      if (!stored) {
+        resolve([]);
+        return;
+      }
 
-    const packages = JSON.parse(stored);
-    if (!Array.isArray(packages)) return [];
+      let packages: any[];
+      try {
+        packages = JSON.parse(stored);
+      } catch {
+        console.error('[AdPublisher] Failed to parse stored data for publish');
+        resolve([]);
+        return;
+      }
 
-    return metadata.map(meta => {
-      const pkg = packages[meta.packageIndex];
-      if (!pkg) return null;
+      if (!Array.isArray(packages)) {
+        resolve([]);
+        return;
+      }
 
-      const images = pkg.images || [];
-      const img = images[meta.imageIndex];
-      if (!img) return null;
+      const results = metadata.map(meta => {
+        const pkg = packages[meta.packageIndex];
+        if (!pkg) return null;
 
-      const imageUrl = img.imageUrl || img.url || img;
-      return {
-        imageUrl,
-        headline: meta.headline,
-        bodyText: meta.bodyText,
-        cta: meta.cta,
-      };
-    }).filter(Boolean) as { imageUrl: string; headline: string; bodyText: string; cta: string }[];
-  } catch {
-    return [];
-  }
+        const images = pkg.images || [];
+        const img = images[meta.imageIndex];
+        if (!img) return null;
+
+        const imageUrl = img.imageUrl || img.url || img;
+        return {
+          imageUrl,
+          headline: meta.headline,
+          bodyText: meta.bodyText,
+          cta: meta.cta,
+        };
+      }).filter(Boolean) as { imageUrl: string; headline: string; bodyText: string; cta: string }[];
+
+      resolve(results);
+    } catch (err) {
+      console.error('[AdPublisher] Error loading image data for publish:', err);
+      resolve([]);
+    }
+  });
 }
+
+// Maximum number of ads to show in the selection list at once
+const MAX_VISIBLE_ADS = 20;  // Reduced to prevent rendering issues
+const MAX_TOTAL_ADS = 50;    // Maximum ads to load from storage
 
 type PublishStep = 'select' | 'destination' | 'configure' | 'review';
 
 const AdPublisher = () => {
   const navigate = useNavigate();
+
+  // Render tracking for debugging
+  const renderCountRef = useRef(0);
+  const mountedRef = useRef(false);
+  const instanceIdRef = useRef(Math.random().toString(36).substr(2, 9));
+
+  renderCountRef.current += 1;
+  debugLog(`Render #${renderCountRef.current} (instance: ${instanceIdRef.current})`);
 
   // State
   const [isLoading, setIsLoading] = useState(true);
@@ -221,37 +290,74 @@ const AdPublisher = () => {
   const [campaignObjective, setCampaignObjective] = useState<CampaignObjective>('OUTCOME_TRAFFIC');
   const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [visibleAdsCount, setVisibleAdsCount] = useState(MAX_VISIBLE_ADS);
 
-  // Load metadata on mount - SIMPLE version with timeout for stability
+  // Load metadata on mount - async version to prevent blocking
   useEffect(() => {
-    console.log('[AdPublisher] Component mounted, starting load...');
+    // Prevent double-mounting issues in StrictMode
+    if (mountedRef.current) {
+      debugLog('Skipping duplicate mount effect (StrictMode)');
+      return;
+    }
+    mountedRef.current = true;
+
+    debugLog(`Component mounted (instance: ${instanceIdRef.current})`);
+    let isCancelled = false;
 
     const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     setCampaignName(`CI Campaign - ${dateStr}`);
     setAdsetName(`CI Ad Set - ${dateStr}`);
 
-    // Use a short timeout to let the page render first
-    const timeoutId = setTimeout(() => {
-      console.log('[AdPublisher] Loading metadata...');
+    // Load metadata asynchronously to prevent blocking the main thread
+    const loadMetadata = async () => {
+      debugLog('Loading metadata asynchronously...');
+
+      // TEMPORARY: Skip localStorage for debugging render issues
+      if (SKIP_LOCALSTORAGE) {
+        debugLog('SKIP_LOCALSTORAGE is enabled - not loading any ads');
+        if (!isCancelled) {
+          setAdMetadata([]);
+          setIsLoading(false);
+        }
+        return;
+      }
+
       try {
-        const metadata = extractMetadataSimple();
-        setAdMetadata(metadata);
-        console.log('[AdPublisher] Loaded', metadata.length, 'ads');
+        const metadata = await extractMetadataAsync();
+        if (!isCancelled) {
+          // Strictly limit metadata to prevent overwhelming renders
+          const limitedMetadata = metadata.slice(0, MAX_TOTAL_ADS);
+          debugLog(`Loaded ${metadata.length} total ads, limiting to ${limitedMetadata.length}`);
+          setAdMetadata(limitedMetadata);
+        }
       } catch (err) {
         console.error('[AdPublisher] Load error:', err);
       }
-      setIsLoading(false);
-    }, 100);
+      if (!isCancelled) {
+        setIsLoading(false);
+      }
+    };
 
-    return () => clearTimeout(timeoutId);
+    // Small delay to let the initial render complete
+    const timeoutId = setTimeout(loadMetadata, 100);
+
+    return () => {
+      debugLog(`Component unmounting (instance: ${instanceIdRef.current})`);
+      isCancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, []);
 
-  // Selection handlers
+  // Selection handlers - optimized to prevent excessive re-renders
   const toggleSelection = useCallback((id: string) => {
+    // Prevent rapid double-clicks from causing issues
     setSelectedIds(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   }, []);
@@ -333,7 +439,7 @@ const AdPublisher = () => {
     setPublishResult(null);
 
     try {
-      const adsWithImages = loadImageDataForPublish(selectedMetadata);
+      const adsWithImages = await loadImageDataForPublish(selectedMetadata);
 
       if (adsWithImages.length === 0) {
         throw new Error('No ads to publish');
@@ -370,25 +476,26 @@ const AdPublisher = () => {
     }
   };
 
-  // Simple loading state
+  // Loading state with better messaging
   if (isLoading) {
     return (
       <div className="page ad-publisher-page">
         <div className="page-header">
           <h1 className="page-title">Ad Publisher</h1>
-          <p className="page-subtitle">Loading...</p>
+          <p className="page-subtitle">Preparing your ads...</p>
         </div>
         <div className="publisher-loading">
           <div className="loading-spinner"></div>
-          <p>Loading ads...</p>
+          <p>ConversionIQ™ loading your generated ads...</p>
+          <p className="loading-hint">This may take a moment for large ad libraries</p>
         </div>
       </div>
     );
   }
 
-  // Main render - simplified structure
+  // Main render - simplified structure with unique key for debugging
   return (
-    <div className="page ad-publisher-page">
+    <div className="page ad-publisher-page" data-instance={instanceIdRef.current}>
       <div className="page-header">
         <div className="page-header-left">
           <h1 className="page-title">Ad Publisher</h1>
@@ -465,28 +572,43 @@ const AdPublisher = () => {
               </div>
 
               <div className="ads-list-text">
-                {adMetadata.map(item => (
-                  <div
-                    key={item.id}
-                    className={`ad-list-item ${selectedIds.has(item.id) ? 'selected' : ''}`}
-                    onClick={() => toggleSelection(item.id)}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(item.id)}
-                      onChange={() => toggleSelection(item.id)}
-                      onClick={e => e.stopPropagation()}
-                    />
-                    <div className="ad-list-content">
-                      <div className="ad-list-headline">{item.headline}</div>
-                      <div className="ad-list-meta">
-                        {formatDate(item.generatedAt)} • {item.audienceType} • {item.conceptType}
+                {adMetadata.slice(0, visibleAdsCount).map(item => {
+                  const isSelected = selectedIds.has(item.id);
+                  return (
+                    <div
+                      key={item.id}
+                      className={`ad-list-item ${isSelected ? 'selected' : ''}`}
+                      onClick={(e) => {
+                        // Ignore if clicking on the checkbox itself (checkbox handles its own click)
+                        if ((e.target as HTMLElement).tagName === 'INPUT') return;
+                        toggleSelection(item.id);
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelection(item.id)}
+                      />
+                      <div className="ad-list-content">
+                        <div className="ad-list-headline">{item.headline}</div>
+                        <div className="ad-list-meta">
+                          {formatDate(item.generatedAt)} • {item.audienceType} • {item.conceptType}
+                        </div>
                       </div>
+                      <div className="ad-list-cta">{item.cta}</div>
                     </div>
-                    <div className="ad-list-cta">{item.cta}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+
+              {visibleAdsCount < adMetadata.length && (
+                <button
+                  className="show-more-btn"
+                  onClick={() => setVisibleAdsCount(prev => prev + MAX_VISIBLE_ADS)}
+                >
+                  Load More ({adMetadata.length - visibleAdsCount} remaining)
+                </button>
+              )}
 
               <button
                 className="primary-btn continue-btn"
@@ -742,7 +864,7 @@ const AdPublisher = () => {
               <div className="preview-section">
                 <h4 className="preview-title">Ads to Publish ({selectedMetadata.length})</h4>
                 <div className="ads-list-text">
-                  {selectedMetadata.map(item => (
+                  {selectedMetadata.slice(0, 20).map(item => (
                     <div key={item.id} className="ad-list-item preview">
                       <div className="ad-list-content">
                         <div className="ad-list-headline">{item.headline}</div>
@@ -750,6 +872,15 @@ const AdPublisher = () => {
                       </div>
                     </div>
                   ))}
+                  {selectedMetadata.length > 20 && (
+                    <div className="ad-list-item preview">
+                      <div className="ad-list-content">
+                        <div className="ad-list-meta">
+                          ... and {selectedMetadata.length - 20} more ads
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
