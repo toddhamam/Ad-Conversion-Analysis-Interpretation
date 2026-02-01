@@ -53,6 +53,7 @@ The user prefers code adhering to these principles:
 - **Incremental changes**: Make small, focused changes rather than large refactors
 - **Avoid over-engineering**: Build only what's needed now, not hypothetical future needs
 - **Minimal abstraction**: Don't abstract prematurely; concrete code is often clearer
+- **Thoroughness**: When fixing issues, perform a thorough check across all similar functionality in the codebase—don't just fix the one instance that triggered the error
 
 ## Form Design Requirements
 
@@ -106,3 +107,5 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 - Commit changes before creating Pull Requests
 - Provide PR URL after creation
 - PR numbers increment sequentially
+- **Separate PRs for distinct fixes**: When iterating on a solution, create separate PRs for each distinct fix rather than bundling unrelated changes
+- Use clear commit messages and PR titles that accurately reflect the changes

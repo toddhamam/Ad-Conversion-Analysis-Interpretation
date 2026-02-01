@@ -225,11 +225,27 @@
 - Parse error messages from API responses for user-friendly feedback
 - Implement progressive fallbacks to older/alternative models if newer ones fail
 - Show clear loading states with accurate timing estimates during AI operations
+- **Robust JSON error parsing**: Wrap error JSON parsing in try-catch to handle malformed responses:
+  ```typescript
+  try {
+    const errorData = await response.json();
+    throw new Error(errorData.error?.message || 'API request failed');
+  } catch (parseError) {
+    throw new Error(`API error: ${response.status} ${response.statusText}`);
+  }
+  ```
+- Add logging statements to track model calls, reasoning effort, and image processing for debugging
 
 ### OpenAI GPT-5.2 Reasoning
 - Use `reasoning.effort` parameter for depth control: `none`, `low`, `medium`, `high`, `xhigh`
 - Higher effort = more tokens = increased API costs
 - Request format: `{ reasoning: { effort: "medium" } }`
+- **Vision API limitation**: The `reasoning` parameter is NOT supported by the Vision API, even for models that support it in text-only mode
+
+### OpenAI API Parameter Evolution
+- Use `max_completion_tokens` instead of `max_tokens` for newer OpenAI models/endpoints
+- Different OpenAI endpoints (chat vs. vision) may support different parameters
+- Always check endpoint-specific documentation for supported parameters
 
 ### Image Generation Limitations
 - Some image URLs (e.g., Facebook CDN) may require authentication that AI APIs cannot handle
@@ -240,3 +256,6 @@
 - **Don't assume model ID accuracy**: Verify model IDs exist via API calls or documentation before implementing
 - **Don't provide generic API errors**: Parse and surface specific error reasons to users
 - **Don't skip configuration checks**: Always verify API keys are present and valid before operations
+- **Don't assume parameter universality**: Parameters supported by one endpoint (e.g., `reasoning` for chat) may not work on another (e.g., vision API)
+- **Don't do incomplete API scans**: When fixing an API parameter issue, check ALL related API functions (e.g., `callOpenAI` AND `callOpenAIWithVision`), not just the one that triggered the error
+- **Don't skip build checks**: Always run `npm run build` or TypeScript checks after API-related modifications to catch regressions
