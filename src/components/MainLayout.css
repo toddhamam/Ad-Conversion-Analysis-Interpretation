@@ -48,6 +48,7 @@
   z-index: 1;
   overflow-x: hidden;
   isolation: isolate;
+  background: var(--bg-secondary);
 }
 
 /* ==================== Responsive Layout ==================== */

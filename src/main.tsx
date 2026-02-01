@@ -9,8 +9,11 @@ console.log('🔧 VITE_META_ACCESS_TOKEN:', import.meta.env.VITE_META_ACCESS_TOK
 console.log('📊 Token length:', import.meta.env.VITE_META_ACCESS_TOKEN?.length || 0);
 console.log('📊 Token first 30 chars:', import.meta.env.VITE_META_ACCESS_TOKEN?.substring(0, 30) || 'MISSING');
 
+// Note: StrictMode temporarily disabled to debug rendering issues
+// StrictMode causes double-rendering in development which can cause issues
+// with async operations and localStorage parsing
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
+  // <StrictMode>
     <App />
-  </StrictMode>,
+  // </StrictMode>,
 )
