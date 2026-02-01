@@ -333,7 +333,7 @@ export interface CopyOptionsResult {
 
 /**
  * Make a request to OpenAI API (supports both text and vision)
- * For GPT-5.2 Thinking, includes reasoning effort configuration
+ * Note: The reasoning parameter is not supported by the current OpenAI API
  */
 async function callOpenAI(
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
@@ -356,24 +356,18 @@ async function callOpenAI(
   } = options;
 
   console.log('🤖 Calling OpenAI API with model:', model);
-  console.log('🧠 Reasoning effort:', reasoningEffort);
+  console.log('🧠 Reasoning effort:', reasoningEffort, '(note: not applied - parameter not supported)');
   console.log('🔑 API Key present:', !!OPENAI_API_KEY);
   console.log('🔑 API Key length:', OPENAI_API_KEY?.length || 0);
   console.log('🔑 API Key prefix:', OPENAI_API_KEY?.substring(0, 7) || 'NONE');
 
-  // Build request body - include reasoning config for GPT-5.2 Thinking models
-  const isReasoningModel = model.includes('5.2') || model.includes('5.1');
+  // Build request body - reasoning parameter is NOT supported by current OpenAI API
   const requestBody: Record<string, unknown> = {
     model,
     messages,
     temperature,
     max_completion_tokens: maxTokens,
   };
-
-  // Add reasoning effort for GPT-5.2 Thinking models
-  if (isReasoningModel && reasoningEffort !== 'none') {
-    requestBody.reasoning = { effort: reasoningEffort };
-  }
 
   const response = await fetch(OPENAI_API_URL, {
     method: 'POST',
