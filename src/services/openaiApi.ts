@@ -414,7 +414,7 @@ async function callOpenAI(
 
 /**
  * Make a request to OpenAI API with vision/image support
- * For GPT-5.2 Thinking, includes reasoning effort configuration
+ * Note: The reasoning parameter is not supported for multimodal/vision requests
  */
 async function callOpenAIWithVision(
   messages: ChatMessage[],
@@ -429,7 +429,7 @@ async function callOpenAIWithVision(
     throw new Error('OpenAI API key not configured. Please add your API key to the configuration.');
   }
 
-  // Use GPT-5.2 Thinking for vision - it has multimodal capabilities with extended reasoning
+  // Use GPT-5.2 for vision - multimodal capabilities
   const {
     model = DEFAULT_VISION_MODEL,
     temperature = 0.7,
@@ -438,22 +438,16 @@ async function callOpenAIWithVision(
   } = options;
 
   console.log('🖼️ Calling OpenAI Vision API with model:', model);
-  console.log('🧠 Reasoning effort:', reasoningEffort);
+  console.log('🧠 Reasoning effort:', reasoningEffort, '(note: not applied to vision requests)');
   console.log('📸 Processing images for analysis...');
 
-  // Build request body - include reasoning config for GPT-5.2 Thinking models
-  const isReasoningModel = model.includes('5.2') || model.includes('5.1');
+  // Build request body - reasoning parameter is NOT supported for vision/multimodal requests
   const requestBody: Record<string, unknown> = {
     model,
     messages,
     temperature,
     max_tokens: maxTokens,
   };
-
-  // Add reasoning effort for GPT-5.2 Thinking models
-  if (isReasoningModel && reasoningEffort !== 'none') {
-    requestBody.reasoning = { effort: reasoningEffort };
-  }
 
   const response = await fetch(OPENAI_API_URL, {
     method: 'POST',
