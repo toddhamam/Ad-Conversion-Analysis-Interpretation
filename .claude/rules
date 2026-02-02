@@ -14,6 +14,8 @@
 - When making visual/styling changes, explicitly state what changed and the file/line number
 - After visual changes, offer to adjust if styling intensity needs tweaking
 - Guide users through troubleshooting steps to empower self-resolution
+- **Simplify technical explanations**: Avoid jargon like "cloning the repo" without explanation; break down issues into simple, direct terms with clear examples of what is wrong and what is correct
+- **Table format for fixes**: When presenting multiple fixes across files, use a table format clearly outlining the file, the issue, and the fix for maximum clarity
 
 ## TypeScript Patterns
 - **Type-only imports**: Use `import type { MyType }` for types when using `verbatimModuleSyntax` to avoid runtime import overhead and build failures
@@ -173,6 +175,9 @@
 - **Deploying without peer dependency resolution**: Committing changes to Vercel without ensuring local dependency resolution methods (`--legacy-peer-deps`) are also applied in the deployment environment (`.npmrc`) causes build failures
 - **Overlooking app pages for SEO**: When adding SEO, don't focus only on the main landing page. All pages (Login, Register, Dashboard) benefit from basic meta tags; internal pages should use `noindex` directives
 - **Not testing schema with validators**: Validate structured data with Google's Rich Results Test or Schema.org Validator before deployment to catch issues early
+- **Incomplete documentation fixes**: Fixing an issue in one documentation file but missing other files with the same underlying problem leads to repeated user frustration (e.g., only updating `SETUP.md` while missing other documentation files)
+- **Assuming folder structure**: Do not assume a standard folder structure within a cloned Git repository—always verify the actual project root and subfolder structure by inspecting the file system
+- **Overlooking port numbers**: Consistently check and update port numbers across ALL relevant documentation and configuration files (e.g., `5173` vs. `5175`)
 
 ### Stripe Integration Mistakes
 - **Don't call `stripe.redirectToCheckout` without a session**: Always create a Checkout Session via backend API first, then pass the `sessionId` to `redirectToCheckout`
@@ -184,6 +189,17 @@
 - `gh pr create` for automated PR creation
 - Always check `git status` and `git diff` before committing
 - **Build verification**: Always run `npm run build` before committing to catch TypeScript errors (unused variables, type mismatches) that would fail Vercel deployment
+- **Leverage Git history**: When a fix was made on another branch, consult Git history (commit messages, diffs) to understand what was changed and identify any incomplete parts
+
+## Documentation Consistency
+- **Update all related files**: When fixing issues in setup scripts or documentation, ensure ALL related files are updated consistently (e.g., `SETUP.md`, `APP-README.md`, `UPDATE-YOUR-LOCAL-COPY.md`, `WHAT-YOU-SHOULD-SEE.md`)
+- **Paths, ports, and branch names**: These are recurring sources of confusion—verify consistency across all documentation files
+- **Don't fix partially**: Fixing only one documentation file while leaving others outdated leads to repeated user frustration
+
+## File System Inspection
+- **Verify before fixing**: Before making fixes, thoroughly inspect the project's directory structure to understand the actual layout
+- **Don't assume folder structure**: Do not assume a standard folder structure within a cloned Git repository—always verify the actual project root and subfolder locations
+- **Check for related files**: When addressing a documentation or setup issue, search for ALL files that might need the same update
 
 ## Best Practices for Larger Tasks
 - **Phased implementation**: Break responsiveness/layout tasks into phases (Core Layout, Page-Level, Component-Level, Polish)
