@@ -1,6 +1,6 @@
 # ✨ WHAT YOU SHOULD SEE NOW ✨
 
-## 🎯 Your app is running at: http://localhost:5173
+## 🎯 Your app is running at: http://localhost:5175
 
 ## 🟣 ULTRA BRIGHT VIOLET FEATURES:
 
@@ -46,7 +46,7 @@
 ### Nuclear option if above doesn't work:
 1. Close the browser completely
 2. Reopen browser
-3. Go to http://localhost:5173
+3. Go to http://localhost:5175
 4. Hard refresh again
 
 ---

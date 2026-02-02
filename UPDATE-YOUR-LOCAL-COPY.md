@@ -12,26 +12,21 @@ Press `Control + C` in the Terminal window where npm is running
 ### Step 2: Pull the latest changes
 ```bash
 cd ~/Ad-Conversion-Analysis-Interpretation
-git pull origin claude/conversion-intelligence-app-10S1W
+git pull
 ```
 
-### Step 3: Go to the conversion-intelligence folder
-```bash
-cd conversion-intelligence
-```
-
-### Step 4: Clear the cache
+### Step 3: Clear the cache
 ```bash
 rm -rf node_modules/.vite .vite
 ```
 
-### Step 5: Start the dev server fresh
+### Step 4: Start the dev server fresh
 ```bash
 npm run dev
 ```
 
-### Step 6: Hard refresh your browser
-Open http://localhost:5173 and press `Command + Shift + R`
+### Step 5: Hard refresh your browser
+Open http://localhost:5175 and press `Command + Shift + R`
 
 ---
 
@@ -53,4 +48,4 @@ Check your Terminal output from `git pull` - you should see these files updated:
 ```bash
 git branch
 ```
-Should show: `* claude/conversion-intelligence-app-10S1W`
+Should show: `* main`
