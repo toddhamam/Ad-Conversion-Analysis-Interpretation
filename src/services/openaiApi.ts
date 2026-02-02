@@ -97,7 +97,7 @@ const USE_VEO_FOR_VIDEO = true; // Use Veo instead of storyboard-only
 // =============================================================================
 // IMAGE SIZE CONFIGURATION - Common Meta Ads formats
 // =============================================================================
-export type ImageSize = '1:1' | '1.91:1' | '9:16';
+export type ImageSize = '1:1' | '16:9' | '9:16';
 
 export interface ImageSizeConfig {
   id: ImageSize;
@@ -118,10 +118,10 @@ export const IMAGE_SIZE_OPTIONS: ImageSizeConfig[] = [
     icon: '⬜',
   },
   {
-    id: '1.91:1',
+    id: '16:9',
     name: 'Landscape',
     description: 'Link ads, Facebook feed',
-    dimensions: '1200×628',
+    dimensions: '1920×1080',
     dalleSize: '1792x1024',
     icon: '🖼️',
   },
@@ -1889,7 +1889,9 @@ Explore fresh visual directions while maintaining professional quality.`,
     }],
     generationConfig: {
       responseModalities: ['TEXT', 'IMAGE'],
-      aspectRatio: imageSize, // Use the selected aspect ratio (e.g., "1:1", "1.91:1", "9:16")
+      imageConfig: {
+        aspectRatio: imageSize, // Use the selected aspect ratio (e.g., "1:1", "16:9", "9:16")
+      }
     }
   };
 
