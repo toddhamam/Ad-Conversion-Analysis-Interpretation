@@ -24,7 +24,7 @@ A decision-support system for analyzing ad conversion data through qualitative i
 3. **Clone the project** (if you haven't already):
    ```bash
    git clone https://github.com/toddhamam/Ad-Conversion-Analysis-Interpretation.git
-   cd Ad-Conversion-Analysis-Interpretation/conversion-intelligence
+   cd Ad-Conversion-Analysis-Interpretation
    ```
 
 4. **Install dependencies**:
@@ -38,7 +38,7 @@ A decision-support system for analyzing ad conversion data through qualitative i
 
 2. **Navigate to the project**:
    ```bash
-   cd ~/Ad-Conversion-Analysis-Interpretation/conversion-intelligence
+   cd ~/Ad-Conversion-Analysis-Interpretation
    ```
 
 3. **Start the server**:
@@ -48,7 +48,7 @@ A decision-support system for analyzing ad conversion data through qualitative i
 
 4. **Open your browser** and go to:
    ```
-   http://localhost:5173
+   http://localhost:5175
    ```
 
 5. **To stop the server**: Press `Ctrl + C` in the Terminal
@@ -57,7 +57,7 @@ A decision-support system for analyzing ad conversion data through qualitative i
 
 ### Blank Page?
 - Check the Terminal for any error messages
-- Make sure the server is running (you should see "Local: http://localhost:5173/")
+- Make sure the server is running (you should see "Local: http://localhost:5175/")
 - Try refreshing the browser
 - Clear browser cache and refresh
 
