@@ -284,6 +284,7 @@
 - Parse error messages from API responses for user-friendly feedback
 - Implement progressive fallbacks to older/alternative models if newer ones fail
 - Show clear loading states with accurate timing estimates during AI operations
+- Handle rate-limiting errors (`429`) gracefully with retry logic or user feedback
 - **Robust JSON error parsing**: Wrap error JSON parsing in try-catch to handle malformed responses:
   ```typescript
   try {
@@ -294,6 +295,18 @@
   }
   ```
 - Add logging statements to track model calls, reasoning effort, and image processing for debugging
+
+### Robust API Response Handling
+- API responses can vary in structure; always validate expected fields exist:
+  ```typescript
+  // For image generation APIs, check all levels of nesting
+  const candidates = response.candidates;
+  if (!candidates?.[0]?.content?.parts?.[0]?.inlineData) {
+    throw new Error('Unexpected API response structure');
+  }
+  ```
+- Use optional chaining (`?.`) to safely access nested properties
+- Provide fallback values or clear error messages when expected data is missing
 
 ### OpenAI GPT-5.2 Reasoning
 - Use `reasoning.effort` parameter for depth control: `none`, `low`, `medium`, `high`, `xhigh`
@@ -318,6 +331,8 @@
 - **Don't assume parameter universality**: Parameters supported by one endpoint (e.g., `reasoning` for chat) may not work on another (e.g., vision API)
 - **Don't do incomplete API scans**: When fixing an API parameter issue, check ALL related API functions (e.g., `callOpenAI` AND `callOpenAIWithVision`), not just the one that triggered the error
 - **Don't skip build checks**: Always run `npm run build` or TypeScript checks after API-related modifications to catch regressions
+- **Don't mix image API parameters**: Gemini uses `aspectRatio`, DALL-E uses `size` - using wrong parameter for wrong API yields unexpected dimensions
+- **Don't assume API response structure**: Always validate that `candidates`, `parts`, `inlineData` exist before accessing
 
 ## React StrictMode & Async Operations
 
@@ -357,11 +372,35 @@ React's StrictMode causes components to render twice in development. Combined wi
   ```
 - **Unique keys for DOM cleanup**: Use `key={location.pathname}` or `data-instance` attributes to help React manage component instances correctly when duplicate rendering occurs
 - **data-instance debugging**: Add `data-instance={instanceId}` attributes and render count logs to debug component lifecycle issues during development
-- **Deferred operations**: Use `requestIdleCallback` or `setTimeout` to defer heavy operations, preventing race conditions during double-render. `setTimeout` is a fallback when `requestIdleCallback` is unavailable
+- **Render counting for debugging**: Use `useRef` to count renders and identify infinite loops:
+  ```tsx
+  const renderCount = useRef(0);
+  renderCount.current++;
+  if (DEBUG_MODE) {
+    console.log(`[ComponentName] Render #${renderCount.current}`);
+  }
+  ```
+- **Deferred operations**: Use `requestIdleCallback` with `setTimeout` fallback to defer heavy operations:
+  ```tsx
+  const scheduleIdle = (callback: () => void) => {
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(callback);
+    } else {
+      setTimeout(callback, 0);
+    }
+  };
+  ```
+  This prevents UI freezes and race conditions during double-render
 
 ## localStorage Performance Patterns
 
 Large amounts of data in localStorage can significantly impact performance, especially during synchronous JSON parsing which blocks the main thread.
+
+### Browser Limitations
+- Browsers have localStorage size limits (typically 5-10MB)
+- Storing large data (especially base64 encoded images) can cause performance degradation, crashes, and `QuotaExceededError`
+- Monitor storage usage and warn users when approaching limits
+- Implement "Clear All" functionality for stored data (e.g., generated ads, cached images)
 
 ### Best Practices
 - **Async parsing**: Parse large localStorage data asynchronously to prevent main thread blocking:
@@ -379,6 +418,58 @@ Large amounts of data in localStorage can significantly impact performance, espe
   const SKIP_LOCALSTORAGE = false; // Set to true to bypass localStorage during debugging
   const DEBUG_MODE = false; // Set to true for verbose logging
   ```
+
+## Media Rendering Performance
+
+Rendering many high-resolution images/videos on a single page causes significant performance issues and potential browser crashes due to memory consumption and rendering work.
+
+### Lazy Loading Media Pattern
+- Initially hide large media items; require user interaction to display:
+  ```tsx
+  const [showImage, setShowImage] = useState(false);
+
+  return showImage ? (
+    <img src={imageUrl} alt="..." />
+  ) : (
+    <button onClick={() => setShowImage(true)}>Show Image</button>
+  );
+  ```
+- Use `IntersectionObserver` for viewport-based lazy loading
+- For lists with many media items, implement pagination or virtualization
+- Never render all base64-encoded images directly on page load
+
+### Image Generation API Differences
+- **Gemini**: Requires explicit `aspectRatio` in generation config (e.g., `"1:1"`, `"16:9"`)
+- **DALL-E**: Uses `size` parameter (e.g., `"1024x1024"`, `"1792x1024"`)
+- Both require correct dimension parameters for expected output
+
+---
+
+## Multi-Step Workflow Patterns
+
+For complex generation or configuration workflows with multiple steps:
+
+### State Management
+- Break workflows into distinct steps (`config`, `selection`, `final-config`, `generate`)
+- Use step indicator UI to show progress
+- Pre-compute or cache intermediate results to avoid recalculation:
+  ```tsx
+  const [copyOptions, setCopyOptions] = useState<CopyOption[]>([]);
+
+  // Compute once and cache
+  useEffect(() => {
+    const options = computeExpensiveOptions(sourceData);
+    setCopyOptions(options);
+  }, [sourceData]);
+  ```
+
+### Progress Feedback
+- Track `generationProgress` state for multi-step operations
+- Show clear status messages during each phase
+- Use spinners and disabled states (`isGeneratingCopy`, `isGeneratingCreatives`)
+- Provide specific progress text, not generic "Loading..."
+
+---
 
 ## CSS Isolation & Performance
 
