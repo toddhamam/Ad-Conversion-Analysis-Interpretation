@@ -295,6 +295,7 @@
   }
   ```
 - Add logging statements to track model calls, reasoning effort, and image processing for debugging
+- Use emoji prefixes for visual log categorization (e.g., `🎨 Generating ad image...`, `🤖 Calling GPT-5.2...`, `✅ Generation complete`)
 
 ### Robust API Response Handling
 - API responses can vary in structure; always validate expected fields exist:
@@ -323,6 +324,40 @@
 - Some image URLs (e.g., Facebook CDN) may require authentication that AI APIs cannot handle
 - Consider proxying or caching images locally before sending to AI APIs
 
+### Structured API Configuration Constants
+Define image/media options as typed constants for maintainability:
+```typescript
+const IMAGE_SIZE_OPTIONS = {
+  square: { label: '1:1 Square', aspectRatio: '1:1', width: 1024, height: 1024, dalleSize: '1024x1024' },
+  landscape: { label: '16:9 Landscape', aspectRatio: '16:9', width: 1792, height: 1024, dalleSize: '1792x1024' },
+  portrait: { label: '9:16 Portrait', aspectRatio: '9:16', width: 1024, height: 1792, dalleSize: '1024x1792' },
+} as const;
+
+type ImageSize = keyof typeof IMAGE_SIZE_OPTIONS;
+```
+This pattern centralizes dimensions, aspect ratios, and API-specific parameters in one place.
+
+### Gemini API Parameter Structure
+The Gemini Imagen API requires specific parameter nesting:
+```typescript
+// ✓ Correct: aspectRatio inside generationConfig
+{
+  contents: [{ parts: [{ text: prompt }] }],
+  generationConfig: {
+    responseModalities: ['TEXT', 'IMAGE'],
+    aspectRatio: '1:1'  // Must be inside generationConfig
+  }
+}
+
+// ✗ Wrong: aspectRatio outside generationConfig
+{
+  contents: [...],
+  aspectRatio: '1:1',  // Causes 400 Bad Request
+  generationConfig: { ... }
+}
+```
+Valid aspect ratios: `"1:1"`, `"16:9"`, `"9:16"`, `"4:3"`, `"3:4"`. Non-standard ratios like `"1.91:1"` are not supported.
+
 ## AI API Mistakes to Avoid
 - **Don't hardcode model IDs**: Use centralized constants defined at service layer
 - **Don't assume model ID accuracy**: Verify model IDs exist via API calls or documentation before implementing
@@ -333,6 +368,7 @@
 - **Don't skip build checks**: Always run `npm run build` or TypeScript checks after API-related modifications to catch regressions
 - **Don't mix image API parameters**: Gemini uses `aspectRatio`, DALL-E uses `size` - using wrong parameter for wrong API yields unexpected dimensions
 - **Don't assume API response structure**: Always validate that `candidates`, `parts`, `inlineData` exist before accessing
+- **Don't misplace Gemini parameters**: `aspectRatio` must be inside `generationConfig`, not at the root level—incorrect placement causes 400 Bad Request errors
 
 ## React StrictMode & Async Operations
 
