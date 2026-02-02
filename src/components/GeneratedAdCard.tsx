@@ -87,8 +87,9 @@ export default function GeneratedAdCard({ ad }: GeneratedAdCardProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [downloadingImage, setDownloadingImage] = useState<number | null>(null);
   const [downloadingVideo, setDownloadingVideo] = useState(false);
-  // Show images by default so users see their generated content immediately
-  const [showImages, setShowImages] = useState(true);
+  // CRITICAL: Default to false to prevent Chrome crashes from rendering many large base64 images
+  // Users can expand to see images - this prevents memory exhaustion on page load
+  const [showImages, setShowImages] = useState(false);
 
   const handleCopy = async (text: string, field: string) => {
     try {
