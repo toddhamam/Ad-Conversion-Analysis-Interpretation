@@ -27,9 +27,39 @@ import './AdGenerator.css';
 const CACHE_KEY = 'channel_analysis_cache';
 const GENERATED_ADS_STORAGE_KEY = 'conversion_intelligence_generated_ads';
 
-// Pagination settings
+// Pagination settings - reduced to prevent Chrome crashes with large base64 images
 const ADS_PER_PAGE = 3;
-const MAX_STORED_ADS = 20; // Limit stored ads to prevent storage overflow
+const MAX_STORED_ADS = 15; // Reduced from 20 to prevent memory issues
+const MAX_DATA_SIZE_MB = 3; // Maximum localStorage data size before warning
+
+// Debug logging for crash investigation
+const DEBUG_MODE = false;
+const debugLog = (...args: unknown[]) => {
+  if (DEBUG_MODE) console.log('[AdGenerator]', ...args);
+};
+
+// Helper to schedule work during browser idle time (prevents Chrome crashes)
+// Uses requestIdleCallback when available, falls back to setTimeout
+const scheduleIdleWork = (callback: () => void, timeout = 2000): number => {
+  const win = window as typeof window & {
+    requestIdleCallback?: (cb: () => void, opts: { timeout: number }) => number;
+  };
+  if (win.requestIdleCallback) {
+    return win.requestIdleCallback(callback, { timeout });
+  }
+  return setTimeout(callback, 50) as unknown as number;
+};
+
+const cancelIdleWork = (id: number): void => {
+  const win = window as typeof window & {
+    cancelIdleCallback?: (id: number) => void;
+  };
+  if (win.cancelIdleCallback) {
+    win.cancelIdleCallback(id);
+  } else {
+    clearTimeout(id);
+  }
+};
 
 interface AudienceOption {
   id: AudienceType;
@@ -138,6 +168,12 @@ type WorkflowStep = 'config' | 'copy-selection' | 'final-config';
 const AdGenerator = () => {
   const navigate = useNavigate();
 
+  // Render tracking for debugging Chrome crashes
+  const renderCountRef = useRef(0);
+  const instanceIdRef = useRef(Math.random().toString(36).substring(2, 9));
+  renderCountRef.current += 1;
+  debugLog(`Render #${renderCountRef.current} (instance: ${instanceIdRef.current})`);
+
   // Core configuration
   const [adType, setAdType] = useState<AdType>('image');
   const [audienceType, setAudienceType] = useState<AudienceType>('prospecting');
@@ -212,71 +248,117 @@ const AdGenerator = () => {
 
   // Load cached analysis and check image cache on mount
   useEffect(() => {
+    debugLog('Mount effect starting');
+
     const cached = getCachedAnalysis();
     setAnalysisData(cached);
 
     // Check image cache status
     const imageStats = getImageCacheStats();
     setImageCacheCount(imageStats.count);
-    console.log(`📸 Image cache: ${imageStats.count} reference images available`);
+    debugLog(`Image cache: ${imageStats.count} reference images available`);
 
-    // Load previously generated ads from localStorage - DEFERRED to prevent blocking
-    const loadAds = () => {
+    // Load previously generated ads from localStorage using idle callback
+    // This prevents blocking the main thread and causing Chrome crashes
+    const idleCallbackId = scheduleIdleWork(() => {
+      debugLog('Starting ads load (idle callback)');
       try {
         const storedAds = localStorage.getItem(GENERATED_ADS_STORAGE_KEY);
-        if (storedAds) {
-          // Check storage size for warning
-          const sizeInMB = (storedAds.length / (1024 * 1024)).toFixed(1);
-          console.log(`📦 localStorage size: ${sizeInMB}MB`);
-
-          if (storedAds.length > 4 * 1024 * 1024) { // > 4MB
-            setStorageWarning(`Storage is ${sizeInMB}MB. Consider deleting old ads to improve performance.`);
-          }
-
-          const parsed = JSON.parse(storedAds);
-          // Limit to MAX_STORED_ADS
-          const limited = parsed.slice(0, MAX_STORED_ADS);
-          setGeneratedAds(limited);
-          console.log(`📦 Loaded ${limited.length} previously generated ads`);
+        if (!storedAds) {
+          debugLog('No stored ads found');
+          setIsLoadingAds(false);
+          return;
         }
+
+        // Check storage size BEFORE parsing to prevent memory issues
+        const sizeInMB = storedAds.length / (1024 * 1024);
+        debugLog(`localStorage size: ${sizeInMB.toFixed(2)}MB`);
+
+        // If data is too large, warn and consider clearing
+        if (sizeInMB > MAX_DATA_SIZE_MB) {
+          console.warn(`[AdGenerator] Large localStorage data detected: ${sizeInMB.toFixed(2)}MB`);
+          setStorageWarning(`Storage is ${sizeInMB.toFixed(1)}MB. Consider clearing old ads to improve performance.`);
+
+          // For very large data (> 5MB), skip loading to prevent crash
+          if (sizeInMB > 5) {
+            console.error('[AdGenerator] Data too large, skipping load to prevent crash');
+            setStorageWarning('Storage too large. Please clear old ads to continue.');
+            setIsLoadingAds(false);
+            return;
+          }
+        }
+
+        // Parse in a try-catch to handle corrupted data
+        let parsed: GeneratedAdPackage[];
+        try {
+          parsed = JSON.parse(storedAds);
+        } catch (parseErr) {
+          console.error('[AdGenerator] JSON parse error:', parseErr);
+          setStorageWarning('Stored ads data is corrupted. Consider clearing.');
+          setIsLoadingAds(false);
+          return;
+        }
+
+        if (!Array.isArray(parsed)) {
+          debugLog('Parsed data is not an array');
+          setIsLoadingAds(false);
+          return;
+        }
+
+        // Strictly limit the number of ads to prevent memory issues
+        const limited = parsed.slice(0, MAX_STORED_ADS);
+        debugLog(`Loaded ${limited.length} ads (limited from ${parsed.length})`);
+
+        setGeneratedAds(limited);
       } catch (e) {
-        console.warn('Failed to load stored generated ads:', e);
+        console.error('[AdGenerator] Failed to load stored ads:', e);
         setStorageWarning('Failed to load saved ads. Storage may be corrupted.');
       } finally {
         setIsLoadingAds(false);
       }
-    };
+    }, 3000); // 3 second timeout for idle callback
 
-    // Use setTimeout to defer the heavy localStorage parsing
-    const timeoutId = setTimeout(loadAds, 100);
-    return () => clearTimeout(timeoutId);
+    return () => cancelIdleWork(idleCallbackId);
   }, []);
 
   // Save generated ads to localStorage whenever they change
+  // Use requestIdleCallback to prevent blocking the main thread
   useEffect(() => {
-    if (generatedAds.length > 0 && !isLoadingAds) {
+    if (generatedAds.length === 0 || isLoadingAds) return;
+
+    const idleCallbackId = scheduleIdleWork(() => {
       try {
-        // Limit to MAX_STORED_ADS before saving
+        // Strictly limit to MAX_STORED_ADS before saving
         const toSave = generatedAds.slice(0, MAX_STORED_ADS);
         const json = JSON.stringify(toSave);
 
         // Check size before saving
-        const sizeInMB = (json.length / (1024 * 1024)).toFixed(1);
-        console.log(`💾 Saving ${toSave.length} ads (${sizeInMB}MB)`);
+        const sizeInMB = json.length / (1024 * 1024);
+        debugLog(`Saving ${toSave.length} ads (${sizeInMB.toFixed(2)}MB)`);
 
-        if (json.length > 4.5 * 1024 * 1024) { // > 4.5MB - approaching 5MB limit
-          setStorageWarning(`Storage is ${sizeInMB}MB. Delete old ads to prevent issues.`);
+        // Warn if approaching problematic size
+        if (sizeInMB > MAX_DATA_SIZE_MB) {
+          setStorageWarning(`Storage is ${sizeInMB.toFixed(1)}MB. Delete old ads to prevent issues.`);
+        }
+
+        // Refuse to save if too large (prevent future crash)
+        if (sizeInMB > 5) {
+          console.error('[AdGenerator] Refusing to save - data too large');
+          setStorageWarning('Too many ads with images. Please delete some to continue.');
+          return;
         }
 
         localStorage.setItem(GENERATED_ADS_STORAGE_KEY, json);
-        console.log(`💾 Saved ${toSave.length} generated ads to storage`);
-      } catch (e: any) {
-        console.warn('Failed to save generated ads:', e);
-        if (e.name === 'QuotaExceededError') {
+        debugLog(`Saved ${toSave.length} ads to storage`);
+      } catch (e: unknown) {
+        console.error('[AdGenerator] Failed to save ads:', e);
+        if (e instanceof Error && e.name === 'QuotaExceededError') {
           setStorageWarning('Storage full! Please delete some ads to continue saving.');
         }
       }
-    }
+    }, 1000);
+
+    return () => cancelIdleWork(idleCallbackId);
   }, [generatedAds, isLoadingAds]);
 
   // Clear all generated ads
