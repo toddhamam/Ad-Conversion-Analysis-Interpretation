@@ -98,6 +98,9 @@ public/
 | `api/billing/portal.ts` | Vercel serverless function for Stripe Customer Portal |
 | `api/funnel/metrics.ts` | Supabase funnel metrics API endpoint |
 | `src/components/IQSelector.tsx` | ConversionIQ™ reasoning level selector for AI operations |
+| `src/components/SEO.tsx` | Centralized SEO component for meta tags and structured data |
+| `public/robots.txt` | Search engine crawl directives (allows AI bots for GEO) |
+| `public/sitemap.xml` | XML sitemap for search engine indexing |
 
 ## Routes
 
@@ -130,6 +133,7 @@ public/
 6. **Stub authentication** - Uses localStorage flag; ready for real auth provider (Clerk, Auth0, etc.)
 7. **Frontend/Backend API separation** - Sensitive operations (Stripe, Supabase) handled by backend serverless functions
 8. **Vercel serverless functions** - API routes in `api/` directory using `@vercel/node` (`VercelRequest`, `VercelResponse`)
+9. **React 19 peer dependency handling** - `.npmrc` with `legacy-peer-deps=true` for libraries that haven't updated React peer deps
 
 ---
 
@@ -710,6 +714,64 @@ The Convertra sales landing follows this architecture:
 | Risk Reversal / Urgency | Cost of inaction. Limited availability. |
 | Final CTA | Clear next step. No friction. |
 | Footer | Brand tagline. Memorable close. |
+
+---
+
+## SEO & GEO Implementation
+
+### Overview
+
+The Convertra sales landing and public pages are optimized for both traditional SEO and GEO (Generative Engine Optimization) to maximize visibility in search engines and AI-generated content.
+
+### SEO Component Pattern
+
+Use the centralized `SEO.tsx` component for consistent meta tag management:
+
+```tsx
+import SEO from '../components/SEO';
+
+// In page component:
+<SEO
+  title="Page Title | Convertra"
+  description="Page description for search results"
+  canonical="https://convertra.ai/page"
+  noIndex={false}  // Set true for internal/protected pages
+/>
+```
+
+### Structured Data (JSON-LD)
+
+Use JSON-LD format for schema markup:
+
+```tsx
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Convertra",
+  "description": "AI-powered ad conversion intelligence platform",
+  // ... additional schema properties
+};
+
+<script type="application/ld+json">
+  {JSON.stringify(structuredData)}
+</script>
+```
+
+### GEO Optimization
+
+To maximize AI citations:
+- Use clear definitions and quotable statistics in content
+- Structure content with Q&A formats where appropriate
+- Include authority signals (testimonials, case studies, enterprise clients)
+- Allow AI bots in `robots.txt`: GPTBot, Claude-Web, PerplexityBot, Google-Extended
+
+### Page SEO Strategy
+
+| Page Type | SEO Approach |
+|-----------|--------------|
+| Sales Landing (`/`) | Full SEO with rich schema, keywords, Open Graph |
+| Login/Signup | Basic meta tags, canonical URLs |
+| Protected App Pages | `noindex` directive, basic title/description |
 
 ---
 

@@ -22,6 +22,18 @@
 - **Non-null assertions**: Use `process.env.VAR_NAME!` in serverless functions where env vars are guaranteed to exist
 - **Strict typing for API responses**: Define interfaces for all API response shapes in `src/types/`
 
+## Peer Dependency Management
+
+### React 19 Compatibility
+- Some libraries (e.g., `react-helmet-async`) expect React <19 and may cause peer dependency conflicts
+- **Local fix**: Use `npm install --legacy-peer-deps` for installations
+- **Vercel deployment fix**: Create `.npmrc` file with `legacy-peer-deps=true`
+- Vercel's build process is stricter than local npm about peer dependencies
+
+### Proactive Configuration
+- For projects using React 19, proactively set up `.npmrc` with `legacy-peer-deps=true` to prevent deployment headaches
+- Always verify `npm run build` succeeds both locally AND on deployment platform
+
 ## React Patterns Used in This Codebase
 - Conditional rendering: `condition ? (...) : (...)` for show/hide
 - NavLink with automatic `.active` class styling for navigation
@@ -38,6 +50,8 @@
 - **useMemo and useCallback**: Use to prevent unnecessary re-renders when passing objects/functions as props or dependencies
 - **useRef for non-render values**: Use `useRef` for mutable values that shouldn't trigger re-renders (instance IDs, DOM refs, cancel flags)
 - **Unique keys for lists**: Always use stable, unique `key={item.id}` for list items to help React's reconciliation
+- **useRef for IntersectionObserver**: Use `useRef` for managing IntersectionObserver instances for scroll-triggered animations without re-renders
+- **useEffect cleanup for event listeners**: Always return cleanup functions for scroll events, intersection observers, and click listeners
 - **useSearchParams cleanup**: When reading from `useSearchParams` for initial state, clear the params after consumption to prevent stale data on subsequent renders:
   ```tsx
   const [searchParams, setSearchParams] = useSearchParams();
@@ -123,6 +137,27 @@
 - Mobile navigation: Combines `position: fixed` sidebar (off-screen by default), overlay, and hamburger button in fixed mobile header
 - Clicking nav items in mobile drawer should close the drawer
 
+## SEO & GEO Patterns
+
+### SEO in Single Page Applications (SPAs)
+- Use `react-helmet-async` for managing `<head>` tags in client-side rendered React apps
+- Create a dedicated `SEO.tsx` component to centralize meta tags, structured data, and SEO elements
+- All pages (including Login, Register, Dashboard) should have basic meta tags; use `noindex` for internal pages
+
+### GEO (Generative Engine Optimization)
+- Optimize for AI citations alongside traditional SEO
+- Key elements for AI citation: clear definitions, quotable statistics, Q&A formats, authority signals, structured data
+- Allow AI bots explicitly in `robots.txt`: GPTBot, Claude-Web, PerplexityBot, Google-Extended
+
+### Schema Markup
+- Use JSON-LD format for structured data (modern standard, well-supported by search engines and AI)
+- Validate schema with Google's Rich Results Test or Schema.org Validator before deployment
+
+### SEO File Locations
+- `robots.txt` → `public/robots.txt`
+- `sitemap.xml` → `public/sitemap.xml`
+- SEO component → `src/components/SEO.tsx`
+
 ## Mistakes to Avoid
 - Initial state defaulting: Set correct initial values for toggles (e.g., `useState(false)` for collapsed-by-default)
 - Overly broad active states: Use NavLink `end` prop to avoid unintended highlighting on child routes
@@ -135,6 +170,9 @@
 - **Stale search params**: When using `useSearchParams` for initial state, clear the params after reading to avoid stale behavior on re-renders
 - **Passing Outlet as children**: Never pass `<Outlet />` as children to layout components; layouts should render `<Outlet />` internally
 - **Unused imports causing build failures**: Remove unused imports before committing, especially when commenting out code that used them (e.g., `StrictMode` in `main.tsx`). TypeScript strict mode will fail the build on unused declared variables
+- **Deploying without peer dependency resolution**: Committing changes to Vercel without ensuring local dependency resolution methods (`--legacy-peer-deps`) are also applied in the deployment environment (`.npmrc`) causes build failures
+- **Overlooking app pages for SEO**: When adding SEO, don't focus only on the main landing page. All pages (Login, Register, Dashboard) benefit from basic meta tags; internal pages should use `noindex` directives
+- **Not testing schema with validators**: Validate structured data with Google's Rich Results Test or Schema.org Validator before deployment to catch issues early
 
 ### Stripe Integration Mistakes
 - **Don't call `stripe.redirectToCheckout` without a session**: Always create a Checkout Session via backend API first, then pass the `sessionId` to `redirectToCheckout`
