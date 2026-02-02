@@ -24,21 +24,21 @@ if ! command -v node &> /dev/null; then
 fi
 
 # Navigate to project and start
-cd ~/Ad-Conversion-Analysis-Interpretation/conversion-intelligence
+cd ~/Ad-Conversion-Analysis-Interpretation/bozeman
 npm install
 npm run dev
 ```
 
-After running this, open your browser to: **http://localhost:5173/**
+After running this, open your browser to: **http://localhost:5175/**
 
 ## If You Already Have the Folder
 
 If you already downloaded the project, just run:
 
 ```bash
-cd ~/Ad-Conversion-Analysis-Interpretation/conversion-intelligence
+cd ~/Ad-Conversion-Analysis-Interpretation/bozeman
 npm install
 npm run dev
 ```
 
-Then open: **http://localhost:5173/**
+Then open: **http://localhost:5175/**
