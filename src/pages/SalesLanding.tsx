@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import SEO, { organizationSchema, softwareApplicationSchema, faqSchema } from '../components/SEO';
 import './SalesLanding.css';
 
 function SalesLanding() {
@@ -62,6 +63,15 @@ function SalesLanding() {
 
   return (
     <div className="sales-landing">
+      {/* SEO Meta Tags & Structured Data */}
+      <SEO
+        title="Winning Ads on Autopilot | Conversion Intelligence Platform"
+        description="Convertra's ConversionIQ™ technology extracts conversion insights from your ad data and automatically generates winning creatives. Stop guessing why your ads convert. The #1 conversion intelligence platform for enterprise brands spending $1M+ on paid media."
+        keywords="conversion intelligence, AI ad generation, ad creative automation, ConversionIQ, enterprise ad optimization, automated ad testing, CMO ad platform, ROAS optimization, ad creative platform, conversion optimization, Meta ads optimization, Google ads AI"
+        canonical="/"
+        jsonLd={[organizationSchema, softwareApplicationSchema, faqSchema]}
+      />
+
       {/* Navigation */}
       <nav className={`sales-nav ${isScrolled ? 'scrolled' : ''}`}>
         <div className="nav-container">

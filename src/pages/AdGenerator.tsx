@@ -18,6 +18,7 @@ import { getCacheStats as getImageCacheStats, uploadBrandImages, clearImageCache
 import GeneratedAdCard from '../components/GeneratedAdCard';
 import CopySelectionPanel from '../components/CopySelectionPanel';
 import IQSelector from '../components/IQSelector';
+import SEO from '../components/SEO';
 import './AdGenerator.css';
 
 const CACHE_KEY = 'channel_analysis_cache';
@@ -430,6 +431,12 @@ const AdGenerator = () => {
 
   return (
     <div className="page ad-generator-page">
+      <SEO
+        title="CreativeIQ™ Ad Generator"
+        description="Generate high-converting ad creatives automatically using AI-powered ConversionIQ™ technology."
+        canonical="/creatives"
+        noindex={true}
+      />
       <div className="page-header">
         <div className="page-header-left">
           <h1 className="page-title">Ad Generator</h1>

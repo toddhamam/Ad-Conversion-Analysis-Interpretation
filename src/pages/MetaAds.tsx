@@ -14,6 +14,7 @@ import Badge from '../components/Badge';
 import DateRangePicker from '../components/DateRangePicker';
 import CampaignTypeDashboard from '../components/CampaignTypeDashboard';
 import AdAnalysisPanel from '../components/AdAnalysisPanel';
+import SEO from '../components/SEO';
 import {
   captureImage,
   getCacheStats,
@@ -332,6 +333,12 @@ const MetaAds = () => {
 
   return (
     <div className="page">
+      <SEO
+        title="Meta Ads"
+        description="Analyze Meta (Facebook & Instagram) ad performance with ConversionIQ™ conversion intelligence."
+        canonical="/channels/meta-ads"
+        noindex={true}
+      />
       <div className="page-header">
         <div className="page-header-left">
           <h1 className="page-title">Meta Ads</h1>

@@ -1,5 +1,6 @@
 // import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { HelmetProvider } from 'react-helmet-async'
 import './index.css'
 import App from './App.tsx'
 
@@ -14,6 +15,8 @@ console.log('📊 Token first 30 chars:', import.meta.env.VITE_META_ACCESS_TOKEN
 // with async operations and localStorage parsing
 createRoot(document.getElementById('root')!).render(
   // <StrictMode>
-    <App />
+    <HelmetProvider>
+      <App />
+    </HelmetProvider>
   // </StrictMode>,
 )

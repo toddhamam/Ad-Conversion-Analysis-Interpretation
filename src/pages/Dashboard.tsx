@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import type { DashboardMetrics } from '../types/funnel';
 import { fetchCampaignSummaries, type CampaignSummary, type DatePreset } from '../services/metaApi';
 import Loading from '../components/Loading';
+import SEO from '../components/SEO';
 import DateRangePicker from '../components/DateRangePicker';
 import DashboardCustomizer from '../components/DashboardCustomizer';
 import type { MetricConfig } from '../components/DashboardCustomizer';
@@ -488,6 +489,12 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard-page">
+      <SEO
+        title="Dashboard"
+        description="Your ConversionIQ™ dashboard - view ad performance, conversion insights, and AI-generated creative recommendations."
+        canonical="/dashboard"
+        noindex={true}
+      />
       <div className="dashboard-header">
         <div className="dashboard-header-left">
           <h1 className="dashboard-title">Dashboard</h1>

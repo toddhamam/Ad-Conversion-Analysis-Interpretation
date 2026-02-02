@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import SEO from '../components/SEO';
 import './Login.css';
 
 function Login() {
@@ -38,6 +39,12 @@ function Login() {
 
   return (
     <div className="login-page">
+      <SEO
+        title="Sign In"
+        description="Sign in to your Convertra account to access your conversion intelligence dashboard and AI-powered ad creative tools."
+        canonical="/login"
+        noindex={true}
+      />
       <div className="login-container">
         <div className="login-card">
           <div className="login-header">
