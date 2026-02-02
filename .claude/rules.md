@@ -36,6 +36,16 @@ The user prefers a standard SaaS URL structure:
 - **Data accuracy**: Dashboard metrics must be accurate - verify API endpoints and data sources
 - **Prioritization**: Fix existing issues first, then build new features (e.g., fix metrics before adding customization)
 
+## SEO/GEO Optimization Preferences
+
+- **"Fully and completely optimize"**: Desire for comprehensive, end-to-end solutions for SEO and GEO
+- **"Hit the ground running with optimized SEO"**: Emphasis on getting started quickly with a strong foundation
+- **"Prioritize AI recommendations"**: Focus on GEO (Generative Engine Optimization) alongside traditional SEO, acknowledging AI's impact on search
+- **No Performance/UI Impact**: SEO implementations should be invisible to end-users and not degrade website performance
+- **Clear, benefit-oriented explanations**: When explaining technical concepts, prefer simple, benefit-driven language ("What this actually means for you")
+- **Actionable next steps**: Provide clear, prioritized action items and ask for confirmation before proceeding
+- **Invisible optimizations**: Meta tags, schema, and config files achieve SEO without altering user-facing UI
+
 ## User Profile & Company Branding
 
 - **User profile prominence**: The user profile area in the top right is a key branding and navigation element
