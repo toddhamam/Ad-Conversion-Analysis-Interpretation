@@ -3,8 +3,8 @@
 echo "🔧 FORCING COMPLETE REFRESH OF CONVERSION INTELLIGENCE APP"
 echo "============================================================"
 
-# Navigate to project
-cd /home/user/Ad-Conversion-Analysis-Interpretation/conversion-intelligence
+# Navigate to project (use script's directory)
+cd "$(dirname "$0")"
 
 echo ""
 echo "Step 1: Killing all Node/Vite processes..."
@@ -22,12 +22,12 @@ rm -rf build
 
 echo ""
 echo "Step 3: Pulling latest changes from git..."
-git pull origin claude/conversion-intelligence-app-10S1W
+git pull
 
 echo ""
 echo "Step 4: Starting fresh dev server..."
 echo "⚡ Dev server will start in a new process..."
-echo "🌐 Open your browser to: http://localhost:5173"
+echo "🌐 Open your browser to: http://localhost:5175"
 echo ""
 echo "IMPORTANT: When the browser opens:"
 echo "1. Press Command + Shift + R (hard refresh)"
