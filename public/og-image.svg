@@ -1,0 +1,60 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#ffffff"/>
+
+  <!-- Subtle gradient overlay -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f8fafc;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#d4e157;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bgGradient)"/>
+
+  <!-- Accent line at top -->
+  <rect x="0" y="0" width="1200" height="6" fill="url(#accentGradient)"/>
+
+  <!-- Logo placeholder - stylized V arrow -->
+  <g transform="translate(80, 80)">
+    <path d="M0 0 L25 40 L50 0" stroke="url(#accentGradient)" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Brand name -->
+  <text x="150" y="115" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="42" font-weight="700" fill="#1e293b">
+    Convertra
+  </text>
+
+  <!-- Main headline -->
+  <text x="80" y="280" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="56" font-weight="700" fill="#1e293b">
+    Conversion Intelligence
+  </text>
+  <text x="80" y="350" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="56" font-weight="700" fill="#1e293b">
+    Platform
+  </text>
+
+  <!-- Subheadline -->
+  <text x="80" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="28" font-weight="400" fill="#475569">
+    Extract insights. Generate winning ads. Automatically.
+  </text>
+
+  <!-- ConversionIQ badge -->
+  <rect x="80" y="480" width="280" height="50" rx="25" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="100" y="513" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="22" font-weight="600" fill="#1e293b">
+    Powered by ConversionIQ
+  </text>
+  <text x="325" y="513" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="600" fill="#a855f7">
+    TM
+  </text>
+
+  <!-- Decorative elements -->
+  <circle cx="1050" cy="150" r="80" fill="#d4e157" opacity="0.1"/>
+  <circle cx="1100" cy="450" r="120" fill="#a855f7" opacity="0.08"/>
+
+  <!-- Bottom accent -->
+  <rect x="0" y="624" width="1200" height="6" fill="url(#accentGradient)"/>
+</svg>

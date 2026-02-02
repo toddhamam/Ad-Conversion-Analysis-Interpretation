@@ -10,6 +10,7 @@ import {
 } from '../services/openaiApi';
 import ChannelInsightsPanel from '../components/ChannelInsightsPanel';
 import IQSelector from '../components/IQSelector';
+import SEO from '../components/SEO';
 import {
   Smartphone,
   Search,
@@ -161,6 +162,12 @@ const Insights = () => {
 
   return (
     <div className="page">
+      <SEO
+        title="Insights"
+        description="AI-powered channel analysis and strategic recommendations from ConversionIQ™."
+        canonical="/insights"
+        noindex={true}
+      />
       <div className="page-header">
         <div className="page-header-left">
           <h1 className="page-title">Insights</h1>

@@ -1,0 +1,45 @@
+# Convertra - Conversion Intelligence Platform
+# https://convertra.ai
+
+User-agent: *
+Allow: /
+
+# Allow all major search engine bots
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Slurp
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+# Allow AI/LLM crawlers for GEO optimization
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: Anthropic-AI
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+# Disallow admin/private areas
+Disallow: /api/
+Disallow: /admin/
+Disallow: /_*
+
+# Sitemap location
+Sitemap: https://convertra.ai/sitemap.xml

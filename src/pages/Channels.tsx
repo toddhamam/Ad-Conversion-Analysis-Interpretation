@@ -1,11 +1,18 @@
 import { Link } from 'react-router-dom';
 import { channels } from '../data/mockData';
 import Badge from '../components/Badge';
+import SEO from '../components/SEO';
 import './Channels.css';
 
 const Channels = () => {
   return (
     <div className="page">
+      <SEO
+        title="Channels"
+        description="Explore conversion intelligence across all your advertising channels - Meta, Google, TikTok, and more."
+        canonical="/channels"
+        noindex={true}
+      />
       <div className="page-header">
         <h1 className="page-title">Channels</h1>
         <p className="page-subtitle">Explore conversions by acquisition channel</p>

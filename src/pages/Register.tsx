@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import SEO from '../components/SEO';
 import './Register.css';
 
 function Register() {
@@ -62,6 +63,12 @@ function Register() {
 
   return (
     <div className="register-page">
+      <SEO
+        title="Create Account"
+        description="Create your Convertra account to access ConversionIQ™ - the conversion intelligence platform that generates winning ads automatically."
+        canonical="/signup"
+        noindex={true}
+      />
       <div className="register-container">
         <div className="register-card">
           <div className="register-header">
