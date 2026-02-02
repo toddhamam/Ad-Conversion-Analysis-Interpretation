@@ -6,6 +6,8 @@ import {
   generateAdPackage,
   generateCopyOptions,
   CONCEPT_ANGLES,
+  IMAGE_SIZE_OPTIONS,
+  DEFAULT_IMAGE_SIZE,
   type AdType,
   type AudienceType,
   type ConceptType,
@@ -13,6 +15,7 @@ import {
   type GeneratedAdPackage,
   type CopyOption,
   type ReasoningEffort,
+  type ImageSize,
 } from '../services/openaiApi';
 import { getCacheStats as getImageCacheStats, uploadBrandImages, clearImageCache } from '../services/imageCache';
 import GeneratedAdCard from '../components/GeneratedAdCard';
@@ -142,6 +145,7 @@ const AdGenerator = () => {
   const [variationCount, setVariationCount] = useState(2);
   const [analysisData, setAnalysisData] = useState<ChannelAnalysisResult | null>(null);
   const [iqLevel, setIqLevel] = useState<ReasoningEffort>('medium');
+  const [imageSize, setImageSize] = useState<ImageSize>(DEFAULT_IMAGE_SIZE);
 
   // Multi-step workflow state
   const [currentStep, setCurrentStep] = useState<WorkflowStep>('config');
@@ -388,6 +392,7 @@ const AdGenerator = () => {
         },
         similarityLevel: similarityValue, // 0 = identical to references, 100 = completely different
         reasoningEffort: iqLevel,
+        imageSize, // Selected image dimensions/aspect ratio
       });
 
       setGeneratedAds(prev => [result, ...prev]);
@@ -727,6 +732,28 @@ const AdGenerator = () => {
               </button>
             </div>
           </div>
+
+          {/* Image Size Selection - only shown for image ads */}
+          {adType === 'image' && (
+            <div className="config-section">
+              <label className="config-label">Image Size</label>
+              <p className="config-hint">Select the aspect ratio for your ad images</p>
+              <div className="image-size-options">
+                {IMAGE_SIZE_OPTIONS.map(option => (
+                  <button
+                    key={option.id}
+                    className={`image-size-btn ${imageSize === option.id ? 'active' : ''}`}
+                    onClick={() => setImageSize(option.id)}
+                  >
+                    <span className="image-size-icon">{option.icon}</span>
+                    <span className="image-size-name">{option.name}</span>
+                    <span className="image-size-dimensions">{option.dimensions}</span>
+                    <span className="image-size-desc">{option.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Variation Count */}
           <div className="config-section">

@@ -94,6 +94,49 @@ const DEFAULT_VIDEO_MODEL = 'veo-3.1-generate-preview'; // Latest Veo with nativ
 const VEO_FAST_MODEL = 'veo-3.1-fast-generate-preview'; // Faster generation, still has audio
 const USE_VEO_FOR_VIDEO = true; // Use Veo instead of storyboard-only
 
+// =============================================================================
+// IMAGE SIZE CONFIGURATION - Common Meta Ads formats
+// =============================================================================
+export type ImageSize = '1:1' | '1.91:1' | '9:16';
+
+export interface ImageSizeConfig {
+  id: ImageSize;
+  name: string;
+  description: string;
+  dimensions: string;
+  dalleSize: '1024x1024' | '1792x1024' | '1024x1792';
+  icon: string;
+}
+
+export const IMAGE_SIZE_OPTIONS: ImageSizeConfig[] = [
+  {
+    id: '1:1',
+    name: 'Square',
+    description: 'Feed ads, Instagram posts',
+    dimensions: '1080×1080',
+    dalleSize: '1024x1024',
+    icon: '⬜',
+  },
+  {
+    id: '1.91:1',
+    name: 'Landscape',
+    description: 'Link ads, Facebook feed',
+    dimensions: '1200×628',
+    dalleSize: '1792x1024',
+    icon: '🖼️',
+  },
+  {
+    id: '9:16',
+    name: 'Portrait/Story',
+    description: 'Stories, Reels',
+    dimensions: '1080×1920',
+    dalleSize: '1024x1792',
+    icon: '📱',
+  },
+];
+
+export const DEFAULT_IMAGE_SIZE: ImageSize = '1:1';
+
 // Check if Gemini API is configured
 export function isGeminiConfigured(): boolean {
   return !!GEMINI_API_KEY && GEMINI_API_KEY.length > 0;
@@ -1614,6 +1657,7 @@ export async function generateAdImage(config: {
   variationIndex: number;
   totalVariations: number;
   similarityLevel?: number; // 0 = identical to references, 100 = completely different
+  imageSize?: ImageSize; // Aspect ratio for generated images
 }): Promise<GeneratedImageResult> {
   // Check if we should use Gemini or fall back to DALL-E
   if (USE_GEMINI_FOR_IMAGES && isGeminiConfigured()) {
@@ -1635,9 +1679,12 @@ async function generateAdImageWithGemini(config: {
   variationIndex: number;
   totalVariations: number;
   similarityLevel?: number; // 0 = identical to references, 100 = completely different
+  imageSize?: ImageSize; // Aspect ratio for generated images
 }): Promise<GeneratedImageResult> {
   const similarity = config.similarityLevel ?? 30; // Default to 30% variation
-  console.log(`🎨 Generating ad image with Gemini Nano Banana Pro ${config.variationIndex + 1}/${config.totalVariations} for ${config.audienceType} audience (${similarity}% variation)`);
+  const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
+  const sizeConfig = IMAGE_SIZE_OPTIONS.find(s => s.id === imageSize) || IMAGE_SIZE_OPTIONS[0];
+  console.log(`🎨 Generating ad image with Gemini Nano Banana Pro ${config.variationIndex + 1}/${config.totalVariations} for ${config.audienceType} audience (${similarity}% variation, ${sizeConfig.dimensions})`);
 
   const visualAnalysis = config.analysisData?.visualAnalysis;
   const topAds = config.analysisData?.topAds || [];
@@ -1842,10 +1889,11 @@ Explore fresh visual directions while maintaining professional quality.`,
     }],
     generationConfig: {
       responseModalities: ['TEXT', 'IMAGE'],
+      aspectRatio: imageSize, // Use the selected aspect ratio (e.g., "1:1", "1.91:1", "9:16")
     }
   };
 
-  console.log(`📤 Sending request to Gemini with ${referenceImages.length} reference images`);
+  console.log(`📤 Sending request to Gemini with ${referenceImages.length} reference images, aspect ratio: ${imageSize}`);
 
   const response = await fetch(apiUrl, {
     method: 'POST',
@@ -1915,8 +1963,11 @@ async function generateAdImageWithDallE(config: {
   analysisData: ChannelAnalysisResult | null;
   variationIndex: number;
   totalVariations: number;
+  imageSize?: ImageSize; // Aspect ratio for generated images
 }): Promise<GeneratedImageResult> {
-  console.log(`🎨 Generating ad image with DALL-E 3 ${config.variationIndex + 1}/${config.totalVariations} for ${config.audienceType} audience`);
+  const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
+  const sizeConfig = IMAGE_SIZE_OPTIONS.find(s => s.id === imageSize) || IMAGE_SIZE_OPTIONS[0];
+  console.log(`🎨 Generating ad image with DALL-E 3 ${config.variationIndex + 1}/${config.totalVariations} for ${config.audienceType} audience (${sizeConfig.dimensions})`);
 
   const visualAnalysis = config.analysisData?.visualAnalysis;
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
@@ -1957,7 +2008,7 @@ async function generateAdImageWithDallE(config: {
     '',
     `This is variation ${config.variationIndex + 1} of ${config.totalVariations} - make it distinct while maintaining brand consistency.`,
     '',
-    'Create a visually striking 1024x1024 ad image. Do NOT include any text in the image.'
+    `Create a visually striking ${sizeConfig.dimensions} ad image. Do NOT include any text in the image.`
   );
 
   const prompt = promptParts.join('\n');
@@ -1972,7 +2023,7 @@ async function generateAdImageWithDallE(config: {
       model: 'dall-e-3',
       prompt,
       n: 1,
-      size: '1024x1024',
+      size: sizeConfig.dalleSize,
       quality: 'hd',
       response_format: 'url',
     }),
@@ -2317,10 +2368,14 @@ export async function generateAdPackage(config: {
   similarityLevel?: number;
   // ConversionIQ reasoning effort level
   reasoningEffort?: ReasoningEffort;
+  // Image size/aspect ratio for generated images
+  imageSize?: ImageSize;
 }): Promise<GeneratedAdPackage> {
   const conceptName = config.conceptType ? CONCEPT_ANGLES[config.conceptType].name : 'general';
   const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
-  console.log(`🚀 Generating ${config.adType} ad package for ${config.audienceType} with ${conceptName} concept (${config.variationCount} variations) | IQ Level: ${reasoningEffort}`);
+  const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
+  const sizeConfig = IMAGE_SIZE_OPTIONS.find(s => s.id === imageSize) || IMAGE_SIZE_OPTIONS[0];
+  console.log(`🚀 Generating ${config.adType} ad package for ${config.audienceType} with ${conceptName} concept (${config.variationCount} variations, ${sizeConfig.dimensions}) | IQ Level: ${reasoningEffort}`);
 
   const id = `ad_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const generatedAt = new Date().toISOString();
@@ -2359,6 +2414,7 @@ export async function generateAdPackage(config: {
         variationIndex: i,
         totalVariations: config.variationCount,
         similarityLevel: config.similarityLevel,
+        imageSize: config.imageSize,
       })
     );
 
