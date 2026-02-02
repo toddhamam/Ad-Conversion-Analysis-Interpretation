@@ -119,6 +119,13 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 - PR numbers increment sequentially
 - **Separate PRs for distinct fixes**: When iterating on a solution, create separate PRs for each distinct fix rather than bundling unrelated changes
 - Use clear commit messages and PR titles that accurately reflect the changes
+- **Complete PR workflow**: User expects the full process through to completion—commit changes, create PR, provide PR URL
+
+## Communication Preferences
+
+- **Simplify technical jargon**: User struggled with terms like "cloning the repo"—break down technical issues into simple, direct terms with clear examples of what is wrong and what is correct
+- **Table format for multi-file fixes**: When presenting fixes across multiple files, use a table format clearly outlining: file, issue, and fix
+- **Clear step-by-step solutions**: Present fixes in ordered, actionable steps rather than long prose explanations
 
 ## Theme & Visual Clarity
 
