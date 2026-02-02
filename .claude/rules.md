@@ -112,6 +112,11 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 - Provide progress feedback for longer operations
 - Never show generic "Loading..." or "Please wait..."
 
+### Media Display Control
+- Give users control over when large media elements load (e.g., "Show Images" button)
+- Don't auto-load many images on page mount - let users trigger loading
+- This improves page responsiveness and prevents crashes on media-heavy pages
+
 ## Git Workflow
 
 - Commit changes before creating Pull Requests
@@ -160,3 +165,15 @@ When encountering performance issues or crashes (especially in Chrome), investig
 - Rendering too many DOM elements without virtualization or pagination
 - Duplicate component mounts (potentially due to React StrictMode in development)
 - Memory pressure from handling large data (images, API responses)
+
+### Storage Management UX
+- **Proactive warnings**: Warn users about large `localStorage` usage before it causes issues
+- **Clear data options**: Provide easy ways to clear stored data (e.g., "Clear All Ads" button)
+- **Storage indicators**: Show users how much data is stored and approaching limits
+
+### Default Values
+- Provide sensible defaults for user-configurable settings:
+  - Similarity threshold: 30%
+  - Image aspect ratio: 1:1
+  - Reasoning level: IQ Standard (fast)
+- Defaults should favor speed/efficiency for first-time users while allowing customization
