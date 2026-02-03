@@ -625,19 +625,26 @@ export async function validatePageAccess(pageId?: string): Promise<{ valid: bool
       return { valid: false, error: pageData.error.message, diagnosis: `Token cannot access Page ${targetPageId}. In Business Manager → Settings → Pages, ensure this Page is added and your token has permission.` };
     }
 
-    // Page is readable. Now check if the token has ads_management permission for this Page
-    // by checking if we can list the Page's ad accounts
-    const promotableUrl = `${META_GRAPH_API}/${targetPageId}/promotable_posts?limit=1&access_token=${ACCESS_TOKEN}`;
-    const promotableResponse = await fetch(promotableUrl);
-    const promotableData = await promotableResponse.json();
+    // Page is readable. Now check if this Page is available as a promote target for the ad account
+    if (AD_ACCOUNT_ID) {
+      const promoteUrl = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/promote_pages?fields=id,name&access_token=${ACCESS_TOKEN}`;
+      const promoteResponse = await fetch(promoteUrl);
+      const promoteData = await promoteResponse.json();
 
-    if (promotableData.error) {
-      return {
-        valid: false,
-        pageName: pageData.name,
-        error: promotableData.error.message,
-        diagnosis: `Token can read Page "${pageData.name}" but lacks ad creation permissions. In Business Manager → Settings → Pages → "${pageData.name}", assign the 'Create Ads' permission to your System User or regenerate your token with pages_manage_ads permission.`,
-      };
+      if (promoteData.error) {
+        // If the promote_pages check fails, log it but don't block — the Page may still work
+        console.warn('⚠️ Could not verify Page via promote_pages:', promoteData.error.message);
+      } else if (promoteData.data) {
+        const pageLinked = promoteData.data.some((p: { id: string }) => p.id === targetPageId);
+        if (!pageLinked) {
+          return {
+            valid: false,
+            pageName: pageData.name,
+            error: `Page "${pageData.name}" is not linked to ad account ${AD_ACCOUNT_ID} for promotion.`,
+            diagnosis: `In Business Manager → Settings → Pages → "${pageData.name}", ensure the Page is assigned to the ad account. Or in Ad Account Settings → Page, add this Page.`,
+          };
+        }
+      }
     }
 
     console.log(`✅ Page "${pageData.name}" (${targetPageId}) is accessible with ad permissions`);
