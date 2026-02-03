@@ -160,6 +160,13 @@
 - `sitemap.xml` → `public/sitemap.xml`
 - SEO component → `src/components/SEO.tsx`
 
+## Meta API Patterns
+
+### Page Access Validation
+- **Use `promote_pages` from the Ad Account, not `promotable_posts` from the Page**: To validate ad creation permissions, query `/{ad_account_id}/promote_pages` (Ad Account perspective), not `/{page_id}/promotable_posts` (Page perspective). The `promotable_posts` endpoint is unreliable for permission validation.
+- **Progressive validation**: Check Page readability first, then ad creation permissions as a secondary step. If the secondary check fails, log a warning and continue rather than blocking.
+- **Diagnostic error responses**: When Meta API calls fail, return the specific error code, message, and actionable diagnostic steps—not just a generic failure message.
+
 ## Mistakes to Avoid
 - Initial state defaulting: Set correct initial values for toggles (e.g., `useState(false)` for collapsed-by-default)
 - Overly broad active states: Use NavLink `end` prop to avoid unintended highlighting on child routes
