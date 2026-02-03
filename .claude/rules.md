@@ -91,6 +91,12 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 };
 ```
 
+## API Data & Error Visibility Preferences
+
+- **Refresh buttons**: Always provide a "Refresh" button for data fetched from external APIs (custom audiences, targeting suggestions, etc.) so users can manually retry if initial loads fail or data becomes stale
+- **Clear error messages**: Users need to see clear error messages when API calls fail, not just a lack of results. Show what went wrong and how to fix it.
+- **Token awareness**: Proactively inform users about access token expiration. Short-lived tokens (Graph API Explorer) expire in 1-2 hours; recommend long-lived or System User tokens for sustained use.
+
 ## Ad Publisher Preferences
 
 - **Default campaign objective**: Sales (`OUTCOME_SALES`), not Traffic

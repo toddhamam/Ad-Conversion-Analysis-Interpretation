@@ -24,6 +24,9 @@
 - **Non-null assertions**: Use `process.env.VAR_NAME!` in serverless functions where env vars are guaranteed to exist
 - **Strict typing for API responses**: Define interfaces for all API response shapes in `src/types/`
 
+## Vite Dev Server Gotchas
+- **esbuild URL parsing**: Vite's `esbuild` plugin can misinterpret URL query parameters containing ISO date strings (especially with milliseconds like `.000`) as loader values, causing internal server errors. Avoid passing raw ISO timestamps in URL query strings during development.
+
 ## Peer Dependency Management
 
 ### React 19 Compatibility
@@ -172,6 +175,7 @@
 - Overly broad active states: Use NavLink `end` prop to avoid unintended highlighting on child routes
 - Redundant navigation: Don't create duplicate entry points; keep workflows clear (e.g., Publisher accessed only after generation)
 - Hidden overlay click interception: `opacity: 0` does NOT prevent click events. Always add `pointer-events: none` to hidden overlays to prevent them from blocking interactions with elements beneath
+- **`mousedown` for click-outside handlers**: Using `mousedown` to detect clicks outside a dropdown can interfere with `onClick` events on dropdown items, causing them to not register. Use `mousedown` with `preventDefault` carefully, or use `click` events with proper event ordering
 - Inconsistent breakpoints: Standardize media query breakpoints across the codebase (900px for tablet, 600px for mobile)
 - **Wrong API endpoint**: Dashboard metrics must come from `/api/funnel/metrics` (Supabase), NOT the Meta API. Using the wrong data source leads to zero/incorrect data
 - **Missing type-only imports**: When `verbatimModuleSyntax` is enabled, failing to use `import type` for types causes build failures
@@ -191,6 +195,9 @@
 - **Missing Page ID**: `VITE_META_PAGE_ID` is required for ad publishing via `object_story_spec`. Omitting it causes cryptic API errors
 - **Not creating ads as PAUSED**: Always create ads with `status: 'PAUSED'` to prevent accidental live publication
 - **Skipping pre-validation**: Always run `validatePageAccess` (Step 0) before the full publish flow to catch permission and configuration issues early with specific diagnostics
+- **Using deprecated API fields**: Meta deprecates fields silently. `approximate_count` → `approximate_count_lower_bound`/`approximate_count_upper_bound`. Always verify current field names.
+- **Swallowing Meta API errors**: Meta's APIs often return `[]` on error instead of throwing. Never let API wrappers catch errors and return empty arrays without surfacing the error to the user.
+- **Not providing retry for API-fetched data**: Always add a "Refresh" button for data fetched from external APIs (custom audiences, targeting suggestions) so users can manually retry on failure
 
 ### Stripe Integration Mistakes
 - **Don't call `stripe.redirectToCheckout` without a session**: Always create a Checkout Session via backend API first, then pass the `sessionId` to `redirectToCheckout`
