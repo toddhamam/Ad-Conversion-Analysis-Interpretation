@@ -520,6 +520,7 @@ const analysis = await analyzeAdCreative(adId, {
 ```bash
 VITE_META_ACCESS_TOKEN=     # Facebook API token
 VITE_META_AD_ACCOUNT_ID=    # Format: act_XXXXXXXXX
+VITE_META_PAGE_ID=          # Facebook Page ID (required for publishing ads)
 VITE_OPENAI_API_KEY=        # GPT-4o access
 VITE_GEMINI_API_KEY=        # Image generation (optional)
 VITE_STRIPE_PUBLISHABLE_KEY= # Stripe publishable key (pk_live_* or pk_test_*)
