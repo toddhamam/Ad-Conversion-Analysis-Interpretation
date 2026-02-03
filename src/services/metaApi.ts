@@ -1262,29 +1262,26 @@ export async function searchTargetingSuggestions(
     access_token: ACCESS_TOKEN,
     q: query,
     type: type,
+    limit: '25',
   });
 
   const url = `${META_GRAPH_API}/search?${params.toString()}`;
 
-  try {
-    const response = await fetch(url);
-    const data = await response.json();
+  const response = await fetch(url);
+  const data = await response.json();
 
-    if (!response.ok || data.error) {
-      console.error('❌ Targeting search failed:', data.error?.message);
-      return [];
-    }
-
-    return (data.data || []).map((item: any) => ({
-      id: item.id,
-      name: item.name,
-      type: item.type === 'interests' ? 'interest' : item.type === 'behaviors' ? 'behavior' : 'demographic',
-      audienceSize: item.audience_size || item.audience_size_upper_bound,
-    }));
-  } catch (err) {
-    console.error('❌ Targeting search error:', err);
-    return [];
+  if (!response.ok || data.error) {
+    const msg = data.error?.message || `HTTP ${response.status}`;
+    console.error('❌ Targeting search failed:', msg);
+    throw new Error(msg);
   }
+
+  return (data.data || []).map((item: any) => ({
+    id: item.id,
+    name: item.name,
+    type: item.type === 'interests' ? 'interest' : item.type === 'behaviors' ? 'behavior' : 'demographic',
+    audienceSize: item.audience_size || item.audience_size_upper_bound,
+  }));
 }
 
 /**
@@ -1299,25 +1296,21 @@ export async function fetchCustomAudiences(): Promise<AudienceRef[]> {
 
   const url = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/customaudiences?${params.toString()}`;
 
-  try {
-    const response = await fetch(url);
-    const data = await response.json();
+  const response = await fetch(url);
+  const data = await response.json();
 
-    if (!response.ok || data.error) {
-      console.error('❌ Failed to fetch custom audiences:', data.error?.message);
-      return [];
-    }
-
-    return (data.data || []).map((item: any) => ({
-      id: item.id,
-      name: item.name,
-      subtype: item.subtype,
-      approximateCount: item.approximate_count,
-    }));
-  } catch (err) {
-    console.error('❌ Custom audiences fetch error:', err);
-    return [];
+  if (!response.ok || data.error) {
+    const msg = data.error?.message || `HTTP ${response.status}`;
+    console.error('❌ Failed to fetch custom audiences:', msg);
+    throw new Error(msg);
   }
+
+  return (data.data || []).map((item: any) => ({
+    id: item.id,
+    name: item.name,
+    subtype: item.subtype,
+    approximateCount: item.approximate_count,
+  }));
 }
 
 /**

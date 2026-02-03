@@ -367,11 +367,13 @@ const AdPublisher = () => {
   const [targetingSearchQuery, setTargetingSearchQuery] = useState('');
   const [targetingSearchResults, setTargetingSearchResults] = useState<DetailedTargetingItem[]>([]);
   const [isSearchingTargeting, setIsSearchingTargeting] = useState(false);
+  const [targetingSearchError, setTargetingSearchError] = useState<string | null>(null);
   const [customAudiences, setCustomAudiences] = useState<AudienceRef[]>([]);
   const [excludedAudiences, setExcludedAudiences] = useState<AudienceRef[]>([]);
   const [availableAudiences, setAvailableAudiences] = useState<AudienceRef[]>([]);
   const [isLoadingAudiences, setIsLoadingAudiences] = useState(false);
   const [audiencesLoaded, setAudiencesLoaded] = useState(false);
+  const [audiencesError, setAudiencesError] = useState<string | null>(null);
   const [selectedAudienceId, setSelectedAudienceId] = useState('');
   const [selectedExcludeAudienceId, setSelectedExcludeAudienceId] = useState('');
 
@@ -457,13 +459,15 @@ const AdPublisher = () => {
 
     searchTimerRef.current = setTimeout(async () => {
       setIsSearchingTargeting(true);
+      setTargetingSearchError(null);
       try {
         const results = await searchTargetingSuggestions(targetingSearchQuery);
         // Filter out already-selected items
         const selectedIds = new Set(detailedTargeting.map(t => t.id));
         setTargetingSearchResults(results.filter(r => !selectedIds.has(r.id)));
-      } catch {
+      } catch (err) {
         setTargetingSearchResults([]);
+        setTargetingSearchError(err instanceof Error ? err.message : 'Search failed');
       } finally {
         setIsSearchingTargeting(false);
       }
@@ -534,12 +538,15 @@ const AdPublisher = () => {
   // Audience handlers
   const loadAvailableAudiences = useCallback(async () => {
     setIsLoadingAudiences(true);
+    setAudiencesError(null);
     try {
       const audiences = await fetchCustomAudiences();
       setAvailableAudiences(audiences);
       setAudiencesLoaded(true);
-    } catch {
+    } catch (err) {
       setAvailableAudiences([]);
+      setAudiencesLoaded(true);
+      setAudiencesError(err instanceof Error ? err.message : 'Failed to load audiences');
     } finally {
       setIsLoadingAudiences(false);
     }
@@ -1317,10 +1324,14 @@ const AdPublisher = () => {
                           onChange={e => setTargetingSearchQuery(e.target.value)}
                           placeholder="Search interests, behaviors, demographics..."
                         />
-                        {(targetingSearchResults.length > 0 || isSearchingTargeting) && targetingSearchQuery && (
+                        {(targetingSearchResults.length > 0 || isSearchingTargeting || targetingSearchError) && targetingSearchQuery && (
                           <div className="targeting-search-dropdown">
                             {isSearchingTargeting ? (
                               <div className="targeting-search-loading">Searching...</div>
+                            ) : targetingSearchError ? (
+                              <div className="targeting-search-empty" style={{ color: '#ef4444' }}>
+                                API error: {targetingSearchError}
+                              </div>
                             ) : targetingSearchResults.length === 0 ? (
                               <div className="targeting-search-empty">No results found</div>
                             ) : (
@@ -1373,6 +1384,11 @@ const AdPublisher = () => {
                           </button>
                         )}
                       </label>
+                      {audiencesError && (
+                        <div style={{ color: '#ef4444', fontSize: '12px', marginBottom: '8px' }}>
+                          API error: {audiencesError}
+                        </div>
+                      )}
                       <div className="audience-select-container">
                         <div className="audience-select-row">
                           <select
