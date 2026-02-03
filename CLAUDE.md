@@ -86,6 +86,10 @@ public/
 | `src/components/ProtectedRoute.tsx` | Auth guard for protected routes |
 | `src/pages/Login.tsx` | Authentication login page |
 | `src/pages/Register.tsx` | Company registration/signup page |
+| `src/pages/ForgotPassword.tsx` | Request password reset email |
+| `src/pages/ResetPassword.tsx` | Set new password after email link |
+| `src/contexts/AuthContext.tsx` | Auth state management with Supabase integration |
+| `src/lib/supabase.ts` | Supabase client singleton with configuration check |
 | `src/components/UserProfileDropdown.tsx` | User profile dropdown with company branding, sign out, account actions |
 | `src/components/MainLayout.tsx` | App shell with sidebar, header, and responsive navigation |
 | `src/services/stripeApi.ts` | Stripe integration - checkout, portal, subscription management |
@@ -109,6 +113,8 @@ public/
 /               → Sales landing page (Convertra marketing)
 /login          → User authentication
 /signup         → Company registration
+/forgot-password → Request password reset email
+/reset-password  → Set new password (from email link)
 ```
 
 ### Protected Routes (auth required)
@@ -130,7 +136,7 @@ public/
 3. **Campaign type detection** - Naming conventions: `[P]`/`Prospecting`, `[R]`/`Retargeting`, `[RT]`/`Retention`
 4. **Image caching** - Top 20 performing images cached by conversion rate
 5. **Public/Protected route separation** - Sales & login are public; app routes require auth
-6. **Stub authentication** - Uses localStorage flag; ready for real auth provider (Clerk, Auth0, etc.)
+6. **Supabase Auth** - Uses Supabase for authentication with localStorage fallback when not configured
 7. **Frontend/Backend API separation** - Sensitive operations (Stripe, Supabase) handled by backend serverless functions
 8. **Vercel serverless functions** - API routes in `api/` directory using `@vercel/node` (`VercelRequest`, `VercelResponse`)
 9. **React 19 peer dependency handling** - `.npmrc` with `legacy-peer-deps=true` for libraries that haven't updated React peer deps
@@ -517,7 +523,12 @@ VITE_META_AD_ACCOUNT_ID=    # Format: act_XXXXXXXXX
 VITE_OPENAI_API_KEY=        # GPT-4o access
 VITE_GEMINI_API_KEY=        # Image generation (optional)
 VITE_STRIPE_PUBLISHABLE_KEY= # Stripe publishable key (pk_live_* or pk_test_*)
+VITE_SUPABASE_URL=          # Supabase project URL (MUST include https://)
+VITE_SUPABASE_ANON_KEY=     # Supabase anonymous key for frontend auth
+VITE_APP_URL=               # App URL for redirects (https://www.convertraiq.com)
 ```
+
+**Important**: URL environment variables (VITE_SUPABASE_URL, VITE_APP_URL) must include the full protocol (`https://`). Missing the protocol will cause the app to crash at runtime.
 
 ### Backend (Vercel serverless functions)
 ```bash
