@@ -660,6 +660,87 @@ export type CampaignObjective = 'OUTCOME_SALES' | 'OUTCOME_LEADS' | 'OUTCOME_AWA
 // Call-to-action types for ads
 export type CallToActionType = 'LEARN_MORE' | 'SHOP_NOW' | 'SIGN_UP' | 'SUBSCRIBE' | 'GET_OFFER' | 'BOOK_NOW' | 'CONTACT_US' | 'DOWNLOAD' | 'APPLY_NOW' | 'BUY_NOW';
 
+// Conversion event types for OUTCOME_SALES objective
+export type ConversionEvent = 'PURCHASE' | 'ADD_TO_CART' | 'LEAD' | 'COMPLETE_REGISTRATION' | 'INITIATE_CHECKOUT' | 'ADD_PAYMENT_INFO' | 'SEARCH' | 'VIEW_CONTENT';
+
+// Gender targeting: 0=all, 1=male, 2=female
+export type GenderTarget = 0 | 1 | 2;
+
+// Budget optimization mode
+export type BudgetMode = 'ABO' | 'CBO';
+
+// Interest/behavior for flexible_spec targeting
+export interface DetailedTargetingItem {
+  id: string;
+  name: string;
+  type: 'interest' | 'behavior' | 'demographic';
+  audienceSize?: number;
+}
+
+// Custom/Lookalike audience reference
+export interface AudienceRef {
+  id: string;
+  name: string;
+  subtype?: string;
+  approximateCount?: number;
+}
+
+// Placement configuration
+export type PublisherPlatform = 'facebook' | 'instagram' | 'audience_network' | 'messenger';
+
+export type FacebookPosition =
+  | 'feed'
+  | 'right_hand_column'
+  | 'marketplace'
+  | 'video_feeds'
+  | 'story'
+  | 'reels'
+  | 'search'
+  | 'instream_video';
+
+export type InstagramPosition =
+  | 'stream'
+  | 'story'
+  | 'reels'
+  | 'explore'
+  | 'explore_home'
+  | 'profile_feed';
+
+export interface PlacementConfig {
+  automatic: boolean;
+  publisherPlatforms?: PublisherPlatform[];
+  facebookPositions?: FacebookPosition[];
+  instagramPositions?: InstagramPosition[];
+}
+
+// Full targeting specification
+export interface FullTargetingSpec {
+  geoLocations: { countries: string[] };
+  ageMin: number;
+  ageMax: number;
+  genders: GenderTarget[];
+  flexibleSpec?: DetailedTargetingItem[][];
+  customAudiences?: AudienceRef[];
+  excludedCustomAudiences?: AudienceRef[];
+}
+
+// Named preset for publisher configuration
+export interface PublishPreset {
+  id: string;
+  name: string;
+  createdAt: string;
+  config: {
+    campaignObjective: CampaignObjective;
+    budgetMode: BudgetMode;
+    dailyBudget: number;
+    conversionEvent?: ConversionEvent;
+    pixelId?: string;
+    targeting: FullTargetingSpec;
+    placements: PlacementConfig;
+    landingPageUrl: string;
+  };
+}
+
 // Campaign for publisher dropdown
 export interface CampaignForPublish {
   id: string;
@@ -681,17 +762,20 @@ export interface AdSetForPublish {
 export interface CreateCampaignRequest {
   name: string;
   objective: CampaignObjective;
+  budgetMode: BudgetMode;
+  dailyBudget?: number; // In dollars, only used when budgetMode is 'CBO'
 }
 
 export interface CreateAdSetRequest {
   name: string;
   campaignId: string;
-  dailyBudget: number; // In dollars (will be converted to cents)
-  optimization: 'CONVERSIONS' | 'LINK_CLICKS' | 'LANDING_PAGE_VIEWS';
-  targeting?: {
-    geoLocations?: { countries: string[] };
-    ageMin?: number;
-    ageMax?: number;
+  dailyBudget?: number; // In dollars, only for ABO mode
+  optimization: 'CONVERSIONS' | 'LINK_CLICKS' | 'LANDING_PAGE_VIEWS' | 'OFFSITE_CONVERSIONS';
+  targeting: FullTargetingSpec;
+  placements: PlacementConfig;
+  promotedObject?: {
+    pixelId: string;
+    customEventType: string;
   };
 }
 
@@ -717,10 +801,15 @@ export interface PublishConfig {
   settings: {
     campaignName?: string;
     campaignObjective?: CampaignObjective;
+    budgetMode?: BudgetMode;
     adsetName?: string;
     dailyBudget?: number;
     landingPageUrl: string;
     pageId?: string;
+    conversionEvent?: ConversionEvent;
+    pixelId?: string;
+    targeting?: FullTargetingSpec;
+    placements?: PlacementConfig;
   };
   existingCampaignId?: string;
   existingAdSetId?: string;
@@ -896,16 +985,21 @@ export async function createCampaign(request: CreateCampaignRequest): Promise<st
   const url = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/campaigns`;
 
   // Build request body
-  const requestBody = {
+  const requestBody: Record<string, any> = {
     access_token: ACCESS_TOKEN,
     name: request.name,
     objective: request.objective,
     status: 'PAUSED', // CRITICAL: Always create as draft
     special_ad_categories: [], // Required field - empty array for non-special ads
-    // Required when using ad set level budget (not campaign budget)
-    // Set to false to keep each ad set's budget independent
-    is_adset_budget_sharing_enabled: false,
   };
+
+  if (request.budgetMode === 'CBO' && request.dailyBudget) {
+    // CBO: budget set at campaign level
+    requestBody.daily_budget = Math.round(request.dailyBudget * 100); // Convert to cents
+  } else {
+    // ABO: budget set at ad set level, disable campaign budget sharing
+    requestBody.is_adset_budget_sharing_enabled = false;
+  }
 
   console.log('📤 Campaign API request:', {
     url,
@@ -950,28 +1044,54 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
 
   const url = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/adsets`;
 
-  // Convert daily budget from dollars to cents
-  const dailyBudgetCents = Math.round(request.dailyBudget * 100);
-
-  // Use LINK_CLICKS for traffic/awareness campaigns (doesn't require pixel)
-  // Only use CONVERSIONS/OFFSITE_CONVERSIONS if pixel is configured
-  let optimizationGoal = 'LINK_CLICKS';
-  if (request.optimization === 'LANDING_PAGE_VIEWS') {
-    optimizationGoal = 'LANDING_PAGE_VIEWS';
+  // Determine optimization goal based on configuration
+  let optimizationGoal = request.optimization;
+  if (request.promotedObject) {
+    optimizationGoal = 'OFFSITE_CONVERSIONS';
+  } else if (optimizationGoal === 'OFFSITE_CONVERSIONS' && !request.promotedObject) {
+    // Fallback if no pixel configured
+    optimizationGoal = 'LINK_CLICKS';
   }
 
   // Build targeting - Meta requires specific format
-  const targeting = {
+  const targeting: Record<string, any> = {
     geo_locations: {
-      countries: request.targeting?.geoLocations?.countries || ['US', 'AU', 'GB', 'CA'],
+      countries: request.targeting.geoLocations.countries,
     },
-    age_min: request.targeting?.ageMin || 18,
-    age_max: request.targeting?.ageMax || 65,
+    age_min: request.targeting.ageMin,
+    age_max: request.targeting.ageMax,
   };
+
+  // Gender (only add if not "all" - gender 0 means all)
+  if (request.targeting.genders && !request.targeting.genders.includes(0)) {
+    targeting.genders = request.targeting.genders;
+  }
+
+  // Detailed targeting (interests/behaviors) via flexible_spec
+  if (request.targeting.flexibleSpec && request.targeting.flexibleSpec.length > 0) {
+    targeting.flexible_spec = request.targeting.flexibleSpec.map(group => {
+      const spec: Record<string, { id: string; name: string }[]> = {};
+      for (const item of group) {
+        const key = item.type === 'interest' ? 'interests' : item.type === 'behavior' ? 'behaviors' : 'demographics';
+        if (!spec[key]) spec[key] = [];
+        spec[key].push({ id: item.id, name: item.name });
+      }
+      return spec;
+    });
+  }
+
+  // Custom audiences
+  if (request.targeting.customAudiences && request.targeting.customAudiences.length > 0) {
+    targeting.custom_audiences = request.targeting.customAudiences.map(a => ({ id: a.id }));
+  }
+
+  // Excluded audiences
+  if (request.targeting.excludedCustomAudiences && request.targeting.excludedCustomAudiences.length > 0) {
+    targeting.excluded_custom_audiences = request.targeting.excludedCustomAudiences.map(a => ({ id: a.id }));
+  }
 
   console.log('🎯 Targeting:', JSON.stringify(targeting, null, 2));
   console.log('🎯 Optimization Goal:', optimizationGoal);
-  console.log('💰 Daily Budget (cents):', dailyBudgetCents);
 
   const params = new URLSearchParams({
     access_token: ACCESS_TOKEN,
@@ -980,16 +1100,44 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
     billing_event: 'IMPRESSIONS',
     optimization_goal: optimizationGoal,
     bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
-    daily_budget: dailyBudgetCents.toString(),
     targeting: JSON.stringify(targeting),
     status: 'PAUSED', // CRITICAL: Always create as draft
   });
+
+  // Budget only for ABO mode (CBO budget is on the campaign)
+  if (request.dailyBudget) {
+    const dailyBudgetCents = Math.round(request.dailyBudget * 100);
+    params.set('daily_budget', dailyBudgetCents.toString());
+    console.log('💰 Daily Budget (cents):', dailyBudgetCents);
+  }
+
+  // Promoted object for conversion tracking (OUTCOME_SALES with pixel)
+  if (request.promotedObject) {
+    params.set('promoted_object', JSON.stringify({
+      pixel_id: request.promotedObject.pixelId,
+      custom_event_type: request.promotedObject.customEventType,
+    }));
+    console.log('🎯 Promoted Object:', JSON.stringify(request.promotedObject));
+  }
+
+  // Manual placements (omit for Advantage+ automatic)
+  if (!request.placements.automatic) {
+    if (request.placements.publisherPlatforms?.length) {
+      params.set('publisher_platforms', JSON.stringify(request.placements.publisherPlatforms));
+    }
+    if (request.placements.facebookPositions?.length) {
+      params.set('facebook_positions', JSON.stringify(request.placements.facebookPositions));
+    }
+    if (request.placements.instagramPositions?.length) {
+      params.set('instagram_positions', JSON.stringify(request.placements.instagramPositions));
+    }
+    console.log('📍 Manual Placements:', request.placements);
+  }
 
   console.log('📤 Creating ad set with params:', {
     name: request.name,
     campaign_id: request.campaignId,
     optimization_goal: optimizationGoal,
-    daily_budget: dailyBudgetCents,
   });
 
   const response = await fetch(url, {
@@ -1101,17 +1249,96 @@ export async function createAd(adsetId: string, creativeId: string, name: string
 }
 
 /**
+ * Search Meta's Targeting API for interests, behaviors, and demographics
+ * Used for the detailed targeting suggestions in the publisher
+ */
+export async function searchTargetingSuggestions(
+  query: string,
+  type: 'adinterest' | 'adinterestsuggestion' | 'adTargetingCategory' = 'adinterest'
+): Promise<DetailedTargetingItem[]> {
+  if (!query.trim()) return [];
+
+  const params = new URLSearchParams({
+    access_token: ACCESS_TOKEN,
+    q: query,
+    type: type,
+  });
+
+  const url = `${META_GRAPH_API}/search?${params.toString()}`;
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (!response.ok || data.error) {
+      console.error('❌ Targeting search failed:', data.error?.message);
+      return [];
+    }
+
+    return (data.data || []).map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      type: item.type === 'interests' ? 'interest' : item.type === 'behaviors' ? 'behavior' : 'demographic',
+      audienceSize: item.audience_size || item.audience_size_upper_bound,
+    }));
+  } catch (err) {
+    console.error('❌ Targeting search error:', err);
+    return [];
+  }
+}
+
+/**
+ * Fetch custom and lookalike audiences for the ad account
+ */
+export async function fetchCustomAudiences(): Promise<AudienceRef[]> {
+  const params = new URLSearchParams({
+    access_token: ACCESS_TOKEN,
+    fields: 'id,name,subtype,approximate_count',
+    limit: '100',
+  });
+
+  const url = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/customaudiences?${params.toString()}`;
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (!response.ok || data.error) {
+      console.error('❌ Failed to fetch custom audiences:', data.error?.message);
+      return [];
+    }
+
+    return (data.data || []).map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      subtype: item.subtype,
+      approximateCount: item.approximate_count,
+    }));
+  } catch (err) {
+    console.error('❌ Custom audiences fetch error:', err);
+    return [];
+  }
+}
+
+/**
  * Main publish function - orchestrates the entire publishing process
  * Handles all three modes: new_campaign, new_adset, existing_adset
  *
- * APPROACH:
- * - For new campaigns, uses OUTCOME_TRAFFIC objective (doesn't require pixel)
- * - For ad sets, uses LINK_CLICKS optimization (doesn't require pixel)
- * - User can modify campaign settings in Meta Ads Manager afterward
+ * Supports full configuration: CBO/ABO budgets, conversion tracking,
+ * detailed targeting, custom audiences, and manual placements.
  */
 export async function publishAds(config: PublishConfig): Promise<PublishResult> {
   console.log('🚀 Starting ad publish process...', config.mode);
   console.log('📋 Full config:', JSON.stringify(config, null, 2));
+
+  const budgetMode = config.settings.budgetMode || 'CBO';
+  const defaultTargeting: FullTargetingSpec = {
+    geoLocations: { countries: ['US', 'AU', 'GB', 'CA'] },
+    ageMin: 18,
+    ageMax: 65,
+    genders: [0],
+  };
+  const defaultPlacements: PlacementConfig = { automatic: true };
 
   const result: PublishResult = {
     success: false,
@@ -1147,14 +1374,14 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
     console.log('🎯 Step 2: Setting up campaign...');
     let campaignId: string;
     if (config.mode === 'new_campaign') {
-      // Use OUTCOME_TRAFFIC by default - it's simpler and doesn't require pixel
-      // User can change to OUTCOME_SALES in Meta Ads Manager
-      const objective = config.settings.campaignObjective || 'OUTCOME_TRAFFIC';
-      console.log(`📝 Creating new campaign: "${config.settings.campaignName}" with objective: ${objective}`);
+      const objective = config.settings.campaignObjective || 'OUTCOME_SALES';
+      console.log(`📝 Creating new campaign: "${config.settings.campaignName}" with objective: ${objective}, budget mode: ${budgetMode}`);
       try {
         campaignId = await createCampaign({
           name: config.settings.campaignName || 'CI Generated Campaign',
           objective: objective,
+          budgetMode: budgetMode,
+          dailyBudget: budgetMode === 'CBO' ? (config.settings.dailyBudget || 50) : undefined,
         });
         console.log(`✅ Campaign created: ${campaignId}`);
       } catch (campError: any) {
@@ -1174,13 +1401,32 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
       adsetId = config.existingAdSetId!;
       console.log(`📝 Using existing ad set: ${adsetId}`);
     } else {
+      const targeting = config.settings.targeting || defaultTargeting;
+      const placements = config.settings.placements || defaultPlacements;
+      const objective = config.settings.campaignObjective || 'OUTCOME_SALES';
+
+      // Determine optimization based on objective and pixel config
+      let optimization: 'LINK_CLICKS' | 'OFFSITE_CONVERSIONS' | 'LANDING_PAGE_VIEWS' | 'CONVERSIONS' = 'LINK_CLICKS';
+      let promotedObject: { pixelId: string; customEventType: string } | undefined;
+
+      if (objective === 'OUTCOME_SALES' && config.settings.pixelId) {
+        optimization = 'OFFSITE_CONVERSIONS';
+        promotedObject = {
+          pixelId: config.settings.pixelId,
+          customEventType: config.settings.conversionEvent || 'PURCHASE',
+        };
+      }
+
       console.log(`📝 Creating new ad set: "${config.settings.adsetName}"`);
       try {
         adsetId = await createAdSet({
           name: config.settings.adsetName || 'CI Generated Ad Set',
           campaignId: campaignId,
-          dailyBudget: config.settings.dailyBudget || 50,
-          optimization: 'LINK_CLICKS', // Use LINK_CLICKS - doesn't require pixel
+          dailyBudget: budgetMode === 'ABO' ? (config.settings.dailyBudget || 50) : undefined,
+          optimization: optimization,
+          targeting: targeting,
+          placements: placements,
+          promotedObject: promotedObject,
         });
         console.log(`✅ Ad set created: ${adsetId}`);
       } catch (adsetError: any) {

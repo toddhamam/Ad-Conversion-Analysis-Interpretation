@@ -4,17 +4,30 @@ import {
   publishAds,
   fetchCampaignsForPublish,
   fetchAdSetsForPublish,
+  searchTargetingSuggestions,
+  fetchCustomAudiences,
   type PublishConfig,
   type PublishResult,
   type CampaignForPublish,
   type AdSetForPublish,
   type CallToActionType,
   type CampaignObjective,
+  type BudgetMode,
+  type ConversionEvent,
+  type GenderTarget,
+  type DetailedTargetingItem,
+  type AudienceRef,
+  type PublisherPlatform,
+  type FacebookPosition,
+  type InstagramPosition,
+  type PlacementConfig,
+  type FullTargetingSpec,
+  type PublishPreset,
 } from '../services/metaApi';
 import './AdPublisher.css';
 
 // Debug flag - set to true to enable verbose logging
-const DEBUG_MODE = true;
+const DEBUG_MODE = false;
 const debugLog = (...args: any[]) => {
   if (DEBUG_MODE) console.log('[AdPublisher]', ...args);
 };
@@ -24,6 +37,7 @@ const SKIP_LOCALSTORAGE = false;
 
 // Storage key for generated ads (shared with AdGenerator)
 const GENERATED_ADS_STORAGE_KEY = 'conversion_intelligence_generated_ads';
+const PRESETS_STORAGE_KEY = 'ci_publish_presets';
 
 // Publishing mode options
 type PublishMode = 'new_campaign' | 'new_adset' | 'existing_adset';
@@ -70,13 +84,59 @@ const CTA_TEXT_TO_TYPE: Record<string, CallToActionType> = {
   'Buy Now': 'BUY_NOW',
 };
 
-// Campaign objective options
+// Campaign objective options - Sales is default/recommended
 const OBJECTIVE_OPTIONS: { id: CampaignObjective; name: string }[] = [
-  { id: 'OUTCOME_TRAFFIC', name: 'Traffic (Recommended)' },
+  { id: 'OUTCOME_SALES', name: 'Sales (Recommended)' },
+  { id: 'OUTCOME_TRAFFIC', name: 'Traffic' },
   { id: 'OUTCOME_AWARENESS', name: 'Awareness' },
   { id: 'OUTCOME_ENGAGEMENT', name: 'Engagement' },
   { id: 'OUTCOME_LEADS', name: 'Leads' },
-  { id: 'OUTCOME_SALES', name: 'Sales' },
+];
+
+// Conversion event options
+const CONVERSION_EVENT_OPTIONS: { id: ConversionEvent; name: string }[] = [
+  { id: 'PURCHASE', name: 'Purchase' },
+  { id: 'ADD_TO_CART', name: 'Add to Cart' },
+  { id: 'LEAD', name: 'Lead' },
+  { id: 'COMPLETE_REGISTRATION', name: 'Complete Registration' },
+  { id: 'INITIATE_CHECKOUT', name: 'Initiate Checkout' },
+  { id: 'ADD_PAYMENT_INFO', name: 'Add Payment Info' },
+  { id: 'SEARCH', name: 'Search' },
+  { id: 'VIEW_CONTENT', name: 'View Content' },
+];
+
+// Placement options
+const PUBLISHER_PLATFORM_OPTIONS: { id: PublisherPlatform; name: string }[] = [
+  { id: 'facebook', name: 'Facebook' },
+  { id: 'instagram', name: 'Instagram' },
+  { id: 'audience_network', name: 'Audience Network' },
+  { id: 'messenger', name: 'Messenger' },
+];
+
+const FACEBOOK_POSITION_OPTIONS: { id: FacebookPosition; name: string }[] = [
+  { id: 'feed', name: 'Feed' },
+  { id: 'story', name: 'Stories' },
+  { id: 'reels', name: 'Reels' },
+  { id: 'video_feeds', name: 'Video Feeds' },
+  { id: 'marketplace', name: 'Marketplace' },
+  { id: 'search', name: 'Search Results' },
+  { id: 'right_hand_column', name: 'Right Column' },
+  { id: 'instream_video', name: 'In-Stream Video' },
+];
+
+const INSTAGRAM_POSITION_OPTIONS: { id: InstagramPosition; name: string }[] = [
+  { id: 'stream', name: 'Feed' },
+  { id: 'story', name: 'Stories' },
+  { id: 'reels', name: 'Reels' },
+  { id: 'explore', name: 'Explore' },
+  { id: 'explore_home', name: 'Explore Home' },
+  { id: 'profile_feed', name: 'Profile Feed' },
+];
+
+// Common country codes
+const COMMON_COUNTRIES = [
+  'US', 'AU', 'GB', 'CA', 'NZ', 'DE', 'FR', 'ES', 'IT', 'NL',
+  'BR', 'MX', 'IN', 'JP', 'KR', 'SG', 'AE', 'ZA', 'PH', 'IE',
 ];
 
 // Lightweight ad metadata - NO IMAGE DATA stored in state
@@ -116,10 +176,16 @@ function formatDate(isoString: string): string {
   }
 }
 
+function formatAudienceSize(size?: number): string {
+  if (!size) return '';
+  if (size >= 1_000_000) return `${(size / 1_000_000).toFixed(1)}M`;
+  if (size >= 1_000) return `${(size / 1_000).toFixed(0)}K`;
+  return size.toString();
+}
+
 // ASYNC metadata extraction - non-blocking to prevent Chrome crashes
 async function extractMetadataAsync(): Promise<AdMetadata[]> {
   return new Promise((resolve) => {
-    // Use requestIdleCallback for browser cooperation, with setTimeout fallback
     const scheduleWork = (callback: () => void) => {
       if ('requestIdleCallback' in window) {
         (window as any).requestIdleCallback(callback, { timeout: 2000 });
@@ -132,7 +198,6 @@ async function extractMetadataAsync(): Promise<AdMetadata[]> {
       try {
         const stored = localStorage.getItem(GENERATED_ADS_STORAGE_KEY);
         if (!stored) {
-          console.log('[AdPublisher] No stored ads found');
           resolve([]);
           return;
         }
@@ -140,7 +205,6 @@ async function extractMetadataAsync(): Promise<AdMetadata[]> {
         const sizeInMB = (stored.length / (1024 * 1024)).toFixed(2);
         console.log(`[AdPublisher] localStorage data size: ${sizeInMB}MB`);
 
-        // For very large data, warn and parse carefully
         if (stored.length > 3 * 1024 * 1024) {
           console.warn('[AdPublisher] Large localStorage detected, parsing may be slow');
         }
@@ -155,12 +219,9 @@ async function extractMetadataAsync(): Promise<AdMetadata[]> {
         }
 
         if (!Array.isArray(packages)) {
-          console.log('[AdPublisher] Data is not an array');
           resolve([]);
           return;
         }
-
-        console.log('[AdPublisher] Found', packages.length, 'packages');
 
         const items: AdMetadata[] = [];
 
@@ -169,8 +230,6 @@ async function extractMetadataAsync(): Promise<AdMetadata[]> {
           if (!pkg) continue;
 
           const images = pkg.images || [];
-
-          // Skip packages with no images
           if (!Array.isArray(images) || images.length === 0) continue;
 
           const copy = pkg.copy || {};
@@ -193,7 +252,6 @@ async function extractMetadataAsync(): Promise<AdMetadata[]> {
           }
         }
 
-        console.log('[AdPublisher] Extracted', items.length, 'ad metadata items');
         resolve(items);
       } catch (err) {
         console.error('[AdPublisher] Error extracting metadata:', err);
@@ -203,8 +261,6 @@ async function extractMetadataAsync(): Promise<AdMetadata[]> {
   });
 }
 
-// Load full image data ONLY when publishing (not during selection)
-// Returns a promise to handle large data more gracefully
 async function loadImageDataForPublish(metadata: AdMetadata[]): Promise<{ imageUrl: string; headline: string; bodyText: string; cta: string }[]> {
   return new Promise((resolve) => {
     try {
@@ -218,7 +274,6 @@ async function loadImageDataForPublish(metadata: AdMetadata[]): Promise<{ imageU
       try {
         packages = JSON.parse(stored);
       } catch {
-        console.error('[AdPublisher] Failed to parse stored data for publish');
         resolve([]);
         return;
       }
@@ -253,24 +308,24 @@ async function loadImageDataForPublish(metadata: AdMetadata[]): Promise<{ imageU
   });
 }
 
-// Maximum number of ads to show in the selection list at once
-const MAX_VISIBLE_ADS = 20;  // Reduced to prevent rendering issues
-const MAX_TOTAL_ADS = 50;    // Maximum ads to load from storage
+const MAX_VISIBLE_ADS = 20;
+const MAX_TOTAL_ADS = 50;
 
 type PublishStep = 'select' | 'destination' | 'configure' | 'review';
 
 const AdPublisher = () => {
   const navigate = useNavigate();
 
-  // Render tracking for debugging
   const renderCountRef = useRef(0);
   const mountedRef = useRef(false);
   const instanceIdRef = useRef(Math.random().toString(36).substr(2, 9));
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const targetingDropdownRef = useRef<HTMLDivElement>(null);
 
   renderCountRef.current += 1;
   debugLog(`Render #${renderCountRef.current} (instance: ${instanceIdRef.current})`);
 
-  // State
+  // Core state
   const [isLoading, setIsLoading] = useState(true);
   const [adMetadata, setAdMetadata] = useState<AdMetadata[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -283,22 +338,75 @@ const AdPublisher = () => {
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
   const [isLoadingAdSets, setIsLoadingAdSets] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [campaignName, setCampaignName] = useState('');
-  const [adsetName, setAdsetName] = useState('');
-  const [dailyBudget, setDailyBudget] = useState(50);
-  const [landingPageUrl, setLandingPageUrl] = useState('https://example.com/offer');
-  const [campaignObjective, setCampaignObjective] = useState<CampaignObjective>('OUTCOME_TRAFFIC');
   const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [visibleAdsCount, setVisibleAdsCount] = useState(MAX_VISIBLE_ADS);
 
-  // Load metadata on mount - async version to prevent blocking
+  // Campaign settings
+  const [campaignName, setCampaignName] = useState('');
+  const [adsetName, setAdsetName] = useState('');
+  const [campaignObjective, setCampaignObjective] = useState<CampaignObjective>('OUTCOME_SALES');
+  const [budgetMode, setBudgetMode] = useState<BudgetMode>('CBO');
+  const [dailyBudget, setDailyBudget] = useState(50);
+
+  // Conversion tracking
+  const [conversionEvent, setConversionEvent] = useState<ConversionEvent>('PURCHASE');
+  const [pixelId, setPixelId] = useState(import.meta.env.VITE_META_PIXEL_ID || '');
+
+  // Targeting
+  const [targetCountries, setTargetCountries] = useState<string[]>(['US', 'AU', 'GB', 'CA']);
+  const [countryInput, setCountryInput] = useState('');
+  const [ageMin, setAgeMin] = useState(18);
+  const [ageMax, setAgeMax] = useState(65);
+  const [genders, setGenders] = useState<GenderTarget[]>([0]);
+  const [detailedTargeting, setDetailedTargeting] = useState<DetailedTargetingItem[]>([]);
+  const [targetingSearchQuery, setTargetingSearchQuery] = useState('');
+  const [targetingSearchResults, setTargetingSearchResults] = useState<DetailedTargetingItem[]>([]);
+  const [isSearchingTargeting, setIsSearchingTargeting] = useState(false);
+  const [customAudiences, setCustomAudiences] = useState<AudienceRef[]>([]);
+  const [excludedAudiences, setExcludedAudiences] = useState<AudienceRef[]>([]);
+  const [availableAudiences, setAvailableAudiences] = useState<AudienceRef[]>([]);
+  const [isLoadingAudiences, setIsLoadingAudiences] = useState(false);
+  const [selectedAudienceId, setSelectedAudienceId] = useState('');
+  const [selectedExcludeAudienceId, setSelectedExcludeAudienceId] = useState('');
+
+  // Placements
+  const [placementAutomatic, setPlacementAutomatic] = useState(true);
+  const [publisherPlatforms, setPublisherPlatforms] = useState<PublisherPlatform[]>(['facebook', 'instagram']);
+  const [facebookPositions, setFacebookPositions] = useState<FacebookPosition[]>(['feed', 'story', 'reels']);
+  const [instagramPositions, setInstagramPositions] = useState<InstagramPosition[]>(['stream', 'story', 'reels']);
+
+  // Ad setup
+  const [landingPageUrl, setLandingPageUrl] = useState('https://example.com/offer');
+
+  // Presets
+  const [presets, setPresets] = useState<PublishPreset[]>(() => {
+    try {
+      const saved = localStorage.getItem(PRESETS_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [selectedPresetId, setSelectedPresetId] = useState('');
+  const [presetName, setPresetName] = useState('');
+  const [showSavePreset, setShowSavePreset] = useState(false);
+
+  // Collapsible sections
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(
+    new Set(['campaign', 'conversion', 'targeting', 'ad-setup'])
+  );
+
+  const toggleSection = useCallback((section: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(section)) next.delete(section);
+      else next.add(section);
+      return next;
+    });
+  }, []);
+
+  // Load metadata on mount
   useEffect(() => {
-    // Prevent double-mounting issues in StrictMode
-    if (mountedRef.current) {
-      debugLog('Skipping duplicate mount effect (StrictMode)');
-      return;
-    }
+    if (mountedRef.current) return;
     mountedRef.current = true;
 
     debugLog(`Component mounted (instance: ${instanceIdRef.current})`);
@@ -308,56 +416,76 @@ const AdPublisher = () => {
     setCampaignName(`CI Campaign - ${dateStr}`);
     setAdsetName(`CI Ad Set - ${dateStr}`);
 
-    // Load metadata asynchronously to prevent blocking the main thread
     const loadMetadata = async () => {
-      debugLog('Loading metadata asynchronously...');
-
-      // TEMPORARY: Skip localStorage for debugging render issues
       if (SKIP_LOCALSTORAGE) {
-        debugLog('SKIP_LOCALSTORAGE is enabled - not loading any ads');
-        if (!isCancelled) {
-          setAdMetadata([]);
-          setIsLoading(false);
-        }
+        if (!isCancelled) { setAdMetadata([]); setIsLoading(false); }
         return;
       }
 
       try {
         const metadata = await extractMetadataAsync();
         if (!isCancelled) {
-          // Strictly limit metadata to prevent overwhelming renders
-          const limitedMetadata = metadata.slice(0, MAX_TOTAL_ADS);
-          debugLog(`Loaded ${metadata.length} total ads, limiting to ${limitedMetadata.length}`);
-          setAdMetadata(limitedMetadata);
+          setAdMetadata(metadata.slice(0, MAX_TOTAL_ADS));
         }
       } catch (err) {
         console.error('[AdPublisher] Load error:', err);
       }
-      if (!isCancelled) {
-        setIsLoading(false);
-      }
+      if (!isCancelled) setIsLoading(false);
     };
 
-    // Small delay to let the initial render complete
     const timeoutId = setTimeout(loadMetadata, 100);
 
     return () => {
-      debugLog(`Component unmounting (instance: ${instanceIdRef.current})`);
       isCancelled = true;
       clearTimeout(timeoutId);
     };
   }, []);
 
-  // Selection handlers - optimized to prevent excessive re-renders
+  // Debounced targeting search
+  useEffect(() => {
+    if (!targetingSearchQuery.trim()) {
+      setTargetingSearchResults([]);
+      return;
+    }
+
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+    searchTimerRef.current = setTimeout(async () => {
+      setIsSearchingTargeting(true);
+      try {
+        const results = await searchTargetingSuggestions(targetingSearchQuery);
+        // Filter out already-selected items
+        const selectedIds = new Set(detailedTargeting.map(t => t.id));
+        setTargetingSearchResults(results.filter(r => !selectedIds.has(r.id)));
+      } catch {
+        setTargetingSearchResults([]);
+      } finally {
+        setIsSearchingTargeting(false);
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [targetingSearchQuery, detailedTargeting]);
+
+  // Close targeting dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (targetingDropdownRef.current && !targetingDropdownRef.current.contains(e.target as Node)) {
+        setTargetingSearchResults([]);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Selection handlers
   const toggleSelection = useCallback((id: string) => {
-    // Prevent rapid double-clicks from causing issues
     setSelectedIds(prev => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }, []);
@@ -373,6 +501,154 @@ const AdPublisher = () => {
   const selectedMetadata = useMemo(() => {
     return adMetadata.filter(a => selectedIds.has(a.id));
   }, [adMetadata, selectedIds]);
+
+  // Country tag handlers
+  const addCountry = useCallback((code: string) => {
+    const upper = code.toUpperCase().trim();
+    if (upper.length === 2 && !targetCountries.includes(upper)) {
+      setTargetCountries(prev => [...prev, upper]);
+    }
+    setCountryInput('');
+  }, [targetCountries]);
+
+  const removeCountry = useCallback((code: string) => {
+    setTargetCountries(prev => prev.filter(c => c !== code));
+  }, []);
+
+  // Targeting handlers
+  const addTargetingItem = useCallback((item: DetailedTargetingItem) => {
+    setDetailedTargeting(prev => [...prev, item]);
+    setTargetingSearchQuery('');
+    setTargetingSearchResults([]);
+  }, []);
+
+  const removeTargetingItem = useCallback((id: string) => {
+    setDetailedTargeting(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  // Audience handlers
+  const loadAvailableAudiences = useCallback(async () => {
+    setIsLoadingAudiences(true);
+    try {
+      const audiences = await fetchCustomAudiences();
+      setAvailableAudiences(audiences);
+    } catch {
+      setAvailableAudiences([]);
+    } finally {
+      setIsLoadingAudiences(false);
+    }
+  }, []);
+
+  const addCustomAudience = useCallback(() => {
+    const audience = availableAudiences.find(a => a.id === selectedAudienceId);
+    if (audience && !customAudiences.some(a => a.id === audience.id)) {
+      setCustomAudiences(prev => [...prev, audience]);
+    }
+    setSelectedAudienceId('');
+  }, [selectedAudienceId, availableAudiences, customAudiences]);
+
+  const addExcludedAudience = useCallback(() => {
+    const audience = availableAudiences.find(a => a.id === selectedExcludeAudienceId);
+    if (audience && !excludedAudiences.some(a => a.id === audience.id)) {
+      setExcludedAudiences(prev => [...prev, audience]);
+    }
+    setSelectedExcludeAudienceId('');
+  }, [selectedExcludeAudienceId, availableAudiences, excludedAudiences]);
+
+  // Placement toggle helpers
+  const togglePlatform = useCallback((platform: PublisherPlatform) => {
+    setPublisherPlatforms(prev =>
+      prev.includes(platform) ? prev.filter(p => p !== platform) : [...prev, platform]
+    );
+  }, []);
+
+  const toggleFbPosition = useCallback((pos: FacebookPosition) => {
+    setFacebookPositions(prev =>
+      prev.includes(pos) ? prev.filter(p => p !== pos) : [...prev, pos]
+    );
+  }, []);
+
+  const toggleIgPosition = useCallback((pos: InstagramPosition) => {
+    setInstagramPositions(prev =>
+      prev.includes(pos) ? prev.filter(p => p !== pos) : [...prev, pos]
+    );
+  }, []);
+
+  // Preset handlers
+  const savePreset = useCallback(() => {
+    if (!presetName.trim()) return;
+
+    const newPreset: PublishPreset = {
+      id: Date.now().toString(),
+      name: presetName.trim(),
+      createdAt: new Date().toISOString(),
+      config: {
+        campaignObjective,
+        budgetMode,
+        dailyBudget,
+        conversionEvent: campaignObjective === 'OUTCOME_SALES' ? conversionEvent : undefined,
+        pixelId: campaignObjective === 'OUTCOME_SALES' ? pixelId : undefined,
+        targeting: {
+          geoLocations: { countries: targetCountries },
+          ageMin,
+          ageMax,
+          genders,
+          flexibleSpec: detailedTargeting.length > 0 ? [detailedTargeting] : undefined,
+          customAudiences: customAudiences.length > 0 ? customAudiences : undefined,
+          excludedCustomAudiences: excludedAudiences.length > 0 ? excludedAudiences : undefined,
+        },
+        placements: {
+          automatic: placementAutomatic,
+          publisherPlatforms: !placementAutomatic ? publisherPlatforms : undefined,
+          facebookPositions: !placementAutomatic ? facebookPositions : undefined,
+          instagramPositions: !placementAutomatic ? instagramPositions : undefined,
+        },
+        landingPageUrl,
+      },
+    };
+
+    const updated = [...presets, newPreset];
+    setPresets(updated);
+    localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(updated));
+    setSelectedPresetId(newPreset.id);
+    setPresetName('');
+    setShowSavePreset(false);
+  }, [presetName, campaignObjective, budgetMode, dailyBudget, conversionEvent, pixelId,
+      targetCountries, ageMin, ageMax, genders, detailedTargeting, customAudiences,
+      excludedAudiences, placementAutomatic, publisherPlatforms, facebookPositions,
+      instagramPositions, landingPageUrl, presets]);
+
+  const loadPreset = useCallback((presetId: string) => {
+    const preset = presets.find(p => p.id === presetId);
+    if (!preset) return;
+
+    const c = preset.config;
+    setCampaignObjective(c.campaignObjective);
+    setBudgetMode(c.budgetMode);
+    setDailyBudget(c.dailyBudget);
+    if (c.conversionEvent) setConversionEvent(c.conversionEvent);
+    if (c.pixelId) setPixelId(c.pixelId);
+    setTargetCountries(c.targeting.geoLocations.countries);
+    setAgeMin(c.targeting.ageMin);
+    setAgeMax(c.targeting.ageMax);
+    setGenders(c.targeting.genders);
+    setDetailedTargeting(c.targeting.flexibleSpec?.[0] || []);
+    setCustomAudiences(c.targeting.customAudiences || []);
+    setExcludedAudiences(c.targeting.excludedCustomAudiences || []);
+    setPlacementAutomatic(c.placements.automatic);
+    if (c.placements.publisherPlatforms) setPublisherPlatforms(c.placements.publisherPlatforms);
+    if (c.placements.facebookPositions) setFacebookPositions(c.placements.facebookPositions);
+    if (c.placements.instagramPositions) setInstagramPositions(c.placements.instagramPositions);
+    setLandingPageUrl(c.landingPageUrl);
+    setSelectedPresetId(presetId);
+  }, [presets]);
+
+  const deletePreset = useCallback((presetId: string) => {
+    const updated = presets.filter(p => p.id !== presetId);
+    setPresets(updated);
+    localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(updated));
+    if (selectedPresetId === presetId) setSelectedPresetId('');
+  }, [presets, selectedPresetId]);
 
   // API calls
   const loadCampaigns = async () => {
@@ -421,7 +697,12 @@ const AdPublisher = () => {
     if (step === 'destination' && publishMode !== 'new_campaign') {
       loadCampaigns();
     }
+    if (step === 'configure' && availableAudiences.length === 0) {
+      loadAvailableAudiences();
+    }
     setCurrentStep(step);
+    // Scroll to top of page on step change
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Validation
@@ -429,8 +710,35 @@ const AdPublisher = () => {
   const canProceedToConfigure = publishMode === 'new_campaign' ||
     (publishMode === 'new_adset' && !!selectedCampaignId) ||
     (publishMode === 'existing_adset' && !!selectedCampaignId && !!selectedAdSetId);
-  const canProceedToReview = !!landingPageUrl &&
-    (publishMode === 'existing_adset' || (!!campaignName && !!adsetName && dailyBudget > 0));
+
+  const canProceedToReview = useMemo(() => {
+    if (!landingPageUrl) return false;
+    if (publishMode === 'existing_adset') return true;
+    if (!campaignName || !adsetName || dailyBudget <= 0) return false;
+    if (campaignObjective === 'OUTCOME_SALES' && !pixelId) return false;
+    if (targetCountries.length === 0) return false;
+    if (!placementAutomatic && publisherPlatforms.length === 0) return false;
+    return true;
+  }, [landingPageUrl, publishMode, campaignName, adsetName, dailyBudget,
+      campaignObjective, pixelId, targetCountries, placementAutomatic, publisherPlatforms]);
+
+  // Build targeting and placements for review/publish
+  const buildTargeting = useCallback((): FullTargetingSpec => ({
+    geoLocations: { countries: targetCountries },
+    ageMin,
+    ageMax,
+    genders,
+    flexibleSpec: detailedTargeting.length > 0 ? [detailedTargeting] : undefined,
+    customAudiences: customAudiences.length > 0 ? customAudiences : undefined,
+    excludedCustomAudiences: excludedAudiences.length > 0 ? excludedAudiences : undefined,
+  }), [targetCountries, ageMin, ageMax, genders, detailedTargeting, customAudiences, excludedAudiences]);
+
+  const buildPlacements = useCallback((): PlacementConfig => ({
+    automatic: placementAutomatic,
+    publisherPlatforms: !placementAutomatic ? publisherPlatforms : undefined,
+    facebookPositions: !placementAutomatic ? facebookPositions : undefined,
+    instagramPositions: !placementAutomatic ? instagramPositions : undefined,
+  }), [placementAutomatic, publisherPlatforms, facebookPositions, instagramPositions]);
 
   // Handle publish
   const handlePublish = async () => {
@@ -456,9 +764,14 @@ const AdPublisher = () => {
         settings: {
           campaignName: publishMode === 'new_campaign' ? campaignName : undefined,
           campaignObjective: publishMode === 'new_campaign' ? campaignObjective : undefined,
+          budgetMode: publishMode !== 'existing_adset' ? budgetMode : undefined,
           adsetName: publishMode !== 'existing_adset' ? adsetName : undefined,
           dailyBudget: publishMode !== 'existing_adset' ? dailyBudget : undefined,
           landingPageUrl,
+          conversionEvent: campaignObjective === 'OUTCOME_SALES' ? conversionEvent : undefined,
+          pixelId: campaignObjective === 'OUTCOME_SALES' ? pixelId : undefined,
+          targeting: publishMode !== 'existing_adset' ? buildTargeting() : undefined,
+          placements: publishMode !== 'existing_adset' ? buildPlacements() : undefined,
         },
         existingCampaignId: publishMode !== 'new_campaign' ? selectedCampaignId : undefined,
         existingAdSetId: publishMode === 'existing_adset' ? selectedAdSetId : undefined,
@@ -476,7 +789,12 @@ const AdPublisher = () => {
     }
   };
 
-  // Loading state with better messaging
+  // Step ordering for completed state
+  const STEP_ORDER: PublishStep[] = ['select', 'destination', 'configure', 'review'];
+  const currentStepIndex = STEP_ORDER.indexOf(currentStep);
+  const isStepCompleted = (step: PublishStep) => STEP_ORDER.indexOf(step) < currentStepIndex;
+
+  // Loading state
   if (isLoading) {
     return (
       <div className="page ad-publisher-page">
@@ -493,7 +811,9 @@ const AdPublisher = () => {
     );
   }
 
-  // Main render - simplified structure with unique key for debugging
+  // Targeting summary for review
+  const targetingSummary = `${targetCountries.join(', ')} | Ages ${ageMin}-${ageMax} | ${genders.includes(0) ? 'All Genders' : genders.map(g => g === 1 ? 'Male' : 'Female').join(', ')}`;
+
   return (
     <div className="page ad-publisher-page" data-instance={instanceIdRef.current}>
       <div className="page-header">
@@ -515,25 +835,20 @@ const AdPublisher = () => {
 
       {/* Step Indicator */}
       <div className="publisher-steps">
-        <div className={`publisher-step ${currentStep === 'select' ? 'active' : ''}`}>
-          <span className="publisher-step-num">1</span>
-          <span className="publisher-step-label">Select</span>
-        </div>
-        <div className="publisher-step-connector" />
-        <div className={`publisher-step ${currentStep === 'destination' ? 'active' : ''}`}>
-          <span className="publisher-step-num">2</span>
-          <span className="publisher-step-label">Destination</span>
-        </div>
-        <div className="publisher-step-connector" />
-        <div className={`publisher-step ${currentStep === 'configure' ? 'active' : ''}`}>
-          <span className="publisher-step-num">3</span>
-          <span className="publisher-step-label">Configure</span>
-        </div>
-        <div className="publisher-step-connector" />
-        <div className={`publisher-step ${currentStep === 'review' ? 'active' : ''}`}>
-          <span className="publisher-step-num">4</span>
-          <span className="publisher-step-label">Publish</span>
-        </div>
+        {STEP_ORDER.map((step, i) => {
+          const labels = ['Select', 'Destination', 'Configure', 'Review'];
+          const isActive = currentStep === step;
+          const isDone = isStepCompleted(step);
+          return (
+            <span key={step} className="publisher-step-group">
+              {i > 0 && <div className={`publisher-step-connector ${isDone ? 'completed' : ''}`} />}
+              <div className={`publisher-step ${isActive ? 'active' : ''} ${isDone ? 'completed' : ''}`}>
+                <span className="publisher-step-num">{isDone ? '✓' : i + 1}</span>
+                <span className="publisher-step-label">{labels[i]}</span>
+              </div>
+            </span>
+          );
+        })}
       </div>
 
       {error && (
@@ -579,7 +894,6 @@ const AdPublisher = () => {
                       key={item.id}
                       className={`ad-list-item ${isSelected ? 'selected' : ''}`}
                       onClick={(e) => {
-                        // Ignore if clicking on the checkbox itself (checkbox handles its own click)
                         if ((e.target as HTMLElement).tagName === 'INPUT') return;
                         toggleSelection(item.id);
                       }}
@@ -708,65 +1022,565 @@ const AdPublisher = () => {
             <h3 className="panel-title">Step 3: Configure Settings</h3>
           </div>
 
+          {/* Preset Bar */}
+          <div className="preset-bar">
+            <span className="preset-bar-label">Preset:</span>
+            <select
+              value={selectedPresetId}
+              onChange={e => {
+                setSelectedPresetId(e.target.value);
+                if (e.target.value) loadPreset(e.target.value);
+              }}
+            >
+              <option value="">-- None --</option>
+              {presets.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            {selectedPresetId && (
+              <button className="preset-btn preset-btn-delete" onClick={() => deletePreset(selectedPresetId)}>
+                Delete
+              </button>
+            )}
+            {!showSavePreset ? (
+              <button className="preset-btn preset-btn-save" onClick={() => setShowSavePreset(true)}>
+                Save As Preset
+              </button>
+            ) : (
+              <div className="preset-save-inline">
+                <input
+                  type="text"
+                  value={presetName}
+                  onChange={e => setPresetName(e.target.value)}
+                  placeholder="Preset name..."
+                  onKeyDown={e => e.key === 'Enter' && savePreset()}
+                />
+                <button className="preset-btn preset-btn-save" onClick={savePreset}>Save</button>
+                <button className="preset-btn preset-btn-delete" onClick={() => { setShowSavePreset(false); setPresetName(''); }}>
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="config-form">
+
+            {/* CAMPAIGN SETTINGS */}
             {publishMode === 'new_campaign' && (
-              <>
-                <div className="form-group">
-                  <label className="form-label">Campaign Name</label>
-                  <input
-                    type="text"
-                    value={campaignName}
-                    onChange={e => setCampaignName(e.target.value)}
-                    className="form-input"
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Campaign Objective</label>
-                  <select
-                    value={campaignObjective}
-                    onChange={e => setCampaignObjective(e.target.value as CampaignObjective)}
-                    className="form-select"
-                  >
-                    {OBJECTIVE_OPTIONS.map(o => (
-                      <option key={o.id} value={o.id}>{o.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </>
+              <div className="config-section">
+                <button
+                  className={`config-section-header ${expandedSections.has('campaign') ? 'expanded' : ''}`}
+                  onClick={() => toggleSection('campaign')}
+                >
+                  <span className="section-title">Campaign Settings</span>
+                  <span className="section-arrow">▼</span>
+                </button>
+                {expandedSections.has('campaign') && (
+                  <div className="config-section-body">
+                    <div className="form-group">
+                      <label className="form-label">Campaign Name</label>
+                      <input
+                        type="text"
+                        value={campaignName}
+                        onChange={e => setCampaignName(e.target.value)}
+                        className="form-input"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Campaign Objective</label>
+                      <select
+                        value={campaignObjective}
+                        onChange={e => setCampaignObjective(e.target.value as CampaignObjective)}
+                        className="form-select"
+                      >
+                        {OBJECTIVE_OPTIONS.map(o => (
+                          <option key={o.id} value={o.id}>{o.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Budget Optimization</label>
+                      <div className="toggle-group">
+                        <button
+                          className={`toggle-option ${budgetMode === 'CBO' ? 'active' : ''}`}
+                          onClick={() => setBudgetMode('CBO')}
+                        >
+                          CBO (Campaign Budget)
+                        </button>
+                        <button
+                          className={`toggle-option ${budgetMode === 'ABO' ? 'active' : ''}`}
+                          onClick={() => setBudgetMode('ABO')}
+                        >
+                          ABO (Ad Set Budget)
+                        </button>
+                      </div>
+                      <span className="form-sublabel">
+                        {budgetMode === 'CBO'
+                          ? 'Meta distributes budget across ad sets automatically'
+                          : 'Each ad set manages its own budget independently'}
+                      </span>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Daily Budget ($)</label>
+                      <input
+                        type="number"
+                        value={dailyBudget}
+                        onChange={e => setDailyBudget(Number(e.target.value))}
+                        className="form-input"
+                        min={1}
+                      />
+                      <span className="form-sublabel">
+                        Budget applies at {budgetMode === 'CBO' ? 'campaign' : 'ad set'} level
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
+            {/* CONVERSION TRACKING (only for OUTCOME_SALES) */}
+            {publishMode !== 'existing_adset' && campaignObjective === 'OUTCOME_SALES' && (
+              <div className="config-section">
+                <button
+                  className={`config-section-header ${expandedSections.has('conversion') ? 'expanded' : ''}`}
+                  onClick={() => toggleSection('conversion')}
+                >
+                  <span className="section-title">Conversion Tracking</span>
+                  <span className="section-arrow">▼</span>
+                </button>
+                {expandedSections.has('conversion') && (
+                  <div className="config-section-body">
+                    <div className="form-group">
+                      <label className="form-label">Meta Pixel ID</label>
+                      <input
+                        type="text"
+                        value={pixelId}
+                        onChange={e => setPixelId(e.target.value)}
+                        className="form-input"
+                        placeholder="Enter your Pixel ID"
+                      />
+                      <span className="form-sublabel">
+                        Required for Sales objective. Find in Events Manager.
+                      </span>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Conversion Event</label>
+                      <select
+                        value={conversionEvent}
+                        onChange={e => setConversionEvent(e.target.value as ConversionEvent)}
+                        className="form-select"
+                      >
+                        {CONVERSION_EVENT_OPTIONS.map(o => (
+                          <option key={o.id} value={o.id}>{o.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TARGETING */}
             {publishMode !== 'existing_adset' && (
-              <>
-                <div className="form-group">
-                  <label className="form-label">Ad Set Name</label>
-                  <input
-                    type="text"
-                    value={adsetName}
-                    onChange={e => setAdsetName(e.target.value)}
-                    className="form-input"
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Daily Budget ($)</label>
-                  <input
-                    type="number"
-                    value={dailyBudget}
-                    onChange={e => setDailyBudget(Number(e.target.value))}
-                    className="form-input"
-                    min={1}
-                  />
-                </div>
-              </>
+              <div className="config-section">
+                <button
+                  className={`config-section-header ${expandedSections.has('targeting') ? 'expanded' : ''}`}
+                  onClick={() => toggleSection('targeting')}
+                >
+                  <span className="section-title">Targeting</span>
+                  <span className="section-arrow">▼</span>
+                </button>
+                {expandedSections.has('targeting') && (
+                  <div className="config-section-body">
+                    {/* Countries */}
+                    <div className="form-group">
+                      <label className="form-label">Countries</label>
+                      <div className="tag-input-container">
+                        {targetCountries.map(code => (
+                          <span key={code} className="tag-item">
+                            {code}
+                            <span className="tag-remove" onClick={() => removeCountry(code)}>×</span>
+                          </span>
+                        ))}
+                        <input
+                          type="text"
+                          className="tag-input"
+                          value={countryInput}
+                          onChange={e => setCountryInput(e.target.value.toUpperCase())}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' || e.key === ',') {
+                              e.preventDefault();
+                              addCountry(countryInput);
+                            }
+                            if (e.key === 'Backspace' && !countryInput && targetCountries.length > 0) {
+                              removeCountry(targetCountries[targetCountries.length - 1]);
+                            }
+                          }}
+                          placeholder="Type country code (e.g. US)..."
+                          maxLength={2}
+                        />
+                      </div>
+                      <span className="form-sublabel">
+                        Common: {COMMON_COUNTRIES.filter(c => !targetCountries.includes(c)).slice(0, 8).map(c => (
+                          <span
+                            key={c}
+                            className="country-quick-add"
+                            onClick={() => addCountry(c)}
+                          >
+                            {c}
+                          </span>
+                        ))}
+                      </span>
+                    </div>
+
+                    {/* Age Range */}
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label className="form-label">Min Age</label>
+                        <input
+                          type="number"
+                          value={ageMin}
+                          onChange={e => setAgeMin(Math.max(18, Math.min(65, Number(e.target.value))))}
+                          className="form-input"
+                          min={18}
+                          max={65}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Max Age</label>
+                        <input
+                          type="number"
+                          value={ageMax}
+                          onChange={e => setAgeMax(Math.max(18, Math.min(65, Number(e.target.value))))}
+                          className="form-input"
+                          min={18}
+                          max={65}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Gender */}
+                    <div className="form-group">
+                      <label className="form-label">Gender</label>
+                      <div className="gender-radio-group">
+                        <label className="gender-radio-item">
+                          <input
+                            type="radio"
+                            name="gender"
+                            checked={genders.includes(0)}
+                            onChange={() => setGenders([0])}
+                          />
+                          All
+                        </label>
+                        <label className="gender-radio-item">
+                          <input
+                            type="radio"
+                            name="gender"
+                            checked={genders.length === 1 && genders[0] === 1}
+                            onChange={() => setGenders([1])}
+                          />
+                          Male
+                        </label>
+                        <label className="gender-radio-item">
+                          <input
+                            type="radio"
+                            name="gender"
+                            checked={genders.length === 1 && genders[0] === 2}
+                            onChange={() => setGenders([2])}
+                          />
+                          Female
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Detailed Targeting Suggestions */}
+                    <div className="form-group">
+                      <label className="form-label">Detailed Targeting (Interests & Behaviors)</label>
+                      <div className="targeting-search-container" ref={targetingDropdownRef}>
+                        <input
+                          type="text"
+                          className="targeting-search-input"
+                          value={targetingSearchQuery}
+                          onChange={e => setTargetingSearchQuery(e.target.value)}
+                          placeholder="Search interests, behaviors, demographics..."
+                        />
+                        {(targetingSearchResults.length > 0 || isSearchingTargeting) && targetingSearchQuery && (
+                          <div className="targeting-search-dropdown">
+                            {isSearchingTargeting ? (
+                              <div className="targeting-search-loading">Searching...</div>
+                            ) : targetingSearchResults.length === 0 ? (
+                              <div className="targeting-search-empty">No results found</div>
+                            ) : (
+                              targetingSearchResults.slice(0, 10).map(item => (
+                                <button
+                                  key={item.id}
+                                  className="targeting-search-item"
+                                  onClick={() => addTargetingItem(item)}
+                                >
+                                  <div>
+                                    <span className="targeting-item-name">{item.name}</span>
+                                    <span className="targeting-item-type"> · {item.type}</span>
+                                  </div>
+                                  {item.audienceSize && (
+                                    <span className="targeting-item-size">{formatAudienceSize(item.audienceSize)}</span>
+                                  )}
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {detailedTargeting.length > 0 && (
+                        <div className="targeting-selected-tags">
+                          {detailedTargeting.map(item => (
+                            <span key={item.id} className="tag-item">
+                              {item.name}
+                              <span className="tag-remove" onClick={() => removeTargetingItem(item.id)}>×</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Custom Audiences */}
+                    <div className="form-group">
+                      <label className="form-label">Custom Audiences</label>
+                      <div className="audience-select-container">
+                        <div className="audience-select-row">
+                          <select
+                            value={selectedAudienceId}
+                            onChange={e => setSelectedAudienceId(e.target.value)}
+                            disabled={isLoadingAudiences}
+                          >
+                            <option value="">
+                              {isLoadingAudiences ? 'Loading audiences...' : '-- Select audience --'}
+                            </option>
+                            {availableAudiences
+                              .filter(a => !customAudiences.some(ca => ca.id === a.id))
+                              .map(a => (
+                                <option key={a.id} value={a.id}>
+                                  {a.name} {a.subtype ? `(${a.subtype})` : ''} {a.approximateCount ? `· ${formatAudienceSize(a.approximateCount)}` : ''}
+                                </option>
+                              ))}
+                          </select>
+                          <button
+                            className="audience-add-btn"
+                            onClick={addCustomAudience}
+                            disabled={!selectedAudienceId}
+                          >
+                            Add
+                          </button>
+                        </div>
+                        {customAudiences.length > 0 && (
+                          <div className="targeting-selected-tags">
+                            {customAudiences.map(a => (
+                              <span key={a.id} className="tag-item">
+                                {a.name}
+                                <span className="tag-remove" onClick={() => setCustomAudiences(prev => prev.filter(x => x.id !== a.id))}>×</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Excluded Audiences */}
+                    <div className="form-group">
+                      <label className="form-label">Excluded Audiences</label>
+                      <div className="audience-select-container">
+                        <div className="audience-select-row">
+                          <select
+                            value={selectedExcludeAudienceId}
+                            onChange={e => setSelectedExcludeAudienceId(e.target.value)}
+                            disabled={isLoadingAudiences}
+                          >
+                            <option value="">
+                              {isLoadingAudiences ? 'Loading...' : '-- Select audience to exclude --'}
+                            </option>
+                            {availableAudiences
+                              .filter(a => !excludedAudiences.some(ea => ea.id === a.id))
+                              .map(a => (
+                                <option key={a.id} value={a.id}>
+                                  {a.name} {a.subtype ? `(${a.subtype})` : ''}
+                                </option>
+                              ))}
+                          </select>
+                          <button
+                            className="audience-add-btn"
+                            onClick={addExcludedAudience}
+                            disabled={!selectedExcludeAudienceId}
+                          >
+                            Exclude
+                          </button>
+                        </div>
+                        {excludedAudiences.length > 0 && (
+                          <div className="targeting-selected-tags">
+                            {excludedAudiences.map(a => (
+                              <span key={a.id} className="tag-item">
+                                {a.name}
+                                <span className="tag-remove" onClick={() => setExcludedAudiences(prev => prev.filter(x => x.id !== a.id))}>×</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
-            <div className="form-group">
-              <label className="form-label">Landing Page URL</label>
-              <input
-                type="url"
-                value={landingPageUrl}
-                onChange={e => setLandingPageUrl(e.target.value)}
-                className="form-input"
-              />
+            {/* PLACEMENTS */}
+            {publishMode !== 'existing_adset' && (
+              <div className="config-section">
+                <button
+                  className={`config-section-header ${expandedSections.has('placements') ? 'expanded' : ''}`}
+                  onClick={() => toggleSection('placements')}
+                >
+                  <span className="section-title">Placements</span>
+                  <span className="section-arrow">▼</span>
+                </button>
+                {expandedSections.has('placements') && (
+                  <div className="config-section-body">
+                    <div className="form-group">
+                      <div className="toggle-group">
+                        <button
+                          className={`toggle-option ${placementAutomatic ? 'active' : ''}`}
+                          onClick={() => setPlacementAutomatic(true)}
+                        >
+                          Advantage+ (Automatic)
+                        </button>
+                        <button
+                          className={`toggle-option ${!placementAutomatic ? 'active' : ''}`}
+                          onClick={() => setPlacementAutomatic(false)}
+                        >
+                          Manual Placements
+                        </button>
+                      </div>
+                      <span className="form-sublabel">
+                        {placementAutomatic
+                          ? 'Meta optimizes placement across all platforms automatically'
+                          : 'Choose specific platforms and positions'}
+                      </span>
+                    </div>
+
+                    {!placementAutomatic && (
+                      <>
+                        <div className="form-group">
+                          <label className="form-label">Platforms</label>
+                          <div className="checkbox-grid">
+                            {PUBLISHER_PLATFORM_OPTIONS.map(p => (
+                              <label key={p.id} className={`checkbox-item ${publisherPlatforms.includes(p.id) ? 'checked' : ''}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={publisherPlatforms.includes(p.id)}
+                                  onChange={() => togglePlatform(p.id)}
+                                />
+                                {p.name}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+
+                        {publisherPlatforms.includes('facebook') && (
+                          <div className="form-group">
+                            <label className="form-label">Facebook Positions</label>
+                            <div className="checkbox-grid">
+                              {FACEBOOK_POSITION_OPTIONS.map(p => (
+                                <label key={p.id} className={`checkbox-item ${facebookPositions.includes(p.id) ? 'checked' : ''}`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={facebookPositions.includes(p.id)}
+                                    onChange={() => toggleFbPosition(p.id)}
+                                  />
+                                  {p.name}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {publisherPlatforms.includes('instagram') && (
+                          <div className="form-group">
+                            <label className="form-label">Instagram Positions</label>
+                            <div className="checkbox-grid">
+                              {INSTAGRAM_POSITION_OPTIONS.map(p => (
+                                <label key={p.id} className={`checkbox-item ${instagramPositions.includes(p.id) ? 'checked' : ''}`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={instagramPositions.includes(p.id)}
+                                    onChange={() => toggleIgPosition(p.id)}
+                                  />
+                                  {p.name}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* AD SETUP */}
+            <div className="config-section">
+              <button
+                className={`config-section-header ${expandedSections.has('ad-setup') ? 'expanded' : ''}`}
+                onClick={() => toggleSection('ad-setup')}
+              >
+                <span className="section-title">Ad Setup</span>
+                <span className="section-arrow">▼</span>
+              </button>
+              {expandedSections.has('ad-setup') && (
+                <div className="config-section-body">
+                  {publishMode !== 'existing_adset' && publishMode === 'new_adset' && (
+                    <>
+                      <div className="form-group">
+                        <label className="form-label">Ad Set Name</label>
+                        <input
+                          type="text"
+                          value={adsetName}
+                          onChange={e => setAdsetName(e.target.value)}
+                          className="form-input"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Daily Budget ($)</label>
+                        <input
+                          type="number"
+                          value={dailyBudget}
+                          onChange={e => setDailyBudget(Number(e.target.value))}
+                          className="form-input"
+                          min={1}
+                        />
+                      </div>
+                    </>
+                  )}
+                  {publishMode === 'new_campaign' && (
+                    <div className="form-group">
+                      <label className="form-label">Ad Set Name</label>
+                      <input
+                        type="text"
+                        value={adsetName}
+                        onChange={e => setAdsetName(e.target.value)}
+                        className="form-input"
+                      />
+                    </div>
+                  )}
+                  <div className="form-group">
+                    <label className="form-label">Landing Page URL</label>
+                    <input
+                      type="url"
+                      value={landingPageUrl}
+                      onChange={e => setLandingPageUrl(e.target.value)}
+                      className="form-input"
+                      placeholder="https://example.com/offer"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -843,10 +1657,54 @@ const AdPublisher = () => {
                     </span>
                   </div>
                   {publishMode !== 'existing_adset' && (
-                    <div className="summary-item">
-                      <span className="summary-label">Daily Budget</span>
-                      <span className="summary-value">${dailyBudget}</span>
-                    </div>
+                    <>
+                      <div className="summary-item">
+                        <span className="summary-label">Objective</span>
+                        <span className="summary-value">
+                          {OBJECTIVE_OPTIONS.find(o => o.id === campaignObjective)?.name}
+                        </span>
+                      </div>
+                      <div className="summary-item">
+                        <span className="summary-label">Budget</span>
+                        <span className="summary-value">${dailyBudget}/day ({budgetMode})</span>
+                      </div>
+                      {campaignObjective === 'OUTCOME_SALES' && (
+                        <div className="summary-item">
+                          <span className="summary-label">Conversion Event</span>
+                          <span className="summary-value">
+                            {CONVERSION_EVENT_OPTIONS.find(o => o.id === conversionEvent)?.name}
+                          </span>
+                        </div>
+                      )}
+                      <div className="summary-item full-width">
+                        <span className="summary-label">Targeting</span>
+                        <span className="summary-value">{targetingSummary}</span>
+                      </div>
+                      {detailedTargeting.length > 0 && (
+                        <div className="summary-item full-width">
+                          <span className="summary-label">Interests & Behaviors</span>
+                          <span className="summary-value">{detailedTargeting.map(t => t.name).join(', ')}</span>
+                        </div>
+                      )}
+                      {customAudiences.length > 0 && (
+                        <div className="summary-item full-width">
+                          <span className="summary-label">Custom Audiences</span>
+                          <span className="summary-value">{customAudiences.map(a => a.name).join(', ')}</span>
+                        </div>
+                      )}
+                      {excludedAudiences.length > 0 && (
+                        <div className="summary-item full-width">
+                          <span className="summary-label">Excluded Audiences</span>
+                          <span className="summary-value">{excludedAudiences.map(a => a.name).join(', ')}</span>
+                        </div>
+                      )}
+                      <div className="summary-item">
+                        <span className="summary-label">Placements</span>
+                        <span className="summary-value">
+                          {placementAutomatic ? 'Advantage+ (Automatic)' : publisherPlatforms.join(', ')}
+                        </span>
+                      </div>
+                    </>
                   )}
                   <div className="summary-item full-width">
                     <span className="summary-label">Landing Page</span>
