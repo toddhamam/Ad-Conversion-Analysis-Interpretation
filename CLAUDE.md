@@ -603,6 +603,10 @@ Always run `npm run dev` to start the development server before testing URLs. Th
 - Graph API version: v21.0
 - Creative fetching includes thumbnail URL extraction
 - Campaign metrics include ROAS, CPA, CVR, CTR
+- **Ad creation safety**: Always create ads with `status: 'PAUSED'` to prevent accidental live publication
+- **Pre-publish validation**: Run `validatePageAccess` before publishing to catch permission/config issues early
+- **Required scopes for publishing**: `ads_management`, `pages_read_engagement`, `pages_manage_ads`
+- **Page ID required**: `VITE_META_PAGE_ID` must be set for ad creatives using `object_story_spec`
 
 ---
 

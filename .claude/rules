@@ -179,6 +179,12 @@
 - **Assuming folder structure**: Do not assume a standard folder structure within a cloned Git repository—always verify the actual project root and subfolder structure by inspecting the file system
 - **Overlooking port numbers**: Consistently check and update port numbers across ALL relevant documentation and configuration files (e.g., `5173` vs. `5175`)
 
+### Meta API Publishing Mistakes
+- **Assuming token validity from partial success**: A token may work for reading ads/analytics but lack scopes for publishing (`pages_manage_ads`, `pages_read_engagement`). Always re-validate permissions before publish operations
+- **Missing Page ID**: `VITE_META_PAGE_ID` is required for ad publishing via `object_story_spec`. Omitting it causes cryptic API errors
+- **Not creating ads as PAUSED**: Always create ads with `status: 'PAUSED'` to prevent accidental live publication
+- **Skipping pre-validation**: Always run `validatePageAccess` (Step 0) before the full publish flow to catch permission and configuration issues early with specific diagnostics
+
 ### Stripe Integration Mistakes
 - **Don't call `stripe.redirectToCheckout` without a session**: Always create a Checkout Session via backend API first, then pass the `sessionId` to `redirectToCheckout`
 - **Don't expose secret keys**: Stripe secret key (`sk_*`) must only be used in backend serverless functions, never in frontend code
@@ -190,6 +196,8 @@
 - Always check `git status` and `git diff` before committing
 - **Build verification**: Always run `npm run build` before committing to catch TypeScript errors (unused variables, type mismatches) that would fail Vercel deployment
 - **Leverage Git history**: When a fix was made on another branch, consult Git history (commit messages, diffs) to understand what was changed and identify any incomplete parts
+- **Branch/deployment alignment**: Vercel deploys from `main`. Ensure fixes are merged to the correct branch; pushing to a feature branch that isn't deployed won't fix production issues
+- **Symlinked `.env`**: The `.env` file may be a symlink—changes may need to target the symlink's actual file, not the symlink itself
 
 ## Documentation Consistency
 - **Update all related files**: When fixing issues in setup scripts or documentation, ensure ALL related files are updated consistently (e.g., `SETUP.md`, `APP-README.md`, `UPDATE-YOUR-LOCAL-COPY.md`, `WHAT-YOU-SHOULD-SEE.md`)
@@ -229,6 +237,29 @@
   ```
 - **Dashboard customization**: Store selected metrics and layout order for persistence across sessions
 - **Common keys**: `'dashboard_ad_spend'`, `'dashboard_metrics'`, `'dashboard_layout'`
+
+## Meta API Permissions & Token Management
+
+### Required Scopes by Operation
+| Operation | Required Scopes |
+|-----------|----------------|
+| Read campaigns, ad sets, ads | `ads_read` |
+| Create campaigns, ad sets | `ads_management`, `ads_read` |
+| Create ad creatives (with `object_story_spec`) | `ads_management`, `pages_read_engagement`, `pages_manage_ads` |
+| Publish to a Page | `pages_manage_ads`, `pages_read_engagement` |
+
+### Token Types
+- **System User tokens**: Can have `expires_at: 0` (never expire) but still require specific granular scopes like `pages_manage_ads`
+- **User tokens**: Have expiration dates and require appropriate scopes
+
+### Pre-Publish Validation
+- Always run `validatePageAccess` before attempting to publish ads
+- This checks: token validity, Page ID configuration, and required permissions
+- Provides specific diagnostic messages (e.g., "Set VITE_META_PAGE_ID", "Generate a new token with pages_manage_ads scope")
+
+### Token Caching Pitfall
+- A valid-looking UI may persist with an expired or insufficient token due to client-side caching of previously fetched data
+- The Meta API will reject new write requests even if cached read data still displays correctly
 
 ## API Route Conventions
 - Backend API routes live in `api/[feature_area]/[specific_route].ts`
