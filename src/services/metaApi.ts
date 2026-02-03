@@ -615,7 +615,6 @@ export async function validatePageAccess(pageId?: string): Promise<{ valid: bool
 
     if (pageData.error) {
       const code = pageData.error.code;
-      const subcode = pageData.error.error_subcode;
 
       if (code === 190) {
         return { valid: false, error: pageData.error.message, diagnosis: 'Access token is expired or invalid. Generate a new token.' };
