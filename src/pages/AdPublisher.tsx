@@ -38,6 +38,7 @@ const SKIP_LOCALSTORAGE = false;
 // Storage key for generated ads (shared with AdGenerator)
 const GENERATED_ADS_STORAGE_KEY = 'conversion_intelligence_generated_ads';
 const PRESETS_STORAGE_KEY = 'ci_publish_presets';
+const PIXEL_ID_STORAGE_KEY = 'ci_publish_pixel_id';
 
 // Publishing mode options
 type PublishMode = 'new_campaign' | 'new_adset' | 'existing_adset';
@@ -351,7 +352,10 @@ const AdPublisher = () => {
 
   // Conversion tracking
   const [conversionEvent, setConversionEvent] = useState<ConversionEvent>('PURCHASE');
-  const [pixelId, setPixelId] = useState(import.meta.env.VITE_META_PIXEL_ID || '');
+  const [pixelId, setPixelId] = useState(() => {
+    const saved = localStorage.getItem(PIXEL_ID_STORAGE_KEY);
+    return saved || import.meta.env.VITE_META_PIXEL_ID || '';
+  });
 
   // Targeting
   const [targetCountries, setTargetCountries] = useState<string[]>(['US', 'AU', 'GB', 'CA']);
@@ -367,6 +371,7 @@ const AdPublisher = () => {
   const [excludedAudiences, setExcludedAudiences] = useState<AudienceRef[]>([]);
   const [availableAudiences, setAvailableAudiences] = useState<AudienceRef[]>([]);
   const [isLoadingAudiences, setIsLoadingAudiences] = useState(false);
+  const [audiencesLoaded, setAudiencesLoaded] = useState(false);
   const [selectedAudienceId, setSelectedAudienceId] = useState('');
   const [selectedExcludeAudienceId, setSelectedExcludeAudienceId] = useState('');
 
@@ -532,6 +537,7 @@ const AdPublisher = () => {
     try {
       const audiences = await fetchCustomAudiences();
       setAvailableAudiences(audiences);
+      setAudiencesLoaded(true);
     } catch {
       setAvailableAudiences([]);
     } finally {
@@ -697,7 +703,7 @@ const AdPublisher = () => {
     if (step === 'destination' && publishMode !== 'new_campaign') {
       loadCampaigns();
     }
-    if (step === 'configure' && availableAudiences.length === 0) {
+    if (step === 'configure' && !audiencesLoaded) {
       loadAvailableAudiences();
     }
     setCurrentStep(step);
@@ -1155,7 +1161,11 @@ const AdPublisher = () => {
                       <input
                         type="text"
                         value={pixelId}
-                        onChange={e => setPixelId(e.target.value)}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setPixelId(val);
+                          localStorage.setItem(PIXEL_ID_STORAGE_KEY, val);
+                        }}
                         className="form-input"
                         placeholder="Enter your Pixel ID"
                       />
@@ -1248,14 +1258,17 @@ const AdPublisher = () => {
                       </div>
                       <div className="form-group">
                         <label className="form-label">Max Age</label>
-                        <input
-                          type="number"
+                        <select
                           value={ageMax}
-                          onChange={e => setAgeMax(Math.max(18, Math.min(65, Number(e.target.value))))}
-                          className="form-input"
-                          min={18}
-                          max={65}
-                        />
+                          onChange={e => setAgeMax(Number(e.target.value))}
+                          className="form-select"
+                        >
+                          {Array.from({ length: 48 }, (_, i) => i + 18).map(age => (
+                            <option key={age} value={age}>
+                              {age === 65 ? '65+' : age}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
 
@@ -1315,7 +1328,10 @@ const AdPublisher = () => {
                                 <button
                                   key={item.id}
                                   className="targeting-search-item"
-                                  onClick={() => addTargetingItem(item)}
+                                  onMouseDown={e => {
+                                    e.preventDefault();
+                                    addTargetingItem(item);
+                                  }}
                                 >
                                   <div>
                                     <span className="targeting-item-name">{item.name}</span>
@@ -1344,7 +1360,19 @@ const AdPublisher = () => {
 
                     {/* Custom Audiences */}
                     <div className="form-group">
-                      <label className="form-label">Custom Audiences</label>
+                      <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        Custom Audiences
+                        {!isLoadingAudiences && (
+                          <button
+                            type="button"
+                            onClick={() => { setAudiencesLoaded(false); loadAvailableAudiences(); }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '12px', padding: 0 }}
+                            title="Refresh audiences from Meta"
+                          >
+                            ↻ Refresh
+                          </button>
+                        )}
+                      </label>
                       <div className="audience-select-container">
                         <div className="audience-select-row">
                           <select
@@ -1353,7 +1381,7 @@ const AdPublisher = () => {
                             disabled={isLoadingAudiences}
                           >
                             <option value="">
-                              {isLoadingAudiences ? 'Loading audiences...' : '-- Select audience --'}
+                              {isLoadingAudiences ? 'Loading audiences...' : availableAudiences.length === 0 && audiencesLoaded ? 'No audiences found' : '-- Select audience --'}
                             </option>
                             {availableAudiences
                               .filter(a => !customAudiences.some(ca => ca.id === a.id))
