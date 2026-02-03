@@ -86,6 +86,10 @@ public/
 | `src/components/ProtectedRoute.tsx` | Auth guard for protected routes |
 | `src/pages/Login.tsx` | Authentication login page |
 | `src/pages/Register.tsx` | Company registration/signup page |
+| `src/pages/ForgotPassword.tsx` | Password reset request page |
+| `src/pages/ResetPassword.tsx` | Set new password page (from email link) |
+| `src/contexts/AuthContext.tsx` | Supabase Auth context with login, signup, password reset |
+| `src/lib/supabase.ts` | Supabase client singleton |
 | `src/components/UserProfileDropdown.tsx` | User profile dropdown with company branding, sign out, account actions |
 | `src/components/MainLayout.tsx` | App shell with sidebar, header, and responsive navigation |
 | `src/services/stripeApi.ts` | Stripe integration - checkout, portal, subscription management |
@@ -109,6 +113,8 @@ public/
 /               → Sales landing page (Convertra marketing)
 /login          → User authentication
 /signup         → Company registration
+/forgot-password → Password reset request
+/reset-password  → Set new password (from email link)
 ```
 
 ### Protected Routes (auth required)
@@ -130,7 +136,7 @@ public/
 3. **Campaign type detection** - Naming conventions: `[P]`/`Prospecting`, `[R]`/`Retargeting`, `[RT]`/`Retention`
 4. **Image caching** - Top 20 performing images cached by conversion rate
 5. **Public/Protected route separation** - Sales & login are public; app routes require auth
-6. **Stub authentication** - Uses localStorage flag; ready for real auth provider (Clerk, Auth0, etc.)
+6. **Supabase Auth** - Uses Supabase Auth for authentication with localStorage fallback for development
 7. **Frontend/Backend API separation** - Sensitive operations (Stripe, Supabase) handled by backend serverless functions
 8. **Vercel serverless functions** - API routes in `api/` directory using `@vercel/node` (`VercelRequest`, `VercelResponse`)
 9. **React 19 peer dependency handling** - `.npmrc` with `legacy-peer-deps=true` for libraries that haven't updated React peer deps
@@ -193,6 +199,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 ---
 
 ## Supabase Integration
+
+### Authentication
+
+Supabase Auth handles user authentication with these features:
+- Email/password signup and login
+- Password reset flow via email
+- Session management with automatic token refresh
+
+**Auth Context** (`src/contexts/AuthContext.tsx`):
+- `signIn(email, password)` - Login
+- `signUp(email, password, metadata)` - Register with company info
+- `signOut()` - Logout
+- `resetPasswordForEmail(email)` - Send password reset email
+- `updatePassword(newPassword)` - Set new password after reset
+
+**Database Schema** (required tables in Supabase):
+- `organizations` - Company/org records (id, name, slug, plan_tier, setup_mode)
+- `users` - User profiles linked to auth.users (id, auth_id, email, full_name, organization_id, role, status)
+
+**Supabase Dashboard Configuration**:
+1. **Authentication → URL Configuration → Site URL**: Set to production domain
+2. **Authentication → URL Configuration → Redirect URLs**: Include `/reset-password` paths
+3. **Authentication → Providers → Email**: Enable email provider
+
+### Data Persistence
 
 For data persistence, use Supabase with inline client creation in serverless functions:
 
@@ -517,6 +548,8 @@ VITE_META_AD_ACCOUNT_ID=    # Format: act_XXXXXXXXX
 VITE_OPENAI_API_KEY=        # GPT-4o access
 VITE_GEMINI_API_KEY=        # Image generation (optional)
 VITE_STRIPE_PUBLISHABLE_KEY= # Stripe publishable key (pk_live_* or pk_test_*)
+VITE_SUPABASE_URL=          # Supabase project URL (for auth)
+VITE_SUPABASE_ANON_KEY=     # Supabase anon/public key (for auth)
 ```
 
 ### Backend (Vercel serverless functions)
