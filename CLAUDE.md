@@ -489,6 +489,38 @@ const analysis = await analyzeAdCreative(adId, {
 });
 ```
 
+### Non-Blocking localStorage Loading
+```tsx
+// Use requestIdleCallback with setTimeout fallback to avoid blocking the main thread
+const extractMetadataAsync = () => {
+  const run = () => {
+    const stored = localStorage.getItem('large_data_key');
+    if (stored) {
+      // Parse and set state
+    }
+  };
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(run);
+  } else {
+    setTimeout(run, 0);
+  }
+};
+```
+
+### Debounced Search Input
+```tsx
+// Use useRef for debounce timer to avoid excessive API calls
+const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+const handleSearchChange = (query: string) => {
+  setSearchQuery(query);
+  if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+  searchTimerRef.current = setTimeout(() => {
+    fetchSearchResults(query);
+  }, 300);
+};
+```
+
 ---
 
 ## Responsive Breakpoints
@@ -521,6 +553,7 @@ const analysis = await analyzeAdCreative(adId, {
 VITE_META_ACCESS_TOKEN=     # Facebook API token
 VITE_META_AD_ACCOUNT_ID=    # Format: act_XXXXXXXXX
 VITE_META_PAGE_ID=          # Facebook Page ID (required for publishing ads)
+VITE_META_PIXEL_ID=         # Meta Pixel ID (required for conversion tracking with OUTCOME_SALES)
 VITE_OPENAI_API_KEY=        # GPT-4o access
 VITE_GEMINI_API_KEY=        # Image generation (optional)
 VITE_STRIPE_PUBLISHABLE_KEY= # Stripe publishable key (pk_live_* or pk_test_*)
@@ -607,6 +640,33 @@ Always run `npm run dev` to start the development server before testing URLs. Th
 - **Pre-publish validation**: Run `validatePageAccess` before publishing to catch permission/config issues early
 - **Required scopes for publishing**: `ads_management`, `pages_read_engagement`, `pages_manage_ads`
 - **Page ID required**: `VITE_META_PAGE_ID` must be set for ad creatives using `object_story_spec`
+
+### Meta API Ad Publishing Patterns
+
+#### Campaign Objectives & Optimization
+- For `OUTCOME_SALES` objective, include `promoted_object` with `pixel_id` and `custom_event_type` for conversion tracking
+- `optimization_goal` choices: `OFFSITE_CONVERSIONS` (preferred for sales with pixel), `LANDING_PAGE_VIEWS`, or `LINK_CLICKS` (fallback if no pixel)
+- Default campaign objective: **Sales** (`OUTCOME_SALES`)
+
+#### Budget Modes (CBO vs ABO)
+- **CBO (default)**: Budget set at campaign level via `createCampaign`
+- **ABO**: Budget set at ad set level via `createAdSet`; requires `is_adset_budget_sharing_enabled: false`
+
+#### Targeting
+- Interests/behaviors use `flexible_spec` in the targeting object for `createAdSet`
+- Fetch targeting suggestions from Meta API in real-time (not manual ID entry)
+- Fetch custom audiences from the ad account via API instead of requiring manual IDs
+
+#### Image Upload Flow
+1. Convert image URL to base64
+2. Upload via `adimages` endpoint using `FormData`
+3. Receive `image_hash` from response
+4. Use `image_hash` in `object_story_spec` → `link_data` for creative creation
+
+#### Ad Creative Structure
+```
+object_story_spec → link_data: { image_hash, message (body), name (headline), call_to_action, link }
+```
 
 ---
 

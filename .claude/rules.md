@@ -91,6 +91,16 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 };
 ```
 
+## Ad Publisher Preferences
+
+- **Default campaign objective**: Sales (`OUTCOME_SALES`), not Traffic
+- **Default budget mode**: CBO (Campaign Budget Optimization)
+- **Targeting presets**: User wants to save and load targeting configurations (countries, interests, audiences) as reusable presets
+- **Real-time targeting search**: Search Meta's targeting suggestions API live, not manual ID entry
+- **Custom audiences via API**: Fetch custom audiences from the ad account automatically, not manual ID input
+- **Multi-step UX**: Clear step indicators, collapsible sections for complex forms, predictable behavior (e.g., click-outside to close dropdowns)
+- **"Ultra smooth and user friendly"**: The ad publisher flow must feel polished and intuitive
+
 ## AI Feature Preferences
 
 ### User Control over AI Depth
@@ -145,6 +155,10 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 - **Remove visual clutter**: Stray decorative graphics that obscure content should be removed
 - **Readability first**: Visual clarity and readability are paramount
 - **Minimal decorative elements**: Only include decorations that enhance rather than obstruct the UI
+
+### Form Element Consistency
+- Apply `font-family: inherit` to form inputs, selects, textareas, and buttons for consistent typography
+- Use CSS classes instead of inline styles for form styling
 
 ## Application Stability
 
