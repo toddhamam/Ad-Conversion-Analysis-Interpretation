@@ -74,11 +74,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const startDate = (req.query.startDate as string) || thirtyDaysAgo.toISOString();
     const endDate = (req.query.endDate as string) || now.toISOString();
 
-    // Create Supabase client inline
-    const supabase = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    // Create Supabase client inline (with env var check)
+    const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+      ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+      : null;
+
+    if (!supabase) {
+      // Return empty metrics when Supabase is not configured
+      return res.status(200).json({
+        summary: { sessions: 0, purchases: 0, conversionRate: 0, totalRevenue: 0, uniqueCustomers: 0, aovPerCustomer: 0 },
+        stepMetrics: FUNNEL_STEPS.map((step) => ({ step, sessions: 0, purchases: 0, conversionRate: 0, revenue: 0 })),
+        abTests: [],
+      } as DashboardMetrics);
+    }
 
     // Query all events in date range
     const { data: events, error } = await supabase
@@ -89,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (error) {
       console.error('[Funnel Metrics API] Error fetching events:', error);
-      return res.status(500).json({ error: 'Failed to fetch metrics' });
+      return res.status(500).json({ error: `Failed to fetch metrics: ${error.message}` });
     }
 
     // Process events into metrics
