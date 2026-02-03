@@ -640,6 +640,14 @@ Always run `npm run dev` to start the development server before testing URLs. Th
 - **Pre-publish validation**: Run `validatePageAccess` before publishing to catch permission/config issues early
 - **Required scopes for publishing**: `ads_management`, `pages_read_engagement`, `pages_manage_ads`
 - **Page ID required**: `VITE_META_PAGE_ID` must be set for ad creatives using `object_story_spec`
+- **Field deprecations**: Meta deprecates fields without warning. Example: `approximate_count` was replaced by `approximate_count_lower_bound` and `approximate_count_upper_bound` on custom audiences. Always verify current field names against Meta's API docs.
+- **Silent failures**: Meta API often returns `[]` on error instead of throwing, making it hard to distinguish "no results" from "failed call". Always check for error objects in responses and surface them explicitly.
+
+### Meta API Token Management
+- **Short-lived tokens** (Graph API Explorer): Expire in 1-2 hours. Only for quick testing.
+- **Long-lived tokens**: Exchange short-lived tokens for ~60-day tokens via the token exchange endpoint.
+- **System User tokens**: Best for production. Can have `expires_at: 0` (never expire) but still require specific granular scopes.
+- **Token caching pitfall**: A valid-looking UI may persist with an expired token due to cached data. Meta will reject new write requests even if cached read data still displays.
 
 ### Meta API Ad Publishing Patterns
 
