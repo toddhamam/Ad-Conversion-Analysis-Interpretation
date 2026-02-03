@@ -596,6 +596,58 @@ export async function testMetaConnection(): Promise<{ success: boolean; message:
 // Environment variable for Facebook Page ID (required for ad creation)
 const PAGE_ID = import.meta.env.VITE_META_PAGE_ID;
 
+/**
+ * Validate that the current access token has permission to use the Facebook Page
+ * for ad creation. This checks the Page is accessible before attempting to publish.
+ */
+export async function validatePageAccess(pageId?: string): Promise<{ valid: boolean; pageName?: string; error?: string; diagnosis?: string }> {
+  const targetPageId = pageId || PAGE_ID;
+
+  if (!targetPageId) {
+    return { valid: false, error: 'No Facebook Page ID configured', diagnosis: 'Set VITE_META_PAGE_ID in your .env file.' };
+  }
+
+  try {
+    // Check if the token can read the Page
+    const pageUrl = `${META_GRAPH_API}/${targetPageId}?fields=name,id&access_token=${ACCESS_TOKEN}`;
+    const pageResponse = await fetch(pageUrl);
+    const pageData = await pageResponse.json();
+
+    if (pageData.error) {
+      const code = pageData.error.code;
+      const subcode = pageData.error.error_subcode;
+
+      if (code === 190) {
+        return { valid: false, error: pageData.error.message, diagnosis: 'Access token is expired or invalid. Generate a new token.' };
+      }
+      if (code === 10 || code === 100) {
+        return { valid: false, error: pageData.error.message, diagnosis: `Page ID ${targetPageId} is not accessible. Verify the ID is correct and the Page is added to your Business Manager.` };
+      }
+      return { valid: false, error: pageData.error.message, diagnosis: `Token cannot access Page ${targetPageId}. In Business Manager → Settings → Pages, ensure this Page is added and your token has permission.` };
+    }
+
+    // Page is readable. Now check if the token has ads_management permission for this Page
+    // by checking if we can list the Page's ad accounts
+    const promotableUrl = `${META_GRAPH_API}/${targetPageId}/promotable_posts?limit=1&access_token=${ACCESS_TOKEN}`;
+    const promotableResponse = await fetch(promotableUrl);
+    const promotableData = await promotableResponse.json();
+
+    if (promotableData.error) {
+      return {
+        valid: false,
+        pageName: pageData.name,
+        error: promotableData.error.message,
+        diagnosis: `Token can read Page "${pageData.name}" but lacks ad creation permissions. In Business Manager → Settings → Pages → "${pageData.name}", assign the 'Create Ads' permission to your System User or regenerate your token with pages_manage_ads permission.`,
+      };
+    }
+
+    console.log(`✅ Page "${pageData.name}" (${targetPageId}) is accessible with ad permissions`);
+    return { valid: true, pageName: pageData.name };
+  } catch (err: any) {
+    return { valid: false, error: err.message, diagnosis: 'Network error checking Page access.' };
+  }
+}
+
 // Campaign objectives available in Meta
 export type CampaignObjective = 'OUTCOME_SALES' | 'OUTCOME_LEADS' | 'OUTCOME_AWARENESS' | 'OUTCOME_ENGAGEMENT' | 'OUTCOME_TRAFFIC';
 
@@ -1063,6 +1115,14 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
   };
 
   try {
+    // Step 0: Validate Page access before doing anything
+    console.log('🔐 Step 0: Validating Facebook Page access...');
+    const pageValidation = await validatePageAccess(config.settings.pageId);
+    if (!pageValidation.valid) {
+      throw new Error(`Page access validation failed: ${pageValidation.error}\n\nDiagnosis: ${pageValidation.diagnosis}`);
+    }
+    console.log(`✅ Page "${pageValidation.pageName}" validated for ad creation`);
+
     // Step 1: Upload all images
     console.log(`📤 Step 1: Uploading ${config.ads.length} images...`);
     for (let i = 0; i < config.ads.length; i++) {
