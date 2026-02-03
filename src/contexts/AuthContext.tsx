@@ -14,6 +14,8 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signUp: (email: string, password: string, metadata: SignUpMetadata) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
+  resetPasswordForEmail: (email: string) => Promise<{ error: AuthError | null }>;
+  updatePassword: (newPassword: string) => Promise<{ error: AuthError | null }>;
   isConfigured: boolean;
 }
 
@@ -151,6 +153,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   }, [isConfigured]);
 
+  const resetPasswordForEmail = useCallback(async (email: string) => {
+    if (!isConfigured) {
+      // For localStorage fallback, we can't actually send emails
+      // Return success to not reveal account existence
+      return { error: null };
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    return { error };
+  }, [isConfigured]);
+
+  const updatePassword = useCallback(async (newPassword: string) => {
+    if (!isConfigured) {
+      // For localStorage fallback, just acknowledge the request
+      return { error: null };
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    return { error };
+  }, [isConfigured]);
+
   const value: AuthContextValue = {
     session,
     user,
@@ -158,6 +183,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signIn,
     signUp,
     signOut,
+    resetPasswordForEmail,
+    updatePassword,
     isConfigured,
   };
 
