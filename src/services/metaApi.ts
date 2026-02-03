@@ -1290,7 +1290,7 @@ export async function searchTargetingSuggestions(
 export async function fetchCustomAudiences(): Promise<AudienceRef[]> {
   const params = new URLSearchParams({
     access_token: ACCESS_TOKEN,
-    fields: 'id,name,subtype,approximate_count',
+    fields: 'id,name,subtype,approximate_count_lower_bound,approximate_count_upper_bound',
     limit: '100',
   });
 
@@ -1309,7 +1309,7 @@ export async function fetchCustomAudiences(): Promise<AudienceRef[]> {
     id: item.id,
     name: item.name,
     subtype: item.subtype,
-    approximateCount: item.approximate_count,
+    approximateCount: item.approximate_count_upper_bound || item.approximate_count_lower_bound,
   }));
 }
 
