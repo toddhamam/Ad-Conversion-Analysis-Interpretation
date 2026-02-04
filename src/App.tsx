@@ -8,7 +8,7 @@ import SuperAdminRoute from './components/SuperAdminRoute';
 import Dashboard from './pages/Dashboard';
 import Channels from './pages/Channels';
 import MetaAds from './pages/MetaAds';
-import Concepts from './pages/Concepts';
+
 import Products from './pages/Products';
 import Insights from './pages/Insights';
 import AdGenerator from './pages/AdGenerator';
@@ -78,7 +78,7 @@ function App() {
             <Route path="/channels/meta-ads" element={<MetaAds />} />
             <Route path="/creatives" element={<AdGenerator />} />
             <Route path="/publish" element={<AdPublisher />} />
-            <Route path="/concepts" element={<Concepts />} />
+
             <Route path="/products" element={<Products />} />
             <Route path="/insights" element={<Insights />} />
             <Route path="/funnels" element={<Funnels />} />
