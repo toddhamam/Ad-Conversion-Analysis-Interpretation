@@ -1362,13 +1362,15 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
   };
 
   try {
-    // Step 0: Validate Page access before doing anything
+    // Step 0: Validate Page access (non-blocking — ad creation APIs will fail with
+    // their own clear errors if the page is truly inaccessible)
     console.log('🔐 Step 0: Validating Facebook Page access...');
     const pageValidation = await validatePageAccess(config.settings.pageId);
     if (!pageValidation.valid) {
-      throw new Error(`Page access validation failed: ${pageValidation.error}\n\nDiagnosis: ${pageValidation.diagnosis}`);
+      console.warn(`⚠️ Page pre-validation failed: ${pageValidation.error} — proceeding anyway, ad creation will fail if page is truly inaccessible.`);
+    } else {
+      console.log(`✅ Page "${pageValidation.pageName}" validated for ad creation`);
     }
-    console.log(`✅ Page "${pageValidation.pageName}" validated for ad creation`);
 
     // Step 1: Upload all images
     console.log(`📤 Step 1: Uploading ${config.ads.length} images...`);
