@@ -571,9 +571,15 @@ STRIPE_WEBHOOK_SECRET=      # Stripe webhook signing secret (whsec_*)
 STRIPE_PRICE_STARTER=       # Stripe Price ID for Starter plan
 STRIPE_PRICE_GROWTH=        # Stripe Price ID for Growth plan
 STRIPE_PRICE_ENTERPRISE=    # Stripe Price ID for Enterprise plan
-SUPABASE_URL=               # Supabase project URL
+SUPABASE_URL=               # Supabase project URL (MUST be set separately from VITE_SUPABASE_URL)
 SUPABASE_SERVICE_ROLE_KEY=  # Supabase service role key (for server-side access)
 ```
+
+**Important**: `SUPABASE_URL` (backend) and `VITE_SUPABASE_URL` (frontend) must both be set in Vercel. The `VITE_` prefix makes variables available to the browser bundle only. Serverless functions in `api/` use `process.env.SUPABASE_URL` (no prefix). Missing `SUPABASE_URL` will cause funnel metrics and other backend Supabase queries to silently return empty data.
+
+### Funnel Event Tracking
+
+Funnel data (`funnel_events` table) is written by an **external system** (the funnel site repo), not by this codebase. This repo only reads from the table. The external system uses separate env vars (`CONVERTRA_SUPABASE_URL`, `CONVERTRA_SUPABASE_SERVICE_ROLE_KEY`) to write events to Convertra's Supabase via a fire-and-forget insert.
 
 ## Deployment (Vercel)
 
