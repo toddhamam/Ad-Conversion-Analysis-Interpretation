@@ -698,6 +698,12 @@ export interface DetailedTargetingItem {
   audienceSize?: number;
 }
 
+// Ad pixel / dataset reference
+export interface PixelRef {
+  id: string;
+  name: string;
+}
+
 // Custom/Lookalike audience reference
 export interface AudienceRef {
   id: string;
@@ -1340,6 +1346,55 @@ export async function fetchCustomAudiences(): Promise<AudienceRef[]> {
     name: item.name,
     subtype: item.subtype,
     approximateCount: item.approximate_count_upper_bound || item.approximate_count_lower_bound,
+  }));
+}
+
+/**
+ * Fetch Meta Pixels (datasets) for the ad account.
+ * Tries the adspixels endpoint first, then falls back to datasets.
+ */
+export async function fetchAdPixels(): Promise<PixelRef[]> {
+  const params = new URLSearchParams({
+    access_token: ACCESS_TOKEN,
+    fields: 'id,name',
+    limit: '100',
+  });
+
+  // Try adspixels first
+  const pixelUrl = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/adspixels?${params.toString()}`;
+  try {
+    const response = await fetch(pixelUrl);
+    const data = await response.json();
+
+    if (!data.error && data.data && data.data.length > 0) {
+      return data.data.map((item: any) => ({
+        id: item.id,
+        name: item.name || `Pixel ${item.id}`,
+      }));
+    }
+
+    // If adspixels returned empty or errored, try datasets
+    if (data.error) {
+      console.warn('⚠️ adspixels endpoint failed, trying datasets:', data.error.message);
+    }
+  } catch (err) {
+    console.warn('⚠️ adspixels fetch failed, trying datasets:', err);
+  }
+
+  // Fallback to datasets endpoint
+  const datasetUrl = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/datasets?${params.toString()}`;
+  const response = await fetch(datasetUrl);
+  const data = await response.json();
+
+  if (!response.ok || data.error) {
+    const msg = data.error?.message || `HTTP ${response.status}`;
+    console.error('❌ Failed to fetch pixels/datasets:', msg);
+    throw new Error(msg);
+  }
+
+  return (data.data || []).map((item: any) => ({
+    id: item.id,
+    name: item.name || `Dataset ${item.id}`,
   }));
 }
 
