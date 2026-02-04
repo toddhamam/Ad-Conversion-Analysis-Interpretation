@@ -1107,48 +1107,48 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
     targeting.excluded_custom_audiences = request.targeting.excludedCustomAudiences.map(a => ({ id: a.id }));
   }
 
-  // Build request body matching createCampaign format (JSON with Content-Type)
-  const requestBody: Record<string, any> = {
-    access_token: ACCESS_TOKEN,
-    name: request.name,
-    campaign_id: request.campaignId,
-    billing_event: 'IMPRESSIONS',
-    optimization_goal: optimizationGoal,
-    targeting: targeting,
-    status: 'PAUSED',
-  };
+  // Use form-encoded body (URLSearchParams) — matching createAdCreative/createAd
+  // Meta's API handles nested objects better as JSON-stringified form values
+  const params = new URLSearchParams();
+  params.append('access_token', ACCESS_TOKEN);
+  params.append('name', request.name);
+  params.append('campaign_id', request.campaignId);
+  params.append('billing_event', 'IMPRESSIONS');
+  params.append('optimization_goal', optimizationGoal);
+  params.append('targeting', JSON.stringify(targeting));
+  params.append('status', 'PAUSED');
 
   if (request.dailyBudget) {
-    requestBody.daily_budget = Math.round(request.dailyBudget * 100);
+    params.append('daily_budget', String(Math.round(request.dailyBudget * 100)));
   }
 
   if (request.promotedObject) {
-    requestBody.promoted_object = {
+    params.append('promoted_object', JSON.stringify({
       pixel_id: request.promotedObject.pixelId,
       custom_event_type: request.promotedObject.customEventType,
-    };
+    }));
   }
 
   if (!request.placements.automatic) {
     if (request.placements.publisherPlatforms?.length) {
-      requestBody.publisher_platforms = request.placements.publisherPlatforms;
+      params.append('publisher_platforms', JSON.stringify(request.placements.publisherPlatforms));
     }
     if (request.placements.facebookPositions?.length) {
-      requestBody.facebook_positions = request.placements.facebookPositions;
+      params.append('facebook_positions', JSON.stringify(request.placements.facebookPositions));
     }
     if (request.placements.instagramPositions?.length) {
-      requestBody.instagram_positions = request.placements.instagramPositions;
+      params.append('instagram_positions', JSON.stringify(request.placements.instagramPositions));
     }
   }
 
   // Log full request (redact token)
-  const debugBody = { ...requestBody, access_token: '***REDACTED***' };
-  console.log('📤 Creating ad set — full request body:', JSON.stringify(debugBody, null, 2));
+  const debugParams = new URLSearchParams(params);
+  debugParams.set('access_token', '***REDACTED***');
+  console.log('📤 Creating ad set — full request body:', debugParams.toString());
 
   const response = await fetch(`${META_GRAPH_API}/${AD_ACCOUNT_ID}/adsets`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(requestBody),
+    body: params,
   });
 
   const responseText = await response.text();
@@ -1431,49 +1431,45 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
       }
     }
 
-    // Step 1.5: Check ad account health before creating anything that costs money
-    console.log('🏥 Step 1.5: Checking ad account status...');
+    // Step 1.5: Full diagnostic — token, account, and app info
+    console.log('🔍 Step 1.5: Running diagnostics...');
+    const diagnostics: string[] = [];
     try {
-      const acctUrl = `${META_GRAPH_API}/${AD_ACCOUNT_ID}?fields=account_status,disable_reason,name,currency,funding_source_details&access_token=${ACCESS_TOKEN}`;
+      // Debug the access token
+      const debugUrl = `${META_GRAPH_API}/debug_token?input_token=${ACCESS_TOKEN}&access_token=${ACCESS_TOKEN}`;
+      const debugResp = await fetch(debugUrl);
+      const debugData = await debugResp.json();
+      if (debugData.data) {
+        const d = debugData.data;
+        const info = `Token: type=${d.type}, app_id=${d.app_id}, valid=${d.is_valid}, scopes=[${(d.scopes || []).join(', ')}], granular_scopes=[${(d.granular_scopes || []).map((s: any) => s.permission).join(', ')}], expires=${d.expires_at === 0 ? 'never' : new Date(d.expires_at * 1000).toISOString()}`;
+        console.log('🔑', info);
+        diagnostics.push(info);
+      }
+    } catch (e) { console.warn('Token debug failed:', e); }
+
+    try {
+      // Check ad account
+      const acctUrl = `${META_GRAPH_API}/${AD_ACCOUNT_ID}?fields=account_status,disable_reason,name,currency,owner,business,capabilities&access_token=${ACCESS_TOKEN}`;
       const acctResp = await fetch(acctUrl);
       const acctData = await acctResp.json();
-      if (acctData.error) {
-        console.warn('⚠️ Could not check account status:', acctData.error.message);
+      if (!acctData.error) {
+        const statusNames: Record<number, string> = { 1: 'ACTIVE', 2: 'DISABLED', 3: 'UNSETTLED', 7: 'PENDING_RISK_REVIEW', 9: 'IN_GRACE_PERIOD', 101: 'CLOSED' };
+        const info = `Account: "${acctData.name}" status=${statusNames[acctData.account_status] || acctData.account_status} disable_reason=${acctData.disable_reason} currency=${acctData.currency} capabilities=[${(acctData.capabilities || []).join(', ')}]`;
+        console.log('🏥', info);
+        diagnostics.push(info);
+        if (acctData.account_status !== 1) {
+          throw new Error(`Ad account is not active (status: ${statusNames[acctData.account_status] || acctData.account_status}). Check Business Manager → Billing.`);
+        }
       } else {
-        const statusNames: Record<number, string> = {
-          1: 'ACTIVE', 2: 'DISABLED', 3: 'UNSETTLED', 7: 'PENDING_RISK_REVIEW',
-          8: 'PENDING_SETTLEMENT', 9: 'IN_GRACE_PERIOD', 100: 'PENDING_CLOSURE', 101: 'CLOSED',
-        };
-        const disableReasons: Record<number, string> = {
-          0: 'NONE', 1: 'ADS_INTEGRITY_POLICY', 2: 'ADS_IP_REVIEW', 3: 'RISK_PAYMENT',
-          4: 'GRAY_ACCOUNT_SHUT_DOWN', 5: 'ADS_AFC_REVIEW', 6: 'BUSINESS_INTEGRITY_RAR',
-          7: 'PERMANENT_CLOSE', 8: 'UNUSED_RESELLER_ACCOUNT', 9: 'UNUSED_ACCOUNT',
-        };
-        const status = acctData.account_status;
-        const statusName = statusNames[status] || `UNKNOWN(${status})`;
-        const disableReason = disableReasons[acctData.disable_reason] || `UNKNOWN(${acctData.disable_reason})`;
-        console.log(`🏥 Account: "${acctData.name}" | Status: ${statusName} | Disable reason: ${disableReason} | Currency: ${acctData.currency}`);
-        console.log(`🏥 Funding source:`, acctData.funding_source_details ? JSON.stringify(acctData.funding_source_details) : 'NONE');
-
-        if (status !== 1) {
-          throw new Error(
-            `Ad account is not active (status: ${statusName}). ` +
-            (acctData.disable_reason && acctData.disable_reason !== 0
-              ? `Disable reason: ${disableReason}. `
-              : '') +
-            'Check your ad account in Meta Business Manager → Billing & Payments.'
-          );
-        }
-        if (!acctData.funding_source_details) {
-          console.warn('⚠️ No funding source found — ad set creation may fail. Add a payment method in Meta Business Manager.');
-        }
+        diagnostics.push(`Account check error: ${acctData.error.message}`);
       }
     } catch (acctErr: any) {
-      if (acctErr.message.includes('Ad account is not active') || acctErr.message.includes('No funding source')) {
-        throw acctErr;
-      }
-      console.warn('⚠️ Account health check failed (non-blocking):', acctErr.message);
+      if (acctErr.message.includes('not active')) throw acctErr;
+      console.warn('Account check failed:', acctErr.message);
     }
+
+    // Store diagnostics for error reporting
+    (result as any)._diagnostics = diagnostics;
 
     // Determine effective objective — OUTCOME_SALES requires a pixel for
     // conversion tracking. Without one, fall back to OUTCOME_TRAFFIC.
@@ -1609,7 +1605,10 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
   } catch (error: any) {
     console.error('❌❌❌ Publish failed:', error);
     console.error('❌ Error stack:', error.stack);
-    result.error = error.message;
+    // Append diagnostics to error message so user can see token/account info
+    const diag = (result as any)._diagnostics as string[] | undefined;
+    const diagText = diag?.length ? `\n\nDiagnostics:\n${diag.join('\n')}` : '';
+    result.error = error.message + diagText;
     result.details = error.stack;
     return result;
   }
