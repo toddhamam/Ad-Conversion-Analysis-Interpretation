@@ -647,6 +647,9 @@ Always run `npm run dev` to start the development server before testing URLs. Th
 - **Page ID required**: `VITE_META_PAGE_ID` must be set for ad creatives using `object_story_spec`
 - **Field deprecations**: Meta deprecates fields without warning. Example: `approximate_count` was replaced by `approximate_count_lower_bound` and `approximate_count_upper_bound` on custom audiences. Always verify current field names against Meta's API docs.
 - **Silent failures**: Meta API often returns `[]` on error instead of throwing, making it hard to distinguish "no results" from "failed call". Always check for error objects in responses and surface them explicitly.
+- **Permission nuances**: `pages_read_engagement` and `ads_management` are distinct permissions. A token may have sufficient permissions to *create ads* (`ads_management`) even if it lacks permissions to *read page metadata* (`pages_read_engagement`). Don't block publishing solely because a page metadata check fails.
+- **`promote_pages` fallback**: When direct page access validation fails (error codes `10` or `100`), use the `promote_pages` endpoint as a fallback to verify ad account/page linkage via `ads_management` permission.
+- **Progressive validation**: Implement validation in stages. If a direct check fails with a permission-specific error (not an outright access denial), attempt a secondary validation using alternative permissions or endpoints before failing entirely. Log warnings (`console.warn`) for non-critical check failures instead of blocking the operation.
 
 ### Meta API Token Management
 - **Short-lived tokens** (Graph API Explorer): Expire in 1-2 hours. Only for quick testing.

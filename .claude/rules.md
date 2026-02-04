@@ -108,6 +108,8 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 - **Refresh buttons**: Always provide a "Refresh" button for data fetched from external APIs (custom audiences, targeting suggestions, etc.) so users can manually retry if initial loads fail or data becomes stale
 - **Clear error messages**: Users need to see clear error messages when API calls fail, not just a lack of results. Show what went wrong and how to fix it.
 - **Token awareness**: Proactively inform users about access token expiration. Short-lived tokens (Graph API Explorer) expire in 1-2 hours; recommend long-lived or System User tokens for sustained use.
+- **Error-code-specific fallbacks**: When encountering specific API error codes, implement fallback logic that checks alternative permissions or endpoints before failing. Don't block operations based on a failure in an initial validation step if a less restrictive check can confirm the core functionality.
+- **Graceful degradation for non-critical checks**: For validation checks that don't strictly block critical functionality (e.g., page metadata access for ad publishing), log warnings instead of returning errors. Reserve hard failures for truly blocking issues.
 
 ## Ad Publisher Preferences
 
