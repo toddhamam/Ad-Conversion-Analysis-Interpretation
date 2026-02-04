@@ -1240,30 +1240,59 @@ export async function createAdCreative(request: CreateAdRequest): Promise<string
  * Create an ad
  * ALWAYS creates in PAUSED status for safety
  */
-export async function createAd(
-  adsetId: string,
-  creativeId: string,
-  name: string,
-  pixelId?: string,
-): Promise<string> {
-  console.log('📝 Creating ad:', name);
+/**
+ * Create an ad with inline creative (no separate creative creation needed)
+ * This lets Meta validate the creative + ad together, avoiding "ad incomplete" errors.
+ */
+export async function createAdWithCreative(request: {
+  name: string;
+  adsetId: string;
+  pageId: string;
+  imageHash: string;
+  headline: string;
+  bodyText: string;
+  linkUrl: string;
+  callToAction: string;
+  pixelId?: string;
+}): Promise<{ adId: string; creativeId: string }> {
+  console.log('📝 Creating ad with inline creative:', request.name);
 
   const url = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/ads`;
 
+  const creative = {
+    name: request.name,
+    object_story_spec: {
+      page_id: request.pageId,
+      link_data: {
+        image_hash: request.imageHash,
+        link: request.linkUrl,
+        message: request.bodyText,
+        name: request.headline,
+        description: request.headline,
+        call_to_action: {
+          type: request.callToAction,
+          value: { link: request.linkUrl },
+        },
+      },
+    },
+  };
+
   const params = new URLSearchParams();
   params.append('access_token', ACCESS_TOKEN);
-  params.append('name', name);
-  params.append('adset_id', adsetId);
-  params.append('creative', JSON.stringify({ id: creativeId }));
+  params.append('name', request.name);
+  params.append('adset_id', request.adsetId);
+  params.append('creative', JSON.stringify(creative));
   params.append('status', 'PAUSED');
 
-  // For OUTCOME_SALES with pixel, include tracking_specs so Meta knows
-  // which pixel to attribute conversions to
-  if (pixelId) {
+  if (request.pixelId) {
     params.append('tracking_specs', JSON.stringify([
-      { 'action.type': ['offsite_conversion'], 'fb_pixel': [pixelId] },
+      { 'action.type': ['offsite_conversion'], 'fb_pixel': [request.pixelId] },
     ]));
   }
+
+  const debugParams = new URLSearchParams(params);
+  debugParams.set('access_token', '***REDACTED***');
+  console.log('📤 Creating ad — params:', decodeURIComponent(debugParams.toString()));
 
   const response = await fetch(url, {
     method: 'POST',
@@ -1275,16 +1304,17 @@ export async function createAd(
   if (!response.ok || data.error) {
     const err = data.error || {};
     const rawInfo = JSON.stringify(data, null, 2);
+    const creativeInfo = JSON.stringify(creative, null, 2);
     console.error('❌ Failed to create ad:', rawInfo);
     throw new Error(
       `${err.error_user_msg || err.message || 'Failed to create ad'}\n\n` +
       `Full Meta response:\n${rawInfo}\n\n` +
-      `Sent: adset_id=${adsetId}, creative_id=${creativeId}, name=${name}`
+      `Creative spec sent:\n${creativeInfo}`
     );
   }
 
   console.log('✅ Ad created:', data.id);
-  return data.id;
+  return { adId: data.id, creativeId: data.creative_id || '' };
 }
 
 /**
@@ -1584,38 +1614,33 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
     }
     result.adsetId = adsetId;
 
-    // Step 4: Create creatives and ads for each image
-    console.log(`🎨 Step 4: Creating ${config.ads.length} ad creatives and ads...`);
+    // Step 4: Create ads with inline creatives (single API call per ad)
+    console.log(`🎨 Step 4: Creating ${config.ads.length} ads...`);
+    const pageId = config.settings.pageId || PAGE_ID;
+    if (!pageId) {
+      throw new Error('Facebook Page ID is required. Set VITE_META_PAGE_ID in your environment.');
+    }
+
     for (let i = 0; i < config.ads.length; i++) {
       const ad = config.ads[i];
       const imageHash = result.imageHashes![i];
 
-      console.log(`📝 Creating creative ${i + 1}/${config.ads.length}...`);
+      console.log(`📝 Creating ad ${i + 1}/${config.ads.length}...`);
 
-      // Create the creative
       try {
-        const creativeId = await createAdCreative({
-          name: `CI Creative ${i + 1} - ${ad.headline.substring(0, 30)}`,
+        const { adId, creativeId } = await createAdWithCreative({
+          name: `CI Ad ${i + 1} - ${ad.headline.substring(0, 30)}`,
           adsetId: adsetId,
+          pageId: pageId,
           imageHash: imageHash,
           headline: ad.headline,
           bodyText: ad.bodyText,
           linkUrl: config.settings.landingPageUrl,
           callToAction: ad.callToAction,
-          pageId: config.settings.pageId,
+          pixelId: config.settings.pixelId,
         });
-        result.creativeIds!.push(creativeId);
-        console.log(`✅ Creative ${i + 1} created: ${creativeId}`);
-
-        // Create the ad
-        console.log(`📝 Creating ad ${i + 1}/${config.ads.length}...`);
-        const adId = await createAd(
-          adsetId,
-          creativeId,
-          `CI Ad ${i + 1} - ${ad.headline.substring(0, 30)}`,
-          config.settings.pixelId,
-        );
         result.adIds!.push(adId);
+        if (creativeId) result.creativeIds!.push(creativeId);
         console.log(`✅ Ad ${i + 1} created: ${adId}`);
       } catch (adError: any) {
         throw new Error(`Ad creation failed for ad ${i + 1}: ${adError.message}`);
