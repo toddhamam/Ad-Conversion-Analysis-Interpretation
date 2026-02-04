@@ -1261,8 +1261,14 @@ export async function createAd(adsetId: string, creativeId: string, name: string
   const data = await response.json();
 
   if (!response.ok || data.error) {
-    console.error('❌ Failed to create ad:', data);
-    throw new Error(data.error?.message || 'Failed to create ad');
+    const err = data.error || {};
+    const rawInfo = JSON.stringify(data, null, 2);
+    console.error('❌ Failed to create ad:', rawInfo);
+    throw new Error(
+      `${err.error_user_msg || err.message || 'Failed to create ad'}\n\n` +
+      `Full Meta response:\n${rawInfo}\n\n` +
+      `Sent: adset_id=${adsetId}, creative_id=${creativeId}, name=${name}`
+    );
   }
 
   console.log('✅ Ad created:', data.id);
