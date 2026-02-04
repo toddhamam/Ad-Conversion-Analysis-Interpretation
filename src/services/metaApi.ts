@@ -619,6 +619,27 @@ export async function validatePageAccess(pageId?: string): Promise<{ valid: bool
       if (code === 190) {
         return { valid: false, error: pageData.error.message, diagnosis: 'Access token is expired or invalid. Generate a new token.' };
       }
+
+      // Error code 10: missing pages_read_engagement permission.
+      // The token may still have ads_management permission, which is sufficient
+      // to create ads on this Page. Fall back to the promote_pages check.
+      if ((code === 10 || code === 100) && AD_ACCOUNT_ID) {
+        console.warn(`⚠️ Cannot read Page ${targetPageId} directly (code ${code}). Falling back to promote_pages check...`);
+        const promoteUrl = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/promote_pages?fields=id,name&access_token=${ACCESS_TOKEN}`;
+        const promoteResponse = await fetch(promoteUrl);
+        const promoteData = await promoteResponse.json();
+
+        if (!promoteData.error && promoteData.data) {
+          const matchedPage = promoteData.data.find((p: { id: string }) => p.id === targetPageId);
+          if (matchedPage) {
+            console.log(`✅ Page "${matchedPage.name}" (${targetPageId}) confirmed via promote_pages (direct read unavailable)`);
+            return { valid: true, pageName: matchedPage.name };
+          }
+        }
+
+        return { valid: false, error: pageData.error.message, diagnosis: `Page ID ${targetPageId} is not accessible. Verify the ID is correct and the Page is added to your Business Manager.` };
+      }
+
       if (code === 10 || code === 100) {
         return { valid: false, error: pageData.error.message, diagnosis: `Page ID ${targetPageId} is not accessible. Verify the ID is correct and the Page is added to your Business Manager.` };
       }
