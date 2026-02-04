@@ -1,7 +1,7 @@
 // Meta Marketing API Service
 console.log('🔥🔥🔥 metaApi.ts VERSION 5.0 LOADED AT', new Date().toISOString(), '🔥🔥🔥');
 
-const META_API_VERSION = 'v21.0';
+const META_API_VERSION = 'v22.0';
 const META_GRAPH_API = `https://graph.facebook.com/${META_API_VERSION}`;
 
 const ACCESS_TOKEN = import.meta.env.VITE_META_ACCESS_TOKEN;
@@ -1504,6 +1504,24 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
       campaignId = config.existingCampaignId!;
       console.log(`📝 Using existing campaign: ${campaignId}`);
       result.campaignId = campaignId;
+    }
+
+    // Step 2.5: Verify campaign exists and wait for propagation
+    // Meta's servers are eventually consistent — a just-created campaign
+    // may not be visible to the server handling the ad set request
+    if (config.mode === 'new_campaign') {
+      console.log('⏳ Waiting for campaign propagation...');
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // Verify the campaign is readable
+      const verifyUrl = `${META_GRAPH_API}/${campaignId}?fields=id,name,status,objective&access_token=${ACCESS_TOKEN}`;
+      const verifyResp = await fetch(verifyUrl);
+      const verifyData = await verifyResp.json();
+      if (verifyData.error) {
+        console.error('❌ Campaign verification failed:', JSON.stringify(verifyData.error));
+        throw new Error(`Campaign ${campaignId} was created but is not readable: ${verifyData.error.message}`);
+      }
+      console.log(`✅ Campaign verified: ${verifyData.name} (${verifyData.status}, ${verifyData.objective})`);
     }
 
     // Step 3: Create or select ad set
