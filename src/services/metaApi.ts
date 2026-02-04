@@ -1018,6 +1018,8 @@ export async function createCampaign(request: CreateCampaignRequest): Promise<st
     objective: request.objective,
     status: 'PAUSED', // CRITICAL: Always create as draft
     special_ad_categories: [], // Required field - empty array for non-special ads
+    // Highest Volume (no bid cap required)
+    bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
   };
 
   if (request.budgetMode === 'CBO' && request.dailyBudget) {
@@ -1148,13 +1150,12 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
   debugParams.set('access_token', '***REDACTED***');
   console.log('📤 Creating ad set — full request body:', debugParams.toString());
 
-  // Attempt the full request
-  let response = await fetch(`${META_GRAPH_API}/${AD_ACCOUNT_ID}/adsets`, {
+  const response = await fetch(`${META_GRAPH_API}/${AD_ACCOUNT_ID}/adsets`, {
     method: 'POST',
     body: params,
   });
 
-  let responseText = await response.text();
+  const responseText = await response.text();
   console.log('📥 Raw Meta API response (HTTP ' + response.status + '):', responseText);
 
   let data: any;
@@ -1164,70 +1165,12 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
     throw new Error(`Meta returned non-JSON (HTTP ${response.status}): ${responseText.substring(0, 500)}`);
   }
 
-  // If the full request fails with code 1, retry with minimal params to isolate the issue
-  if (data.error?.code === 1) {
-    console.warn('⚠️ Full ad set request failed with code 1. Retrying with MINIMAL params...');
-
-    const minimalTargeting = {
-      geo_locations: { countries: request.targeting.geoLocations.countries },
-      age_min: request.targeting.ageMin,
-      age_max: request.targeting.ageMax,
-    };
-
-    const minimalParams = new URLSearchParams();
-    minimalParams.append('access_token', ACCESS_TOKEN);
-    minimalParams.append('name', request.name + ' (minimal)');
-    minimalParams.append('campaign_id', request.campaignId);
-    minimalParams.append('billing_event', 'IMPRESSIONS');
-    minimalParams.append('optimization_goal', 'LINK_CLICKS');
-    minimalParams.append('targeting', JSON.stringify(minimalTargeting));
-    minimalParams.append('status', 'PAUSED');
-
-    if (request.dailyBudget) {
-      minimalParams.append('daily_budget', String(Math.round(request.dailyBudget * 100)));
-    }
-
-    const minDebug = new URLSearchParams(minimalParams);
-    minDebug.set('access_token', '***REDACTED***');
-    console.log('📤 Minimal retry params:', minDebug.toString());
-
-    const retryResp = await fetch(`${META_GRAPH_API}/${AD_ACCOUNT_ID}/adsets`, {
-      method: 'POST',
-      body: minimalParams,
-    });
-
-    const retryText = await retryResp.text();
-    console.log('📥 Minimal retry response (HTTP ' + retryResp.status + '):', retryText);
-
-    let retryData: any;
-    try { retryData = JSON.parse(retryText); } catch { retryData = {}; }
-
-    if (retryData.id) {
-      // Minimal worked! The issue is with the extra params
-      console.log('✅ Minimal ad set created:', retryData.id);
-      console.warn('⚠️ Full request failed but minimal succeeded — issue is with targeting/placements/pixel params');
-      return retryData.id;
-    }
-
-    // Both failed — include both results
-    const fullErr = JSON.stringify(data, null, 2);
-    const retryErr = JSON.stringify(retryData, null, 2);
-    throw new Error(
-      `Full request failed:\n${fullErr}\n\n` +
-      `Minimal retry also failed:\n${retryErr}\n\n` +
-      `Full params:\n${decodeURIComponent(debugParams.toString())}\n\n` +
-      `Minimal params:\n${decodeURIComponent(minDebug.toString())}`
-    );
-  }
-
   if (!response.ok || data.error) {
     const err = data.error || {};
     const rawInfo = JSON.stringify(data, null, 2);
-    const sentParams = debugParams.toString();
     throw new Error(
       `${err.error_user_msg || err.message || 'Unknown error'}\n\n` +
-      `Full Meta response:\n${rawInfo}\n\n` +
-      `Sent params:\n${decodeURIComponent(sentParams)}`
+      `Full Meta response:\n${rawInfo}`
     );
   }
 
