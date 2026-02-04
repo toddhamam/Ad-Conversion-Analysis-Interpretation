@@ -14,7 +14,9 @@ The user prefers a standard SaaS URL structure:
 - Place "Log in" next to the primary CTA ("Schedule Demo")
 - Log in button styling: subtle lime green outline, becoming more prominent on hover
 - Navigation dropdowns should be collapsed by default on page load
-- Sidebar supports collapsible sections for Channels and Insights
+- Sidebar supports collapsible sections for Channels
+- **Avoid dropdowns for single destinations**: If a nav section only leads to one page, use a direct link instead of a dropdown. ConversionIQ™ links directly to `/insights` rather than using an expandable section.
+- **Action-oriented nav labels**: Nav links should clearly indicate the functionality (e.g., "ConversionIQ™" links directly to insights)
 
 ## Design & Branding Preferences
 
@@ -53,6 +55,16 @@ The user prefers a standard SaaS URL structure:
 - **User profile dropdown actions**: Must include "Sign out", "Account details", and "Reset password"
 - **Mobile accessibility**: User profile dropdown must be accessible on mobile devices (include in mobile header)
 - **Progressive enhancement**: Features like user profile dropdown should work across all breakpoints (desktop, tablet, mobile)
+
+## Feature Removal Checklist
+
+When removing a page or feature, clean up all associated artifacts:
+1. Delete the component file (e.g., `src/pages/Feature.tsx`)
+2. Delete the associated CSS file (e.g., `src/pages/Feature.css`)
+3. Remove the route from `src/App.tsx`
+4. Remove the nav item from `src/components/Sidebar.tsx`
+5. Remove any related state variables (e.g., `featureExpanded` useState)
+6. Verify build compiles cleanly with `npm run build`
 
 ## Code Quality Principles (Karpathy-inspired)
 

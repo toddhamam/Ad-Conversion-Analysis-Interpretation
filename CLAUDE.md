@@ -82,7 +82,7 @@ public/
 | `src/pages/SalesLanding.tsx` | Convertra sales/marketing landing page |
 | `src/pages/SalesLanding.css` | Sales landing page styles with animations |
 | `src/components/Loading.tsx` | Branded loading component with animated logo |
-| `src/components/Sidebar.tsx` | Collapsible sidebar navigation with expandable sections |
+| `src/components/Sidebar.tsx` | Collapsible sidebar navigation with direct links |
 | `src/components/ProtectedRoute.tsx` | Auth guard for protected routes |
 | `src/pages/Login.tsx` | Authentication login page |
 | `src/pages/Register.tsx` | Company registration/signup page |
@@ -124,9 +124,8 @@ public/
 /channels/meta-ads  → Meta Ads dashboard (main view)
 /creatives      → AI ad generation
 /publish        → Ad publisher
-/concepts       → Concepts management
 /products       → Products management
-/insights       → Channel AI analysis
+/insights       → Channel AI analysis (ConversionIQ™)
 ```
 
 ## Architecture Decisions
