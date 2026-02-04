@@ -1120,71 +1120,72 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
   console.log('🎯 Targeting:', JSON.stringify(targeting, null, 2));
   console.log('🎯 Optimization Goal:', optimizationGoal);
 
-  const params = new URLSearchParams({
+  // Build request body as JSON — same format that works for createCampaign
+  const requestBody: Record<string, any> = {
     access_token: ACCESS_TOKEN,
     name: request.name,
     campaign_id: request.campaignId,
     billing_event: 'IMPRESSIONS',
     optimization_goal: optimizationGoal,
-    bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
-    targeting: JSON.stringify(targeting),
+    targeting: targeting,
     status: 'PAUSED', // CRITICAL: Always create as draft
-  });
+  };
 
   // Budget only for ABO mode (CBO budget is on the campaign)
   if (request.dailyBudget) {
-    const dailyBudgetCents = Math.round(request.dailyBudget * 100);
-    params.set('daily_budget', dailyBudgetCents.toString());
-    console.log('💰 Daily Budget (cents):', dailyBudgetCents);
+    requestBody.daily_budget = Math.round(request.dailyBudget * 100);
+    console.log('💰 Daily Budget (cents):', requestBody.daily_budget);
   }
 
   // Promoted object for conversion tracking (OUTCOME_SALES with pixel)
   if (request.promotedObject) {
-    params.set('promoted_object', JSON.stringify({
+    requestBody.promoted_object = {
       pixel_id: request.promotedObject.pixelId,
       custom_event_type: request.promotedObject.customEventType,
-    }));
+    };
     console.log('🎯 Promoted Object:', JSON.stringify(request.promotedObject));
   }
 
   // Manual placements (omit for Advantage+ automatic)
   if (!request.placements.automatic) {
     if (request.placements.publisherPlatforms?.length) {
-      params.set('publisher_platforms', JSON.stringify(request.placements.publisherPlatforms));
+      requestBody.publisher_platforms = request.placements.publisherPlatforms;
     }
     if (request.placements.facebookPositions?.length) {
-      params.set('facebook_positions', JSON.stringify(request.placements.facebookPositions));
+      requestBody.facebook_positions = request.placements.facebookPositions;
     }
     if (request.placements.instagramPositions?.length) {
-      params.set('instagram_positions', JSON.stringify(request.placements.instagramPositions));
+      requestBody.instagram_positions = request.placements.instagramPositions;
     }
     console.log('📍 Manual Placements:', request.placements);
   }
 
-  console.log('📤 Creating ad set with params:', {
-    name: request.name,
-    campaign_id: request.campaignId,
-    optimization_goal: optimizationGoal,
-    bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
-    has_promoted_object: !!request.promotedObject,
-    has_daily_budget: !!request.dailyBudget,
-    targeting_countries: request.targeting.geoLocations.countries,
-  });
+  // Log the full request (redact token)
+  const debugBody = { ...requestBody, access_token: '***REDACTED***' };
+  console.log('📤 Creating ad set — full request body:', JSON.stringify(debugBody, null, 2));
 
   const response = await fetch(url, {
     method: 'POST',
-    body: params,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody),
   });
 
   const data = await response.json();
 
   if (!response.ok || data.error) {
-    console.error('❌ Failed to create ad set. Full API response:', JSON.stringify(data, null, 2));
+    // Log everything Meta returns — including blame_field_specs which identifies the bad field
+    console.error('❌ Failed to create ad set. HTTP status:', response.status);
+    console.error('❌ Full API response:', JSON.stringify(data, null, 2));
     const err = data.error || {};
+    console.error('❌ Error code:', err.code, '| type:', err.type, '| is_transient:', err.is_transient);
+    if (err.error_data) console.error('❌ error_data:', JSON.stringify(err.error_data));
+    if (err.blame_field_specs) console.error('❌ blame_field_specs:', JSON.stringify(err.blame_field_specs));
+
     const parts = [
       err.error_user_msg || err.message || 'Unknown error',
       err.error_user_title ? `(${err.error_user_title})` : '',
       err.error_subcode ? `[subcode: ${err.error_subcode}]` : '',
+      err.blame_field_specs ? `[blame: ${JSON.stringify(err.blame_field_specs)}]` : '',
       err.fbtrace_id ? `[trace: ${err.fbtrace_id}]` : '',
     ].filter(Boolean).join(' ');
     throw new Error(parts);
