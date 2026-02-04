@@ -6,6 +6,7 @@ import {
   fetchAdSetsForPublish,
   searchTargetingSuggestions,
   fetchCustomAudiences,
+  fetchAdPixels,
   type PublishConfig,
   type PublishResult,
   type CampaignForPublish,
@@ -17,6 +18,7 @@ import {
   type GenderTarget,
   type DetailedTargetingItem,
   type AudienceRef,
+  type PixelRef,
   type PublisherPlatform,
   type FacebookPosition,
   type InstagramPosition,
@@ -352,6 +354,8 @@ const AdPublisher = () => {
 
   // Conversion tracking
   const [conversionEvent, setConversionEvent] = useState<ConversionEvent>('PURCHASE');
+  const [availablePixels, setAvailablePixels] = useState<PixelRef[]>([]);
+  const [pixelsLoading, setPixelsLoading] = useState(false);
   const [pixelId, setPixelId] = useState(() => {
     const saved = localStorage.getItem(PIXEL_ID_STORAGE_KEY);
     return saved || import.meta.env.VITE_META_PIXEL_ID || '';
@@ -551,6 +555,32 @@ const AdPublisher = () => {
       setIsLoadingAudiences(false);
     }
   }, []);
+
+  // Pixel fetch
+  const loadAvailablePixels = useCallback(async () => {
+    setPixelsLoading(true);
+    try {
+      const pixels = await fetchAdPixels();
+      setAvailablePixels(pixels);
+      // Auto-select first pixel if none saved
+      if (!pixelId && pixels.length > 0) {
+        setPixelId(pixels[0].id);
+        localStorage.setItem(PIXEL_ID_STORAGE_KEY, pixels[0].id);
+      }
+    } catch (err) {
+      console.warn('Could not fetch pixels:', err);
+      setAvailablePixels([]);
+    } finally {
+      setPixelsLoading(false);
+    }
+  }, [pixelId]);
+
+  // Load pixels when conversion section is expanded
+  useEffect(() => {
+    if (expandedSections.has('conversion') && availablePixels.length === 0 && !pixelsLoading) {
+      loadAvailablePixels();
+    }
+  }, [expandedSections, availablePixels.length, pixelsLoading, loadAvailablePixels]);
 
   const addCustomAudience = useCallback(() => {
     const audience = availableAudiences.find(a => a.id === selectedAudienceId);
@@ -1164,20 +1194,41 @@ const AdPublisher = () => {
                 {expandedSections.has('conversion') && (
                   <div className="config-section-body">
                     <div className="form-group">
-                      <label className="form-label">Meta Pixel ID</label>
-                      <input
-                        type="text"
-                        value={pixelId}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setPixelId(val);
-                          localStorage.setItem(PIXEL_ID_STORAGE_KEY, val);
-                        }}
-                        className="form-input"
-                        placeholder="Enter your Pixel ID"
-                      />
+                      <label className="form-label">Meta Pixel / Dataset</label>
+                      {pixelsLoading ? (
+                        <div className="form-sublabel">Loading pixels...</div>
+                      ) : availablePixels.length > 0 ? (
+                        <select
+                          value={pixelId}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setPixelId(val);
+                            localStorage.setItem(PIXEL_ID_STORAGE_KEY, val);
+                          }}
+                          className="form-select"
+                        >
+                          <option value="">Select a pixel...</option>
+                          {availablePixels.map(p => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} ({p.id})
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={pixelId}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setPixelId(val);
+                            localStorage.setItem(PIXEL_ID_STORAGE_KEY, val);
+                          }}
+                          className="form-input"
+                          placeholder="Enter your Pixel ID"
+                        />
+                      )}
                       <span className="form-sublabel">
-                        Required for Sales objective. Find in Events Manager.
+                        Required for Sales objective. Pulled from your ad account.
                       </span>
                     </div>
                     <div className="form-group">

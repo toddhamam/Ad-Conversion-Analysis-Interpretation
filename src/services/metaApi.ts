@@ -698,6 +698,12 @@ export interface DetailedTargetingItem {
   audienceSize?: number;
 }
 
+// Ad pixel / dataset reference
+export interface PixelRef {
+  id: string;
+  name: string;
+}
+
 // Custom/Lookalike audience reference
 export interface AudienceRef {
   id: string;
@@ -794,7 +800,6 @@ export interface CreateAdSetRequest {
   optimization: 'CONVERSIONS' | 'LINK_CLICKS' | 'LANDING_PAGE_VIEWS' | 'OFFSITE_CONVERSIONS';
   targeting: FullTargetingSpec;
   placements: PlacementConfig;
-  destinationType?: 'WEBSITE' | 'APP' | 'ON_AD' | 'SHOP_AUTOMATIC';
   promotedObject?: {
     pixelId: string;
     customEventType: string;
@@ -1115,21 +1120,16 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
   console.log('🎯 Targeting:', JSON.stringify(targeting, null, 2));
   console.log('🎯 Optimization Goal:', optimizationGoal);
 
-  // Use form-encoded data — Meta's Marketing API requires this format
-  // for /adsets (nested objects like targeting must be JSON.stringify'd)
-  const params = new URLSearchParams();
-  params.set('access_token', ACCESS_TOKEN);
-  params.set('name', request.name);
-  params.set('campaign_id', request.campaignId);
-  params.set('billing_event', 'IMPRESSIONS');
-  params.set('optimization_goal', optimizationGoal);
-  params.set('targeting', JSON.stringify(targeting));
-  params.set('status', 'PAUSED'); // CRITICAL: Always create as draft
-
-  // destination_type — required for OUTCOME_SALES, OUTCOME_TRAFFIC, etc.
-  if (request.destinationType) {
-    params.set('destination_type', request.destinationType);
-  }
+  const params = new URLSearchParams({
+    access_token: ACCESS_TOKEN,
+    name: request.name,
+    campaign_id: request.campaignId,
+    billing_event: 'IMPRESSIONS',
+    optimization_goal: optimizationGoal,
+    bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
+    targeting: JSON.stringify(targeting),
+    status: 'PAUSED', // CRITICAL: Always create as draft
+  });
 
   // Budget only for ABO mode (CBO budget is on the campaign)
   if (request.dailyBudget) {
@@ -1161,10 +1161,15 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
     console.log('📍 Manual Placements:', request.placements);
   }
 
-  // Log the full request for debugging (redact token)
-  const debugParams = new URLSearchParams(params);
-  debugParams.set('access_token', '***REDACTED***');
-  console.log('📤 Creating ad set with params:', debugParams.toString());
+  console.log('📤 Creating ad set with params:', {
+    name: request.name,
+    campaign_id: request.campaignId,
+    optimization_goal: optimizationGoal,
+    bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
+    has_promoted_object: !!request.promotedObject,
+    has_daily_budget: !!request.dailyBudget,
+    targeting_countries: request.targeting.geoLocations.countries,
+  });
 
   const response = await fetch(url, {
     method: 'POST',
@@ -1174,17 +1179,15 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
   const data = await response.json();
 
   if (!response.ok || data.error) {
-    console.error('❌ Failed to create ad set:', data);
-    console.error('❌ Error details:', JSON.stringify(data.error, null, 2));
+    console.error('❌ Failed to create ad set. Full API response:', JSON.stringify(data, null, 2));
     const err = data.error || {};
-    // Surface the most specific error info available from Meta
     const parts = [
       err.error_user_msg || err.message || 'Unknown error',
       err.error_user_title ? `(${err.error_user_title})` : '',
       err.error_subcode ? `[subcode: ${err.error_subcode}]` : '',
       err.fbtrace_id ? `[trace: ${err.fbtrace_id}]` : '',
     ].filter(Boolean).join(' ');
-    throw new Error(`Ad Set creation failed: ${parts}`);
+    throw new Error(parts);
   }
 
   console.log('✅ Ad set created:', data.id);
@@ -1347,6 +1350,55 @@ export async function fetchCustomAudiences(): Promise<AudienceRef[]> {
 }
 
 /**
+ * Fetch Meta Pixels (datasets) for the ad account.
+ * Tries the adspixels endpoint first, then falls back to datasets.
+ */
+export async function fetchAdPixels(): Promise<PixelRef[]> {
+  const params = new URLSearchParams({
+    access_token: ACCESS_TOKEN,
+    fields: 'id,name',
+    limit: '100',
+  });
+
+  // Try adspixels first
+  const pixelUrl = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/adspixels?${params.toString()}`;
+  try {
+    const response = await fetch(pixelUrl);
+    const data = await response.json();
+
+    if (!data.error && data.data && data.data.length > 0) {
+      return data.data.map((item: any) => ({
+        id: item.id,
+        name: item.name || `Pixel ${item.id}`,
+      }));
+    }
+
+    // If adspixels returned empty or errored, try datasets
+    if (data.error) {
+      console.warn('⚠️ adspixels endpoint failed, trying datasets:', data.error.message);
+    }
+  } catch (err) {
+    console.warn('⚠️ adspixels fetch failed, trying datasets:', err);
+  }
+
+  // Fallback to datasets endpoint
+  const datasetUrl = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/datasets?${params.toString()}`;
+  const response = await fetch(datasetUrl);
+  const data = await response.json();
+
+  if (!response.ok || data.error) {
+    const msg = data.error?.message || `HTTP ${response.status}`;
+    console.error('❌ Failed to fetch pixels/datasets:', msg);
+    throw new Error(msg);
+  }
+
+  return (data.data || []).map((item: any) => ({
+    id: item.id,
+    name: item.name || `Dataset ${item.id}`,
+  }));
+}
+
+/**
  * Main publish function - orchestrates the entire publishing process
  * Handles all three modes: new_campaign, new_adset, existing_adset
  *
@@ -1398,16 +1450,23 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
       }
     }
 
+    // Determine effective objective — OUTCOME_SALES requires a pixel for
+    // conversion tracking. Without one, fall back to OUTCOME_TRAFFIC.
+    let effectiveObjective = config.settings.campaignObjective || 'OUTCOME_SALES';
+    if (effectiveObjective === 'OUTCOME_SALES' && !config.settings.pixelId) {
+      console.warn('⚠️ No pixel configured — switching objective from OUTCOME_SALES to OUTCOME_TRAFFIC');
+      effectiveObjective = 'OUTCOME_TRAFFIC';
+    }
+
     // Step 2: Create or select campaign
     console.log('🎯 Step 2: Setting up campaign...');
     let campaignId: string;
     if (config.mode === 'new_campaign') {
-      const objective = config.settings.campaignObjective || 'OUTCOME_SALES';
-      console.log(`📝 Creating new campaign: "${config.settings.campaignName}" with objective: ${objective}, budget mode: ${budgetMode}`);
+      console.log(`📝 Creating new campaign: "${config.settings.campaignName}" with objective: ${effectiveObjective}, budget mode: ${budgetMode}`);
       try {
         campaignId = await createCampaign({
           name: config.settings.campaignName || 'CI Generated Campaign',
-          objective: objective,
+          objective: effectiveObjective,
           budgetMode: budgetMode,
           dailyBudget: budgetMode === 'CBO' ? (config.settings.dailyBudget || 50) : undefined,
         });
@@ -1431,27 +1490,21 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
     } else {
       const targeting = config.settings.targeting || defaultTargeting;
       const placements = config.settings.placements || defaultPlacements;
-      const objective = config.settings.campaignObjective || 'OUTCOME_SALES';
 
-      // Determine optimization and destination based on objective and pixel config
+      // Determine ad set optimization based on effective campaign objective
       let optimization: 'LINK_CLICKS' | 'OFFSITE_CONVERSIONS' | 'LANDING_PAGE_VIEWS' | 'CONVERSIONS' = 'LINK_CLICKS';
       let promotedObject: { pixelId: string; customEventType: string } | undefined;
-      let destinationType: 'WEBSITE' | undefined = 'WEBSITE';
 
-      if (objective === 'OUTCOME_SALES' && config.settings.pixelId) {
+      if (effectiveObjective === 'OUTCOME_SALES' && config.settings.pixelId) {
         optimization = 'OFFSITE_CONVERSIONS';
         promotedObject = {
           pixelId: config.settings.pixelId,
           customEventType: config.settings.conversionEvent || 'PURCHASE',
         };
-      } else if (objective === 'OUTCOME_SALES' && !config.settings.pixelId) {
-        // OUTCOME_SALES without pixel — use LANDING_PAGE_VIEWS which is
-        // compatible with sales campaigns without requiring a pixel
-        optimization = 'LANDING_PAGE_VIEWS';
-        console.warn('⚠️ No pixel configured for OUTCOME_SALES — using LANDING_PAGE_VIEWS optimization');
       }
+      // For OUTCOME_TRAFFIC (or OUTCOME_SALES downgraded to TRAFFIC), LINK_CLICKS is correct
 
-      console.log(`📝 Creating new ad set: "${config.settings.adsetName}" (optimization: ${optimization}, destination: ${destinationType})`);
+      console.log(`📝 Creating new ad set: "${config.settings.adsetName}" (objective: ${effectiveObjective}, optimization: ${optimization})`);
       try {
         adsetId = await createAdSet({
           name: config.settings.adsetName || 'CI Generated Ad Set',
@@ -1460,12 +1513,11 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
           optimization: optimization,
           targeting: targeting,
           placements: placements,
-          destinationType: destinationType,
           promotedObject: promotedObject,
         });
         console.log(`✅ Ad set created: ${adsetId}`);
       } catch (adsetError: any) {
-        throw new Error(`Ad Set creation failed: ${adsetError.message}`);
+        throw new Error(adsetError.message);
       }
     }
     result.adsetId = adsetId;
