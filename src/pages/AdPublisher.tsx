@@ -895,7 +895,7 @@ const AdPublisher = () => {
       </div>
 
       {error && (
-        <div className="publisher-error">
+        <div className="publisher-error" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '12px' }}>
           <span className="error-icon">❌</span>
           {error}
         </div>

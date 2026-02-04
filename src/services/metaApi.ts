@@ -1069,18 +1069,18 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
   console.log('🚀 Creating ad set:', request.name);
   console.log('📋 Ad Set Request:', JSON.stringify(request, null, 2));
 
-  const url = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/adsets`;
+  // Auth via query param (standard Graph API pattern), data via POST body
+  const url = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/adsets?access_token=${ACCESS_TOKEN}`;
 
   // Determine optimization goal based on configuration
   let optimizationGoal = request.optimization;
   if (request.promotedObject) {
     optimizationGoal = 'OFFSITE_CONVERSIONS';
   } else if (optimizationGoal === 'OFFSITE_CONVERSIONS' && !request.promotedObject) {
-    // Fallback if no pixel configured
     optimizationGoal = 'LINK_CLICKS';
   }
 
-  // Build targeting - Meta requires specific format
+  // Build targeting — minimal required format
   const targeting: Record<string, any> = {
     geo_locations: {
       countries: request.targeting.geoLocations.countries,
@@ -1089,12 +1089,9 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
     age_max: request.targeting.ageMax,
   };
 
-  // Gender (only add if not "all" - gender 0 means all)
   if (request.targeting.genders && !request.targeting.genders.includes(0)) {
     targeting.genders = request.targeting.genders;
   }
-
-  // Detailed targeting (interests/behaviors) via flexible_spec
   if (request.targeting.flexibleSpec && request.targeting.flexibleSpec.length > 0) {
     targeting.flexible_spec = request.targeting.flexibleSpec.map(group => {
       const spec: Record<string, { id: string; name: string }[]> = {};
@@ -1106,89 +1103,77 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
       return spec;
     });
   }
-
-  // Custom audiences
   if (request.targeting.customAudiences && request.targeting.customAudiences.length > 0) {
     targeting.custom_audiences = request.targeting.customAudiences.map(a => ({ id: a.id }));
   }
-
-  // Excluded audiences
   if (request.targeting.excludedCustomAudiences && request.targeting.excludedCustomAudiences.length > 0) {
     targeting.excluded_custom_audiences = request.targeting.excludedCustomAudiences.map(a => ({ id: a.id }));
   }
 
-  console.log('🎯 Targeting:', JSON.stringify(targeting, null, 2));
-  console.log('🎯 Optimization Goal:', optimizationGoal);
-
-  // Build request body as JSON — same format that works for createCampaign
+  // Build the minimal request body — only what Meta requires
   const requestBody: Record<string, any> = {
-    access_token: ACCESS_TOKEN,
     name: request.name,
     campaign_id: request.campaignId,
     billing_event: 'IMPRESSIONS',
     optimization_goal: optimizationGoal,
-    targeting: targeting,
-    status: 'PAUSED', // CRITICAL: Always create as draft
+    targeting: JSON.stringify(targeting),
+    status: 'PAUSED',
   };
 
-  // Budget only for ABO mode (CBO budget is on the campaign)
   if (request.dailyBudget) {
     requestBody.daily_budget = Math.round(request.dailyBudget * 100);
-    console.log('💰 Daily Budget (cents):', requestBody.daily_budget);
   }
 
-  // Promoted object for conversion tracking (OUTCOME_SALES with pixel)
   if (request.promotedObject) {
-    requestBody.promoted_object = {
+    requestBody.promoted_object = JSON.stringify({
       pixel_id: request.promotedObject.pixelId,
       custom_event_type: request.promotedObject.customEventType,
-    };
-    console.log('🎯 Promoted Object:', JSON.stringify(request.promotedObject));
+    });
   }
 
-  // Manual placements (omit for Advantage+ automatic)
   if (!request.placements.automatic) {
     if (request.placements.publisherPlatforms?.length) {
-      requestBody.publisher_platforms = request.placements.publisherPlatforms;
+      requestBody.publisher_platforms = JSON.stringify(request.placements.publisherPlatforms);
     }
     if (request.placements.facebookPositions?.length) {
-      requestBody.facebook_positions = request.placements.facebookPositions;
+      requestBody.facebook_positions = JSON.stringify(request.placements.facebookPositions);
     }
     if (request.placements.instagramPositions?.length) {
-      requestBody.instagram_positions = request.placements.instagramPositions;
+      requestBody.instagram_positions = JSON.stringify(request.placements.instagramPositions);
     }
-    console.log('📍 Manual Placements:', request.placements);
   }
 
-  // Log the full request (redact token)
-  const debugBody = { ...requestBody, access_token: '***REDACTED***' };
-  console.log('📤 Creating ad set — full request body:', JSON.stringify(debugBody, null, 2));
+  console.log('📤 Creating ad set — request body:', JSON.stringify(requestBody, null, 2));
+
+  // Use URLSearchParams for form-encoded POST body (access_token is in URL)
+  const formBody = new URLSearchParams();
+  for (const [key, value] of Object.entries(requestBody)) {
+    formBody.set(key, String(value));
+  }
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(requestBody),
+    body: formBody,
   });
 
-  const data = await response.json();
+  const responseText = await response.text();
+  console.log('📥 Raw Meta API response (HTTP ' + response.status + '):', responseText);
+
+  let data: any;
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error(`Meta returned non-JSON (HTTP ${response.status}): ${responseText.substring(0, 500)}`);
+  }
 
   if (!response.ok || data.error) {
-    // Log everything Meta returns — including blame_field_specs which identifies the bad field
-    console.error('❌ Failed to create ad set. HTTP status:', response.status);
-    console.error('❌ Full API response:', JSON.stringify(data, null, 2));
     const err = data.error || {};
-    console.error('❌ Error code:', err.code, '| type:', err.type, '| is_transient:', err.is_transient);
-    if (err.error_data) console.error('❌ error_data:', JSON.stringify(err.error_data));
-    if (err.blame_field_specs) console.error('❌ blame_field_specs:', JSON.stringify(err.blame_field_specs));
-
-    const parts = [
-      err.error_user_msg || err.message || 'Unknown error',
-      err.error_user_title ? `(${err.error_user_title})` : '',
-      err.error_subcode ? `[subcode: ${err.error_subcode}]` : '',
-      err.blame_field_specs ? `[blame: ${JSON.stringify(err.blame_field_specs)}]` : '',
-      err.fbtrace_id ? `[trace: ${err.fbtrace_id}]` : '',
-    ].filter(Boolean).join(' ');
-    throw new Error(parts);
+    // Include the FULL raw response in the error so we can see everything Meta returns
+    const rawInfo = JSON.stringify(data, null, 2);
+    throw new Error(
+      `${err.error_user_msg || err.message || 'Unknown error'}\n\n` +
+      `Full Meta response:\n${rawInfo}`
+    );
   }
 
   console.log('✅ Ad set created:', data.id);
