@@ -1,7 +1,7 @@
 // Meta Marketing API Service
 console.log('🔥🔥🔥 metaApi.ts VERSION 5.0 LOADED AT', new Date().toISOString(), '🔥🔥🔥');
 
-const META_API_VERSION = 'v22.0';
+const META_API_VERSION = 'v24.0';
 const META_GRAPH_API = `https://graph.facebook.com/${META_API_VERSION}`;
 
 const ACCESS_TOKEN = import.meta.env.VITE_META_ACCESS_TOKEN;
