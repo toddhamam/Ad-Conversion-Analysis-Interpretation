@@ -1114,6 +1114,9 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
   console.log('🎯 Targeting:', JSON.stringify(targeting, null, 2));
   console.log('🎯 Optimization Goal:', optimizationGoal);
 
+  // Meta requires start_time for ad sets — use now (ISO 8601)
+  const startTime = new Date().toISOString();
+
   const params = new URLSearchParams({
     access_token: ACCESS_TOKEN,
     name: request.name,
@@ -1123,6 +1126,7 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
     bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
     targeting: JSON.stringify(targeting),
     status: 'PAUSED', // CRITICAL: Always create as draft
+    start_time: startTime,
   });
 
   // Budget only for ABO mode (CBO budget is on the campaign)
@@ -1171,8 +1175,15 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
   if (!response.ok || data.error) {
     console.error('❌ Failed to create ad set:', data);
     console.error('❌ Error details:', JSON.stringify(data.error, null, 2));
-    const errorMsg = data.error?.error_user_msg || data.error?.message || 'Failed to create ad set';
-    throw new Error(`Ad Set creation failed: ${errorMsg}`);
+    const err = data.error || {};
+    // Surface the most specific error info available from Meta
+    const parts = [
+      err.error_user_msg || err.message || 'Unknown error',
+      err.error_user_title ? `(${err.error_user_title})` : '',
+      err.error_subcode ? `[subcode: ${err.error_subcode}]` : '',
+      err.fbtrace_id ? `[trace: ${err.fbtrace_id}]` : '',
+    ].filter(Boolean).join(' ');
+    throw new Error(`Ad Set creation failed: ${parts}`);
   }
 
   console.log('✅ Ad set created:', data.id);
