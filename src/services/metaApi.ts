@@ -1221,14 +1221,15 @@ export async function createAdCreative(request: CreateAdRequest): Promise<string
   const data = await response.json();
 
   if (!response.ok || data.error) {
-    console.error('❌ Failed to create ad creative - Full response:', JSON.stringify(data, null, 2));
-    console.error('❌ Error code:', data.error?.code);
-    console.error('❌ Error type:', data.error?.type);
-    console.error('❌ Error message:', data.error?.message);
-    console.error('❌ Error user message:', data.error?.error_user_msg);
-    console.error('❌ Object story spec sent:', JSON.stringify(objectStorySpec, null, 2));
-    const errorMsg = data.error?.error_user_msg || data.error?.message || 'Failed to create ad creative';
-    throw new Error(errorMsg);
+    const err = data.error || {};
+    const rawInfo = JSON.stringify(data, null, 2);
+    const specInfo = JSON.stringify(objectStorySpec, null, 2);
+    console.error('❌ Failed to create ad creative:', rawInfo);
+    throw new Error(
+      `${err.error_user_msg || err.message || 'Failed to create ad creative'}\n\n` +
+      `Full Meta response:\n${rawInfo}\n\n` +
+      `object_story_spec sent:\n${specInfo}`
+    );
   }
 
   console.log('✅ Ad creative created:', data.id);
