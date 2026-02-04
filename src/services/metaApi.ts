@@ -1242,6 +1242,7 @@ export async function createAdCreative(request: CreateAdRequest): Promise<string
  */
 export async function createAd(adsetId: string, creativeId: string, name: string): Promise<string> {
   console.log('📝 Creating ad:', name);
+  console.log('📋 createAd params: adset_id=%s, creative_id=%s, name=%s', adsetId, creativeId, name);
 
   const url = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/ads`;
 
@@ -1249,7 +1250,7 @@ export async function createAd(adsetId: string, creativeId: string, name: string
     access_token: ACCESS_TOKEN,
     name: name,
     adset_id: adsetId,
-    creative: JSON.stringify({ creative_id: creativeId }),
+    creative: JSON.stringify({ id: creativeId }),
     status: 'PAUSED', // CRITICAL: Always create as draft
   });
 
