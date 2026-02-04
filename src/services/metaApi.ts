@@ -1240,19 +1240,30 @@ export async function createAdCreative(request: CreateAdRequest): Promise<string
  * Create an ad
  * ALWAYS creates in PAUSED status for safety
  */
-export async function createAd(adsetId: string, creativeId: string, name: string): Promise<string> {
+export async function createAd(
+  adsetId: string,
+  creativeId: string,
+  name: string,
+  pixelId?: string,
+): Promise<string> {
   console.log('📝 Creating ad:', name);
-  console.log('📋 createAd params: adset_id=%s, creative_id=%s, name=%s', adsetId, creativeId, name);
 
   const url = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/ads`;
 
-  const params = new URLSearchParams({
-    access_token: ACCESS_TOKEN,
-    name: name,
-    adset_id: adsetId,
-    creative: JSON.stringify({ id: creativeId }),
-    status: 'PAUSED', // CRITICAL: Always create as draft
-  });
+  const params = new URLSearchParams();
+  params.append('access_token', ACCESS_TOKEN);
+  params.append('name', name);
+  params.append('adset_id', adsetId);
+  params.append('creative', JSON.stringify({ id: creativeId }));
+  params.append('status', 'PAUSED');
+
+  // For OUTCOME_SALES with pixel, include tracking_specs so Meta knows
+  // which pixel to attribute conversions to
+  if (pixelId) {
+    params.append('tracking_specs', JSON.stringify([
+      { 'action.type': ['offsite_conversion'], 'fb_pixel': [pixelId] },
+    ]));
+  }
 
   const response = await fetch(url, {
     method: 'POST',
@@ -1601,7 +1612,8 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
         const adId = await createAd(
           adsetId,
           creativeId,
-          `CI Ad ${i + 1} - ${ad.headline.substring(0, 30)}`
+          `CI Ad ${i + 1} - ${ad.headline.substring(0, 30)}`,
+          config.settings.pixelId,
         );
         result.adIds!.push(adId);
         console.log(`✅ Ad ${i + 1} created: ${adId}`);
