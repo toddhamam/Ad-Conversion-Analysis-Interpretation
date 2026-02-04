@@ -794,6 +794,7 @@ export interface CreateAdSetRequest {
   optimization: 'CONVERSIONS' | 'LINK_CLICKS' | 'LANDING_PAGE_VIEWS' | 'OFFSITE_CONVERSIONS';
   targeting: FullTargetingSpec;
   placements: PlacementConfig;
+  destinationType?: 'WEBSITE' | 'APP' | 'ON_AD' | 'SHOP_AUTOMATIC';
   promotedObject?: {
     pixelId: string;
     customEventType: string;
@@ -1114,53 +1115,60 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
   console.log('🎯 Targeting:', JSON.stringify(targeting, null, 2));
   console.log('🎯 Optimization Goal:', optimizationGoal);
 
-  // Build request body as JSON (consistent with createCampaign)
-  const requestBody: Record<string, any> = {
-    access_token: ACCESS_TOKEN,
-    name: request.name,
-    campaign_id: request.campaignId,
-    billing_event: 'IMPRESSIONS',
-    optimization_goal: optimizationGoal,
-    targeting: targeting,
-    status: 'PAUSED', // CRITICAL: Always create as draft
-    start_time: new Date().toISOString(),
-  };
+  // Use form-encoded data — Meta's Marketing API requires this format
+  // for /adsets (nested objects like targeting must be JSON.stringify'd)
+  const params = new URLSearchParams();
+  params.set('access_token', ACCESS_TOKEN);
+  params.set('name', request.name);
+  params.set('campaign_id', request.campaignId);
+  params.set('billing_event', 'IMPRESSIONS');
+  params.set('optimization_goal', optimizationGoal);
+  params.set('targeting', JSON.stringify(targeting));
+  params.set('status', 'PAUSED'); // CRITICAL: Always create as draft
+
+  // destination_type — required for OUTCOME_SALES, OUTCOME_TRAFFIC, etc.
+  if (request.destinationType) {
+    params.set('destination_type', request.destinationType);
+  }
 
   // Budget only for ABO mode (CBO budget is on the campaign)
   if (request.dailyBudget) {
-    requestBody.daily_budget = Math.round(request.dailyBudget * 100); // Convert to cents
-    console.log('💰 Daily Budget (cents):', requestBody.daily_budget);
+    const dailyBudgetCents = Math.round(request.dailyBudget * 100);
+    params.set('daily_budget', dailyBudgetCents.toString());
+    console.log('💰 Daily Budget (cents):', dailyBudgetCents);
   }
 
   // Promoted object for conversion tracking (OUTCOME_SALES with pixel)
   if (request.promotedObject) {
-    requestBody.promoted_object = {
+    params.set('promoted_object', JSON.stringify({
       pixel_id: request.promotedObject.pixelId,
       custom_event_type: request.promotedObject.customEventType,
-    };
+    }));
     console.log('🎯 Promoted Object:', JSON.stringify(request.promotedObject));
   }
 
   // Manual placements (omit for Advantage+ automatic)
   if (!request.placements.automatic) {
     if (request.placements.publisherPlatforms?.length) {
-      requestBody.publisher_platforms = request.placements.publisherPlatforms;
+      params.set('publisher_platforms', JSON.stringify(request.placements.publisherPlatforms));
     }
     if (request.placements.facebookPositions?.length) {
-      requestBody.facebook_positions = request.placements.facebookPositions;
+      params.set('facebook_positions', JSON.stringify(request.placements.facebookPositions));
     }
     if (request.placements.instagramPositions?.length) {
-      requestBody.instagram_positions = request.placements.instagramPositions;
+      params.set('instagram_positions', JSON.stringify(request.placements.instagramPositions));
     }
     console.log('📍 Manual Placements:', request.placements);
   }
 
-  console.log('📤 Creating ad set with body:', JSON.stringify(requestBody, null, 2));
+  // Log the full request for debugging (redact token)
+  const debugParams = new URLSearchParams(params);
+  debugParams.set('access_token', '***REDACTED***');
+  console.log('📤 Creating ad set with params:', debugParams.toString());
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(requestBody),
+    body: params,
   });
 
   const data = await response.json();
@@ -1425,9 +1433,10 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
       const placements = config.settings.placements || defaultPlacements;
       const objective = config.settings.campaignObjective || 'OUTCOME_SALES';
 
-      // Determine optimization based on objective and pixel config
+      // Determine optimization and destination based on objective and pixel config
       let optimization: 'LINK_CLICKS' | 'OFFSITE_CONVERSIONS' | 'LANDING_PAGE_VIEWS' | 'CONVERSIONS' = 'LINK_CLICKS';
       let promotedObject: { pixelId: string; customEventType: string } | undefined;
+      let destinationType: 'WEBSITE' | undefined = 'WEBSITE';
 
       if (objective === 'OUTCOME_SALES' && config.settings.pixelId) {
         optimization = 'OFFSITE_CONVERSIONS';
@@ -1435,9 +1444,14 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
           pixelId: config.settings.pixelId,
           customEventType: config.settings.conversionEvent || 'PURCHASE',
         };
+      } else if (objective === 'OUTCOME_SALES' && !config.settings.pixelId) {
+        // OUTCOME_SALES without pixel — use LANDING_PAGE_VIEWS which is
+        // compatible with sales campaigns without requiring a pixel
+        optimization = 'LANDING_PAGE_VIEWS';
+        console.warn('⚠️ No pixel configured for OUTCOME_SALES — using LANDING_PAGE_VIEWS optimization');
       }
 
-      console.log(`📝 Creating new ad set: "${config.settings.adsetName}"`);
+      console.log(`📝 Creating new ad set: "${config.settings.adsetName}" (optimization: ${optimization}, destination: ${destinationType})`);
       try {
         adsetId = await createAdSet({
           name: config.settings.adsetName || 'CI Generated Ad Set',
@@ -1446,6 +1460,7 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
           optimization: optimization,
           targeting: targeting,
           placements: placements,
+          destinationType: destinationType,
           promotedObject: promotedObject,
         });
         console.log(`✅ Ad set created: ${adsetId}`);
