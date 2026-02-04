@@ -1114,60 +1114,53 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
   console.log('🎯 Targeting:', JSON.stringify(targeting, null, 2));
   console.log('🎯 Optimization Goal:', optimizationGoal);
 
-  // Meta requires start_time for ad sets — use now (ISO 8601)
-  const startTime = new Date().toISOString();
-
-  const params = new URLSearchParams({
+  // Build request body as JSON (consistent with createCampaign)
+  const requestBody: Record<string, any> = {
     access_token: ACCESS_TOKEN,
     name: request.name,
     campaign_id: request.campaignId,
     billing_event: 'IMPRESSIONS',
     optimization_goal: optimizationGoal,
-    bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
-    targeting: JSON.stringify(targeting),
+    targeting: targeting,
     status: 'PAUSED', // CRITICAL: Always create as draft
-    start_time: startTime,
-  });
+    start_time: new Date().toISOString(),
+  };
 
   // Budget only for ABO mode (CBO budget is on the campaign)
   if (request.dailyBudget) {
-    const dailyBudgetCents = Math.round(request.dailyBudget * 100);
-    params.set('daily_budget', dailyBudgetCents.toString());
-    console.log('💰 Daily Budget (cents):', dailyBudgetCents);
+    requestBody.daily_budget = Math.round(request.dailyBudget * 100); // Convert to cents
+    console.log('💰 Daily Budget (cents):', requestBody.daily_budget);
   }
 
   // Promoted object for conversion tracking (OUTCOME_SALES with pixel)
   if (request.promotedObject) {
-    params.set('promoted_object', JSON.stringify({
+    requestBody.promoted_object = {
       pixel_id: request.promotedObject.pixelId,
       custom_event_type: request.promotedObject.customEventType,
-    }));
+    };
     console.log('🎯 Promoted Object:', JSON.stringify(request.promotedObject));
   }
 
   // Manual placements (omit for Advantage+ automatic)
   if (!request.placements.automatic) {
     if (request.placements.publisherPlatforms?.length) {
-      params.set('publisher_platforms', JSON.stringify(request.placements.publisherPlatforms));
+      requestBody.publisher_platforms = request.placements.publisherPlatforms;
     }
     if (request.placements.facebookPositions?.length) {
-      params.set('facebook_positions', JSON.stringify(request.placements.facebookPositions));
+      requestBody.facebook_positions = request.placements.facebookPositions;
     }
     if (request.placements.instagramPositions?.length) {
-      params.set('instagram_positions', JSON.stringify(request.placements.instagramPositions));
+      requestBody.instagram_positions = request.placements.instagramPositions;
     }
     console.log('📍 Manual Placements:', request.placements);
   }
 
-  console.log('📤 Creating ad set with params:', {
-    name: request.name,
-    campaign_id: request.campaignId,
-    optimization_goal: optimizationGoal,
-  });
+  console.log('📤 Creating ad set with body:', JSON.stringify(requestBody, null, 2));
 
   const response = await fetch(url, {
     method: 'POST',
-    body: params,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody),
   });
 
   const data = await response.json();
