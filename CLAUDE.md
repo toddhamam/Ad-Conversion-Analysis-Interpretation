@@ -638,7 +638,7 @@ Always run `npm run dev` to start the development server before testing URLs. Th
 
 ### Working with Meta API
 - All requests go through `metaApi.ts`
-- Graph API version: v21.0
+- Graph API version: v24.0
 - Creative fetching includes thumbnail URL extraction
 - Campaign metrics include ROAS, CPA, CVR, CTR
 - **Ad creation safety**: Always create ads with `status: 'PAUSED'` to prevent accidental live publication
@@ -657,32 +657,92 @@ Always run `npm run dev` to start the development server before testing URLs. Th
 - **System User tokens**: Best for production. Can have `expires_at: 0` (never expire) but still require specific granular scopes.
 - **Token caching pitfall**: A valid-looking UI may persist with an expired token due to cached data. Meta will reject new write requests even if cached read data still displays.
 
-### Meta API Ad Publishing Patterns
+### Meta API Ad Publishing — Critical Parameters
 
-#### Campaign Objectives & Optimization
+These parameters were discovered through extensive trial-and-error (PRs #87-95). Missing any one of them causes opaque Meta API errors.
+
+#### Campaign Level (`createCampaign`)
+- `bid_strategy: 'LOWEST_COST_WITHOUT_CAP'` — **required**, otherwise Meta defaults to a strategy that demands `bid_amount` (error: "Bid amount required for bid strategy provided"). This maps to "Highest Volume" in the Meta UI.
+- `special_ad_categories: []` — **required** even when empty
+- `status: 'PAUSED'` — always create in draft/paused mode
+- Budget in cents (multiply by 100)
 - For `OUTCOME_SALES` objective, include `promoted_object` with `pixel_id` and `custom_event_type` for conversion tracking
 - `optimization_goal` choices: `OFFSITE_CONVERSIONS` (preferred for sales with pixel), `LANDING_PAGE_VIEWS`, or `LINK_CLICKS` (fallback if no pixel)
 - Default campaign objective: **Sales** (`OUTCOME_SALES`)
 
-#### Budget Modes (CBO vs ABO)
-- **CBO (default)**: Budget set at campaign level via `createCampaign`
-- **ABO**: Budget set at ad set level via `createAdSet`; requires `is_adset_budget_sharing_enabled: false`
+#### Ad Set Level (`createAdSet`)
+- `destination_type: 'WEBSITE'` — **required** in v24.0 for `OUTCOME_SALES` and `OUTCOME_TRAFFIC`. Missing this causes a generic "Invalid parameter" error (code 100).
+- `billing_event: 'IMPRESSIONS'` — standard setting
+- Must use **form-encoded body** (`URLSearchParams`), NOT JSON — nested objects like `targeting` and `promoted_object` must be `JSON.stringify()`'d as string values
+- **Campaign propagation delay**: Meta is eventually consistent. After creating a campaign, wait 3 seconds + do a verification read before creating the ad set, or the campaign ID may not be found.
 
-#### Targeting
-- Interests/behaviors use `flexible_spec` in the targeting object for `createAdSet`
+#### Ad Level (`createAdWithCreative`)
+- Use **inline creative spec** — pass the full `object_story_spec` in the `creative` param of the ad creation call. Do NOT create a creative separately then reference by ID, as this causes "Ad incomplete" errors (subcode 2446391).
+- `tracking_specs` **required** for `OUTCOME_SALES` with pixel: `[{"action.type": ["offsite_conversion"], "fb_pixel": ["<pixel_id>"]}]`. Note: `offsite_conversion` is the correct API value for what the Meta UI calls "Website Events".
+- `link_data` must include the `description` field (in addition to `name`/headline)
+
+#### Ad Creative Structure (Inline Pattern)
+```
+ads endpoint → creative: {
+  name,
+  object_story_spec: {
+    page_id,
+    link_data: { image_hash, link, message, name, description, call_to_action }
+  }
+}
+```
+
+### Request Encoding Rules
+
+Different Meta API endpoints require different content types. Using the wrong encoding causes silent failures or cryptic errors.
+
+| Endpoint | Content Type | Notes |
+|----------|-------------|-------|
+| Campaigns | JSON body (`Content-Type: application/json`) | Standard JSON object |
+| Ad Sets | Form-encoded (`URLSearchParams`) | Nested objects (`targeting`, `promoted_object`) must be `JSON.stringify()`'d |
+| Ads | Form-encoded (`URLSearchParams`) | `creative` spec must be `JSON.stringify()`'d |
+| Image uploads | `FormData` | Binary upload with `filename` field |
+
+### Meta Business Manager Setup Requirements
+
+These prerequisites must be completed in Meta Business Manager before ads can be created via the API. Missing any one causes errors that are not obvious from the error messages.
+
+1. **System User must be Admin role** (not Employee). Employee-role System Users cannot accept required policies. You cannot change an existing System User's role — you must create a new one if the current user is Employee.
+2. **Non-discrimination policy must be accepted** by the System User (error: "Certification required", subcode 2859024). Navigate to Business Settings → System Users → select the user → accept the policy. Only Admin-role users can do this.
+3. **Page access must be assigned** to the System User: Business Settings → System Users → Add Assets → Pages. Without this, you get "You don't have the required permission to access this profile".
+4. **Ad Account access must be assigned** to the System User.
+5. **Pixel/Dataset access must be assigned** to the System User (for conversion tracking).
+6. **Required API scopes**: `ads_management`, `pages_read_engagement`, `pages_manage_ads`, `business_management`
+
+### Targeting (`flexible_spec`)
+
+- Items from Meta's targeting search API should be bucketed as `interests` (not `demographics`) unless the item's `type` is explicitly `behavior`. Most targeting suggestions (personal development, well-being, mindfulness, etc.) are interests.
 - Fetch targeting suggestions from Meta API in real-time (not manual ID entry)
 - Fetch custom audiences from the ad account via API instead of requiring manual IDs
 
-#### Image Upload Flow
+### Pre-Publish Diagnostics
+
+The `publishAds()` function runs automatic diagnostics before ad set creation:
+
+- **Token introspection** via `debug_token` endpoint: validates scopes, checks `granular_scopes` with `target_ids`, confirms expiration
+- **Account health check**: verifies `account_status` (1=ACTIVE), `disable_reason` (0=none), currency, and capabilities
+- Diagnostic output is appended to error messages when publishing fails, making it easier to identify token/permission issues
+
+### Pixel Management
+
+- Pixels are fetched via `fetchAdPixels()` from the `adspixels` endpoint (fallback: `datasets` endpoint)
+- Never manually enter pixel IDs — always fetch from the API to ensure they're associated with the ad account
+- Pixel ID is required for `OUTCOME_SALES` campaigns (used in both `promoted_object` and `tracking_specs`)
+
+### Budget Modes (CBO vs ABO)
+- **CBO (default)**: Budget set at campaign level via `createCampaign`
+- **ABO**: Budget set at ad set level via `createAdSet`; requires `is_adset_budget_sharing_enabled: false`
+
+### Image Upload Flow
 1. Convert image URL to base64
 2. Upload via `adimages` endpoint using `FormData`
 3. Receive `image_hash` from response
 4. Use `image_hash` in `object_story_spec` → `link_data` for creative creation
-
-#### Ad Creative Structure
-```
-object_story_spec → link_data: { image_hash, message (body), name (headline), call_to_action, link }
-```
 
 ---
 
