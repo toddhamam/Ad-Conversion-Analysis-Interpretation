@@ -1117,6 +1117,8 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
   params.append('optimization_goal', optimizationGoal);
   params.append('targeting', JSON.stringify(targeting));
   params.append('status', 'PAUSED');
+  // destination_type is required in v24.0 for OUTCOME_SALES/OUTCOME_TRAFFIC
+  params.append('destination_type', 'WEBSITE');
 
   if (request.dailyBudget) {
     params.append('daily_budget', String(Math.round(request.dailyBudget * 100)));
@@ -1163,11 +1165,13 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
 
   if (!response.ok || data.error) {
     const err = data.error || {};
-    // Include the FULL raw response in the error so we can see everything Meta returns
+    // Include the FULL raw response AND the sent params in the error
     const rawInfo = JSON.stringify(data, null, 2);
+    const sentParams = debugParams.toString();
     throw new Error(
       `${err.error_user_msg || err.message || 'Unknown error'}\n\n` +
-      `Full Meta response:\n${rawInfo}`
+      `Full Meta response:\n${rawInfo}\n\n` +
+      `Sent params:\n${decodeURIComponent(sentParams)}`
     );
   }
 
@@ -1441,7 +1445,8 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
       const debugData = await debugResp.json();
       if (debugData.data) {
         const d = debugData.data;
-        const info = `Token: type=${d.type}, app_id=${d.app_id}, valid=${d.is_valid}, scopes=[${(d.scopes || []).join(', ')}], granular_scopes=[${(d.granular_scopes || []).map((s: any) => s.permission).join(', ')}], expires=${d.expires_at === 0 ? 'never' : new Date(d.expires_at * 1000).toISOString()}`;
+        const granularInfo = (d.granular_scopes || []).map((s: any) => `${s.scope}→[${(s.target_ids || []).join(',')}]`).join(', ');
+        const info = `Token: type=${d.type}, app_id=${d.app_id}, valid=${d.is_valid}, scopes=[${(d.scopes || []).join(', ')}], granular_scopes=[${granularInfo}], expires=${d.expires_at === 0 ? 'never' : new Date(d.expires_at * 1000).toISOString()}`;
         console.log('🔑', info);
         diagnostics.push(info);
       }
