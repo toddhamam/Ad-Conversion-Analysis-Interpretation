@@ -20,7 +20,6 @@ const Sidebar = ({
   logoAlt = 'Convertra',
 }: SidebarProps) => {
   const [channelsExpanded, setChannelsExpanded] = useState(false);
-  const [insightsExpanded, setInsightsExpanded] = useState(false);
 
   return (
     <>
@@ -110,37 +109,14 @@ const Sidebar = ({
           <span className="nav-label">Funnels</span>
         </NavLink>
 
-        <div className="nav-section">
-          <button
-            className={`nav-item nav-item-expandable ${insightsExpanded ? 'expanded' : ''}`}
-            onClick={() => !collapsed && setInsightsExpanded(!insightsExpanded)}
-            title="ConversionIQ™"
-          >
-            <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="20" x2="18" y2="10"/>
-              <line x1="12" y1="20" x2="12" y2="4"/>
-              <line x1="6" y1="20" x2="6" y2="14"/>
-            </svg>
-            <span className="nav-label">ConversionIQ™</span>
-            {!collapsed && (
-              <svg className="nav-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="6 9 12 15 18 9"/>
-              </svg>
-            )}
-          </button>
-          {insightsExpanded && !collapsed && (
-            <div className="nav-submenu">
-              <NavLink to="/insights" className="nav-subitem" onClick={onCloseMobile}>
-                <span className="nav-bullet"></span>
-                <span>Overview</span>
-              </NavLink>
-              <NavLink to="/concepts" className="nav-subitem" onClick={onCloseMobile}>
-                <span className="nav-bullet"></span>
-                <span>Concepts</span>
-              </NavLink>
-            </div>
-          )}
-        </div>
+        <NavLink to="/insights" className="nav-item" title="ConversionIQ™" onClick={onCloseMobile}>
+          <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"/>
+            <line x1="12" y1="20" x2="12" y2="4"/>
+            <line x1="6" y1="20" x2="6" y2="14"/>
+          </svg>
+          <span className="nav-label">ConversionIQ™</span>
+        </NavLink>
       </nav>
 
       <div className="sidebar-cta">
