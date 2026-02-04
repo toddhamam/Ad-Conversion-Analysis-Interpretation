@@ -1069,9 +1069,6 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
   console.log('🚀 Creating ad set:', request.name);
   console.log('📋 Ad Set Request:', JSON.stringify(request, null, 2));
 
-  // Auth via query param (standard Graph API pattern), data via POST body
-  const url = `${META_GRAPH_API}/${AD_ACCOUNT_ID}/adsets?access_token=${ACCESS_TOKEN}`;
-
   // Determine optimization goal based on configuration
   let optimizationGoal = request.optimization;
   if (request.promotedObject) {
@@ -1110,13 +1107,14 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
     targeting.excluded_custom_audiences = request.targeting.excludedCustomAudiences.map(a => ({ id: a.id }));
   }
 
-  // Build the minimal request body — only what Meta requires
+  // Build request body matching createCampaign format (JSON with Content-Type)
   const requestBody: Record<string, any> = {
+    access_token: ACCESS_TOKEN,
     name: request.name,
     campaign_id: request.campaignId,
     billing_event: 'IMPRESSIONS',
     optimization_goal: optimizationGoal,
-    targeting: JSON.stringify(targeting),
+    targeting: targeting,
     status: 'PAUSED',
   };
 
@@ -1125,35 +1123,32 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
   }
 
   if (request.promotedObject) {
-    requestBody.promoted_object = JSON.stringify({
+    requestBody.promoted_object = {
       pixel_id: request.promotedObject.pixelId,
       custom_event_type: request.promotedObject.customEventType,
-    });
+    };
   }
 
   if (!request.placements.automatic) {
     if (request.placements.publisherPlatforms?.length) {
-      requestBody.publisher_platforms = JSON.stringify(request.placements.publisherPlatforms);
+      requestBody.publisher_platforms = request.placements.publisherPlatforms;
     }
     if (request.placements.facebookPositions?.length) {
-      requestBody.facebook_positions = JSON.stringify(request.placements.facebookPositions);
+      requestBody.facebook_positions = request.placements.facebookPositions;
     }
     if (request.placements.instagramPositions?.length) {
-      requestBody.instagram_positions = JSON.stringify(request.placements.instagramPositions);
+      requestBody.instagram_positions = request.placements.instagramPositions;
     }
   }
 
-  console.log('📤 Creating ad set — request body:', JSON.stringify(requestBody, null, 2));
+  // Log full request (redact token)
+  const debugBody = { ...requestBody, access_token: '***REDACTED***' };
+  console.log('📤 Creating ad set — full request body:', JSON.stringify(debugBody, null, 2));
 
-  // Use URLSearchParams for form-encoded POST body (access_token is in URL)
-  const formBody = new URLSearchParams();
-  for (const [key, value] of Object.entries(requestBody)) {
-    formBody.set(key, String(value));
-  }
-
-  const response = await fetch(url, {
+  const response = await fetch(`${META_GRAPH_API}/${AD_ACCOUNT_ID}/adsets`, {
     method: 'POST',
-    body: formBody,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody),
   });
 
   const responseText = await response.text();
@@ -1434,6 +1429,50 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
       } catch (imgError: any) {
         throw new Error(`Image upload failed for ad ${i + 1}: ${imgError.message}`);
       }
+    }
+
+    // Step 1.5: Check ad account health before creating anything that costs money
+    console.log('🏥 Step 1.5: Checking ad account status...');
+    try {
+      const acctUrl = `${META_GRAPH_API}/${AD_ACCOUNT_ID}?fields=account_status,disable_reason,name,currency,funding_source_details&access_token=${ACCESS_TOKEN}`;
+      const acctResp = await fetch(acctUrl);
+      const acctData = await acctResp.json();
+      if (acctData.error) {
+        console.warn('⚠️ Could not check account status:', acctData.error.message);
+      } else {
+        const statusNames: Record<number, string> = {
+          1: 'ACTIVE', 2: 'DISABLED', 3: 'UNSETTLED', 7: 'PENDING_RISK_REVIEW',
+          8: 'PENDING_SETTLEMENT', 9: 'IN_GRACE_PERIOD', 100: 'PENDING_CLOSURE', 101: 'CLOSED',
+        };
+        const disableReasons: Record<number, string> = {
+          0: 'NONE', 1: 'ADS_INTEGRITY_POLICY', 2: 'ADS_IP_REVIEW', 3: 'RISK_PAYMENT',
+          4: 'GRAY_ACCOUNT_SHUT_DOWN', 5: 'ADS_AFC_REVIEW', 6: 'BUSINESS_INTEGRITY_RAR',
+          7: 'PERMANENT_CLOSE', 8: 'UNUSED_RESELLER_ACCOUNT', 9: 'UNUSED_ACCOUNT',
+        };
+        const status = acctData.account_status;
+        const statusName = statusNames[status] || `UNKNOWN(${status})`;
+        const disableReason = disableReasons[acctData.disable_reason] || `UNKNOWN(${acctData.disable_reason})`;
+        console.log(`🏥 Account: "${acctData.name}" | Status: ${statusName} | Disable reason: ${disableReason} | Currency: ${acctData.currency}`);
+        console.log(`🏥 Funding source:`, acctData.funding_source_details ? JSON.stringify(acctData.funding_source_details) : 'NONE');
+
+        if (status !== 1) {
+          throw new Error(
+            `Ad account is not active (status: ${statusName}). ` +
+            (acctData.disable_reason && acctData.disable_reason !== 0
+              ? `Disable reason: ${disableReason}. `
+              : '') +
+            'Check your ad account in Meta Business Manager → Billing & Payments.'
+          );
+        }
+        if (!acctData.funding_source_details) {
+          console.warn('⚠️ No funding source found — ad set creation may fail. Add a payment method in Meta Business Manager.');
+        }
+      }
+    } catch (acctErr: any) {
+      if (acctErr.message.includes('Ad account is not active') || acctErr.message.includes('No funding source')) {
+        throw acctErr;
+      }
+      console.warn('⚠️ Account health check failed (non-blocking):', acctErr.message);
     }
 
     // Determine effective objective — OUTCOME_SALES requires a pixel for
