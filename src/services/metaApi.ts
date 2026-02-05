@@ -944,6 +944,9 @@ export async function fetchCampaignsForPublish(): Promise<CampaignForPublish[]> 
     access_token: ACCESS_TOKEN,
     fields: 'id,name,status,objective',
     limit: '100',
+    filtering: JSON.stringify([
+      { field: 'effective_status', operator: 'IN', value: ['ACTIVE', 'PAUSED', 'DRAFT'] }
+    ]),
   });
 
   const response = await fetch(`${url}?${params}`);
@@ -979,6 +982,9 @@ export async function fetchAdSetsForPublish(campaignId?: string): Promise<AdSetF
     access_token: ACCESS_TOKEN,
     fields: 'id,name,status,campaign_id,daily_budget',
     limit: '100',
+    filtering: JSON.stringify([
+      { field: 'effective_status', operator: 'IN', value: ['ACTIVE', 'PAUSED', 'DRAFT'] }
+    ]),
   });
 
   const response = await fetch(`${url}?${params}`);

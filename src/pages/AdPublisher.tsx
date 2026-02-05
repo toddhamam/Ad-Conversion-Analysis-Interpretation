@@ -401,6 +401,19 @@ const AdPublisher = () => {
   const [presetName, setPresetName] = useState('');
   const [showSavePreset, setShowSavePreset] = useState(false);
 
+  // Derive the effective campaign objective based on mode
+  // For new_adset: inherit from the selected existing campaign
+  // For new_campaign: use the local campaignObjective state
+  const effectiveCampaignObjective = useMemo((): CampaignObjective => {
+    if (publishMode === 'new_adset' && selectedCampaignId) {
+      const selectedCampaign = campaigns.find(c => c.id === selectedCampaignId);
+      if (selectedCampaign?.objective) {
+        return selectedCampaign.objective as CampaignObjective;
+      }
+    }
+    return campaignObjective;
+  }, [publishMode, selectedCampaignId, campaigns, campaignObjective]);
+
   // Collapsible sections
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(['campaign', 'conversion', 'targeting', 'ad-setup'])
@@ -757,13 +770,16 @@ const AdPublisher = () => {
   const canProceedToReview = useMemo(() => {
     if (!landingPageUrl) return false;
     if (publishMode === 'existing_adset') return true;
-    if (!campaignName || !adsetName || dailyBudget <= 0) return false;
-    if (campaignObjective === 'OUTCOME_SALES' && !pixelId) return false;
+    // For new_campaign: require campaignName, adsetName, and budget
+    // For new_adset: only require adsetName and budget (campaign already exists)
+    if (publishMode === 'new_campaign' && !campaignName) return false;
+    if (!adsetName || dailyBudget <= 0) return false;
+    if (effectiveCampaignObjective === 'OUTCOME_SALES' && !pixelId) return false;
     if (targetCountries.length === 0) return false;
     if (!placementAutomatic && publisherPlatforms.length === 0) return false;
     return true;
   }, [landingPageUrl, publishMode, campaignName, adsetName, dailyBudget,
-      campaignObjective, pixelId, targetCountries, placementAutomatic, publisherPlatforms]);
+      effectiveCampaignObjective, pixelId, targetCountries, placementAutomatic, publisherPlatforms]);
 
   // Build targeting and placements for review/publish
   const buildTargeting = useCallback((): FullTargetingSpec => ({
@@ -806,13 +822,13 @@ const AdPublisher = () => {
         })),
         settings: {
           campaignName: publishMode === 'new_campaign' ? campaignName : undefined,
-          campaignObjective: publishMode === 'new_campaign' ? campaignObjective : undefined,
-          budgetMode: publishMode !== 'existing_adset' ? budgetMode : undefined,
+          campaignObjective: publishMode !== 'existing_adset' ? effectiveCampaignObjective : undefined,
+          budgetMode: publishMode === 'new_campaign' ? budgetMode : publishMode === 'new_adset' ? 'ABO' as BudgetMode : undefined,
           adsetName: publishMode !== 'existing_adset' ? adsetName : undefined,
           dailyBudget: publishMode !== 'existing_adset' ? dailyBudget : undefined,
           landingPageUrl,
-          conversionEvent: campaignObjective === 'OUTCOME_SALES' ? conversionEvent : undefined,
-          pixelId: campaignObjective === 'OUTCOME_SALES' ? pixelId : undefined,
+          conversionEvent: effectiveCampaignObjective === 'OUTCOME_SALES' ? conversionEvent : undefined,
+          pixelId: effectiveCampaignObjective === 'OUTCOME_SALES' ? pixelId : undefined,
           targeting: publishMode !== 'existing_adset' ? buildTargeting() : undefined,
           placements: publishMode !== 'existing_adset' ? buildPlacements() : undefined,
         },
@@ -1017,7 +1033,9 @@ const AdPublisher = () => {
                   >
                     <option value="">-- Select a campaign --</option>
                     {campaigns.map(c => (
-                      <option key={c.id} value={c.id}>{c.name} ({c.status})</option>
+                      <option key={c.id} value={c.id}>
+                        {c.status === 'PAUSED' ? '⏸ ' : c.status === 'DRAFT' ? '📝 ' : ''}{c.name} — {c.objective?.replace('OUTCOME_', '')} ({c.status})
+                      </option>
                     ))}
                   </select>
                 )}
@@ -1038,7 +1056,9 @@ const AdPublisher = () => {
                     >
                       <option value="">-- Select an ad set --</option>
                       {adSets.map(a => (
-                        <option key={a.id} value={a.id}>{a.name} ({a.status})</option>
+                        <option key={a.id} value={a.id}>
+                          {a.status === 'PAUSED' ? '⏸ ' : a.status === 'DRAFT' ? '📝 ' : ''}{a.name}{a.dailyBudget ? ` — $${a.dailyBudget}/day` : ''} ({a.status})
+                        </option>
                       ))}
                     </select>
                   )}
@@ -1105,6 +1125,18 @@ const AdPublisher = () => {
               </div>
             )}
           </div>
+
+          {publishMode === 'new_adset' && selectedCampaignId && (
+            <div className="inherited-campaign-info">
+              <span className="info-icon">ℹ️</span>
+              <span>
+                Creating ad set in campaign: <strong>{campaigns.find(c => c.id === selectedCampaignId)?.name}</strong>
+                {' '}— Objective: <strong>
+                  {OBJECTIVE_OPTIONS.find(o => o.id === effectiveCampaignObjective)?.name || effectiveCampaignObjective}
+                </strong>
+              </span>
+            </div>
+          )}
 
           <div className="config-form">
 
@@ -1182,7 +1214,7 @@ const AdPublisher = () => {
             )}
 
             {/* CONVERSION TRACKING (only for OUTCOME_SALES) */}
-            {publishMode !== 'existing_adset' && campaignObjective === 'OUTCOME_SALES' && (
+            {publishMode !== 'existing_adset' && effectiveCampaignObjective === 'OUTCOME_SALES' && (
               <div className="config-section">
                 <button
                   className={`config-section-header ${expandedSections.has('conversion') ? 'expanded' : ''}`}
@@ -1751,19 +1783,35 @@ const AdPublisher = () => {
                       {PUBLISH_MODE_OPTIONS.find(m => m.id === publishMode)?.name}
                     </span>
                   </div>
+                  {publishMode !== 'new_campaign' && selectedCampaignId && (
+                    <div className="summary-item full-width">
+                      <span className="summary-label">Campaign</span>
+                      <span className="summary-value">
+                        {campaigns.find(c => c.id === selectedCampaignId)?.name || selectedCampaignId}
+                      </span>
+                    </div>
+                  )}
+                  {publishMode === 'existing_adset' && selectedAdSetId && (
+                    <div className="summary-item full-width">
+                      <span className="summary-label">Ad Set</span>
+                      <span className="summary-value">
+                        {adSets.find(a => a.id === selectedAdSetId)?.name || selectedAdSetId}
+                      </span>
+                    </div>
+                  )}
                   {publishMode !== 'existing_adset' && (
                     <>
                       <div className="summary-item">
                         <span className="summary-label">Objective</span>
                         <span className="summary-value">
-                          {OBJECTIVE_OPTIONS.find(o => o.id === campaignObjective)?.name}
+                          {OBJECTIVE_OPTIONS.find(o => o.id === effectiveCampaignObjective)?.name}
                         </span>
                       </div>
                       <div className="summary-item">
                         <span className="summary-label">Budget</span>
-                        <span className="summary-value">${dailyBudget}/day ({budgetMode})</span>
+                        <span className="summary-value">${dailyBudget}/day ({publishMode === 'new_adset' ? 'Ad Set' : budgetMode})</span>
                       </div>
-                      {campaignObjective === 'OUTCOME_SALES' && (
+                      {effectiveCampaignObjective === 'OUTCOME_SALES' && (
                         <div className="summary-item">
                           <span className="summary-label">Conversion Event</span>
                           <span className="summary-value">
