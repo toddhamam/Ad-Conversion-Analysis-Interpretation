@@ -945,7 +945,7 @@ export async function fetchCampaignsForPublish(): Promise<CampaignForPublish[]> 
     fields: 'id,name,status,objective',
     limit: '100',
     filtering: JSON.stringify([
-      { field: 'effective_status', operator: 'IN', value: ['ACTIVE', 'PAUSED', 'DRAFT'] }
+      { field: 'effective_status', operator: 'IN', value: ['ACTIVE', 'PAUSED'] }
     ]),
   });
 
@@ -983,7 +983,7 @@ export async function fetchAdSetsForPublish(campaignId?: string): Promise<AdSetF
     fields: 'id,name,status,campaign_id,daily_budget',
     limit: '100',
     filtering: JSON.stringify([
-      { field: 'effective_status', operator: 'IN', value: ['ACTIVE', 'PAUSED', 'DRAFT'] }
+      { field: 'effective_status', operator: 'IN', value: ['ACTIVE', 'PAUSED'] }
     ]),
   });
 
