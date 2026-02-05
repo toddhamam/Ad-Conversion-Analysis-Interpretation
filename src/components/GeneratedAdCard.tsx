@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import type { GeneratedAdPackage } from '../services/openaiApi';
-import { Image, Video, AlertTriangle, Clock, Lightbulb, Timer, Ruler, Download, Loader } from 'lucide-react';
+import { Image, Video, AlertTriangle, Clock, Lightbulb, Timer, Ruler, Download, Loader, RefreshCw } from 'lucide-react';
 import './GeneratedAdCard.css';
 
 interface GeneratedAdCardProps {
   ad: GeneratedAdPackage;
+  onRegenerateImage?: (adId: string, imageIndex: number) => Promise<void>;
 }
 
 function formatDate(isoString: string): string {
@@ -83,13 +84,27 @@ function LazyImage({ src, alt, onLoad }: { src: string; alt: string; onLoad?: ()
   );
 }
 
-export default function GeneratedAdCard({ ad }: GeneratedAdCardProps) {
+export default function GeneratedAdCard({ ad, onRegenerateImage }: GeneratedAdCardProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [downloadingImage, setDownloadingImage] = useState<number | null>(null);
   const [downloadingVideo, setDownloadingVideo] = useState(false);
+  const [regeneratingImage, setRegeneratingImage] = useState<number | null>(null);
   // CRITICAL: Default to false to prevent Chrome crashes from rendering many large base64 images
   // Users can expand to see images - this prevents memory exhaustion on page load
   const [showImages, setShowImages] = useState(false);
+
+  const handleRegenerateImage = async (index: number) => {
+    if (!onRegenerateImage || regeneratingImage !== null) return;
+
+    setRegeneratingImage(index);
+    try {
+      await onRegenerateImage(ad.id, index);
+    } catch (err) {
+      console.error('Failed to regenerate image:', err);
+    } finally {
+      setRegeneratingImage(null);
+    }
+  };
 
   const handleCopy = async (text: string, field: string) => {
     try {
@@ -238,12 +253,33 @@ export default function GeneratedAdCard({ ad }: GeneratedAdCardProps) {
               {ad.images!.map((image, index) => (
                 <div key={index} className="image-card">
                   <div className="image-container">
+                    {regeneratingImage === index && (
+                      <div className="regenerating-overlay">
+                        <Loader size={32} strokeWidth={1.5} className="spinning" />
+                        <span>Regenerating...</span>
+                      </div>
+                    )}
                     <LazyImage
                       src={image.imageUrl}
                       alt={`Generated ad ${index + 1}`}
                     />
                   </div>
                   <div className="image-actions">
+                    {onRegenerateImage && (
+                      <button
+                        className="action-btn regenerate-btn"
+                        onClick={() => handleRegenerateImage(index)}
+                        disabled={regeneratingImage !== null}
+                        title="Generate a new image for this variation"
+                      >
+                        {regeneratingImage === index ? (
+                          <Loader size={14} strokeWidth={1.5} className="spinning" />
+                        ) : (
+                          <RefreshCw size={14} strokeWidth={1.5} />
+                        )}
+                        {regeneratingImage === index ? 'Regenerating...' : 'Regenerate'}
+                      </button>
+                    )}
                     <button
                       className="action-btn download-btn"
                       onClick={() => handleDownloadImage(image.imageUrl, index)}

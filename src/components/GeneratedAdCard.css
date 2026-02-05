@@ -169,6 +169,7 @@
   padding: 12px;
   display: flex;
   justify-content: center;
+  gap: 8px;
 }
 
 .action-btn {
@@ -194,6 +195,45 @@
 .action-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Regenerate Button */
+.regenerate-btn {
+  background: var(--bg-card);
+  border-color: var(--accent-violet);
+  color: var(--accent-violet);
+}
+
+.regenerate-btn:hover:not(:disabled) {
+  background: rgba(168, 85, 247, 0.1);
+  border-color: var(--accent-violet);
+}
+
+/* Regenerating Overlay */
+.regenerating-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 10;
+  border-radius: 10px;
+}
+
+.regenerating-overlay span {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--accent-violet);
+}
+
+.image-container {
+  position: relative;
 }
 
 /* Storyboard Section */

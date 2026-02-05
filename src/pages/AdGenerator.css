@@ -310,6 +310,130 @@
   line-height: 1.4;
 }
 
+/* Copy Length Options */
+.copy-length-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.copy-length-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 20px 16px;
+  background: var(--bg-card);
+  border: 2px solid var(--border-primary);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.copy-length-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-violet);
+}
+
+.copy-length-btn.active {
+  background: rgba(212, 225, 87, 0.12);
+  border-color: var(--accent-primary);
+}
+
+.copy-length-icon {
+  font-size: 24px;
+}
+
+.copy-length-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.copy-length-btn.active .copy-length-name {
+  color: var(--accent-primary);
+}
+
+.copy-length-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.4;
+}
+
+@media (max-width: 600px) {
+  .copy-length-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Product Selector */
+.product-selector-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border-primary);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.product-selector-link {
+  color: var(--accent-violet);
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+
+.product-selector-link:hover {
+  color: var(--accent-primary);
+}
+
+.product-selector-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.product-selector-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 20px;
+  background: var(--bg-card);
+  border: 2px solid var(--border-primary);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.product-selector-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-violet);
+}
+
+.product-selector-btn.active {
+  background: rgba(212, 225, 87, 0.12);
+  border-color: var(--accent-primary);
+}
+
+.product-selector-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.product-selector-btn.active .product-selector-name {
+  color: var(--accent-primary);
+}
+
+.product-selector-author {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 /* Variation Options */
 .variation-options {
   display: flex;
