@@ -944,9 +944,6 @@ export async function fetchCampaignsForPublish(): Promise<CampaignForPublish[]> 
     access_token: ACCESS_TOKEN,
     fields: 'id,name,status,objective',
     limit: '100',
-    filtering: JSON.stringify([
-      { field: 'effective_status', operator: 'IN', value: ['ACTIVE', 'PAUSED'] }
-    ]),
   });
 
   const response = await fetch(`${url}?${params}`);
@@ -957,14 +954,18 @@ export async function fetchCampaignsForPublish(): Promise<CampaignForPublish[]> 
     throw new Error(data.error?.message || 'Failed to fetch campaigns');
   }
 
-  const campaigns: CampaignForPublish[] = (data.data || []).map((c: any) => ({
-    id: c.id,
-    name: c.name,
-    status: c.status,
-    objective: c.objective,
-  }));
+  // Filter client-side: only show ACTIVE and PAUSED campaigns (exclude DELETED, ARCHIVED, etc.)
+  const ALLOWED_STATUSES = new Set(['ACTIVE', 'PAUSED']);
+  const campaigns: CampaignForPublish[] = (data.data || [])
+    .filter((c: any) => ALLOWED_STATUSES.has(c.status))
+    .map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      status: c.status,
+      objective: c.objective,
+    }));
 
-  console.log(`✅ Fetched ${campaigns.length} campaigns`);
+  console.log(`✅ Fetched ${campaigns.length} campaigns (filtered from ${data.data?.length || 0} total)`);
   return campaigns;
 }
 
@@ -982,9 +983,6 @@ export async function fetchAdSetsForPublish(campaignId?: string): Promise<AdSetF
     access_token: ACCESS_TOKEN,
     fields: 'id,name,status,campaign_id,daily_budget',
     limit: '100',
-    filtering: JSON.stringify([
-      { field: 'effective_status', operator: 'IN', value: ['ACTIVE', 'PAUSED'] }
-    ]),
   });
 
   const response = await fetch(`${url}?${params}`);
@@ -995,15 +993,19 @@ export async function fetchAdSetsForPublish(campaignId?: string): Promise<AdSetF
     throw new Error(data.error?.message || 'Failed to fetch ad sets');
   }
 
-  const adSets: AdSetForPublish[] = (data.data || []).map((a: any) => ({
-    id: a.id,
-    name: a.name,
-    status: a.status,
-    campaignId: a.campaign_id,
-    dailyBudget: a.daily_budget ? parseInt(a.daily_budget) / 100 : undefined,
-  }));
+  // Filter client-side: only show ACTIVE and PAUSED ad sets (exclude DELETED, ARCHIVED, etc.)
+  const ALLOWED_STATUSES = new Set(['ACTIVE', 'PAUSED']);
+  const adSets: AdSetForPublish[] = (data.data || [])
+    .filter((a: any) => ALLOWED_STATUSES.has(a.status))
+    .map((a: any) => ({
+      id: a.id,
+      name: a.name,
+      status: a.status,
+      campaignId: a.campaign_id,
+      dailyBudget: a.daily_budget ? parseInt(a.daily_budget) / 100 : undefined,
+    }));
 
-  console.log(`✅ Fetched ${adSets.length} ad sets`);
+  console.log(`✅ Fetched ${adSets.length} ad sets (filtered from ${data.data?.length || 0} total)`);
   return adSets;
 }
 
