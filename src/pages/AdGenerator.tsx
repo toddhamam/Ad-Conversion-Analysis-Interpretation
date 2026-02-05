@@ -1,13 +1,16 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   isOpenAIConfigured,
   isGeminiConfigured,
   generateAdPackage,
   generateCopyOptions,
+  generateAdImage,
   CONCEPT_ANGLES,
   IMAGE_SIZE_OPTIONS,
   DEFAULT_IMAGE_SIZE,
+  COPY_LENGTH_OPTIONS,
+  DEFAULT_COPY_LENGTH,
   type AdType,
   type AudienceType,
   type ConceptType,
@@ -16,6 +19,8 @@ import {
   type CopyOption,
   type ReasoningEffort,
   type ImageSize,
+  type CopyLength,
+  type ProductContext,
 } from '../services/openaiApi';
 import { getCacheStats as getImageCacheStats, uploadBrandImages, clearImageCache } from '../services/imageCache';
 import GeneratedAdCard from '../components/GeneratedAdCard';
@@ -26,10 +31,12 @@ import './AdGenerator.css';
 
 const CACHE_KEY = 'channel_analysis_cache';
 const GENERATED_ADS_STORAGE_KEY = 'conversion_intelligence_generated_ads';
+const PRODUCTS_STORAGE_KEY = 'convertra_products';
 
 // Pagination settings - reduced to prevent Chrome crashes with large base64 images
 const ADS_PER_PAGE = 3;
-const MAX_STORED_ADS = 15; // Reduced from 20 to prevent memory issues
+const MAX_STORED_ADS = 10; // Keep total ads low to prevent memory issues
+const MAX_ADS_WITH_IMAGES = 5; // Only keep images for the most recent N ads
 const MAX_DATA_SIZE_MB = 3; // Maximum localStorage data size before warning
 
 // Debug logging for crash investigation
@@ -182,6 +189,15 @@ const AdGenerator = () => {
   const [analysisData, setAnalysisData] = useState<ChannelAnalysisResult | null>(null);
   const [iqLevel, setIqLevel] = useState<ReasoningEffort>('medium');
   const [imageSize, setImageSize] = useState<ImageSize>(DEFAULT_IMAGE_SIZE);
+  const [copyLength, setCopyLength] = useState<CopyLength>(DEFAULT_COPY_LENGTH);
+
+  // Product context
+  const [products, setProducts] = useState<ProductContext[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const selectedProduct = useMemo(
+    () => products.find(p => p.id === selectedProductId) || null,
+    [products, selectedProductId]
+  );
 
   // Multi-step workflow state
   const [currentStep, setCurrentStep] = useState<WorkflowStep>('config');
@@ -245,6 +261,34 @@ const AdGenerator = () => {
     clearImageCache();
     setImageCacheCount(0);
   };
+
+  // Load products from localStorage on mount + when tab regains focus
+  // (covers navigating back from Products page via both SPA routing and tab switching)
+  useEffect(() => {
+    const loadProducts = () => {
+      try {
+        const storedProducts = localStorage.getItem(PRODUCTS_STORAGE_KEY);
+        if (storedProducts) {
+          const parsed: ProductContext[] = JSON.parse(storedProducts);
+          setProducts(parsed);
+          setSelectedProductId(prev => {
+            if (!prev && parsed.length === 1) return parsed[0].id;
+            return prev;
+          });
+        }
+      } catch {
+        console.warn('Failed to load products from localStorage');
+      }
+    };
+
+    loadProducts();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') loadProducts();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   // Load cached analysis and check image cache on mount
   useEffect(() => {
@@ -323,16 +367,31 @@ const AdGenerator = () => {
 
   // Save generated ads to localStorage whenever they change
   // Use requestIdleCallback to prevent blocking the main thread
+  // Strip image data from older ads to keep storage manageable
   useEffect(() => {
     if (generatedAds.length === 0 || isLoadingAds) return;
 
     const idleCallbackId = scheduleIdleWork(() => {
       try {
         // Strictly limit to MAX_STORED_ADS before saving
-        const toSave = generatedAds.slice(0, MAX_STORED_ADS);
-        const json = JSON.stringify(toSave);
+        const limited = generatedAds.slice(0, MAX_STORED_ADS);
 
-        // Check size before saving
+        // Strip base64 image data from older ads to prevent localStorage bloat
+        // Keep images only for the most recent N ads
+        const toSave = limited.map((ad, index) => {
+          if (index >= MAX_ADS_WITH_IMAGES && ad.images) {
+            return {
+              ...ad,
+              images: ad.images.map(img => ({
+                ...img,
+                imageUrl: '', // Strip large base64 data from old ads
+              })),
+            };
+          }
+          return ad;
+        });
+
+        const json = JSON.stringify(toSave);
         const sizeInMB = json.length / (1024 * 1024);
         debugLog(`Saving ${toSave.length} ads (${sizeInMB.toFixed(2)}MB)`);
 
@@ -413,6 +472,8 @@ const AdGenerator = () => {
         conceptType,
         analysisData,
         reasoningEffort: iqLevel,
+        copyLength,
+        productContext: selectedProduct || undefined,
       });
 
       setCopyOptions(result);
@@ -475,6 +536,7 @@ const AdGenerator = () => {
         similarityLevel: similarityValue, // 0 = identical to references, 100 = completely different
         reasoningEffort: iqLevel,
         imageSize, // Selected image dimensions/aspect ratio
+        productContext: selectedProduct || undefined,
       });
 
       setGeneratedAds(prev => [result, ...prev]);
@@ -506,6 +568,57 @@ const AdGenerator = () => {
   const handleBackToCopySelection = () => {
     setCurrentStep('copy-selection');
   };
+
+  // Regenerate a single image within an ad package
+  const handleRegenerateImage = useCallback(async (adId: string, imageIndex: number) => {
+    // Find the ad to regenerate
+    const adToUpdate = generatedAds.find(ad => ad.id === adId);
+    if (!adToUpdate || !adToUpdate.images || adToUpdate.images.length <= imageIndex) {
+      console.error('Cannot regenerate: ad or image not found');
+      return;
+    }
+
+    console.log(`🔄 Regenerating image ${imageIndex + 1} for ad ${adId}`);
+
+    try {
+      // Generate a new image with the same parameters
+      const newImage = await generateAdImage({
+        audienceType: adToUpdate.audienceType,
+        analysisData,
+        variationIndex: imageIndex,
+        totalVariations: adToUpdate.images.length,
+        similarityLevel: similarityValue,
+        imageSize,
+        productContext: selectedProduct || undefined,
+      });
+
+      // Update the ad with the new image
+      const updatedAds = generatedAds.map(ad => {
+        if (ad.id === adId && ad.images) {
+          const updatedImages = [...ad.images];
+          updatedImages[imageIndex] = newImage;
+          return { ...ad, images: updatedImages };
+        }
+        return ad;
+      });
+
+      setGeneratedAds(updatedAds);
+
+      // Update localStorage asynchronously to avoid blocking the main thread
+      scheduleIdleWork(() => {
+        try {
+          const toSave = updatedAds.slice(0, MAX_STORED_ADS);
+          localStorage.setItem(GENERATED_ADS_STORAGE_KEY, JSON.stringify(toSave));
+          console.log('✅ Image regenerated and saved successfully');
+        } catch (storageError) {
+          console.warn('Failed to save to localStorage:', storageError);
+        }
+      });
+    } catch (err: any) {
+      console.error('❌ Failed to regenerate image:', err);
+      throw new Error(err.message || 'Failed to regenerate image');
+    }
+  }, [generatedAds, analysisData, similarityValue, imageSize, selectedProduct]);
 
   const costEstimate = calculateCost(adType, variationCount, currentStep === 'config');
   const hasAnalysisData = !!analysisData;
@@ -637,6 +750,31 @@ const AdGenerator = () => {
         <section className="config-panel">
           <h3 className="config-title">Step 1: Audience & Concept</h3>
 
+          {/* Product Selection */}
+          <div className="config-section">
+            <label className="config-label">Product</label>
+            <p className="config-hint">Select the product this ad is for — ensures accurate copy and image references</p>
+            {products.length === 0 ? (
+              <div className="product-selector-empty">
+                <span>No products defined yet.</span>
+                <Link to="/products" className="product-selector-link">Add a product →</Link>
+              </div>
+            ) : (
+              <div className="product-selector-options">
+                {products.map(product => (
+                  <button
+                    key={product.id}
+                    className={`product-selector-btn ${selectedProductId === product.id ? 'active' : ''}`}
+                    onClick={() => setSelectedProductId(selectedProductId === product.id ? null : product.id)}
+                  >
+                    <span className="product-selector-name">{product.name}</span>
+                    <span className="product-selector-author">by {product.author}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Audience Type Selection */}
           <div className="config-section">
             <label className="config-label">Target Audience</label>
@@ -671,6 +809,25 @@ const AdGenerator = () => {
                     <span className="concept-name">{option.name}</span>
                   </div>
                   <span className="concept-desc">{option.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Copy Length Selection */}
+          <div className="config-section">
+            <label className="config-label">Body Copy Length</label>
+            <p className="config-hint">Choose short-form for quick impact or long-form for full storytelling</p>
+            <div className="copy-length-options">
+              {COPY_LENGTH_OPTIONS.map(option => (
+                <button
+                  key={option.id}
+                  className={`copy-length-btn ${copyLength === option.id ? 'active' : ''}`}
+                  onClick={() => setCopyLength(option.id)}
+                >
+                  <span className="copy-length-icon">{option.icon}</span>
+                  <span className="copy-length-name">{option.name}</span>
+                  <span className="copy-length-desc">{option.description}</span>
                 </button>
               ))}
             </div>
@@ -717,12 +874,24 @@ const AdGenerator = () => {
           </div>
 
           <div className="selection-summary">
+            {selectedProduct && (
+              <>
+                <span className="summary-item">
+                  <span className="summary-label">Product:</span> {selectedProduct.name}
+                </span>
+                <span className="summary-divider">|</span>
+              </>
+            )}
             <span className="summary-item">
               <span className="summary-label">Audience:</span> {AUDIENCE_OPTIONS.find(a => a.id === audienceType)?.name}
             </span>
             <span className="summary-divider">|</span>
             <span className="summary-item">
               <span className="summary-label">Concept:</span> {CONCEPT_ANGLES[conceptType].name}
+            </span>
+            <span className="summary-divider">|</span>
+            <span className="summary-item">
+              <span className="summary-label">Copy:</span> {COPY_LENGTH_OPTIONS.find(c => c.id === copyLength)?.name}
             </span>
           </div>
 
@@ -769,6 +938,12 @@ const AdGenerator = () => {
           <div className="final-summary">
             <h4 className="summary-title">Your Selections</h4>
             <div className="summary-grid">
+              {selectedProduct && (
+                <div className="summary-card">
+                  <span className="summary-card-label">Product</span>
+                  <span className="summary-card-value">{selectedProduct.name}</span>
+                </div>
+              )}
               <div className="summary-card">
                 <span className="summary-card-label">Audience</span>
                 <span className="summary-card-value">{AUDIENCE_OPTIONS.find(a => a.id === audienceType)?.name}</span>
@@ -776,6 +951,10 @@ const AdGenerator = () => {
               <div className="summary-card">
                 <span className="summary-card-label">Concept</span>
                 <span className="summary-card-value">{CONCEPT_ANGLES[conceptType].name}</span>
+              </div>
+              <div className="summary-card">
+                <span className="summary-card-label">Copy Length</span>
+                <span className="summary-card-value">{COPY_LENGTH_OPTIONS.find(c => c.id === copyLength)?.name}</span>
               </div>
               <div className="summary-card">
                 <span className="summary-card-label">Headlines</span>
@@ -964,7 +1143,11 @@ const AdGenerator = () => {
           </div>
           <div className="generated-ads-list">
             {generatedAds.slice(0, visibleAdsCount).map(ad => (
-              <GeneratedAdCard key={ad.id} ad={ad} />
+              <GeneratedAdCard
+                key={ad.id}
+                ad={ad}
+                onRegenerateImage={ad.adType === 'image' ? handleRegenerateImage : undefined}
+              />
             ))}
           </div>
           {visibleAdsCount < generatedAds.length && (

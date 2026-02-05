@@ -137,6 +137,51 @@ export const IMAGE_SIZE_OPTIONS: ImageSizeConfig[] = [
 
 export const DEFAULT_IMAGE_SIZE: ImageSize = '1:1';
 
+// Copy length types for body copy generation
+export type CopyLength = 'short' | 'long';
+
+export interface CopyLengthConfig {
+  id: CopyLength;
+  name: string;
+  description: string;
+  maxChars: number;
+  icon: string;
+}
+
+export const COPY_LENGTH_OPTIONS: CopyLengthConfig[] = [
+  {
+    id: 'short',
+    name: 'Short-Form',
+    description: 'Punchy, scroll-stopping (max 125 chars)',
+    maxChars: 125,
+    icon: '⚡',
+  },
+  {
+    id: 'long',
+    name: 'Long-Form',
+    description: 'Full story, emotional depth (max 500 chars)',
+    maxChars: 500,
+    icon: '📖',
+  },
+];
+
+export const DEFAULT_COPY_LENGTH: CopyLength = 'short';
+
+// Product context for accurate ad generation
+export interface ProductContext {
+  id: string;
+  name: string;
+  author: string;
+  description: string;
+  landingPageUrl: string;
+  productImages: Array<{
+    base64Data: string;
+    mimeType: string;
+    fileName: string;
+  }>;
+  createdAt: string;
+}
+
 // Check if Gemini API is configured
 export function isGeminiConfigured(): boolean {
   return !!GEMINI_API_KEY && GEMINI_API_KEY.length > 0;
@@ -1302,14 +1347,19 @@ export async function generateCopyOptions(config: {
   conceptType: ConceptType;
   analysisData: ChannelAnalysisResult | null;
   reasoningEffort?: ReasoningEffort;
+  copyLength?: CopyLength;
+  productContext?: ProductContext;
 }): Promise<CopyOptionsResult> {
   if (!isOpenAIConfigured()) {
     throw new Error('OpenAI API key not configured');
   }
 
   const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
-  console.log(`📝 Generating copy options for ${config.audienceType} audience with ${config.conceptType} concept | IQ Level: ${reasoningEffort}`);
+  const copyLength = config.copyLength ?? DEFAULT_COPY_LENGTH;
+  const copyLengthConfig = COPY_LENGTH_OPTIONS.find(opt => opt.id === copyLength) ?? COPY_LENGTH_OPTIONS[0];
+  console.log(`📝 Generating copy options for ${config.audienceType} audience with ${config.conceptType} concept | IQ Level: ${reasoningEffort} | Copy Length: ${copyLength}`);
   console.log('📊 Analysis data available:', !!config.analysisData);
+  console.log('📦 Product context:', config.productContext ? config.productContext.name : 'Not provided');
 
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
   const conceptAngle = CONCEPT_ANGLES[config.conceptType];
@@ -1440,8 +1490,23 @@ NOTE: No analysis data is available. Run Channel Analysis first for data-driven 
 - Key phrases/hints: ${conceptAngle.promptHints.join(', ')}`;
   }
 
-  const userPrompt = `Generate copy OPTIONS for a ${config.audienceType.toUpperCase()} audience${isAutoMode ? ' using analysis-driven insights' : ` using the ${conceptAngle.name} concept`}.
+  // Build product context section
+  let productSection = '';
+  if (config.productContext) {
+    const p = config.productContext;
+    productSection = `
+=== PRODUCT YOU ARE WRITING ADS FOR ===
+Product Name: ${p.name}
+Author/Brand: ${p.author}
+Description: ${p.description}
+${p.landingPageUrl ? `Landing Page: ${p.landingPageUrl}` : ''}
 
+CRITICAL: All copy MUST be about "${p.name}" by ${p.author}. NEVER reference any other product, brand, or company name. The product name and author above are the ONLY correct references.
+`;
+  }
+
+  const userPrompt = `Generate copy OPTIONS for a ${config.audienceType.toUpperCase()} audience${isAutoMode ? ' using analysis-driven insights' : ` using the ${conceptAngle.name} concept`}.
+${productSection}
 AUDIENCE CONTEXT:
 - Focus: ${audienceAngle.focus}
 - Tone: ${audienceAngle.tone}
@@ -1464,9 +1529,11 @@ ${hasAnalysis ? `Based on the REAL PERFORMANCE DATA above, generate copy that:
    - Each should ${hasAnalysis ? 'follow patterns from the top ads above' : 'be distinct and compelling'}
    - ${hasAnalysis ? 'Reference specific winning elements from the analysis' : 'Use varied emotional angles'}
 
-2. Generate 5 BODY COPY options (max 125 characters each)
+2. Generate 5 BODY COPY options (${copyLength === 'long' ? 'LONG-FORM' : 'SHORT-FORM'}, max ${copyLengthConfig.maxChars} characters each)
    - Each should ${hasAnalysis ? 'incorporate winning copy elements from the analysis' : 'use different approaches'}
-   - ${hasAnalysis ? 'Use the emotional triggers that work for this account' : 'Mix direct and story-driven approaches'}
+   - ${hasAnalysis ? 'Use the emotional triggers that work for this account' : 'Mix direct and story-driven approaches'}${copyLength === 'long' ? `
+   - LONG-FORM REQUIREMENTS: Paint the full emotional picture, address objections, build desire, include storytelling elements
+   - Use line breaks for readability. Tell a mini-story that takes the reader on a journey.` : ''}
 
 3. Generate 4 CTA options
    - ${hasAnalysis ? 'Based on CTAs that drive action for this account' : 'Varied action words and urgency levels'}
@@ -1658,6 +1725,7 @@ export async function generateAdImage(config: {
   totalVariations: number;
   similarityLevel?: number; // 0 = identical to references, 100 = completely different
   imageSize?: ImageSize; // Aspect ratio for generated images
+  productContext?: ProductContext;
 }): Promise<GeneratedImageResult> {
   // Check if we should use Gemini or fall back to DALL-E
   if (USE_GEMINI_FOR_IMAGES && isGeminiConfigured()) {
@@ -1680,6 +1748,7 @@ async function generateAdImageWithGemini(config: {
   totalVariations: number;
   similarityLevel?: number; // 0 = identical to references, 100 = completely different
   imageSize?: ImageSize; // Aspect ratio for generated images
+  productContext?: ProductContext;
 }): Promise<GeneratedImageResult> {
   const similarity = config.similarityLevel ?? 30; // Default to 30% variation
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
@@ -1702,6 +1771,15 @@ async function generateAdImageWithGemini(config: {
     data: cached.base64Data,
     mimeType: cached.mimeType
   }));
+
+  // Add product mockup images as additional references
+  if (config.productContext?.productImages?.length) {
+    const productImgs = config.productContext.productImages.slice(0, 3); // Max 3 product mockups
+    productImgs.forEach(img => {
+      referenceImages.push({ data: img.base64Data, mimeType: img.mimeType });
+    });
+    console.log(`📦 Added ${productImgs.length} product mockup images as references`);
+  }
 
   if (cachedImages.length > 0) {
     console.log('📸 Using high-quality reference images:',
@@ -1802,9 +1880,26 @@ Explore fresh visual directions while maintaining professional quality.`,
 
   // If we have reference images, add explicit note about them
   if (referenceImages.length > 0) {
+    const productImgCount = config.productContext?.productImages?.length ? Math.min(config.productContext.productImages.length, 3) : 0;
+    const adRefCount = referenceImages.length - productImgCount;
     promptParts.push(
-      `I have attached ${referenceImages.length} REFERENCE IMAGES from our top-performing ads.`,
+      `I have attached ${referenceImages.length} REFERENCE IMAGES.`,
+      adRefCount > 0 ? `${adRefCount} are from top-performing ads - match their visual style.` : '',
+      productImgCount > 0 ? `${productImgCount} are PRODUCT MOCKUP images - the generated image MUST depict this exact product.` : '',
       'You MUST study these images and match their visual style as specified above.',
+      ''
+    );
+  }
+
+  // Product context for accurate product depiction
+  if (config.productContext) {
+    promptParts.push(
+      'PRODUCT CONTEXT:',
+      `- Product: ${config.productContext.name}`,
+      `- Author/Brand: ${config.productContext.author}`,
+      `- Description: ${config.productContext.description}`,
+      '',
+      'The generated image MUST accurately represent this product. If product mockup reference images are attached, match the product appearance closely.',
       ''
     );
   }
@@ -1966,6 +2061,7 @@ async function generateAdImageWithDallE(config: {
   variationIndex: number;
   totalVariations: number;
   imageSize?: ImageSize; // Aspect ratio for generated images
+  productContext?: ProductContext;
 }): Promise<GeneratedImageResult> {
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
   const sizeConfig = IMAGE_SIZE_OPTIONS.find(s => s.id === imageSize) || IMAGE_SIZE_OPTIONS[0];
@@ -1978,10 +2074,26 @@ async function generateAdImageWithDallE(config: {
   const promptParts = [
     'Create a high-converting social media advertisement image.',
     '',
+  ];
+
+  // Product context for accurate product depiction
+  if (config.productContext) {
+    promptParts.push(
+      'PRODUCT:',
+      `- Product: ${config.productContext.name}`,
+      `- Author/Brand: ${config.productContext.author}`,
+      `- Description: ${config.productContext.description}`,
+      '',
+      'The image MUST accurately represent this product.',
+      ''
+    );
+  }
+
+  promptParts.push(
     `Target Audience: ${config.audienceType.toUpperCase()} - ${audienceAngle.focus}`,
     `Tone: ${audienceAngle.tone}`,
     '',
-  ];
+  );
 
   if (visualAnalysis) {
     promptParts.push('VISUAL STYLE GUIDANCE (from winning ads):');
@@ -2372,6 +2484,8 @@ export async function generateAdPackage(config: {
   reasoningEffort?: ReasoningEffort;
   // Image size/aspect ratio for generated images
   imageSize?: ImageSize;
+  // Product context for accurate product references
+  productContext?: ProductContext;
 }): Promise<GeneratedAdPackage> {
   const conceptName = config.conceptType ? CONCEPT_ANGLES[config.conceptType].name : 'general';
   const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
@@ -2417,6 +2531,7 @@ export async function generateAdPackage(config: {
         totalVariations: config.variationCount,
         similarityLevel: config.similarityLevel,
         imageSize: config.imageSize,
+        productContext: config.productContext,
       })
     );
 
