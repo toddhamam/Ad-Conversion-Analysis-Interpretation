@@ -739,6 +739,10 @@ const AdPublisher = () => {
     setSelectedCampaignId('');
     setSelectedAdSetId('');
     setAdSets([]);
+    // Fetch campaigns when switching to a mode that needs them
+    if (mode !== 'new_campaign' && campaigns.length === 0) {
+      loadCampaigns();
+    }
   };
 
   const handleCampaignSelect = (id: string) => {
@@ -750,7 +754,9 @@ const AdPublisher = () => {
   };
 
   const goToStep = (step: PublishStep) => {
-    if (step === 'destination' && publishMode !== 'new_campaign') {
+    // Pre-load campaigns when entering the destination step so they're ready
+    // if the user switches to new_adset or existing_adset mode
+    if (step === 'destination' && campaigns.length === 0) {
       loadCampaigns();
     }
     if (step === 'configure' && !audiencesLoaded) {
