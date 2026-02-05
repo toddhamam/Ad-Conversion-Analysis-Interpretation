@@ -103,6 +103,9 @@ public/
 | `api/funnel/metrics.ts` | Supabase funnel metrics API endpoint |
 | `src/components/IQSelector.tsx` | ConversionIQ™ reasoning level selector for AI operations |
 | `src/components/SEO.tsx` | Centralized SEO component for meta tags and structured data |
+| `src/components/GeneratedAdCard.tsx` | Generated ad display with lazy images, copy clipboard, image regeneration |
+| `src/components/CopySelectionPanel.tsx` | Multi-select UI for choosing headlines, body copy, and CTAs |
+| `src/pages/Products.tsx` | Product CRUD manager (name, author, description, URL, mockup images) |
 | `public/robots.txt` | Search engine crawl directives (allows AI bots for GEO) |
 | `public/sitemap.xml` | XML sitemap for search engine indexing |
 
@@ -139,6 +142,7 @@ public/
 7. **Frontend/Backend API separation** - Sensitive operations (Stripe, Supabase) handled by backend serverless functions
 8. **Vercel serverless functions** - API routes in `api/` directory using `@vercel/node` (`VercelRequest`, `VercelResponse`)
 9. **React 19 peer dependency handling** - `.npmrc` with `legacy-peer-deps=true` for libraries that haven't updated React peer deps
+10. **Two-layer AI context** - Channel analysis provides performance patterns (account-wide); Product Context provides identity (product name, author, mockups). Both layers are injected into prompts independently — changing one never affects the other
 
 ---
 
@@ -817,12 +821,44 @@ The ad generator uses these frameworks:
 - Authority
 
 ### Creative Generation Flow
-1. User selects source ads (top performers)
-2. User selects ConversionIQ™ reasoning level
-3. GPT-5.2 analyzes creative patterns with selected depth
-4. Gemini 3 Pro generates new images
-5. Veo generates video variants
-6. User reviews and exports to Meta
+1. **Step 1 (Config)**: User selects product, audience type, concept angle, copy length (short/long-form), and ConversionIQ™ reasoning level
+2. GPT-5.2 generates copy options (headlines, body texts, CTAs) using channel analysis patterns + product context
+3. **Step 2 (Copy Selection)**: User picks preferred headlines, body texts, and CTAs from generated options
+4. **Step 3 (Final Config)**: User selects ad type (image/video), image size, variation count, and generates creatives
+5. Gemini 3 Pro generates images (with product mockups as reference images) or Veo generates video
+6. User reviews results — can regenerate individual images without regenerating the full set
+7. User exports to Meta via Ad Publisher
+
+### Product Context Architecture
+
+The AI needs two complementary layers to generate accurate ads:
+
+| Layer | Source | What It Provides | Stored In |
+|-------|--------|-----------------|-----------|
+| **Performance patterns** | ConversionIQ™ Channel Analysis (Insights page) | "Curiosity-gap headlines convert 3x", winning visual elements, emotional triggers | `channel_analysis_cache` in localStorage |
+| **Product identity** | Product Context (Products page) | "This is The Resistance Protocol by Marcus Reid — a digital course about..." | `convertra_products` in localStorage |
+
+- Channel analysis is **account-wide** — analyzes all ads for the last 30 days
+- Product context is **per-product** — tells the AI what to call the product and what it looks like
+- The AI combines both: proven patterns + correct identity
+- Without product context, the AI may reference the platform name instead of the actual product
+- Product mockup images are sent as additional reference images to Gemini alongside performance-based cached images
+
+```typescript
+interface ProductContext {
+  id: string;
+  name: string;           // "The Resistance Protocol"
+  author: string;         // "Marcus Reid"
+  description: string;    // 1-2 sentences
+  landingPageUrl: string;
+  productImages: Array<{  // Max 5, resized to 1024px, JPEG 80% quality
+    base64Data: string;
+    mimeType: string;
+    fileName: string;
+  }>;
+  createdAt: string;
+}
+```
 
 ---
 

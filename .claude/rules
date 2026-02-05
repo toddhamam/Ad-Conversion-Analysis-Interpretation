@@ -53,6 +53,17 @@
 - `overflow-y: auto` for scrollable navigation content
 - Dynamic class toggling: Classes like `sidebar-collapsed`, `expanded`, `mobile-open` toggled in `.tsx`, defined in `.css`
 - **useMemo and useCallback**: Use to prevent unnecessary re-renders when passing objects/functions as props or dependencies
+- **useMemo for derived state with heavy objects**: When deriving state from arrays that contain large objects (e.g., products with base64 images), always use `useMemo` — a bare `.find()` on every render re-searches the array and keeps the large object reference alive unnecessarily:
+  ```tsx
+  // ✗ Recalculates on every render
+  const selectedProduct = products.find(p => p.id === selectedId) || null;
+
+  // ✓ Only recalculates when dependencies change
+  const selectedProduct = useMemo(
+    () => products.find(p => p.id === selectedId) || null,
+    [products, selectedId]
+  );
+  ```
 - **useRef for non-render values**: Use `useRef` for mutable values that shouldn't trigger re-renders (instance IDs, DOM refs, cancel flags)
 - **Unique keys for lists**: Always use stable, unique `key={item.id}` for list items to help React's reconciliation
 - **useRef for IntersectionObserver**: Use `useRef` for managing IntersectionObserver instances for scroll-triggered animations without re-renders
@@ -181,6 +192,19 @@
 - **Missing type-only imports**: When `verbatimModuleSyntax` is enabled, failing to use `import type` for types causes build failures
 - **React Router v7 instability**: Avoid `createBrowserRouter` (v7 API) with nested routes and context providers—use standard `BrowserRouter` with `<Outlet />` in layouts instead
 - **Stale search params**: When using `useSearchParams` for initial state, clear the params after reading to avoid stale behavior on re-renders
+- **Over-broad useEffect dependencies**: Using step/phase state (e.g., `[currentStep]`) as a dependency for data-loading effects causes the effect to re-run on every step change, re-parsing localStorage and triggering unnecessary re-renders. For data that only needs to load once (like saved products), use `[]` with a `visibilitychange` listener instead:
+  ```tsx
+  // ✗ Re-parses localStorage on every step change
+  useEffect(() => { loadFromStorage(); }, [currentStep]);
+
+  // ✓ Loads once on mount + when user navigates back to the tab
+  useEffect(() => {
+    loadFromStorage();
+    const onVisible = () => { if (document.visibilityState === 'visible') loadFromStorage(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+  ```
 - **Passing Outlet as children**: Never pass `<Outlet />` as children to layout components; layouts should render `<Outlet />` internally
 - **Unused imports causing build failures**: Remove unused imports before committing, especially when commenting out code that used them (e.g., `StrictMode` in `main.tsx`). TypeScript strict mode will fail the build on unused declared variables
 - **Deploying without peer dependency resolution**: Committing changes to Vercel without ensuring local dependency resolution methods (`--legacy-peer-deps`) are also applied in the deployment environment (`.npmrc`) causes build failures
@@ -499,6 +523,40 @@ Large amounts of data in localStorage can significantly impact performance, espe
   const SKIP_LOCALSTORAGE = false; // Set to true to bypass localStorage during debugging
   const DEBUG_MODE = false; // Set to true for verbose logging
   ```
+- **Always wrap `setItem` in try/catch**: `localStorage.setItem` throws `QuotaExceededError` silently when storage is full. Without try/catch, the write fails and no data persists — the user sees no error but their data is lost:
+  ```tsx
+  function saveData(data: object): { success: boolean; error?: string } {
+    try {
+      localStorage.setItem('key', JSON.stringify(data));
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Storage limit exceeded.' };
+    }
+  }
+  ```
+- **Idle callbacks for ALL localStorage writes of large data**: Not just reads — synchronous `JSON.stringify` + `setItem` of multi-MB data blocks the main thread and causes UI freezes. Use `scheduleIdleWork` / `requestIdleCallback` for writes too
+- **Strip heavy payloads from old entries**: When storing a list of items that contain large data (base64 images), keep full data only for the N most recent items and strip it from older ones. The metadata (text, timestamps) remains while the heavy payloads are removed:
+  ```tsx
+  const toSave = items.map((item, index) => {
+    if (index >= MAX_ITEMS_WITH_IMAGES && item.images) {
+      return { ...item, images: item.images.map(img => ({ ...img, imageUrl: '' })) };
+    }
+    return item;
+  });
+  ```
+
+### Image Storage in localStorage
+- **Resize before storing**: Full-resolution images (1-3MB each) in base64 will blow localStorage's ~5MB limit. Use canvas to resize to max 1024px and compress to JPEG 80% quality (~50-150KB each):
+  ```tsx
+  const canvas = document.createElement('canvas');
+  canvas.width = scaledWidth;
+  canvas.height = scaledHeight;
+  ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+  ```
+- **4 full-resolution product images in base64 ≈ 5-12MB** — guaranteed `QuotaExceededError`
+- **4 resized product images (1024px, JPEG 0.8) ≈ 200-600KB** — safely within limits
+- **The failure is silent**: `setItem` throws, but without try/catch the app continues as if the save succeeded. The user adds a product, sees it in state, navigates away, and it's gone because it was never persisted
 
 ## Media Rendering Performance
 
@@ -549,6 +607,21 @@ For complex generation or configuration workflows with multiple steps:
 - Show clear status messages during each phase
 - Use spinners and disabled states (`isGeneratingCopy`, `isGeneratingCreatives`)
 - Provide specific progress text, not generic "Loading..."
+
+### Two-Layer AI Prompt Context
+When generating AI content that needs both performance intelligence and product identity:
+- **Layer 1 (Performance patterns)**: Injected from channel analysis — winning headlines, emotional triggers, visual elements. Account-wide, never changes per product.
+- **Layer 2 (Product identity)**: Injected from product context — product name, author, description, mockup images. Per-product, ensures the AI references the correct brand.
+- These layers are injected as **separate prompt sections** and never interfere with each other. Changing the product context doesn't affect the analysis pipeline, and vice versa.
+- Product mockup images are sent as additional reference images to image generation APIs (Gemini) alongside performance-based cached images.
+- **Critical prompt instruction**: Include `CRITICAL: All copy MUST be about "{productName}" by {author}. NEVER reference any other product.` to prevent the AI from inventing product names.
+
+### Per-Item Regeneration Pattern
+When generating a set of items (e.g., 3 ad image variations) and one is unsatisfactory:
+- Use a **callback prop pattern** (`onRegenerateImage?: (id, index) => Promise<void>`) to allow regenerating a single item
+- Show a **loading overlay on just that item** while regenerating, keeping the rest visible
+- The parent component handles the actual API call and state update; the child component handles the UI feedback
+- Update the stored set by replacing only the regenerated item, not the entire set
 
 ---
 
