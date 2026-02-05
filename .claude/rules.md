@@ -147,6 +147,12 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 - Don't auto-load many images on page mount - let users trigger loading
 - This improves page responsiveness and prevents crashes on media-heavy pages
 
+## Debugging & Error Persistence
+
+- **Don't assume the first fix works**: When the user says "Still not working whatsoever", trace the full flow comprehensively — check API calls, state transitions, and intermediate values rather than making incremental guesses
+- **Verify fix at every layer**: When fixing a multi-step bug (e.g., data not loading), verify the fix works at each layer: API call fires, response is correct, state is updated, UI re-renders
+- **Iterative development order**: API changes first, then component logic, then UI/UX polish
+
 ## Git Workflow
 
 - Commit changes before creating Pull Requests
