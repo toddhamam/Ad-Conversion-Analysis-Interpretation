@@ -625,6 +625,55 @@ When generating a set of items (e.g., 3 ad image variations) and one is unsatisf
 
 ---
 
+## Client-Side Filtering Fallback
+
+When server-side filtering via external API parameters leads to silent failures or unexpected empty results, fall back to fetching all data and filtering client-side:
+```tsx
+// ✗ Risky: API silently returns [] if filter value is invalid
+const campaigns = await fetchCampaigns({ effective_status: ['ACTIVE', 'PAUSED', 'DRAFT'] });
+
+// ✓ Robust: Fetch all, then filter in-memory
+const allCampaigns = await fetchCampaigns();
+const filtered = allCampaigns.filter(c => ['ACTIVE', 'PAUSED'].includes(c.effective_status));
+```
+This is especially important for Meta API, where invalid filter values (e.g., `DRAFT` for `effective_status`) cause silent empty results rather than errors.
+
+## Data Fetch Timing in Multi-Step Workflows
+
+In multi-step workflows, ensure data-fetching functions are triggered at the correct transition points, not gated by state that hasn't updated yet:
+```tsx
+// ✗ Bug: loadCampaigns skipped because publishMode hasn't been set yet
+const handleNextStep = () => {
+  setPublishMode('new_adset');
+  setCurrentStep('destination');
+  // loadCampaigns() checks publishMode, but setState is async — it's still the old value
+};
+
+// ✓ Fix: Trigger the fetch explicitly or use the value directly
+const handleNextStep = () => {
+  const mode = 'new_adset';
+  setPublishMode(mode);
+  setCurrentStep('destination');
+  if (mode === 'new_adset' || mode === 'existing_adset') {
+    loadCampaigns(); // Don't rely on state that hasn't flushed yet
+  }
+};
+```
+
+## Enum-Based Mode Management
+
+For components with distinct operational modes, use a union type (not boolean flags) to make states mutually exclusive and self-documenting:
+```tsx
+type PublishMode = 'new_campaign' | 'new_adset' | 'existing_adset';
+
+// ✗ Ambiguous: multiple booleans can conflict
+const [isNewCampaign, setIsNewCampaign] = useState(false);
+const [isExistingAdSet, setIsExistingAdSet] = useState(false);
+
+// ✓ Clear: single state, mutually exclusive modes
+const [publishMode, setPublishMode] = useState<PublishMode>('new_campaign');
+```
+
 ## CSS Isolation & Performance
 
 ### Containment Properties
