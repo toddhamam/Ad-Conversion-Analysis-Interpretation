@@ -14,6 +14,7 @@ import Insights from './pages/Insights';
 import AdGenerator from './pages/AdGenerator';
 import AdPublisher from './pages/AdPublisher';
 import Funnels from './pages/Funnels';
+import SeoIQ from './pages/SeoIQ';
 import Billing from './pages/Billing';
 import AccountSettings from './pages/AccountSettings';
 import SalesLanding from './pages/SalesLanding';
@@ -81,6 +82,7 @@ function App() {
 
             <Route path="/products" element={<Products />} />
             <Route path="/insights" element={<Insights />} />
+            <Route path="/seo-iq" element={<SeoIQ />} />
             <Route path="/funnels" element={<Funnels />} />
             <Route path="/billing" element={<Billing />} />
             <Route path="/account" element={<AccountSettings />} />
