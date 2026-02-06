@@ -1,13 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { encrypt, decrypt, isEncryptionConfigured } from '../_lib/encryption.js';
-import { getGoogleAccessToken } from '../_lib/google-auth.js';
+import { encrypt, decrypt, isEncryptionConfigured } from './_lib/encryption.js';
+import { getGoogleAccessToken } from './_lib/google-auth.js';
 import {
   scoreQuickWin,
   scoreCTROptimization,
   buildArticleSystemPrompt,
   buildArticleUserPrompt,
-} from '../_lib/seo-prompts.js';
+} from './_lib/seo-prompts.js';
 
 // ─── Shared Supabase client ────────────────────────────────────────────────
 
@@ -79,13 +79,12 @@ interface GeminiResponse {
 // ─── Main catch-all handler ────────────────────────────────────────────────
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const pathSegments = req.query.path;
+  // Route is passed via vercel.json rewrite: /api/seo-iq/:path* → /api/seoiq?route=:path
+  const route = typeof req.query.route === 'string' ? req.query.route : '';
 
-  if (!pathSegments || !Array.isArray(pathSegments) || pathSegments.length === 0) {
+  if (!route) {
     return res.status(404).json({ error: 'Not found' });
   }
-
-  const route = pathSegments[0];
 
   switch (route) {
     case 'sites':
