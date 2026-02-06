@@ -16,6 +16,9 @@ import {
   fetchAutopilotStatus,
   updateAutopilotConfig,
   autopilotPickKeyword,
+  fetchScheduledRuns,
+  createScheduledRuns,
+  deleteScheduledRun,
 } from '../services/seoIqApi';
 import type {
   SeoSite,
@@ -24,6 +27,7 @@ import type {
   SeoIQTab,
   ArticleStatus,
   AutopilotConfig,
+  ScheduledRun,
 } from '../types/seoiq';
 import './SeoIQ.css';
 
@@ -78,6 +82,16 @@ export default function SeoIQ() {
   const [autopilotArticleNum, setAutopilotArticleNum] = useState(0);
   const [autopilotTotalArticles, setAutopilotTotalArticles] = useState(1);
 
+  // Content Calendar
+  const [scheduledRuns, setScheduledRuns] = useState<ScheduledRun[]>([]);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [showScheduleMonth, setShowScheduleMonth] = useState(false);
+  const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([1, 3, 5]); // Mon, Wed, Fri
+
   const selectedSite = sites.find((s) => s.id === selectedSiteId) || null;
 
   // Load sites
@@ -127,6 +141,17 @@ export default function SeoIQ() {
       fetchAutopilotStatus(selectedSiteId).then(setAutopilotConfig).catch(console.error);
     }
   }, [activeTab, selectedSiteId]);
+
+  // Load scheduled runs when autopilot tab is active
+  useEffect(() => {
+    if (activeTab === 'autopilot' && selectedSiteId) {
+      setScheduleLoading(true);
+      fetchScheduledRuns(selectedSiteId, calendarMonth)
+        .then(setScheduledRuns)
+        .catch(console.error)
+        .finally(() => setScheduleLoading(false));
+    }
+  }, [activeTab, selectedSiteId, calendarMonth]);
 
   const loadArticles = async () => {
     if (!selectedSiteId) return;
@@ -397,6 +422,137 @@ export default function SeoIQ() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update autopilot config');
     }
+  };
+
+  // ─── Content Calendar handlers ──────────────────────────────────────────
+
+  const handleCalendarDayClick = async (dateStr: string) => {
+    if (!selectedSiteId) return;
+    const existing = scheduledRuns.find((r) => r.scheduled_date === dateStr);
+    if (existing) {
+      if (existing.status !== 'pending') return; // Only delete pending runs
+      try {
+        await deleteScheduledRun(selectedSiteId, dateStr);
+        setScheduledRuns((prev) => prev.filter((r) => r.scheduled_date !== dateStr));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to remove scheduled run');
+      }
+    } else {
+      try {
+        const created = await createScheduledRuns(selectedSiteId, [dateStr]);
+        setScheduledRuns((prev) => [...prev, ...created]);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to schedule run');
+      }
+    }
+  };
+
+  const handleScheduleMonth = async () => {
+    if (!selectedSiteId) return;
+    const [year, mon] = calendarMonth.split('-').map(Number);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const daysInMonth = new Date(year, mon, 0).getDate();
+    const dates: string[] = [];
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(year, mon - 1, d);
+      if (date <= today) continue; // Skip past and today
+      if (!selectedWeekdays.includes(date.getDay())) continue;
+      const dateStr = `${year}-${String(mon).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      if (scheduledRuns.find((r) => r.scheduled_date === dateStr)) continue; // Skip existing
+      dates.push(dateStr);
+    }
+
+    if (dates.length === 0) {
+      setShowScheduleMonth(false);
+      return;
+    }
+
+    try {
+      const created = await createScheduledRuns(selectedSiteId, dates);
+      setScheduledRuns((prev) => [...prev, ...created]);
+      setShowScheduleMonth(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to schedule month');
+    }
+  };
+
+  const handleRunReadyArticles = async () => {
+    if (!selectedSiteId) return;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const readyRuns = scheduledRuns.filter(
+      (r) => r.scheduled_date === todayStr && r.status === 'keyword_picked' && r.keyword_id
+    );
+    if (readyRuns.length === 0) return;
+
+    setAutopilotRunning(true);
+    setAutopilotResult(null);
+    setError(null);
+    setAutopilotTotalArticles(readyRuns.length);
+
+    let currentStep = 0;
+    try {
+      for (let i = 0; i < readyRuns.length; i++) {
+        const run = readyRuns[i];
+        setAutopilotArticleNum(i + 1);
+
+        // Step 3: Generate article (steps 1-2 done by cron)
+        currentStep = 3;
+        setAutopilotStepStatus({ 1: 'done', 2: 'done', 3: 'running' });
+        const generated = await generateArticle({
+          site_id: selectedSiteId,
+          keyword_id: run.keyword_id!,
+          iq_level: autopilotConfig?.autopilot_iq_level || 'medium',
+        });
+        setAutopilotStepStatus((prev) => ({ ...prev, 3: 'done' }));
+
+        // Step 4: Publish + Index
+        currentStep = 4;
+        setAutopilotStepStatus((prev) => ({ ...prev, 4: 'running' }));
+        const published = await publishArticle({
+          article_id: generated.article.id,
+          generate_thumbnail: true,
+          submit_indexing: true,
+        });
+        setAutopilotStepStatus((prev) => ({ ...prev, 4: 'done' }));
+
+        // Update the scheduled run in local state
+        setScheduledRuns((prev) =>
+          prev.map((r) =>
+            r.id === run.id
+              ? { ...r, status: 'completed' as const, article_id: generated.article.id, article_title: generated.article.title, published_url: published.published_url }
+              : r
+          )
+        );
+
+        setAutopilotResult({
+          keyword: run.keyword_text || '',
+          articleTitle: generated.article.title,
+          publishedUrl: published.published_url,
+        });
+      }
+
+      setSuccess(`${readyRuns.length} scheduled article(s) published`);
+      setTimeout(() => setSuccess(null), 8000);
+    } catch (err) {
+      setAutopilotStepStatus((prev) => ({ ...prev, [currentStep]: 'failed' }));
+      setError(err instanceof Error ? err.message : 'Scheduled run failed');
+    } finally {
+      setAutopilotRunning(false);
+    }
+  };
+
+  const calendarMonthLabel = (() => {
+    const [year, mon] = calendarMonth.split('-').map(Number);
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return `${monthNames[mon - 1]} ${year}`;
+  })();
+
+  const navigateMonth = (delta: number) => {
+    const [year, mon] = calendarMonth.split('-').map(Number);
+    const d = new Date(year, mon - 1 + delta, 1);
+    setCalendarMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   };
 
   // Filter and sort keywords
@@ -1009,6 +1165,128 @@ export default function SeoIQ() {
             )}
           </div>
         )}
+
+        {/* Content Calendar */}
+        {(() => {
+          const [year, mon] = calendarMonth.split('-').map(Number);
+          const daysInMonth = new Date(year, mon, 0).getDate();
+          const firstDayOfWeek = new Date(year, mon - 1, 1).getDay(); // 0=Sun
+          const todayStr = new Date().toISOString().split('T')[0];
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+          // Shift so Monday=0 (ISO week)
+          const startOffset = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
+
+          const readyToday = scheduledRuns.filter(
+            (r) => r.scheduled_date === todayStr && r.status === 'keyword_picked'
+          );
+
+          return (
+            <div className="calendar-section">
+              <div className="calendar-header">
+                <h3>Content Calendar</h3>
+                <div className="calendar-nav">
+                  <button className="calendar-nav-btn" onClick={() => navigateMonth(-1)}>&lt;</button>
+                  <span className="calendar-month-label">{calendarMonthLabel}</span>
+                  <button className="calendar-nav-btn" onClick={() => navigateMonth(1)}>&gt;</button>
+                </div>
+                <button
+                  className="calendar-schedule-btn"
+                  onClick={() => setShowScheduleMonth(!showScheduleMonth)}
+                >
+                  Schedule Month
+                </button>
+              </div>
+
+              {/* Schedule Month Popover */}
+              {showScheduleMonth && (
+                <div className="calendar-schedule-popover">
+                  <div className="calendar-schedule-weekdays">
+                    {weekdayLabels.map((label, i) => {
+                      const dayNum = i === 6 ? 0 : i + 1; // Mon=1...Sat=6, Sun=0
+                      const checked = selectedWeekdays.includes(dayNum);
+                      return (
+                        <label key={label} className="calendar-weekday-check">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setSelectedWeekdays((prev) =>
+                                checked ? prev.filter((d) => d !== dayNum) : [...prev, dayNum]
+                              );
+                            }}
+                          />
+                          {label}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <button className="calendar-apply-btn" onClick={handleScheduleMonth}>
+                    Apply
+                  </button>
+                </div>
+              )}
+
+              {/* Ready Today Banner */}
+              {readyToday.length > 0 && !autopilotRunning && (
+                <div className="calendar-ready-banner">
+                  <div>
+                    <strong>{readyToday.length} article{readyToday.length > 1 ? 's' : ''} ready for today</strong>
+                    <p>Keywords pre-selected by the overnight cron. Click to generate and publish.</p>
+                  </div>
+                  <button className="seo-iq-btn seo-iq-btn-violet" onClick={handleRunReadyArticles}>
+                    Generate All
+                  </button>
+                </div>
+              )}
+
+              {/* Calendar Grid */}
+              {scheduleLoading ? (
+                <Loading size="small" message="ConversionIQ™ loading calendar..." />
+              ) : (
+                <div className="calendar-grid">
+                  {weekdayLabels.map((label) => (
+                    <div key={label} className="calendar-weekday-header">{label}</div>
+                  ))}
+                  {Array.from({ length: startOffset }).map((_, i) => (
+                    <div key={`empty-${i}`} className="calendar-day empty" />
+                  ))}
+                  {Array.from({ length: daysInMonth }).map((_, i) => {
+                    const day = i + 1;
+                    const dateStr = `${year}-${String(mon).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    const run = scheduledRuns.find((r) => r.scheduled_date === dateStr);
+                    const dateObj = new Date(year, mon - 1, day);
+                    const isPast = dateObj < today;
+                    const isToday = dateStr === todayStr;
+                    const isClickable = !isPast && (!run || run.status === 'pending');
+
+                    let statusClass = '';
+                    if (run) {
+                      statusClass = `status-${run.status}`;
+                    }
+
+                    return (
+                      <div
+                        key={day}
+                        className={`calendar-day ${statusClass} ${isToday ? 'today' : ''} ${isPast ? 'past' : ''} ${isClickable ? 'clickable' : ''}`}
+                        onClick={() => isClickable && !isPast && handleCalendarDayClick(dateStr)}
+                      >
+                        <span className="calendar-day-num">{day}</span>
+                        {run && <span className={`calendar-dot ${run.status}`} />}
+                        {run?.keyword_text && (
+                          <span className="calendar-day-keyword" title={run.keyword_text}>
+                            {run.keyword_text.length > 12 ? run.keyword_text.slice(0, 12) + '...' : run.keyword_text}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Config Panel */}
         <div className="autopilot-config">

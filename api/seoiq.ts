@@ -109,6 +109,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handleAutopilotConfig(req, res);
     case 'autopilot-cron':
       return handleAutopilotCron(req, res);
+    case 'autopilot-schedule':
+      return handleAutopilotSchedule(req, res);
     default:
       return res.status(404).json({ error: `Unknown route: ${route}` });
   }
@@ -1333,11 +1335,50 @@ async function handleAutopilotCron(req: VercelRequest, res: VercelResponse) {
       updated_at: new Date().toISOString(),
     }).eq('id', site.id);
 
+    // ── Process content calendar scheduled runs for today ──
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const { data: scheduledRuns } = await supabase
+      .from('autopilot_scheduled_runs')
+      .select('id, site_id')
+      .eq('status', 'pending')
+      .eq('scheduled_date', today);
+
+    if (scheduledRuns && scheduledRuns.length > 0) {
+      for (const run of scheduledRuns) {
+        // Pick top keyword for each scheduled run
+        const { data: kw } = await supabase
+          .from('seo_keywords')
+          .select('id, keyword')
+          .eq('site_id', run.site_id)
+          .eq('status', 'active')
+          .gt('opportunity_score', 0)
+          .order('opportunity_score', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (kw) {
+          await supabase.from('autopilot_scheduled_runs').update({
+            status: 'keyword_picked',
+            keyword_id: kw.id,
+            keyword_text: kw.keyword,
+            updated_at: new Date().toISOString(),
+          }).eq('id', run.id);
+        } else {
+          await supabase.from('autopilot_scheduled_runs').update({
+            status: 'failed',
+            error: 'No active keywords available',
+            updated_at: new Date().toISOString(),
+          }).eq('id', run.id);
+        }
+      }
+    }
+
     return res.status(200).json({
       message: 'Keyword picked, awaiting article generation',
       siteId: site.id,
       keywordId: keyword.id,
       keyword: keyword.keyword,
+      scheduledRunsProcessed: scheduledRuns?.length || 0,
     });
   } catch (err) {
     console.error('Autopilot cron error:', err);
@@ -1346,4 +1387,95 @@ async function handleAutopilotCron(req: VercelRequest, res: VercelResponse) {
       message: err instanceof Error ? err.message : 'Unknown error',
     });
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONTENT CALENDAR SCHEDULE HANDLER
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function handleAutopilotSchedule(req: VercelRequest, res: VercelResponse) {
+  const { method } = req;
+
+  if (method === 'GET') {
+    // Fetch scheduled runs for a site + month
+    const { siteId, month } = req.query;
+    if (!siteId || typeof siteId !== 'string') {
+      return res.status(400).json({ error: 'siteId is required' });
+    }
+    if (!month || typeof month !== 'string') {
+      return res.status(400).json({ error: 'month is required (YYYY-MM)' });
+    }
+
+    // Calculate date range for the month
+    const [year, mon] = month.split('-').map(Number);
+    const startDate = `${month}-01`;
+    const endDate = `${year}-${String(mon + 1).padStart(2, '0')}-01`;
+    // Handle December → next year January
+    const endDateFinal = mon === 12 ? `${year + 1}-01-01` : endDate;
+
+    const { data, error } = await supabase
+      .from('autopilot_scheduled_runs')
+      .select('*')
+      .eq('site_id', siteId)
+      .gte('scheduled_date', startDate)
+      .lt('scheduled_date', endDateFinal)
+      .order('scheduled_date', { ascending: true });
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to fetch scheduled runs', message: error.message });
+    }
+
+    return res.status(200).json(data || []);
+  }
+
+  if (method === 'POST') {
+    // Bulk-create scheduled runs
+    const { site_id, dates } = req.body;
+    if (!site_id) {
+      return res.status(400).json({ error: 'site_id is required' });
+    }
+    if (!dates || !Array.isArray(dates) || dates.length === 0) {
+      return res.status(400).json({ error: 'dates array is required' });
+    }
+
+    const rows = dates.map((date: string) => ({
+      site_id,
+      scheduled_date: date,
+      status: 'pending',
+    }));
+
+    const { data, error } = await supabase
+      .from('autopilot_scheduled_runs')
+      .upsert(rows, { onConflict: 'site_id,scheduled_date', ignoreDuplicates: true })
+      .select('*');
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to create scheduled runs', message: error.message });
+    }
+
+    return res.status(201).json(data || []);
+  }
+
+  if (method === 'DELETE') {
+    // Delete a single scheduled run (only if pending)
+    const { site_id, scheduled_date } = req.body;
+    if (!site_id || !scheduled_date) {
+      return res.status(400).json({ error: 'site_id and scheduled_date are required' });
+    }
+
+    const { error } = await supabase
+      .from('autopilot_scheduled_runs')
+      .delete()
+      .eq('site_id', site_id)
+      .eq('scheduled_date', scheduled_date)
+      .eq('status', 'pending');
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to delete scheduled run', message: error.message });
+    }
+
+    return res.status(200).json({ success: true });
+  }
+
+  return res.status(405).json({ error: 'Method not allowed' });
 }

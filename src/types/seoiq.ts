@@ -209,6 +209,23 @@ export interface SeoIQPageState {
   selectedKeywordId: string | null;
 }
 
+export type ScheduledRunStatus = 'pending' | 'keyword_picked' | 'generating' | 'completed' | 'failed' | 'skipped';
+
+export interface ScheduledRun {
+  id: string;
+  site_id: string;
+  scheduled_date: string;
+  status: ScheduledRunStatus;
+  keyword_id: string | null;
+  article_id: string | null;
+  keyword_text: string | null;
+  article_title: string | null;
+  published_url: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AutopilotConfig {
   autopilot_enabled: boolean;
   autopilot_cadence: 'daily' | 'every_3_days' | 'weekly';

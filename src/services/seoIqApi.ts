@@ -3,6 +3,7 @@ import type {
   SeoKeyword,
   SeoArticle,
   AutopilotConfig,
+  ScheduledRun,
   CreateSeoSiteRequest,
   UpdateSeoSiteRequest,
   RefreshKeywordsResponse,
@@ -155,5 +156,29 @@ export async function autopilotPickKeyword(siteId: string): Promise<SeoKeyword> 
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ site_id: siteId }),
+  });
+}
+
+// ─── Content Calendar ─────────────────────────────────────────────────────
+
+export async function fetchScheduledRuns(siteId: string, month: string): Promise<ScheduledRun[]> {
+  return fetchJson<ScheduledRun[]>(
+    `${API_BASE}/seo-iq/autopilot-schedule?siteId=${siteId}&month=${month}`
+  );
+}
+
+export async function createScheduledRuns(siteId: string, dates: string[]): Promise<ScheduledRun[]> {
+  return fetchJson<ScheduledRun[]>(`${API_BASE}/seo-iq/autopilot-schedule`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ site_id: siteId, dates }),
+  });
+}
+
+export async function deleteScheduledRun(siteId: string, scheduledDate: string): Promise<void> {
+  await fetchJson<{ success: boolean }>(`${API_BASE}/seo-iq/autopilot-schedule`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ site_id: siteId, scheduled_date: scheduledDate }),
   });
 }
