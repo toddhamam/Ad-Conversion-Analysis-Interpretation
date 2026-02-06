@@ -116,7 +116,11 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
         if (userError || !appUser) {
           // User exists in auth but not in users/organizations tables yet
           // Call backend API to provision (uses service role key to bypass RLS)
-          console.log('No user record found, provisioning via backend API...');
+          console.log('No user record found, provisioning via backend API...', {
+            authId: authUser.id,
+            email: authUser.email,
+            userError: userError?.message || null,
+          });
           const meta = authUser.user_metadata || {};
 
           try {
@@ -133,18 +137,24 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
 
             if (!provisionRes.ok) {
               const errData = await provisionRes.json().catch(() => ({}));
-              console.error('Provision API error:', errData);
-              setError('Failed to set up organization. Please try again.');
+              console.error('Provision API error:', provisionRes.status, errData);
+              setError(`Failed to set up organization (${provisionRes.status}). Please try again.`);
               setLoading(false);
               return;
             }
 
-            const { organization: newOrg, user: newUser } = await provisionRes.json();
-            setOrganization(newOrg as Organization);
-            setUser(newUser as AppUser);
+            const provisionData = await provisionRes.json();
+            if (!provisionData.organization || !provisionData.user) {
+              console.error('Provision response missing data:', provisionData);
+              setError('Organization setup returned incomplete data. Please try again.');
+              setLoading(false);
+              return;
+            }
+            setOrganization(provisionData.organization as Organization);
+            setUser(provisionData.user as AppUser);
           } catch (provisionErr) {
             console.error('Provision request failed:', provisionErr);
-            setError('Failed to set up organization. Please try again.');
+            setError('Failed to connect to server. Please check your connection and try again.');
             setLoading(false);
             return;
           }
@@ -157,17 +167,13 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
         }
       }
 
-      // Apply organization branding to CSS variables
-      if (organization) {
-        applyBranding(organization);
-      }
     } catch (err) {
       console.error('Failed to load organization:', err);
       setError('Failed to load organization data');
     } finally {
       setLoading(false);
     }
-  }, [authUser, isConfigured, organization]);
+  }, [authUser, isConfigured]);
 
   // Load organization data when auth user changes
   useEffect(() => {
