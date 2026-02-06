@@ -43,10 +43,19 @@ The user prefers a standard SaaS URL structure:
 - **"Fully and completely optimize"**: Desire for comprehensive, end-to-end solutions for SEO and GEO
 - **"Hit the ground running with optimized SEO"**: Emphasis on getting started quickly with a strong foundation
 - **"Prioritize AI recommendations"**: Focus on GEO (Generative Engine Optimization) alongside traditional SEO, acknowledging AI's impact on search
+- **GEO > traditional SEO**: AI citation is considered more critical than traditional search rankings. Content must be "AI-first" with authority signals, factual density, and quotable statements
 - **No Performance/UI Impact**: SEO implementations should be invisible to end-users and not degrade website performance
 - **Clear, benefit-oriented explanations**: When explaining technical concepts, prefer simple, benefit-driven language ("What this actually means for you")
 - **Actionable next steps**: Provide clear, prioritized action items and ask for confirmation before proceeding
 - **Invisible optimizations**: Meta tags, schema, and config files achieve SEO without altering user-facing UI
+
+## AI Content Writing Style
+
+- **Human-like writing**: Prioritize authentic, conversational, and specific language over generic AI-sounding phrases
+- **Avoid corporate buzzwords**: No hedging, no filler, no generic marketing-speak
+- **Mandatory FAQ sections**: Articles must include FAQ sections as a critical GEO signal
+- **Authority signals**: Include quotable statistics, clear definitions, and factual density for AI citation
+- **Category consistency**: When generating categories, provide existing categories to AI to maintain a consistent taxonomy rather than inventing new ones each time
 
 ## User Profile & Company Branding
 
@@ -147,6 +156,11 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 - Don't auto-load many images on page mount - let users trigger loading
 - This improves page responsiveness and prevents crashes on media-heavy pages
 
+## Date Handling
+
+- **UTC vs local time**: Use local date formatting for user-facing calendars and scheduled events — raw UTC `toISOString()` causes off-by-one errors due to timezone differences
+- Always adjust for timezones when comparing dates in calendar views
+
 ## Debugging & Error Persistence
 
 - **Don't assume the first fix works**: When the user says "Still not working whatsoever", trace the full flow comprehensively — check API calls, state transitions, and intermediate values rather than making incremental guesses
@@ -161,6 +175,8 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 - **Separate PRs for distinct fixes**: When iterating on a solution, create separate PRs for each distinct fix rather than bundling unrelated changes
 - Use clear commit messages and PR titles that accurately reflect the changes
 - **Complete PR workflow**: User expects the full process through to completion—commit changes, create PR, provide PR URL
+- **Verify active branch**: Always confirm the active branch matches the intended PR target before committing — committing to the wrong branch requires cherry-picking/rebasing
+- **Review git diff before committing**: Always check `git diff` to avoid losing uncommitted changes or mixing changes into unintended commits
 
 ## Communication Preferences
 
