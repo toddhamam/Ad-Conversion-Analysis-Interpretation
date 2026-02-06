@@ -3,5 +3,8 @@
     { "source": "/api/seo-iq/:path(.*)", "destination": "/api/seoiq?route=:path" },
     { "source": "/api/auth/google/:action", "destination": "/api/google-auth?action=:action" },
     { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    { "path": "/api/seo-iq/autopilot-cron", "schedule": "0 6 * * *" }
   ]
 }

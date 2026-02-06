@@ -30,6 +30,18 @@ export interface SeoSite {
   slug_prefix: string;
   voice_guide: string | null;
 
+  // Autopilot
+  autopilot_enabled: boolean;
+  autopilot_cadence: 'daily' | 'every_3_days' | 'weekly';
+  autopilot_iq_level: 'low' | 'medium' | 'high';
+  autopilot_articles_per_run: number;
+  autopilot_next_run_at: string | null;
+  autopilot_pipeline_step: string | null;
+  autopilot_pipeline_keyword_id: string | null;
+  autopilot_pipeline_article_id: string | null;
+  autopilot_last_run_at: string | null;
+  autopilot_last_error: string | null;
+
   created_at: string;
   updated_at: string;
 }
@@ -189,10 +201,23 @@ export interface KeywordOpportunity {
 
 // UI workflow types
 
-export type SeoIQTab = 'sites' | 'keywords' | 'generate' | 'articles';
+export type SeoIQTab = 'sites' | 'keywords' | 'generate' | 'articles' | 'autopilot';
 
 export interface SeoIQPageState {
   activeTab: SeoIQTab;
   selectedSiteId: string | null;
   selectedKeywordId: string | null;
+}
+
+export interface AutopilotConfig {
+  autopilot_enabled: boolean;
+  autopilot_cadence: 'daily' | 'every_3_days' | 'weekly';
+  autopilot_iq_level: 'low' | 'medium' | 'high';
+  autopilot_articles_per_run: number;
+  autopilot_next_run_at: string | null;
+  autopilot_pipeline_step: string | null;
+  autopilot_pipeline_keyword_id: string | null;
+  autopilot_pipeline_article_id: string | null;
+  autopilot_last_run_at: string | null;
+  autopilot_last_error: string | null;
 }
