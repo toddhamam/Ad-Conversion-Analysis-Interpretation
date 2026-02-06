@@ -98,6 +98,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handleGenerateArticle(req, res);
     case 'publish-article':
       return handlePublishArticle(req, res);
+    case 'provision-org':
+      return handleProvisionOrg(req, res);
     default:
       return res.status(404).json({ error: `Unknown route: ${route}` });
   }
@@ -1012,5 +1014,83 @@ async function submitToIndexingApi(url: string, accessToken: string): Promise<bo
   } catch (err) {
     console.error('Indexing API error:', err);
     return false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PROVISION ORGANIZATION HANDLER
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function handleProvisionOrg(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { authId, email, fullName, companyName } = req.body || {};
+
+  if (!authId || !email) {
+    return res.status(400).json({ error: 'authId and email are required' });
+  }
+
+  try {
+    // Check if user already exists
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('*, organization:organizations(*)')
+      .eq('auth_id', authId)
+      .single();
+
+    if (existingUser) {
+      return res.status(200).json({
+        organization: existingUser.organization,
+        user: { ...existingUser, organization: undefined },
+      });
+    }
+
+    // Create organization
+    const name = companyName || fullName || 'My Company';
+    const slug = name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
+
+    const { data: org, error: orgErr } = await supabase
+      .from('organizations')
+      .insert({
+        name,
+        slug: `${slug}-${Date.now().toString(36)}`,
+        setup_mode: 'self_service',
+        plan_tier: 'free',
+      })
+      .select()
+      .single();
+
+    if (orgErr || !org) {
+      console.error('Failed to create organization:', orgErr);
+      return res.status(500).json({ error: 'Failed to create organization' });
+    }
+
+    // Create user linked to organization
+    const { data: user, error: userErr } = await supabase
+      .from('users')
+      .insert({
+        auth_id: authId,
+        email,
+        full_name: fullName || email,
+        organization_id: org.id,
+        role: 'owner',
+        status: 'active',
+      })
+      .select()
+      .single();
+
+    if (userErr || !user) {
+      console.error('Failed to create user:', userErr);
+      // Rollback org creation
+      await supabase.from('organizations').delete().eq('id', org.id);
+      return res.status(500).json({ error: 'Failed to create user profile' });
+    }
+
+    return res.status(201).json({ organization: org, user });
+  } catch (err) {
+    console.error('Provision org error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 }

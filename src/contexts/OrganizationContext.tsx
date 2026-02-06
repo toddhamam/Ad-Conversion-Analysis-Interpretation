@@ -114,54 +114,40 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
           .single();
 
         if (userError || !appUser) {
-          // User exists in auth but not in users table yet
-          // Auto-provision organization and user record
-          console.log('No user record found, auto-provisioning organization...');
+          // User exists in auth but not in users/organizations tables yet
+          // Call backend API to provision (uses service role key to bypass RLS)
+          console.log('No user record found, provisioning via backend API...');
           const meta = authUser.user_metadata || {};
-          const companyName = meta.company_name || meta.full_name || 'My Company';
-          const slug = companyName.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
 
-          const { data: newOrg, error: orgCreateErr } = await supabase
-            .from('organizations')
-            .insert({
-              name: companyName,
-              slug: `${slug}-${Date.now().toString(36)}`,
-              setup_mode: 'self_service',
-              plan_tier: 'free',
-            })
-            .select()
-            .single();
+          try {
+            const provisionRes = await fetch('/api/seo-iq/provision-org', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                authId: authUser.id,
+                email: authUser.email || '',
+                fullName: meta.full_name || authUser.email || 'User',
+                companyName: meta.company_name || meta.full_name || 'My Company',
+              }),
+            });
 
-          if (orgCreateErr || !newOrg) {
-            console.error('Failed to auto-create organization:', orgCreateErr);
-            setError('Failed to set up organization. Please contact support.');
+            if (!provisionRes.ok) {
+              const errData = await provisionRes.json().catch(() => ({}));
+              console.error('Provision API error:', errData);
+              setError('Failed to set up organization. Please try again.');
+              setLoading(false);
+              return;
+            }
+
+            const { organization: newOrg, user: newUser } = await provisionRes.json();
+            setOrganization(newOrg as Organization);
+            setUser(newUser as AppUser);
+          } catch (provisionErr) {
+            console.error('Provision request failed:', provisionErr);
+            setError('Failed to set up organization. Please try again.');
             setLoading(false);
             return;
           }
-
-          const { data: newUser, error: userCreateErr } = await supabase
-            .from('users')
-            .insert({
-              auth_id: authUser.id,
-              email: authUser.email || '',
-              full_name: meta.full_name || authUser.email || 'User',
-              organization_id: newOrg.id,
-              role: 'owner',
-              status: 'active',
-            })
-            .select()
-            .single();
-
-          if (userCreateErr || !newUser) {
-            console.error('Failed to auto-create user:', userCreateErr);
-            await supabase.from('organizations').delete().eq('id', newOrg.id);
-            setError('Failed to set up user profile. Please contact support.');
-            setLoading(false);
-            return;
-          }
-
-          setOrganization(newOrg as Organization);
-          setUser(newUser as AppUser);
         } else {
           setOrganization(appUser.organization as Organization);
           setUser({
