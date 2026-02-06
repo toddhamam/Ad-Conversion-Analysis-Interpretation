@@ -115,17 +115,60 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
 
         if (userError || !appUser) {
           // User exists in auth but not in users table yet
-          // This can happen if signup succeeded but org creation failed
-          setError('Account setup incomplete. Please contact support.');
-          setLoading(false);
-          return;
-        }
+          // Auto-provision organization and user record
+          console.log('No user record found, auto-provisioning organization...');
+          const meta = authUser.user_metadata || {};
+          const companyName = meta.company_name || meta.full_name || 'My Company';
+          const slug = companyName.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
 
-        setOrganization(appUser.organization as Organization);
-        setUser({
-          ...appUser,
-          organization: undefined, // Remove nested org from user object
-        } as AppUser);
+          const { data: newOrg, error: orgCreateErr } = await supabase
+            .from('organizations')
+            .insert({
+              name: companyName,
+              slug: `${slug}-${Date.now().toString(36)}`,
+              setup_mode: 'self_service',
+              plan_tier: 'free',
+            })
+            .select()
+            .single();
+
+          if (orgCreateErr || !newOrg) {
+            console.error('Failed to auto-create organization:', orgCreateErr);
+            setError('Failed to set up organization. Please contact support.');
+            setLoading(false);
+            return;
+          }
+
+          const { data: newUser, error: userCreateErr } = await supabase
+            .from('users')
+            .insert({
+              auth_id: authUser.id,
+              email: authUser.email || '',
+              full_name: meta.full_name || authUser.email || 'User',
+              organization_id: newOrg.id,
+              role: 'owner',
+              status: 'active',
+            })
+            .select()
+            .single();
+
+          if (userCreateErr || !newUser) {
+            console.error('Failed to auto-create user:', userCreateErr);
+            await supabase.from('organizations').delete().eq('id', newOrg.id);
+            setError('Failed to set up user profile. Please contact support.');
+            setLoading(false);
+            return;
+          }
+
+          setOrganization(newOrg as Organization);
+          setUser(newUser as AppUser);
+        } else {
+          setOrganization(appUser.organization as Organization);
+          setUser({
+            ...appUser,
+            organization: undefined, // Remove nested org from user object
+          } as AppUser);
+        }
       }
 
       // Apply organization branding to CSS variables
