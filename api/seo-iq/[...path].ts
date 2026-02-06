@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { encrypt, decrypt } from '../_lib/encryption.js';
+import { encrypt, decrypt, isEncryptionConfigured } from '../_lib/encryption.js';
 import { getGoogleAccessToken } from '../_lib/google-auth.js';
 import {
   scoreQuickWin,
@@ -182,6 +182,18 @@ async function handleSitesPost(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'organizationId, name, and domain are required' });
   }
 
+  // Verify the organization exists before creating a site
+  const { data: org, error: orgError } = await supabase
+    .from('organizations')
+    .select('id')
+    .eq('id', organizationId)
+    .single();
+
+  if (orgError || !org) {
+    console.error('Organization not found for site creation:', organizationId, orgError?.message);
+    return res.status(404).json({ error: 'Organization not found. Please sign out and sign back in.' });
+  }
+
   const insertData: Record<string, unknown> = {
     organization_id: organizationId,
     name,
@@ -193,11 +205,17 @@ async function handleSitesPost(req: VercelRequest, res: VercelResponse) {
   };
 
   // Encrypt target Supabase credentials if provided
-  if (target_supabase_url) {
-    insertData.target_supabase_url_encrypted = encrypt(target_supabase_url);
-  }
-  if (target_supabase_key) {
-    insertData.target_supabase_key_encrypted = encrypt(target_supabase_key);
+  if (target_supabase_url || target_supabase_key) {
+    if (!isEncryptionConfigured()) {
+      console.error('CREDENTIAL_ENCRYPTION_KEY is not configured');
+      return res.status(500).json({ error: 'Server encryption is not configured. Site credentials cannot be stored securely.' });
+    }
+    if (target_supabase_url) {
+      insertData.target_supabase_url_encrypted = encrypt(target_supabase_url);
+    }
+    if (target_supabase_key) {
+      insertData.target_supabase_key_encrypted = encrypt(target_supabase_key);
+    }
   }
 
   const { data, error } = await supabase
@@ -210,6 +228,7 @@ async function handleSitesPost(req: VercelRequest, res: VercelResponse) {
     if (error.code === '23505') {
       return res.status(409).json({ error: 'A site with this domain already exists in your organization' });
     }
+    console.error('Failed to create site:', error);
     return res.status(500).json({ error: 'Failed to create site', message: error.message });
   }
 

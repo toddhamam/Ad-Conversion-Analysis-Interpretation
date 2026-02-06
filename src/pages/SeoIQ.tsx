@@ -23,7 +23,7 @@ import type {
 import './SeoIQ.css';
 
 export default function SeoIQ() {
-  const { organization, loading: orgLoading } = useOrganization();
+  const { organization, loading: orgLoading, error: orgError, refresh: refreshOrg } = useOrganization();
   const [searchParams] = useSearchParams();
 
   // Tab state
@@ -250,6 +250,24 @@ export default function SeoIQ() {
 
   if (orgLoading || sitesLoading) {
     return <Loading size="large" message="ConversionIQ™ loading SEO tools..." />;
+  }
+
+  if (orgError || !organization) {
+    return (
+      <div className="seo-iq-page">
+        <SEO title="SEO IQ | Convertra" noindex />
+        <div className="seo-iq-header">
+          <h1>SEO IQ <span>BETA</span></h1>
+        </div>
+        <div className="seo-iq-empty">
+          <h3>Unable to load organization</h3>
+          <p>{orgError || 'Organization data could not be loaded. Please try refreshing.'}</p>
+          <button className="seo-iq-btn seo-iq-btn-primary" onClick={() => refreshOrg()}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
