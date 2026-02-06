@@ -7,7 +7,7 @@ const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 const stripe = stripeSecretKey
-  ? new Stripe(stripeSecretKey, { apiVersion: '2024-12-18.acacia' })
+  ? new Stripe(stripeSecretKey, { apiVersion: '2024-12-18.acacia' as const as any })
   : null;
 
 // Initialize Supabase for organization updates
@@ -118,8 +118,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .update({
               subscription_id: subscription.id,
               subscription_status: subscription.status,
-              current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-              current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+              current_period_start: new Date((subscription as any).current_period_start * 1000).toISOString(),
+              current_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
               updated_at: new Date().toISOString(),
             })
             .eq('id', organizationId);
@@ -145,8 +145,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .from('organizations')
             .update({
               subscription_status: subscription.cancel_at_period_end ? 'canceling' : subscription.status,
-              current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-              current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+              current_period_start: new Date((subscription as any).current_period_start * 1000).toISOString(),
+              current_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
               updated_at: new Date().toISOString(),
             })
             .eq('id', organizationId);
@@ -194,7 +194,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice;
-        const subscriptionId = invoice.subscription as string;
+        const subscriptionId = (invoice as any).subscription as string;
 
         console.log('[Billing Webhook] Payment failed:', {
           invoiceId: invoice.id,
