@@ -1121,6 +1121,120 @@
   text-align: center;
 }
 
+/* Selected day */
+
+.calendar-day.selected {
+  background: rgba(168, 85, 247, 0.10);
+  border-color: var(--accent-violet);
+  box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.2);
+}
+
+.calendar-day.selected:hover {
+  background: rgba(168, 85, 247, 0.15);
+}
+
+.calendar-day.selected .calendar-day-num {
+  color: var(--accent-violet);
+  font-weight: 600;
+}
+
+.calendar-day-check {
+  font-size: 10px;
+  color: var(--accent-violet);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.calendar-day.today.selected {
+  background: rgba(168, 85, 247, 0.12);
+  border-color: var(--accent-violet);
+}
+
+/* Save Bar */
+
+.calendar-save-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  margin-top: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 10px;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: opacity 0.2s, max-height 0.2s, padding 0.2s, margin 0.2s;
+  padding: 0 16px;
+  margin-top: 0;
+}
+
+.calendar-save-bar.visible {
+  opacity: 1;
+  max-height: 60px;
+  padding: 12px 16px;
+  margin-top: 12px;
+}
+
+.calendar-changes-badge {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.calendar-save-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.calendar-clear-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.calendar-clear-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.calendar-clear-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.calendar-save-btn {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.calendar-save-btn:hover {
+  background: var(--accent-secondary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(212, 225, 87, 0.3);
+}
+
+.calendar-save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 /* Calendar responsive */
 
 @media (max-width: 600px) {
@@ -1151,5 +1265,16 @@
 
   .calendar-day-keyword {
     display: none;
+  }
+
+  .calendar-save-bar.visible {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+    max-height: 90px;
+  }
+
+  .calendar-day-check {
+    font-size: 9px;
   }
 }

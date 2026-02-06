@@ -91,6 +91,8 @@ export default function SeoIQ() {
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [showScheduleMonth, setShowScheduleMonth] = useState(false);
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([1, 3, 5]); // Mon, Wed, Fri
+  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
+  const [savingSchedule, setSavingSchedule] = useState(false);
 
   const selectedSite = sites.find((s) => s.id === selectedSiteId) || null;
 
@@ -147,7 +149,10 @@ export default function SeoIQ() {
     if (activeTab === 'autopilot' && selectedSiteId) {
       setScheduleLoading(true);
       fetchScheduledRuns(selectedSiteId, calendarMonth)
-        .then(setScheduledRuns)
+        .then((runs) => {
+          setScheduledRuns(runs);
+          setSelectedDates(new Set(runs.filter((r) => r.status === 'pending').map((r) => r.scheduled_date)));
+        })
         .catch(console.error)
         .finally(() => setScheduleLoading(false));
     }
@@ -426,56 +431,75 @@ export default function SeoIQ() {
 
   // ─── Content Calendar handlers ──────────────────────────────────────────
 
-  const handleCalendarDayClick = async (dateStr: string) => {
-    if (!selectedSiteId) return;
-    const existing = scheduledRuns.find((r) => r.scheduled_date === dateStr);
-    if (existing) {
-      if (existing.status !== 'pending') return; // Only delete pending runs
-      try {
-        await deleteScheduledRun(selectedSiteId, dateStr);
-        setScheduledRuns((prev) => prev.filter((r) => r.scheduled_date !== dateStr));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to remove scheduled run');
+  const handleCalendarDayClick = (dateStr: string) => {
+    const existingRun = scheduledRuns.find((r) => r.scheduled_date === dateStr);
+    if (existingRun && existingRun.status !== 'pending') return;
+
+    setSelectedDates((prev) => {
+      const next = new Set(prev);
+      if (next.has(dateStr)) {
+        next.delete(dateStr);
+      } else {
+        next.add(dateStr);
       }
-    } else {
-      try {
-        const created = await createScheduledRuns(selectedSiteId, [dateStr]);
-        setScheduledRuns((prev) => [...prev, ...created]);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to schedule run');
-      }
-    }
+      return next;
+    });
   };
 
-  const handleScheduleMonth = async () => {
-    if (!selectedSiteId) return;
+  const handleScheduleMonth = () => {
     const [year, mon] = calendarMonth.split('-').map(Number);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const daysInMonth = new Date(year, mon, 0).getDate();
-    const dates: string[] = [];
+    const newDates = new Set(selectedDates);
 
     for (let d = 1; d <= daysInMonth; d++) {
       const date = new Date(year, mon - 1, d);
-      if (date <= today) continue; // Skip past and today
+      if (date <= today) continue;
       if (!selectedWeekdays.includes(date.getDay())) continue;
       const dateStr = `${year}-${String(mon).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      if (scheduledRuns.find((r) => r.scheduled_date === dateStr)) continue; // Skip existing
-      dates.push(dateStr);
+      const existingRun = scheduledRuns.find((r) => r.scheduled_date === dateStr);
+      if (existingRun && existingRun.status !== 'pending') continue;
+      newDates.add(dateStr);
     }
 
-    if (dates.length === 0) {
-      setShowScheduleMonth(false);
-      return;
-    }
+    setSelectedDates(newDates);
+    setShowScheduleMonth(false);
+  };
 
+  const handleSaveSchedule = async () => {
+    if (!selectedSiteId) return;
+    setSavingSchedule(true);
     try {
-      const created = await createScheduledRuns(selectedSiteId, dates);
-      setScheduledRuns((prev) => [...prev, ...created]);
-      setShowScheduleMonth(false);
+      const serverPendingDates = new Set(
+        scheduledRuns.filter((r) => r.status === 'pending').map((r) => r.scheduled_date)
+      );
+      const toAdd = [...selectedDates].filter((d) => !serverPendingDates.has(d));
+      const toRemove = [...serverPendingDates].filter((d) => !selectedDates.has(d));
+
+      if (toAdd.length > 0) {
+        const created = await createScheduledRuns(selectedSiteId, toAdd);
+        setScheduledRuns((prev) => [...prev.filter((r) => !toAdd.includes(r.scheduled_date)), ...created]);
+      }
+
+      for (const dateStr of toRemove) {
+        await deleteScheduledRun(selectedSiteId, dateStr);
+      }
+      if (toRemove.length > 0) {
+        setScheduledRuns((prev) => prev.filter((r) => !toRemove.includes(r.scheduled_date)));
+      }
+
+      setSuccess('Schedule saved successfully');
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to schedule month');
+      setError(err instanceof Error ? err.message : 'Failed to save schedule');
+    } finally {
+      setSavingSchedule(false);
     }
+  };
+
+  const handleClearDates = () => {
+    setSelectedDates(new Set());
   };
 
   const handleRunReadyArticles = async () => {
@@ -1175,6 +1199,13 @@ export default function SeoIQ() {
           const today = new Date();
           const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
           today.setHours(0, 0, 0, 0);
+          const serverPendingDates = new Set(
+            scheduledRuns.filter((r) => r.status === 'pending').map((r) => r.scheduled_date)
+          );
+          const addedDates = [...selectedDates].filter((d) => !serverPendingDates.has(d));
+          const removedDates = [...serverPendingDates].filter((d) => !selectedDates.has(d));
+          const hasUnsavedChanges = addedDates.length > 0 || removedDates.length > 0;
+          const unsavedCount = addedDates.length + removedDates.length;
           const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
           // Shift so Monday=0 (ISO week)
           const startOffset = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
@@ -1268,14 +1299,17 @@ export default function SeoIQ() {
                       statusClass = `status-${run.status}`;
                     }
 
+                    const isSelected = selectedDates.has(dateStr);
+
                     return (
                       <div
                         key={day}
-                        className={`calendar-day ${statusClass} ${isToday ? 'today' : ''} ${isPast ? 'past' : ''} ${isClickable ? 'clickable' : ''}`}
-                        onClick={() => isClickable && !isPast && handleCalendarDayClick(dateStr)}
+                        className={`calendar-day ${run && run.status !== 'pending' ? statusClass : ''} ${isToday ? 'today' : ''} ${isPast ? 'past' : ''} ${isClickable ? 'clickable' : ''} ${isSelected ? 'selected' : ''}`}
+                        onClick={() => isClickable && handleCalendarDayClick(dateStr)}
                       >
                         <span className="calendar-day-num">{day}</span>
-                        {run && <span className={`calendar-dot ${run.status}`} />}
+                        {isSelected && <span className="calendar-day-check">✓</span>}
+                        {run && run.status !== 'pending' && <span className={`calendar-dot ${run.status}`} />}
                         {run?.keyword_text && (
                           <span className="calendar-day-keyword" title={run.keyword_text}>
                             {run.keyword_text.length > 12 ? run.keyword_text.slice(0, 12) + '...' : run.keyword_text}
@@ -1286,6 +1320,21 @@ export default function SeoIQ() {
                   })}
                 </div>
               )}
+
+                {/* Save Bar */}
+                <div className={`calendar-save-bar ${hasUnsavedChanges ? 'visible' : ''}`}>
+                  <span className="calendar-changes-badge">
+                    {unsavedCount} unsaved change{unsavedCount !== 1 ? 's' : ''}
+                  </span>
+                  <div className="calendar-save-actions">
+                    <button className="calendar-clear-btn" onClick={handleClearDates} disabled={savingSchedule}>
+                      Clear All
+                    </button>
+                    <button className="calendar-save-btn" onClick={handleSaveSchedule} disabled={savingSchedule}>
+                      {savingSchedule ? 'Saving...' : 'Save Schedule'}
+                    </button>
+                  </div>
+                </div>
             </div>
           );
         })()}
