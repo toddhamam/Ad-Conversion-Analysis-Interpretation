@@ -8,7 +8,7 @@ import { encrypt } from './_lib/encryption.js';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_REDIRECT_URI =
-  process.env.GOOGLE_REDIRECT_URI || 'https://app.convertra.io/api/auth/google/callback';
+  process.env.GOOGLE_REDIRECT_URI || 'https://www.convertraiq.com/api/auth/google/callback';
 
 // Request both GSC read and Indexing API scopes in one consent
 const SCOPES = [
