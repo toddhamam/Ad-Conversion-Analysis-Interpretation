@@ -123,7 +123,15 @@ export default function SeoIQ() {
 
   // Add site
   const handleAddSite = async () => {
-    if (!organization?.id || !newSiteName || !newSiteDomain) return;
+    if (!newSiteName || !newSiteDomain) {
+      setError('Please fill in Site Name and Domain');
+      return;
+    }
+    if (!organization?.id) {
+      setError('Organization not loaded. Please refresh the page.');
+      console.error('handleAddSite: organization is', organization);
+      return;
+    }
     setAddingSite(true);
     setError(null);
     try {
