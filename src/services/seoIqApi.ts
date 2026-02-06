@@ -2,6 +2,7 @@ import type {
   SeoSite,
   SeoKeyword,
   SeoArticle,
+  AutopilotConfig,
   CreateSeoSiteRequest,
   UpdateSeoSiteRequest,
   RefreshKeywordsResponse,
@@ -128,4 +129,31 @@ export async function deleteArticle(siteId: string, articleId: string): Promise<
     `${API_BASE}/seo-iq/articles?siteId=${siteId}&articleId=${articleId}`,
     { method: 'DELETE' }
   );
+}
+
+// ─── Autopilot ────────────────────────────────────────────────────────────
+
+export async function fetchAutopilotStatus(siteId: string): Promise<AutopilotConfig> {
+  return fetchJson<AutopilotConfig>(
+    `${API_BASE}/seo-iq/autopilot-status?siteId=${siteId}`
+  );
+}
+
+export async function updateAutopilotConfig(
+  siteId: string,
+  config: Partial<Pick<AutopilotConfig, 'autopilot_enabled' | 'autopilot_cadence' | 'autopilot_iq_level' | 'autopilot_articles_per_run'>> & { autopilot_pipeline_step?: string | null }
+): Promise<AutopilotConfig> {
+  return fetchJson<AutopilotConfig>(`${API_BASE}/seo-iq/autopilot-config`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ siteId, ...config }),
+  });
+}
+
+export async function autopilotPickKeyword(siteId: string): Promise<SeoKeyword> {
+  return fetchJson<SeoKeyword>(`${API_BASE}/seo-iq/autopilot-pick-keyword`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ site_id: siteId }),
+  });
 }

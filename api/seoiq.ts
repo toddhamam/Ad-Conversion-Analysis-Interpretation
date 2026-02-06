@@ -101,6 +101,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handlePublishArticle(req, res);
     case 'provision-org':
       return handleProvisionOrg(req, res);
+    case 'autopilot-pick-keyword':
+      return handleAutopilotPickKeyword(req, res);
+    case 'autopilot-status':
+      return handleAutopilotStatus(req, res);
+    case 'autopilot-config':
+      return handleAutopilotConfig(req, res);
+    case 'autopilot-cron':
+      return handleAutopilotCron(req, res);
     default:
       return res.status(404).json({ error: `Unknown route: ${route}` });
   }
@@ -1140,5 +1148,202 @@ async function handleProvisionOrg(req: VercelRequest, res: VercelResponse) {
   } catch (err) {
     console.error('Provision org error:', err);
     return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUTOPILOT HANDLERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function handleAutopilotPickKeyword(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { site_id } = req.body;
+  if (!site_id) {
+    return res.status(400).json({ error: 'site_id is required' });
+  }
+
+  const { data: keyword, error } = await supabase
+    .from('seo_keywords')
+    .select('*')
+    .eq('site_id', site_id)
+    .eq('status', 'active')
+    .gt('opportunity_score', 0)
+    .order('opportunity_score', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error || !keyword) {
+    return res.status(404).json({ error: 'No active keywords with opportunities found. Refresh keywords first.' });
+  }
+
+  return res.status(200).json(keyword);
+}
+
+async function handleAutopilotStatus(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { siteId } = req.query;
+  if (!siteId || typeof siteId !== 'string') {
+    return res.status(400).json({ error: 'siteId is required' });
+  }
+
+  const { data, error } = await supabase
+    .from('seo_sites')
+    .select('autopilot_enabled, autopilot_cadence, autopilot_iq_level, autopilot_articles_per_run, autopilot_next_run_at, autopilot_pipeline_step, autopilot_pipeline_keyword_id, autopilot_pipeline_article_id, autopilot_last_run_at, autopilot_last_error')
+    .eq('id', siteId)
+    .single();
+
+  if (error || !data) {
+    return res.status(404).json({ error: 'Site not found' });
+  }
+
+  return res.status(200).json(data);
+}
+
+async function handleAutopilotConfig(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'PUT') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { siteId, autopilot_enabled, autopilot_cadence, autopilot_iq_level, autopilot_articles_per_run, autopilot_pipeline_step } = req.body;
+  if (!siteId) {
+    return res.status(400).json({ error: 'siteId is required' });
+  }
+
+  const updateData: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (autopilot_enabled !== undefined) updateData.autopilot_enabled = autopilot_enabled;
+  if (autopilot_cadence !== undefined) updateData.autopilot_cadence = autopilot_cadence;
+  if (autopilot_iq_level !== undefined) updateData.autopilot_iq_level = autopilot_iq_level;
+  if (autopilot_articles_per_run !== undefined) {
+    updateData.autopilot_articles_per_run = Math.min(Math.max(autopilot_articles_per_run, 1), 5);
+  }
+
+  // Allow clearing pipeline state (after resume completes)
+  if (autopilot_pipeline_step !== undefined) {
+    updateData.autopilot_pipeline_step = autopilot_pipeline_step;
+    if (autopilot_pipeline_step === null) {
+      updateData.autopilot_pipeline_keyword_id = null;
+      updateData.autopilot_pipeline_article_id = null;
+    }
+  }
+
+  // Calculate next run time when enabling
+  if (autopilot_enabled) {
+    const cadence = autopilot_cadence || 'weekly';
+    const now = new Date();
+    let nextRun: Date;
+    if (cadence === 'daily') {
+      nextRun = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    } else if (cadence === 'every_3_days') {
+      nextRun = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+    } else {
+      nextRun = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    }
+    nextRun.setUTCHours(6, 0, 0, 0);
+    updateData.autopilot_next_run_at = nextRun.toISOString();
+  } else if (autopilot_enabled === false) {
+    updateData.autopilot_next_run_at = null;
+  }
+
+  const { data, error } = await supabase
+    .from('seo_sites')
+    .update(updateData)
+    .eq('id', siteId)
+    .select('autopilot_enabled, autopilot_cadence, autopilot_iq_level, autopilot_articles_per_run, autopilot_next_run_at, autopilot_pipeline_step, autopilot_pipeline_keyword_id, autopilot_pipeline_article_id, autopilot_last_run_at, autopilot_last_error')
+    .single();
+
+  if (error) {
+    return res.status(500).json({ error: 'Failed to update autopilot config', message: error.message });
+  }
+
+  return res.status(200).json(data);
+}
+
+async function handleAutopilotCron(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Verify cron secret (Vercel sends Authorization: Bearer <CRON_SECRET>)
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) {
+    const authHeader = req.headers.authorization;
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+  }
+
+  try {
+    // Find sites due for autopilot run
+    const now = new Date().toISOString();
+    const { data: sites, error } = await supabase
+      .from('seo_sites')
+      .select('id, domain, google_status, autopilot_cadence, autopilot_iq_level, autopilot_articles_per_run, autopilot_pipeline_step')
+      .eq('autopilot_enabled', true)
+      .lte('autopilot_next_run_at', now)
+      .is('autopilot_pipeline_step', null)
+      .limit(1);
+
+    if (error || !sites || sites.length === 0) {
+      return res.status(200).json({ message: 'No sites due for autopilot run' });
+    }
+
+    const site = sites[0];
+
+    if (site.google_status !== 'active') {
+      await supabase.from('seo_sites').update({
+        autopilot_last_error: 'Google not connected',
+        updated_at: new Date().toISOString(),
+      }).eq('id', site.id);
+      return res.status(200).json({ message: 'Skipped — Google not connected', siteId: site.id });
+    }
+
+    // Pick the top keyword (fast DB query, stays within 10s timeout)
+    const { data: keyword } = await supabase
+      .from('seo_keywords')
+      .select('id, keyword')
+      .eq('site_id', site.id)
+      .eq('status', 'active')
+      .gt('opportunity_score', 0)
+      .order('opportunity_score', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (!keyword) {
+      await supabase.from('seo_sites').update({
+        autopilot_last_error: 'No active keywords found — refresh keywords first',
+        updated_at: new Date().toISOString(),
+      }).eq('id', site.id);
+      return res.status(200).json({ message: 'No keywords available', siteId: site.id });
+    }
+
+    // Mark as awaiting generation (user needs to click Resume in the UI)
+    await supabase.from('seo_sites').update({
+      autopilot_pipeline_step: 'awaiting_generation',
+      autopilot_pipeline_keyword_id: keyword.id,
+      autopilot_last_error: null,
+      updated_at: new Date().toISOString(),
+    }).eq('id', site.id);
+
+    return res.status(200).json({
+      message: 'Keyword picked, awaiting article generation',
+      siteId: site.id,
+      keywordId: keyword.id,
+      keyword: keyword.keyword,
+    });
+  } catch (err) {
+    console.error('Autopilot cron error:', err);
+    return res.status(500).json({
+      error: 'Cron handler failed',
+      message: err instanceof Error ? err.message : 'Unknown error',
+    });
   }
 }

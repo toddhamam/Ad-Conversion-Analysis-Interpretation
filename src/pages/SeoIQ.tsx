@@ -13,6 +13,9 @@ import {
   generateArticle,
   publishArticle,
   deleteArticle,
+  fetchAutopilotStatus,
+  updateAutopilotConfig,
+  autopilotPickKeyword,
 } from '../services/seoIqApi';
 import type {
   SeoSite,
@@ -20,6 +23,7 @@ import type {
   SeoArticle,
   SeoIQTab,
   ArticleStatus,
+  AutopilotConfig,
 } from '../types/seoiq';
 import './SeoIQ.css';
 
@@ -66,6 +70,14 @@ export default function SeoIQ() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // Autopilot
+  const [autopilotConfig, setAutopilotConfig] = useState<AutopilotConfig | null>(null);
+  const [autopilotRunning, setAutopilotRunning] = useState(false);
+  const [autopilotStepStatus, setAutopilotStepStatus] = useState<Record<number, 'pending' | 'running' | 'done' | 'failed'>>({});
+  const [autopilotResult, setAutopilotResult] = useState<{ keyword?: string; articleTitle?: string; publishedUrl?: string } | null>(null);
+  const [autopilotArticleNum, setAutopilotArticleNum] = useState(0);
+  const [autopilotTotalArticles, setAutopilotTotalArticles] = useState(1);
+
   const selectedSite = sites.find((s) => s.id === selectedSiteId) || null;
 
   // Load sites
@@ -106,6 +118,13 @@ export default function SeoIQ() {
   useEffect(() => {
     if (activeTab === 'articles' && selectedSiteId) {
       loadArticles();
+    }
+  }, [activeTab, selectedSiteId]);
+
+  // Load autopilot config when tab or site changes
+  useEffect(() => {
+    if (activeTab === 'autopilot' && selectedSiteId) {
+      fetchAutopilotStatus(selectedSiteId).then(setAutopilotConfig).catch(console.error);
     }
   }, [activeTab, selectedSiteId]);
 
@@ -251,6 +270,135 @@ export default function SeoIQ() {
     }
   };
 
+  // ─── Autopilot handlers ───────────────────────────────────────────────────
+
+  const handleRunAutopilot = async () => {
+    if (!selectedSiteId) return;
+
+    setAutopilotRunning(true);
+    setAutopilotResult(null);
+    setError(null);
+
+    const totalArticles = autopilotConfig?.autopilot_articles_per_run || 1;
+    setAutopilotTotalArticles(totalArticles);
+
+    let currentStep = 0;
+    try {
+      // Step 1: Refresh keywords (once for all articles)
+      currentStep = 1;
+      setAutopilotStepStatus({ 1: 'running' });
+      await refreshKeywords(selectedSiteId);
+      setAutopilotStepStatus((prev) => ({ ...prev, 1: 'done' }));
+
+      for (let i = 0; i < totalArticles; i++) {
+        setAutopilotArticleNum(i + 1);
+
+        // Step 2: Pick keyword
+        currentStep = 2;
+        setAutopilotStepStatus((prev) => ({ ...prev, 2: 'running', 3: 'pending', 4: 'pending' }));
+        const keyword = await autopilotPickKeyword(selectedSiteId);
+        setAutopilotStepStatus((prev) => ({ ...prev, 2: 'done' }));
+
+        // Step 3: Generate article
+        currentStep = 3;
+        setAutopilotStepStatus((prev) => ({ ...prev, 3: 'running' }));
+        const generated = await generateArticle({
+          site_id: selectedSiteId,
+          keyword_id: keyword.id,
+          iq_level: autopilotConfig?.autopilot_iq_level || 'medium',
+        });
+        setAutopilotStepStatus((prev) => ({ ...prev, 3: 'done' }));
+
+        // Step 4: Publish + Index
+        currentStep = 4;
+        setAutopilotStepStatus((prev) => ({ ...prev, 4: 'running' }));
+        const published = await publishArticle({
+          article_id: generated.article.id,
+          generate_thumbnail: true,
+          submit_indexing: true,
+        });
+        setAutopilotStepStatus((prev) => ({ ...prev, 4: 'done' }));
+
+        setAutopilotResult({
+          keyword: keyword.keyword,
+          articleTitle: generated.article.title,
+          publishedUrl: published.published_url,
+        });
+      }
+
+      // Update last run time
+      await updateAutopilotConfig(selectedSiteId, { autopilot_pipeline_step: null });
+      setSuccess(`Autopilot complete — ${totalArticles} article(s) published`);
+      setTimeout(() => setSuccess(null), 8000);
+    } catch (err) {
+      setAutopilotStepStatus((prev) => ({ ...prev, [currentStep]: 'failed' }));
+      setError(err instanceof Error ? err.message : 'Autopilot failed');
+    } finally {
+      setAutopilotRunning(false);
+    }
+  };
+
+  const handleResumeAutopilot = async () => {
+    if (!selectedSiteId || !autopilotConfig?.autopilot_pipeline_keyword_id) return;
+
+    setAutopilotRunning(true);
+    setAutopilotResult(null);
+    setError(null);
+    setAutopilotTotalArticles(1);
+    setAutopilotArticleNum(1);
+
+    let currentStep = 3;
+    try {
+      // Steps 1-2 already done by cron
+      setAutopilotStepStatus({ 1: 'done', 2: 'done', 3: 'running' });
+
+      const generated = await generateArticle({
+        site_id: selectedSiteId,
+        keyword_id: autopilotConfig.autopilot_pipeline_keyword_id,
+        iq_level: autopilotConfig.autopilot_iq_level || 'medium',
+      });
+      setAutopilotStepStatus((prev) => ({ ...prev, 3: 'done' }));
+
+      currentStep = 4;
+      setAutopilotStepStatus((prev) => ({ ...prev, 4: 'running' }));
+      const published = await publishArticle({
+        article_id: generated.article.id,
+        generate_thumbnail: true,
+        submit_indexing: true,
+      });
+      setAutopilotStepStatus((prev) => ({ ...prev, 4: 'done' }));
+
+      // Clear pipeline state
+      await updateAutopilotConfig(selectedSiteId, { autopilot_pipeline_step: null });
+      const newConfig = await fetchAutopilotStatus(selectedSiteId);
+      setAutopilotConfig(newConfig);
+
+      setAutopilotResult({
+        keyword: generated.article.primary_keyword || '',
+        articleTitle: generated.article.title,
+        publishedUrl: published.published_url,
+      });
+
+      setSuccess('Autopilot resumed — article published');
+      setTimeout(() => setSuccess(null), 8000);
+    } catch (err) {
+      setAutopilotStepStatus((prev) => ({ ...prev, [currentStep]: 'failed' }));
+      setError(err instanceof Error ? err.message : 'Resume failed');
+    } finally {
+      setAutopilotRunning(false);
+    }
+  };
+
+  const handleAutopilotConfigChange = async (changes: Partial<Pick<AutopilotConfig, 'autopilot_enabled' | 'autopilot_cadence' | 'autopilot_iq_level' | 'autopilot_articles_per_run'>>) => {
+    if (!selectedSiteId) return;
+    try {
+      const updated = await updateAutopilotConfig(selectedSiteId, changes);
+      setAutopilotConfig(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update autopilot config');
+    }
+  };
+
   // Filter and sort keywords
   const filteredKeywords = keywords
     .filter((k) => keywordFilter === 'all' || k.opportunity_type === keywordFilter)
@@ -351,6 +499,13 @@ export default function SeoIQ() {
           Articles
           {articles.length > 0 && <span className="seo-iq-tab-badge">{articles.length}</span>}
         </button>
+        <button
+          className={`seo-iq-tab ${activeTab === 'autopilot' ? 'active' : ''}`}
+          onClick={() => setActiveTab('autopilot')}
+          disabled={!selectedSiteId}
+        >
+          Autopilot
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -358,6 +513,7 @@ export default function SeoIQ() {
       {activeTab === 'keywords' && renderKeywordsTab()}
       {activeTab === 'generate' && renderGenerateTab()}
       {activeTab === 'articles' && renderArticlesTab()}
+      {activeTab === 'autopilot' && renderAutopilotTab()}
     </div>
   );
 
@@ -751,6 +907,182 @@ export default function SeoIQ() {
           ))
         )}
       </>
+    );
+  }
+
+  // ─── Autopilot Tab ───────────────────────────────────────────────────────
+
+  function renderAutopilotTab() {
+    if (!selectedSite) {
+      return <div className="seo-iq-empty"><p>Select a site first</p></div>;
+    }
+
+    if (selectedSite.google_status !== 'active') {
+      return (
+        <div className="seo-iq-empty">
+          <h3>Google not connected</h3>
+          <p>Connect Google Search Console before running autopilot</p>
+          <a href={getGoogleConnectUrl(selectedSite.id, '/seo-iq')} className="seo-iq-btn seo-iq-btn-violet" style={{ textDecoration: 'none' }}>
+            Connect Google
+          </a>
+        </div>
+      );
+    }
+
+    const steps = [
+      { num: 1, label: 'Refresh Keywords', desc: 'Sync latest data from GSC' },
+      { num: 2, label: 'Pick Keyword', desc: 'Select highest-opportunity keyword' },
+      { num: 3, label: 'Generate Article', desc: 'AI writes SEO-optimized content' },
+      { num: 4, label: 'Publish & Index', desc: 'Push to site + submit to Google' },
+    ];
+
+    return (
+      <div className="autopilot-container">
+        {/* Run Now */}
+        <div className="autopilot-run-section">
+          <button
+            className="autopilot-run-btn"
+            onClick={handleRunAutopilot}
+            disabled={autopilotRunning}
+          >
+            {autopilotRunning
+              ? `Running... (Article ${autopilotArticleNum} of ${autopilotTotalArticles})`
+              : 'Run Autopilot Now'}
+          </button>
+          <p className="autopilot-run-desc">
+            Refreshes keywords, picks the best opportunity, generates an article, publishes it, and submits to Google for indexing.
+          </p>
+        </div>
+
+        {/* Resume Banner */}
+        {autopilotConfig?.autopilot_pipeline_step === 'awaiting_generation' && !autopilotRunning && (
+          <div className="autopilot-resume-banner">
+            <div>
+              <strong>Scheduled run ready — keyword picked</strong>
+              <p>Click Resume to generate and publish the article.</p>
+            </div>
+            <button className="seo-iq-btn seo-iq-btn-violet" onClick={handleResumeAutopilot}>
+              Resume
+            </button>
+          </div>
+        )}
+
+        {/* Progress Stepper */}
+        {(autopilotRunning || Object.keys(autopilotStepStatus).length > 0) && (
+          <div className="autopilot-stepper">
+            {steps.map((step) => {
+              const status = autopilotStepStatus[step.num] || 'pending';
+              return (
+                <div key={step.num} className={`autopilot-step ${status}`}>
+                  <div className="autopilot-step-indicator">
+                    {status === 'done' ? '\u2713' : status === 'running' ? '\u21BB' : status === 'failed' ? '\u2717' : step.num}
+                  </div>
+                  <div className="autopilot-step-content">
+                    <div className="autopilot-step-label">{step.label}</div>
+                    <div className="autopilot-step-desc">{step.desc}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Result Card */}
+        {autopilotResult && !autopilotRunning && (
+          <div className="autopilot-result">
+            <h3>Last Autopilot Result</h3>
+            <div className="autopilot-result-row">
+              <span className="autopilot-result-label">Keyword</span>
+              <span>{autopilotResult.keyword}</span>
+            </div>
+            <div className="autopilot-result-row">
+              <span className="autopilot-result-label">Article</span>
+              <span>{autopilotResult.articleTitle}</span>
+            </div>
+            {autopilotResult.publishedUrl && (
+              <div className="autopilot-result-row">
+                <span className="autopilot-result-label">Published</span>
+                <a href={autopilotResult.publishedUrl} target="_blank" rel="noopener noreferrer">
+                  {autopilotResult.publishedUrl}
+                </a>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Config Panel */}
+        <div className="autopilot-config">
+          <h3>Schedule Settings</h3>
+          <div className="autopilot-config-row">
+            <label>
+              <input
+                type="checkbox"
+                checked={autopilotConfig?.autopilot_enabled || false}
+                onChange={(e) => handleAutopilotConfigChange({ autopilot_enabled: e.target.checked })}
+                disabled={autopilotRunning}
+              />
+              Enable scheduled autopilot
+            </label>
+          </div>
+          {autopilotConfig?.autopilot_enabled && (
+            <>
+              <div className="autopilot-config-row">
+                <label>Cadence</label>
+                <select
+                  value={autopilotConfig.autopilot_cadence || 'weekly'}
+                  onChange={(e) => handleAutopilotConfigChange({ autopilot_cadence: e.target.value as 'daily' | 'every_3_days' | 'weekly' })}
+                  disabled={autopilotRunning}
+                >
+                  <option value="daily">Daily</option>
+                  <option value="every_3_days">Every 3 Days</option>
+                  <option value="weekly">Weekly</option>
+                </select>
+              </div>
+              <div className="autopilot-config-row">
+                <label>IQ Level</label>
+                <select
+                  value={autopilotConfig.autopilot_iq_level || 'medium'}
+                  onChange={(e) => handleAutopilotConfigChange({ autopilot_iq_level: e.target.value as 'low' | 'medium' | 'high' })}
+                  disabled={autopilotRunning}
+                >
+                  <option value="low">IQ Standard (~10 sec)</option>
+                  <option value="medium">IQ Deep (~30 sec)</option>
+                  <option value="high">IQ Maximum (~60 sec)</option>
+                </select>
+              </div>
+              <div className="autopilot-config-row">
+                <label>Articles per Run</label>
+                <select
+                  value={autopilotConfig.autopilot_articles_per_run || 1}
+                  onChange={(e) => handleAutopilotConfigChange({ autopilot_articles_per_run: parseInt(e.target.value) })}
+                  disabled={autopilotRunning}
+                >
+                  <option value={1}>1</option>
+                  <option value={2}>2</option>
+                  <option value={3}>3</option>
+                  <option value={4}>4</option>
+                  <option value={5}>5</option>
+                </select>
+              </div>
+              {autopilotConfig.autopilot_next_run_at && (
+                <div className="autopilot-config-info">
+                  Next scheduled run: {new Date(autopilotConfig.autopilot_next_run_at).toLocaleString()}
+                </div>
+              )}
+            </>
+          )}
+          {autopilotConfig?.autopilot_last_run_at && (
+            <div className="autopilot-config-info">
+              Last run: {new Date(autopilotConfig.autopilot_last_run_at).toLocaleString()}
+            </div>
+          )}
+          {autopilotConfig?.autopilot_last_error && (
+            <div className="autopilot-config-error">
+              Last error: {autopilotConfig.autopilot_last_error}
+            </div>
+          )}
+        </div>
+      </div>
     );
   }
 }
