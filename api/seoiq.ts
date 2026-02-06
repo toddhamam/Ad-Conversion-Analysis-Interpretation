@@ -713,14 +713,22 @@ async function handleGenerateArticle(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Could not resolve keyword' });
     }
 
-    // Fetch existing article slugs for internal linking
+    // Fetch existing articles with titles, categories, and keywords for intelligent internal linking
     const { data: existingArticles } = await supabase
       .from('seo_articles')
-      .select('slug')
+      .select('slug, title, category, primary_keyword')
       .eq('site_id', site_id)
       .eq('status', 'published');
 
-    const existingSlugs = (existingArticles || []).map((a) => a.slug);
+    const articleContext = (existingArticles || []).map((a) => ({
+      slug: a.slug,
+      title: a.title,
+      category: a.category,
+      keyword: a.primary_keyword,
+    }));
+
+    // Collect existing categories for taxonomy consistency
+    const existingCategories = [...new Set(articleContext.map((a) => a.category).filter(Boolean))];
 
     // Build prompts
     const systemPrompt = buildArticleSystemPrompt(site.voice_guide);
@@ -728,7 +736,8 @@ async function handleGenerateArticle(req: VercelRequest, res: VercelResponse) {
       keywordText,
       keywordData as Parameters<typeof buildArticleUserPrompt>[1],
       custom_instructions,
-      existingSlugs,
+      articleContext,
+      existingCategories,
     );
 
     // Map IQ level to max_tokens
