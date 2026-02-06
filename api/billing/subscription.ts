@@ -4,7 +4,7 @@ import Stripe from 'stripe';
 // Initialize Stripe (handle missing key gracefully for dev)
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey
-  ? new Stripe(stripeSecretKey, { apiVersion: '2024-12-18.acacia' })
+  ? new Stripe(stripeSecretKey, { apiVersion: '2024-12-18.acacia' as const as any })
   : null;
 
 // Plan limits by tier
@@ -95,8 +95,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             status: subscription.status,
             planTier,
             billingInterval,
-            currentPeriodStart: new Date(subscription.current_period_start * 1000).toISOString(),
-            currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+            currentPeriodStart: new Date((subscription as any).current_period_start * 1000).toISOString(),
+            currentPeriodEnd: new Date((subscription as any).current_period_end * 1000).toISOString(),
             cancelAtPeriodEnd: subscription.cancel_at_period_end,
             trialEnd: subscription.trial_end
               ? new Date(subscription.trial_end * 1000).toISOString()
@@ -109,10 +109,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         analysesRun: 0, // TODO: Track from database
         analysesLimit: limits.analysesLimit,
         currentPeriodStart: subscription
-          ? new Date(subscription.current_period_start * 1000).toISOString()
+          ? new Date((subscription as any).current_period_start * 1000).toISOString()
           : new Date().toISOString(),
         currentPeriodEnd: subscription
-          ? new Date(subscription.current_period_end * 1000).toISOString()
+          ? new Date((subscription as any).current_period_end * 1000).toISOString()
           : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       },
       invoices: invoices.data.map((inv) => ({

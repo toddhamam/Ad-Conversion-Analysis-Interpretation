@@ -1,13 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { encrypt, decrypt } from '../lib/encryption.js';
-import { getGoogleAccessToken } from '../lib/google-auth.js';
+import { encrypt, decrypt } from '../_lib/encryption.js';
+import { getGoogleAccessToken } from '../_lib/google-auth.js';
 import {
   scoreQuickWin,
   scoreCTROptimization,
   buildArticleSystemPrompt,
   buildArticleUserPrompt,
-} from './prompts.js';
+} from '../_lib/seo-prompts.js';
 
 // ─── Shared Supabase client ────────────────────────────────────────────────
 

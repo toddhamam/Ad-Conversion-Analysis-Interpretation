@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 // Initialize Stripe (handle missing key gracefully)
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey
-  ? new Stripe(stripeSecretKey, { apiVersion: '2024-12-18.acacia' })
+  ? new Stripe(stripeSecretKey, { apiVersion: '2024-12-18.acacia' as const as any })
   : null;
 
 // Initialize Supabase for multi-tenant operations

@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
-import { encrypt } from '../../lib/encryption.js';
+import { encrypt } from '../../_lib/encryption.js';
 
 // ── Shared config ──────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { decrypt } from '../lib/encryption';
+import { decrypt } from '../_lib/encryption.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
