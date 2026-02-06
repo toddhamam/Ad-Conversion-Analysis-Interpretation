@@ -1,4 +1,4 @@
-import { decrypt } from './encryption';
+import { decrypt } from './encryption.js';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -72,7 +72,7 @@ export async function getGoogleAccessToken(siteId: string): Promise<string | nul
   }
 
   // Store the refreshed token
-  const { encrypt: enc } = await import('./encryption');
+  const { encrypt: enc } = await import('./encryption.js');
   const newExpiresAt = new Date(Date.now() + newTokens.expires_in * 1000);
 
   await supabase

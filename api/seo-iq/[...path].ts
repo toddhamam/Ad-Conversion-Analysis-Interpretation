@@ -1,0 +1,1016 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createClient } from '@supabase/supabase-js';
+import { encrypt, decrypt } from '../lib/encryption.js';
+import { getGoogleAccessToken } from '../lib/google-auth.js';
+import {
+  scoreQuickWin,
+  scoreCTROptimization,
+  buildArticleSystemPrompt,
+  buildArticleUserPrompt,
+} from './prompts.js';
+
+// ─── Shared Supabase client ────────────────────────────────────────────────
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+// ─── Shared constants ──────────────────────────────────────────────────────
+
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+const GEMINI_MODEL = 'gemini-2.0-flash-exp-image-generation';
+
+// ─── Shared interfaces ────────────────────────────────────────────────────
+
+interface GSCRow {
+  keys: string[];
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+interface GSCResponse {
+  rows?: GSCRow[];
+}
+
+interface AnthropicMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+interface AnthropicResponse {
+  id: string;
+  content: Array<{ type: string; text: string }>;
+  model: string;
+  usage: { input_tokens: number; output_tokens: number };
+}
+
+interface GeneratedArticle {
+  title: string;
+  slug: string;
+  metaDescription: string;
+  content: string;
+  wordCount: number;
+  category: string;
+  readTimeMinutes: number;
+  secondaryKeywords: string[];
+  thumbnailPrompt: string;
+  faqQuestions: Array<{ question: string; answer: string }>;
+}
+
+interface GeminiResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?: string;
+        inlineData?: { mimeType: string; data: string };
+      }>;
+    };
+  }>;
+  error?: { message: string };
+}
+
+// ─── Main catch-all handler ────────────────────────────────────────────────
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const pathSegments = req.query.path;
+
+  if (!pathSegments || !Array.isArray(pathSegments) || pathSegments.length === 0) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  const route = pathSegments[0];
+
+  switch (route) {
+    case 'sites':
+      return handleSites(req, res);
+    case 'articles':
+      return handleArticles(req, res);
+    case 'refresh-keywords':
+      return handleRefreshKeywords(req, res);
+    case 'generate-article':
+      return handleGenerateArticle(req, res);
+    case 'publish-article':
+      return handlePublishArticle(req, res);
+    default:
+      return res.status(404).json({ error: `Unknown route: ${route}` });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SITES HANDLER
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function handleSites(req: VercelRequest, res: VercelResponse) {
+  const { method } = req;
+
+  if (method === 'GET') {
+    return handleSitesGet(req, res);
+  } else if (method === 'POST') {
+    return handleSitesPost(req, res);
+  } else if (method === 'PUT') {
+    return handleSitesPut(req, res);
+  } else if (method === 'DELETE') {
+    return handleSitesDelete(req, res);
+  }
+
+  return res.status(405).json({ error: 'Method not allowed' });
+}
+
+async function handleSitesGet(req: VercelRequest, res: VercelResponse) {
+  const { organizationId, siteId } = req.query;
+
+  if (!organizationId || typeof organizationId !== 'string') {
+    return res.status(400).json({ error: 'organizationId is required' });
+  }
+
+  // Single site fetch
+  if (siteId && typeof siteId === 'string') {
+    const { data, error } = await supabase
+      .from('seo_sites')
+      .select('id, organization_id, name, domain, google_status, google_scopes, target_table_name, gsc_property, slug_prefix, voice_guide, target_supabase_url_encrypted, target_supabase_key_encrypted, created_at, updated_at')
+      .eq('id', siteId)
+      .eq('organization_id', organizationId)
+      .single();
+
+    if (error || !data) {
+      return res.status(404).json({ error: 'Site not found' });
+    }
+
+    return res.status(200).json({
+      ...data,
+      has_target_credentials: !!(data.target_supabase_url_encrypted && data.target_supabase_key_encrypted),
+      // Strip encrypted fields from response
+      target_supabase_url_encrypted: undefined,
+      target_supabase_key_encrypted: undefined,
+    });
+  }
+
+  // List all sites for org
+  const { data, error } = await supabase
+    .from('seo_sites')
+    .select('id, organization_id, name, domain, google_status, google_scopes, target_table_name, gsc_property, slug_prefix, voice_guide, target_supabase_url_encrypted, target_supabase_key_encrypted, created_at, updated_at')
+    .eq('organization_id', organizationId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    return res.status(500).json({ error: 'Failed to fetch sites', message: error.message });
+  }
+
+  const sites = (data || []).map((site) => ({
+    ...site,
+    has_target_credentials: !!(site.target_supabase_url_encrypted && site.target_supabase_key_encrypted),
+    target_supabase_url_encrypted: undefined,
+    target_supabase_key_encrypted: undefined,
+  }));
+
+  return res.status(200).json(sites);
+}
+
+async function handleSitesPost(req: VercelRequest, res: VercelResponse) {
+  const { organizationId, name, domain, gsc_property, slug_prefix, voice_guide, target_supabase_url, target_supabase_key, target_table_name } = req.body;
+
+  if (!organizationId || !name || !domain) {
+    return res.status(400).json({ error: 'organizationId, name, and domain are required' });
+  }
+
+  const insertData: Record<string, unknown> = {
+    organization_id: organizationId,
+    name,
+    domain: domain.replace(/^https?:\/\//, '').replace(/\/$/, ''), // Strip protocol and trailing slash
+    gsc_property: gsc_property || null,
+    slug_prefix: slug_prefix || '',
+    voice_guide: voice_guide || null,
+    target_table_name: target_table_name || 'articles',
+  };
+
+  // Encrypt target Supabase credentials if provided
+  if (target_supabase_url) {
+    insertData.target_supabase_url_encrypted = encrypt(target_supabase_url);
+  }
+  if (target_supabase_key) {
+    insertData.target_supabase_key_encrypted = encrypt(target_supabase_key);
+  }
+
+  const { data, error } = await supabase
+    .from('seo_sites')
+    .insert(insertData)
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'A site with this domain already exists in your organization' });
+    }
+    return res.status(500).json({ error: 'Failed to create site', message: error.message });
+  }
+
+  return res.status(201).json({
+    ...data,
+    has_target_credentials: !!(data.target_supabase_url_encrypted && data.target_supabase_key_encrypted),
+    target_supabase_url_encrypted: undefined,
+    target_supabase_key_encrypted: undefined,
+  });
+}
+
+async function handleSitesPut(req: VercelRequest, res: VercelResponse) {
+  const { siteId, organizationId, name, gsc_property, slug_prefix, voice_guide, target_supabase_url, target_supabase_key, target_table_name } = req.body;
+
+  if (!siteId || !organizationId) {
+    return res.status(400).json({ error: 'siteId and organizationId are required' });
+  }
+
+  const updateData: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (name !== undefined) updateData.name = name;
+  if (gsc_property !== undefined) updateData.gsc_property = gsc_property;
+  if (slug_prefix !== undefined) updateData.slug_prefix = slug_prefix;
+  if (voice_guide !== undefined) updateData.voice_guide = voice_guide;
+  if (target_table_name !== undefined) updateData.target_table_name = target_table_name;
+
+  if (target_supabase_url) {
+    updateData.target_supabase_url_encrypted = encrypt(target_supabase_url);
+  }
+  if (target_supabase_key) {
+    updateData.target_supabase_key_encrypted = encrypt(target_supabase_key);
+  }
+
+  const { data, error } = await supabase
+    .from('seo_sites')
+    .update(updateData)
+    .eq('id', siteId)
+    .eq('organization_id', organizationId)
+    .select()
+    .single();
+
+  if (error) {
+    return res.status(500).json({ error: 'Failed to update site', message: error.message });
+  }
+
+  return res.status(200).json({
+    ...data,
+    has_target_credentials: !!(data.target_supabase_url_encrypted && data.target_supabase_key_encrypted),
+    target_supabase_url_encrypted: undefined,
+    target_supabase_key_encrypted: undefined,
+  });
+}
+
+async function handleSitesDelete(req: VercelRequest, res: VercelResponse) {
+  const { siteId, organizationId } = req.query;
+
+  if (!siteId || typeof siteId !== 'string' || !organizationId || typeof organizationId !== 'string') {
+    return res.status(400).json({ error: 'siteId and organizationId are required' });
+  }
+
+  const { error } = await supabase
+    .from('seo_sites')
+    .delete()
+    .eq('id', siteId)
+    .eq('organization_id', organizationId);
+
+  if (error) {
+    return res.status(500).json({ error: 'Failed to delete site', message: error.message });
+  }
+
+  return res.status(200).json({ success: true });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ARTICLES HANDLER
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function handleArticles(req: VercelRequest, res: VercelResponse) {
+  if (req.method === 'GET') {
+    return handleArticlesGet(req, res);
+  } else if (req.method === 'PUT') {
+    return handleArticlesUpdate(req, res);
+  } else if (req.method === 'DELETE') {
+    return handleArticlesDelete(req, res);
+  }
+
+  return res.status(405).json({ error: 'Method not allowed' });
+}
+
+async function handleArticlesGet(req: VercelRequest, res: VercelResponse) {
+  const { siteId, articleId, status } = req.query;
+
+  if (!siteId || typeof siteId !== 'string') {
+    return res.status(400).json({ error: 'siteId is required' });
+  }
+
+  // Single article fetch
+  if (articleId && typeof articleId === 'string') {
+    const { data, error } = await supabase
+      .from('seo_articles')
+      .select('*')
+      .eq('id', articleId)
+      .eq('site_id', siteId)
+      .single();
+
+    if (error || !data) {
+      return res.status(404).json({ error: 'Article not found' });
+    }
+
+    return res.status(200).json(data);
+  }
+
+  // List articles for site
+  let query = supabase
+    .from('seo_articles')
+    .select('*')
+    .eq('site_id', siteId)
+    .order('created_at', { ascending: false });
+
+  if (status && typeof status === 'string') {
+    query = query.eq('status', status);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return res.status(500).json({ error: 'Failed to fetch articles', message: error.message });
+  }
+
+  return res.status(200).json(data || []);
+}
+
+async function handleArticlesUpdate(req: VercelRequest, res: VercelResponse) {
+  const { articleId, siteId, title, slug, meta_description, content, category, status } = req.body;
+
+  if (!articleId || !siteId) {
+    return res.status(400).json({ error: 'articleId and siteId are required' });
+  }
+
+  const updateData: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (title !== undefined) updateData.title = title;
+  if (slug !== undefined) updateData.slug = slug;
+  if (meta_description !== undefined) updateData.meta_description = meta_description;
+  if (content !== undefined) {
+    updateData.content = content;
+    updateData.word_count = content.split(/\s+/).length;
+  }
+  if (category !== undefined) updateData.category = category;
+  if (status !== undefined) updateData.status = status;
+
+  const { data, error } = await supabase
+    .from('seo_articles')
+    .update(updateData)
+    .eq('id', articleId)
+    .eq('site_id', siteId)
+    .select()
+    .single();
+
+  if (error) {
+    return res.status(500).json({ error: 'Failed to update article', message: error.message });
+  }
+
+  return res.status(200).json(data);
+}
+
+async function handleArticlesDelete(req: VercelRequest, res: VercelResponse) {
+  const { articleId, siteId } = req.query;
+
+  if (!articleId || typeof articleId !== 'string' || !siteId || typeof siteId !== 'string') {
+    return res.status(400).json({ error: 'articleId and siteId are required' });
+  }
+
+  const { error } = await supabase
+    .from('seo_articles')
+    .delete()
+    .eq('id', articleId)
+    .eq('site_id', siteId);
+
+  if (error) {
+    return res.status(500).json({ error: 'Failed to delete article', message: error.message });
+  }
+
+  return res.status(200).json({ success: true });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REFRESH KEYWORDS HANDLER
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function handleRefreshKeywords(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { site_id, days = 90 } = req.body;
+
+  if (!site_id) {
+    return res.status(400).json({ error: 'site_id is required' });
+  }
+
+  try {
+    // Fetch site config
+    const { data: site, error: siteError } = await supabase
+      .from('seo_sites')
+      .select('id, domain, gsc_property, google_status')
+      .eq('id', site_id)
+      .single();
+
+    if (siteError || !site) {
+      return res.status(404).json({ error: 'Site not found' });
+    }
+
+    if (site.google_status !== 'active') {
+      return res.status(400).json({ error: 'Google is not connected for this site. Please connect Google first.' });
+    }
+
+    // Get a valid Google access token (auto-refreshes if expired)
+    const accessToken = await getGoogleAccessToken(site_id);
+    if (!accessToken) {
+      return res.status(401).json({ error: 'Failed to get Google access token. Please reconnect Google.' });
+    }
+
+    // Build GSC property URL
+    const gscProperty = site.gsc_property || `sc-domain:${site.domain}`;
+
+    // Calculate date range (GSC data has ~3 day delay)
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() - 3);
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - days);
+
+    const formatDate = (d: Date) => d.toISOString().split('T')[0];
+
+    // Fetch query data from GSC
+    const gscResponse = await fetch(
+      `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(gscProperty)}/searchAnalytics/query`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          startDate: formatDate(startDate),
+          endDate: formatDate(endDate),
+          dimensions: ['query'],
+          rowLimit: 5000,
+          startRow: 0,
+        }),
+      }
+    );
+
+    if (!gscResponse.ok) {
+      const errorText = await gscResponse.text();
+      console.error('GSC API error:', gscResponse.status, errorText);
+      return res.status(502).json({ error: 'Failed to fetch data from Google Search Console', details: errorText });
+    }
+
+    const gscData: GSCResponse = await gscResponse.json();
+    const queries = gscData.rows || [];
+
+    // Fetch existing articles for this site (to check topic coverage)
+    const { data: existingArticles } = await supabase
+      .from('seo_articles')
+      .select('slug, primary_keyword')
+      .eq('site_id', site_id);
+
+    const existingKeywords = new Set(
+      (existingArticles || [])
+        .map((a) => a.primary_keyword?.toLowerCase())
+        .filter(Boolean)
+    );
+
+    // Score and upsert keywords
+    let upsertCount = 0;
+    let scoredCount = 0;
+
+    for (const row of queries) {
+      const keyword = row.keys[0];
+      if (!keyword) continue;
+
+      const clicks = row.clicks || 0;
+      const impressions = row.impressions || 0;
+      const ctr = Math.round((row.ctr || 0) * 10000) / 100; // Convert to percentage
+      const position = Math.round((row.position || 0) * 10) / 10;
+
+      // Score this keyword
+      const quickWinScore = scoreQuickWin(position, impressions, ctr, clicks);
+      const ctrScore = scoreCTROptimization(impressions, ctr, position);
+
+      // Pick the best opportunity type
+      let opportunityType: string | null = null;
+      let score = 0;
+      let reasoning = '';
+      let action = '';
+
+      if (quickWinScore > ctrScore && quickWinScore > 0) {
+        opportunityType = 'quick_win';
+        score = quickWinScore;
+        reasoning = `Position ${position} with ${impressions} impressions. A dedicated article could push this to page 1.`;
+        action = `Write a dedicated article targeting this keyword to move from position ${position} to top 5.`;
+      } else if (ctrScore > 0) {
+        opportunityType = 'ctr_optimization';
+        score = ctrScore;
+        reasoning = `${impressions} impressions but only ${ctr}% CTR at position ${position}. Better title/meta could double clicks.`;
+        action = 'Optimize the title tag and meta description for better CTR.';
+      }
+
+      // Skip keywords we've already written articles for
+      if (existingKeywords.has(keyword.toLowerCase())) {
+        score = Math.max(score - 30, 0);
+      }
+
+      const cluster = classifyCluster(keyword);
+
+      const { error: upsertError } = await supabase
+        .from('seo_keywords')
+        .upsert(
+          {
+            site_id,
+            keyword,
+            clicks,
+            impressions,
+            ctr,
+            current_position: position,
+            opportunity_type: opportunityType,
+            opportunity_score: score,
+            reasoning,
+            action,
+            topic_cluster: cluster,
+            status: existingKeywords.has(keyword.toLowerCase()) ? 'used' : 'active',
+          },
+          { onConflict: 'site_id,keyword' }
+        );
+
+      if (!upsertError) {
+        upsertCount++;
+        if (score > 0) scoredCount++;
+      }
+    }
+
+    return res.status(200).json({
+      gsc_queries: queries.length,
+      keywords_upserted: upsertCount,
+      opportunities_scored: scoredCount,
+    });
+  } catch (err) {
+    console.error('Refresh keywords error:', err);
+    return res.status(500).json({ error: 'Failed to refresh keywords', message: err instanceof Error ? err.message : 'Unknown error' });
+  }
+}
+
+/**
+ * Classify a keyword into a topic cluster.
+ * This is a generic version — sites can customize via voice_guide.
+ */
+function classifyCluster(keyword: string): string {
+  const kw = keyword.toLowerCase();
+
+  if (kw.includes('how to') || kw.includes('tutorial') || kw.includes('guide') || kw.includes('step'))
+    return 'How-To';
+  if (kw.includes('best') || kw.includes('top') || kw.includes('review') || kw.includes('vs'))
+    return 'Comparison';
+  if (kw.includes('what is') || kw.includes('meaning') || kw.includes('definition'))
+    return 'Explainer';
+  if (kw.includes('why') || kw.includes('reason') || kw.includes('cause'))
+    return 'Analysis';
+  if (kw.includes('example') || kw.includes('template') || kw.includes('sample'))
+    return 'Resource';
+  if (kw.includes('tip') || kw.includes('trick') || kw.includes('hack'))
+    return 'Tips';
+  if (kw.includes('mistake') || kw.includes('problem') || kw.includes('issue') || kw.includes('fix'))
+    return 'Troubleshooting';
+
+  return 'General';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GENERATE ARTICLE HANDLER
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function handleGenerateArticle(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  if (!ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' });
+  }
+
+  const { site_id, keyword_id, keyword: manualKeyword, custom_instructions, iq_level = 'medium' } = req.body;
+
+  if (!site_id) {
+    return res.status(400).json({ error: 'site_id is required' });
+  }
+
+  if (!keyword_id && !manualKeyword) {
+    return res.status(400).json({ error: 'Either keyword_id or keyword is required' });
+  }
+
+  try {
+    // Fetch site config
+    const { data: site, error: siteError } = await supabase
+      .from('seo_sites')
+      .select('id, domain, voice_guide, slug_prefix')
+      .eq('id', site_id)
+      .single();
+
+    if (siteError || !site) {
+      return res.status(404).json({ error: 'Site not found' });
+    }
+
+    // Resolve keyword data
+    let keywordText = manualKeyword;
+    let keywordData: Record<string, unknown> | undefined;
+
+    if (keyword_id) {
+      const { data: kw } = await supabase
+        .from('seo_keywords')
+        .select('*')
+        .eq('id', keyword_id)
+        .single();
+
+      if (kw) {
+        keywordText = kw.keyword;
+        keywordData = {
+          searchVolume: kw.search_volume,
+          competition: kw.competition,
+          currentPosition: kw.current_position,
+          impressions: kw.impressions,
+          opportunityType: kw.opportunity_type,
+          cluster: kw.topic_cluster,
+        };
+      }
+    }
+
+    if (!keywordText) {
+      return res.status(400).json({ error: 'Could not resolve keyword' });
+    }
+
+    // Fetch existing article slugs for internal linking
+    const { data: existingArticles } = await supabase
+      .from('seo_articles')
+      .select('slug')
+      .eq('site_id', site_id)
+      .eq('status', 'published');
+
+    const existingSlugs = (existingArticles || []).map((a) => a.slug);
+
+    // Build prompts
+    const systemPrompt = buildArticleSystemPrompt(site.voice_guide);
+    const userPrompt = buildArticleUserPrompt(
+      keywordText,
+      keywordData as Parameters<typeof buildArticleUserPrompt>[1],
+      custom_instructions,
+      existingSlugs,
+    );
+
+    // Map IQ level to max_tokens
+    const maxTokens = iq_level === 'high' ? 8192 : iq_level === 'low' ? 4096 : 6144;
+
+    // Call Anthropic API
+    const anthropicResponse = await fetch(ANTHROPIC_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: ANTHROPIC_MODEL,
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [
+          { role: 'user', content: userPrompt },
+        ] as AnthropicMessage[],
+      }),
+    });
+
+    if (!anthropicResponse.ok) {
+      const errorText = await anthropicResponse.text();
+      console.error('Anthropic API error:', anthropicResponse.status, errorText);
+      return res.status(502).json({ error: 'Failed to generate article', details: errorText });
+    }
+
+    const anthropicData: AnthropicResponse = await anthropicResponse.json();
+    const responseText = anthropicData.content
+      .filter((c) => c.type === 'text')
+      .map((c) => c.text)
+      .join('');
+
+    // Parse JSON from response (handle optional code fences)
+    let articleData: GeneratedArticle;
+    try {
+      const jsonStr = responseText
+        .replace(/^```(?:json)?\s*/m, '')
+        .replace(/\s*```\s*$/m, '')
+        .trim();
+      articleData = JSON.parse(jsonStr);
+    } catch {
+      console.error('Failed to parse article JSON:', responseText.substring(0, 500));
+      return res.status(502).json({
+        error: 'Failed to parse generated article',
+        rawResponse: responseText.substring(0, 2000),
+      });
+    }
+
+    // Insert as draft
+    const { data: article, error: insertError } = await supabase
+      .from('seo_articles')
+      .insert({
+        site_id,
+        keyword_id: keyword_id || null,
+        title: articleData.title,
+        slug: articleData.slug,
+        meta_description: articleData.metaDescription,
+        content: articleData.content,
+        word_count: articleData.wordCount || articleData.content.split(/\s+/).length,
+        primary_keyword: keywordText,
+        secondary_keywords: articleData.secondaryKeywords || [],
+        category: articleData.category || 'General',
+        read_time_minutes: articleData.readTimeMinutes || Math.ceil(articleData.content.split(/\s+/).length / 200),
+        thumbnail_prompt: articleData.thumbnailPrompt || null,
+        status: 'draft',
+        generation_model: ANTHROPIC_MODEL,
+        generation_params: {
+          iq_level,
+          max_tokens: maxTokens,
+          input_tokens: anthropicData.usage.input_tokens,
+          output_tokens: anthropicData.usage.output_tokens,
+          faq_questions: articleData.faqQuestions || [],
+        },
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('Failed to insert article:', insertError);
+      return res.status(500).json({ error: 'Failed to save generated article', message: insertError.message });
+    }
+
+    // Mark the keyword as used
+    if (keyword_id) {
+      await supabase
+        .from('seo_keywords')
+        .update({ status: 'used', updated_at: new Date().toISOString() })
+        .eq('id', keyword_id);
+    }
+
+    return res.status(201).json({ article });
+  } catch (err) {
+    console.error('Generate article error:', err);
+    return res.status(500).json({
+      error: 'Failed to generate article',
+      message: err instanceof Error ? err.message : 'Unknown error',
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PUBLISH ARTICLE HANDLER
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function handlePublishArticle(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { article_id, generate_thumbnail = true, submit_indexing = true } = req.body;
+
+  if (!article_id) {
+    return res.status(400).json({ error: 'article_id is required' });
+  }
+
+  try {
+    // Fetch article
+    const { data: article, error: articleError } = await supabase
+      .from('seo_articles')
+      .select('*')
+      .eq('id', article_id)
+      .single();
+
+    if (articleError || !article) {
+      return res.status(404).json({ error: 'Article not found' });
+    }
+
+    if (article.status === 'published') {
+      return res.status(400).json({ error: 'Article is already published' });
+    }
+
+    // Mark as publishing
+    await supabase
+      .from('seo_articles')
+      .update({ status: 'publishing', updated_at: new Date().toISOString() })
+      .eq('id', article_id);
+
+    // Fetch site with encrypted credentials
+    const { data: site, error: siteError } = await supabase
+      .from('seo_sites')
+      .select('*')
+      .eq('id', article.site_id)
+      .single();
+
+    if (siteError || !site) {
+      await markFailed(article_id, 'Site not found');
+      return res.status(404).json({ error: 'Site not found' });
+    }
+
+    // Verify target Supabase credentials exist
+    if (!site.target_supabase_url_encrypted || !site.target_supabase_key_encrypted) {
+      await markFailed(article_id, 'Target Supabase credentials not configured');
+      return res.status(400).json({ error: 'Target Supabase credentials not configured for this site' });
+    }
+
+    // Decrypt target Supabase credentials
+    const targetUrl = decrypt(site.target_supabase_url_encrypted);
+    const targetKey = decrypt(site.target_supabase_key_encrypted);
+    const targetTable = site.target_table_name || 'articles';
+
+    // Create inline Supabase client for the target database
+    const targetSupabase = createClient(targetUrl, targetKey);
+
+    // Publish article to target database
+    const publishData: Record<string, unknown> = {
+      slug: article.slug,
+      title: article.title,
+      description: article.meta_description,
+      content: article.content,
+      category: article.category,
+      read_time_minutes: article.read_time_minutes,
+      is_published: true,
+      is_featured: true,
+      published_at: new Date().toISOString(),
+      meta_title: article.title,
+      meta_description: article.meta_description,
+    };
+
+    const { data: publishedData, error: publishError } = await targetSupabase
+      .from(targetTable)
+      .upsert(publishData, { onConflict: 'slug' })
+      .select()
+      .single();
+
+    if (publishError) {
+      console.error('Target Supabase publish error:', publishError);
+      await markFailed(article_id, `Publish failed: ${publishError.message}`);
+      return res.status(502).json({ error: 'Failed to publish to target site', details: publishError.message });
+    }
+
+    const publishedUrl = `https://${site.domain}${site.slug_prefix || '/articles/'}${article.slug}`;
+    let thumbnailGenerated = false;
+    let indexingSubmitted = false;
+
+    // Generate thumbnail via Gemini (optional)
+    if (generate_thumbnail && article.thumbnail_prompt && GEMINI_API_KEY) {
+      const thumbnailUrl = await generateThumbnail(article.slug, article.thumbnail_prompt);
+      if (thumbnailUrl) {
+        // Update thumbnail in target database
+        await targetSupabase
+          .from(targetTable)
+          .update({ featured_image: thumbnailUrl })
+          .eq('slug', article.slug);
+
+        // Update thumbnail in our database
+        await supabase
+          .from('seo_articles')
+          .update({ thumbnail_url: thumbnailUrl })
+          .eq('id', article_id);
+
+        thumbnailGenerated = true;
+      }
+    }
+
+    // Submit to Google Indexing API (optional)
+    if (submit_indexing && site.google_status === 'active') {
+      const googleToken = await getGoogleAccessToken(site.id);
+      if (googleToken) {
+        indexingSubmitted = await submitToIndexingApi(publishedUrl, googleToken);
+
+        if (indexingSubmitted) {
+          await supabase
+            .from('seo_articles')
+            .update({
+              indexing_status: 'submitted',
+              indexing_submitted_at: new Date().toISOString(),
+            })
+            .eq('id', article_id);
+        }
+      }
+    }
+
+    // Mark as published
+    await supabase
+      .from('seo_articles')
+      .update({
+        status: 'published',
+        published_url: publishedUrl,
+        published_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', article_id);
+
+    return res.status(200).json({
+      published_url: publishedUrl,
+      thumbnail_generated: thumbnailGenerated,
+      indexing_submitted: indexingSubmitted,
+    });
+  } catch (err) {
+    console.error('Publish article error:', err);
+    await markFailed(article_id, err instanceof Error ? err.message : 'Unknown error');
+    return res.status(500).json({
+      error: 'Failed to publish article',
+      message: err instanceof Error ? err.message : 'Unknown error',
+    });
+  }
+}
+
+// ─── Publish Article helpers ───────────────────────────────────────────────
+
+async function markFailed(articleId: string, error: string) {
+  await supabase
+    .from('seo_articles')
+    .update({
+      status: 'failed',
+      publish_error: error,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', articleId);
+}
+
+async function generateThumbnail(slug: string, prompt: string): Promise<string | null> {
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': GEMINI_API_KEY!,
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      console.error('Gemini API error:', response.status);
+      return null;
+    }
+
+    const data: GeminiResponse = await response.json();
+
+    if (data.error) {
+      console.error('Gemini error:', data.error.message);
+      return null;
+    }
+
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    for (const part of parts) {
+      if (part.inlineData) {
+        const extension = part.inlineData.mimeType.split('/')[1] || 'png';
+        // Return the path the target site would use
+        return `/images/articles/${slug}.${extension}`;
+      }
+    }
+
+    return null;
+  } catch (err) {
+    console.error('Thumbnail generation error:', err);
+    return null;
+  }
+}
+
+async function submitToIndexingApi(url: string, accessToken: string): Promise<boolean> {
+  try {
+    const response = await fetch(
+      'https://indexing.googleapis.com/v3/urlNotifications:publish',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ url, type: 'URL_UPDATED' }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Indexing API error:', response.status, errorText);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Indexing API error:', err);
+    return false;
+  }
+}
