@@ -594,18 +594,18 @@
   padding: 16px 48px;
   font-size: 16px;
   font-weight: 700;
-  color: #1e293b;
-  background: var(--gradient-holographic);
+  color: #ffffff;
+  background: var(--accent-violet);
   border: none;
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.3s;
-  box-shadow: 0 4px 20px rgba(168, 85, 247, 0.2);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.3);
 }
 
 .autopilot-run-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(168, 85, 247, 0.3);
+  box-shadow: 0 4px 16px rgba(168, 85, 247, 0.4), 0 0 20px rgba(168, 85, 247, 0.2);
 }
 
 .autopilot-run-btn:disabled {

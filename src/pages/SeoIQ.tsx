@@ -480,7 +480,8 @@ export default function SeoIQ() {
 
   const handleRunReadyArticles = async () => {
     if (!selectedSiteId) return;
-    const todayStr = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const readyRuns = scheduledRuns.filter(
       (r) => r.scheduled_date === todayStr && r.status === 'keyword_picked' && r.keyword_id
     );
@@ -1171,8 +1172,8 @@ export default function SeoIQ() {
           const [year, mon] = calendarMonth.split('-').map(Number);
           const daysInMonth = new Date(year, mon, 0).getDate();
           const firstDayOfWeek = new Date(year, mon - 1, 1).getDay(); // 0=Sun
-          const todayStr = new Date().toISOString().split('T')[0];
           const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
           today.setHours(0, 0, 0, 0);
           const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
           // Shift so Monday=0 (ISO week)
@@ -1257,6 +1258,7 @@ export default function SeoIQ() {
                     const dateStr = `${year}-${String(mon).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                     const run = scheduledRuns.find((r) => r.scheduled_date === dateStr);
                     const dateObj = new Date(year, mon - 1, day);
+                    dateObj.setHours(0, 0, 0, 0);
                     const isPast = dateObj < today;
                     const isToday = dateStr === todayStr;
                     const isClickable = !isPast && (!run || run.status === 'pending');

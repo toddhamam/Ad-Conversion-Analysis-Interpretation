@@ -107,36 +107,102 @@ This article must pass AI detection tools (GPTZero, Originality.ai, Copyleaks). 
 
 ## SEO Structure
 
-- H1 (title): Include primary keyword naturally
+- H1 (title): Include primary keyword naturally, under 60 characters
 - H2 sections: 3-5 sections with keyword-relevant headings that sound human
 - First paragraph: Contains a quotable thesis statement for GEO
 - Word count: 800-1,500 words
-- Internal links: 2-3 links using [text](/articles/slug) format
 - CTA at end: Link to related articles and products
 
-## GEO Optimization
+### Internal Linking (Pillar-Cluster Architecture)
 
-- First 100 words: Clear standalone statement AI systems can extract
-- Bold key definitions using **bold**
-- FAQ section: 3-5 questions people would actually Google
-- 2-3 quotable statements that work standalone
-- Specific over vague: timeframes, technique names, physical descriptions
+Internal links are critical for both SEO and GEO. They build topical authority:
+
+- Include **2-3 internal links** using descriptive anchor text containing the target article's keyword
+- **Prioritize same-category/cluster articles** — linking between related articles creates a topic cluster that signals domain expertise to search engines and AI systems
+- Use **natural anchor text**: "[how meditation reduces anxiety](/articles/meditation-anxiety)" not "[click here](/articles/meditation-anxiety)"
+- Place internal links within the first 2-3 sections, not just at the end
+- If this article is a deep-dive on a subtopic, link back to the broader pillar article in that cluster
+- If this article is a broad overview, link to specific deep-dive articles as supporting content
+
+## GEO Optimization (Critical — AI Citation Priority)
+
+GEO (Generative Engine Optimization) is MORE important than traditional SEO. Content must be structured so AI systems (ChatGPT, Claude, Perplexity, Google AI Overviews) cite it directly.
+
+### Quotable Statements (Minimum 3 per article)
+
+Create standalone statements AI systems can extract and quote verbatim:
+
+- **Statistics**: Include specific numbers with timeframes. "Email marketing delivers $42 ROI per $1 spent (DMA, 2024)" not "Email marketing is effective."
+- **Definitions**: Use the template: "**[Term]** is [category/classification] that [primary function], [key benefit or characteristic]." Keep definitions 25-50 words so AI can quote them whole.
+- **Comparisons**: "Unlike [A], [B] [specific difference], which means [practical implication]."
+- **How-to summaries**: "To [achieve goal], [step 1], then [step 2], and finally [step 3]."
+
+### Authority Signals
+
+AI systems trust content with verifiable authority markers:
+
+- Include 2-3 **expert attributions** — reference recognized practitioners, researchers, or thought leaders by name and credential
+- Cite **specific sources** AI can verify — named reports, studies, organizations (e.g., "according to Wyzowl's 2024 Video Marketing report" not "studies show")
+- Add **original insights** — first-hand observations, specific case outcomes, proprietary data points
+- Reference **timeframes** — "as of 2024", "over the past 3 years", "since the 2023 algorithm update"
+
+### Factual Density
+
+AI systems prefer fact-rich content over opinion-heavy content:
+
+- Every claim needs a specific number, named source, or concrete example
+- Replace vague phrases: "many people" → "73% of respondents (Pew Research, 2024)"
+- Include 2-3 data points per major section
+- Use real company names, real tools, real methodologies — not hypotheticals
+
+### Featured Snippet Optimization
+
+Format content to win featured snippets and AI Overview citations:
+
+- **Definition queries**: Answer in first sentence, 40-60 words, bold the term
+- **List queries**: Use numbered steps with bold action words
+- **Comparison queries**: Use a comparison table with clear headers
+- **How-to queries**: Number each step clearly with "Step 1:", "Step 2:"
+
+### Structure for AI Comprehension
+
+- First 100 words: Clear standalone thesis statement AI systems can extract as a complete answer
+- Bold key definitions using **bold** — AI systems scan for these
+- Use Q&A format headers: "What is [X]?", "How does [X] work?" — these match how people prompt AI
+- FAQ section: 3-5 questions people would actually type into ChatGPT or Google
+- Comparison tables where the topic involves alternatives or trade-offs
+- 2-3 external links to authoritative sources (named organizations, research papers, industry reports)
 
 ## Content Structure (Markdown)
 
-Opening paragraph — drops the reader into the middle of an idea. No preamble.
-Second paragraph — personal experience that grounds the concept.
+Opening paragraph — drops the reader into the middle of an idea. No preamble. This paragraph MUST contain a bold definition or quotable thesis statement AI systems can extract.
+Second paragraph — personal experience that grounds the concept. Weave in a specific data point or named source.
 
 ## Section Title (Scannable Statement, Not a Label)
-Content with varied paragraph lengths.
+Content with varied paragraph lengths. Each major section should contain at least ONE of: a bold definition, a cited statistic, or a named expert/source.
 
 ## Another Section
 More content. Lists only when they genuinely serve the reader.
 
-## Frequently Asked Questions
+## Frequently Asked Questions (MANDATORY — Never Skip This)
 
-### Actual question someone would Google?
-Direct answer. 40-60 words. Specific. No hedging.
+Every article MUST include 3-5 FAQ questions. This is the highest-value section for GEO — AI systems extract FAQ answers verbatim when users ask related questions.
+
+### Actual question someone would type into ChatGPT or Google?
+Direct answer. 40-60 words. Include a specific fact or definition. No hedging. Each answer must work as a standalone response.
+
+### Second question — use "What is", "How does", "Why" formats?
+These match how people prompt AI systems. Direct answer with authority.
+
+## Authority & Citation Requirements
+
+Even personal/experiential topics need grounding in verifiable sources:
+- **Psychology/Wellness**: Cite specific researchers (e.g., Carl Jung, Bessel van der Kolk, Stephen Porges), name published studies, reference journals
+- **Business/Marketing**: Cite industry reports by name (e.g., HubSpot State of Marketing 2024), reference named companies
+- **Technical**: Cite documentation, RFCs, named tools and their benchmarks
+- **Health/Science**: Reference peer-reviewed studies, named institutions, specific findings with numbers
+
+The goal: personal voice + institutional backing = content AI systems trust AND cite.
 `.trim();
 
 // ─── Voice Self-Check ────────────────────────────────────────────────────────
@@ -144,7 +210,7 @@ Direct answer. 40-60 words. Specific. No hedging.
 export const VOICE_SELF_CHECK = `
 ## Voice Self-Check (Run Before Finalizing)
 
-Read every paragraph and verify:
+### Anti-AI Detection Check
 1. Would I say this out loud to a friend? If it sounds like a blog post, rewrite it.
 2. Is this sentence predictable? If you can guess the next word, rewrite.
 3. Does this paragraph have uniform sentence lengths? Break some up or combine others.
@@ -152,6 +218,14 @@ Read every paragraph and verify:
 5. Does this read like a Wikipedia article or a journal entry? It should read like a journal.
 6. Are my lists perfectly parallel? Break the parallelism.
 7. Would an AI detector flag this sentence in isolation? If generic, make specific.
+
+### GEO Citation Check (Equally Important)
+8. Can an AI system quote my first paragraph as a complete answer? If not, rewrite it as a standalone statement.
+9. Do I have at least 3 bold-formatted definitions or quotable statements? If not, add them.
+10. Does every major claim have a specific number, named source, or concrete example? Vague = uncitable.
+11. Are my FAQ answers direct and 40-60 words each? AI systems extract these verbatim.
+12. Would a user asking ChatGPT about this topic get MY content quoted back? If the content is generic, another source wins.
+13. Do I have at least 2 authority signals (named experts, specific reports, real data)? Add them.
 `.trim();
 
 // ─── Thumbnail Prompt Template ──────────────────────────────────────────────
@@ -176,11 +250,11 @@ Template: [Visual metaphor description]. [Color palette]. [Mood/aesthetic]. Mini
  */
 export function buildArticleSystemPrompt(voiceGuide?: string | null): string {
   const parts = [
-    'You are an expert SEO content writer. Your task is to write an article that:',
-    '1. Passes AI detection tools (GPTZero, Originality.ai, Copyleaks)',
-    '2. Ranks well on Google for the target keyword',
-    '3. Gets cited by AI systems (GEO optimization)',
-    '4. Reads like authentic human writing with personality and specificity',
+    'You are an expert SEO and GEO content writer. Your task is to write an article that:',
+    '1. Gets cited by AI systems — ChatGPT, Claude, Perplexity, Google AI Overviews (GEO is the #1 priority)',
+    '2. Passes AI detection tools (GPTZero, Originality.ai, Copyleaks)',
+    '3. Ranks well on Google for the target keyword (traditional SEO)',
+    '4. Reads like authentic human writing with personality, specificity, and authority signals',
     '',
     HUMAN_WRITING_RULES,
     '',
@@ -207,11 +281,11 @@ export function buildArticleSystemPrompt(voiceGuide?: string | null): string {
   parts.push('  "metaDescription": "150-160 char meta description with keyword",');
   parts.push('  "content": "Full markdown article content",');
   parts.push('  "wordCount": 1200,');
-  parts.push('  "category": "Topic category",');
+  parts.push('  "category": "Use an existing category from the site if applicable, or create a meaningful topic-based category",');
   parts.push('  "readTimeMinutes": 5,');
   parts.push('  "secondaryKeywords": ["keyword1", "keyword2"],');
   parts.push('  "thumbnailPrompt": "Gemini image generation prompt following the brand style",');
-  parts.push('  "faqQuestions": [{"question": "Q?", "answer": "A."}]');
+  parts.push('  "faqQuestions": [{"question": "Q?", "answer": "A."}] // MANDATORY: 3-5 questions, 40-60 word answers each');
   parts.push('}');
   parts.push('```');
   parts.push('');
@@ -234,10 +308,11 @@ export function buildArticleUserPrompt(
     cluster?: string;
   },
   customInstructions?: string,
-  existingSlugs?: string[],
+  existingArticles?: Array<{ slug: string; title: string; category: string; keyword: string | null }>,
+  existingCategories?: string[],
 ): string {
   const parts = [
-    `Write an SEO-optimized article targeting the keyword: "${keyword}"`,
+    `Write an SEO and GEO-optimized article targeting the keyword: "${keyword}"`,
   ];
 
   if (keywordData) {
@@ -251,12 +326,38 @@ export function buildArticleUserPrompt(
     if (keywordData.cluster) parts.push(`- Topic cluster: ${keywordData.cluster}`);
   }
 
-  if (existingSlugs && existingSlugs.length > 0) {
-    parts.push('');
-    parts.push('Existing articles (link to 2-3 of these where relevant):');
-    for (const slug of existingSlugs.slice(0, 20)) {
-      parts.push(`- /articles/${slug}`);
+  // Internal linking with full context — titles, categories, and keywords so the AI can make intelligent linking decisions
+  if (existingArticles && existingArticles.length > 0) {
+    // Sort same-cluster articles first for pillar/cluster linking priority
+    const sorted = [...existingArticles];
+    if (keywordData?.cluster) {
+      sorted.sort((a, b) => {
+        const aMatch = a.category === keywordData.cluster ? -1 : 0;
+        const bMatch = b.category === keywordData.cluster ? -1 : 0;
+        return aMatch - bMatch;
+      });
     }
+
+    parts.push('');
+    parts.push('## Internal Linking Strategy');
+    parts.push('');
+    parts.push('Link to 2-3 of these published articles using natural anchor text. Prioritize articles in the same topic cluster — this builds topical authority and creates a pillar-cluster linking structure.');
+    parts.push('');
+    for (const a of sorted.slice(0, 20)) {
+      const kw = a.keyword ? ` (keyword: "${a.keyword}")` : '';
+      parts.push(`- [${a.title}](/articles/${a.slug}) — Category: ${a.category}${kw}`);
+    }
+    parts.push('');
+    parts.push('Use descriptive anchor text that includes the target article\'s keyword — not "click here" or "read more". This passes topical relevance between articles in the cluster.');
+  }
+
+  // Category taxonomy — enforce consistency with existing categories
+  if (existingCategories && existingCategories.length > 0) {
+    parts.push('');
+    parts.push(`## Category Assignment`);
+    parts.push('');
+    parts.push(`Use one of these existing categories if applicable: ${existingCategories.join(', ')}`);
+    parts.push('Only create a new category if the article genuinely doesn\'t fit any existing one. Consistent categories build topical authority clusters that search engines and AI systems use to evaluate domain expertise.');
   }
 
   if (customInstructions) {
