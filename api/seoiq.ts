@@ -89,6 +89,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   switch (route) {
     case 'sites':
       return handleSites(req, res);
+    case 'keywords':
+      return handleKeywords(req, res);
     case 'articles':
       return handleArticles(req, res);
     case 'refresh-keywords':
@@ -301,6 +303,34 @@ async function handleSitesDelete(req: VercelRequest, res: VercelResponse) {
   }
 
   return res.status(200).json({ success: true });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// KEYWORDS HANDLER
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function handleKeywords(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { siteId } = req.query;
+
+  if (!siteId || typeof siteId !== 'string') {
+    return res.status(400).json({ error: 'siteId is required' });
+  }
+
+  const { data, error } = await supabase
+    .from('seo_keywords')
+    .select('*')
+    .eq('site_id', siteId)
+    .order('opportunity_score', { ascending: false });
+
+  if (error) {
+    return res.status(500).json({ error: 'Failed to fetch keywords', message: error.message });
+  }
+
+  return res.status(200).json(data || []);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

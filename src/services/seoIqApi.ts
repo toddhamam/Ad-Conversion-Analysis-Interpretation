@@ -69,7 +69,7 @@ export function getGoogleConnectUrl(siteId: string, returnUrl?: string): string 
 
 export async function fetchKeywords(siteId: string): Promise<SeoKeyword[]> {
   return fetchJson<SeoKeyword[]>(
-    `${API_BASE}/seo-iq/refresh-keywords?siteId=${siteId}`
+    `${API_BASE}/seo-iq/keywords?siteId=${siteId}`
   );
 }
 
