@@ -7,6 +7,7 @@ import {
   fetchSites,
   createSite,
   getGoogleConnectUrl,
+  fetchKeywords,
   refreshKeywords,
   fetchArticles,
   generateArticle,
@@ -156,6 +157,23 @@ export default function SeoIQ() {
     }
   };
 
+  // Load keywords for selected site
+  const loadKeywords = useCallback(async (siteId: string) => {
+    try {
+      const data = await fetchKeywords(siteId);
+      setKeywords(data);
+    } catch (err) {
+      console.error('Failed to load keywords:', err);
+    }
+  }, []);
+
+  // Load keywords when tab or site changes
+  useEffect(() => {
+    if ((activeTab === 'keywords' || activeTab === 'generate') && selectedSiteId) {
+      loadKeywords(selectedSiteId);
+    }
+  }, [activeTab, selectedSiteId, loadKeywords]);
+
   // Refresh keywords
   const handleRefreshKeywords = async () => {
     if (!selectedSiteId) return;
@@ -164,8 +182,8 @@ export default function SeoIQ() {
     try {
       const result = await refreshKeywords(selectedSiteId);
       setSuccess(`Synced ${result.gsc_queries} queries, scored ${result.opportunities_scored} opportunities`);
-      // Reload keywords from the returned data
-      setKeywords([]); // Will be refetched on next render
+      // Reload keywords from the database
+      await loadKeywords(selectedSiteId);
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh keywords');
