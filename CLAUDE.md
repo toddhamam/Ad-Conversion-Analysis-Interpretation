@@ -74,7 +74,7 @@ public/
 | File | Purpose |
 |------|---------|
 | `src/services/metaApi.ts` | Meta Marketing API - fetches ads, creatives, campaigns |
-| `src/services/openaiApi.ts` | AI analysis (GPT-4o) + creative generation (Gemini/Veo) |
+| `src/services/openaiApi.ts` | AI analysis (GPT-5.2) + creative generation (Gemini/Veo). Model IDs defined as constants at top of file |
 | `src/services/imageCache.ts` | Client-side image caching with quality scoring |
 | `src/pages/MetaAds.tsx` | Main dashboard - campaign metrics, creative analysis |
 | `src/pages/AdGenerator.tsx` | AI-powered ad creative generation workflow |
@@ -100,6 +100,7 @@ public/
 | `src/components/StatCard.tsx` | Reusable stat card component for metrics display |
 | `api/billing/checkout.ts` | Vercel serverless function for Stripe Checkout sessions |
 | `api/billing/portal.ts` | Vercel serverless function for Stripe Customer Portal |
+| `api/seoiq.ts` | SEO IQ catch-all API — sites, keywords, articles, autopilot (JWT-protected) |
 | `api/funnel/metrics.ts` | Supabase funnel metrics API endpoint |
 | `src/components/IQSelector.tsx` | ConversionIQ™ reasoning level selector for AI operations |
 | `src/components/SEO.tsx` | Centralized SEO component for meta tags and structured data |
@@ -129,6 +130,9 @@ public/
 /publish        → Ad publisher
 /products       → Products management
 /insights       → Channel AI analysis (ConversionIQ™)
+/seo-iq         → SEO IQ dashboard (sites, keywords, articles, autopilot)
+/billing        → Billing & subscription management
+/*              → 404 Not Found (catch-all for unknown routes)
 ```
 
 ## Architecture Decisions
@@ -143,6 +147,8 @@ public/
 8. **Vercel serverless functions** - API routes in `api/` directory using `@vercel/node` (`VercelRequest`, `VercelResponse`)
 9. **React 19 peer dependency handling** - `.npmrc` with `legacy-peer-deps=true` for libraries that haven't updated React peer deps
 10. **Two-layer AI context** - Channel analysis provides performance patterns (account-wide); Product Context provides identity (product name, author, mockups). Both layers are injected into prompts independently — changing one never affects the other
+11. **JWT auth on API routes** - All `api/seoiq.ts` routes require Bearer token authentication and tenant isolation via `organization_id`. Only `provision-org` and `autopilot-cron` use their own auth mechanisms
+12. **404 catch-all route** - Unknown routes render a branded 404 page instead of a blank screen, preventing route enumeration
 
 ---
 
@@ -213,6 +219,60 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 ```
+
+---
+
+## API Authentication & Tenant Isolation
+
+All multi-tenant API routes must enforce JWT authentication and tenant isolation. The pattern established in `api/seoiq.ts` should be followed for any new API routes.
+
+### Authentication Pattern
+```typescript
+interface AuthContext {
+  userId: string;
+  organizationId: string;
+  authUserId: string;
+}
+
+async function authenticateRequest(req: VercelRequest): Promise<AuthContext | null> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return null;
+
+  const token = authHeader.slice(7);
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return null;
+
+  const { data: profile } = await supabase
+    .from('users')
+    .select('id, organization_id')
+    .eq('auth_id', user.id)
+    .single();
+
+  if (!profile) return null;
+  return { userId: profile.id, organizationId: profile.organization_id, authUserId: user.id };
+}
+```
+
+### Tenant Isolation Rules
+- **Never trust client-provided `organizationId`** — always derive it from the authenticated user's profile
+- **Verify resource ownership** before any read/write on tenant-scoped resources (e.g., sites, keywords, articles):
+```typescript
+async function verifySiteOwnership(siteId: string, organizationId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('seo_sites')
+    .select('organization_id')
+    .eq('id', siteId)
+    .single();
+  if (!data) return false;
+  return data.organization_id === organizationId;
+}
+```
+- Return `403 Forbidden` for ownership failures, `401 Unauthorized` for missing/invalid tokens
+
+### Security Rules for Logging
+- **Never log API tokens, keys, or secrets** — not even partially. Wrap any diagnostic logging in `if (import.meta.env.DEV)` for frontend code
+- **Never log Bearer tokens** in serverless functions
+- **Fallback defaults must be safe** — e.g., `is_super_admin` should default to `false`, never `true`
 
 ---
 
@@ -541,6 +601,9 @@ const handleSearchChange = (query: string) => {
 - Section padding: `60px 16px` (from `100px 32px`)
 - Logo: `height: 26px` (from `32px`)
 
+### MainLayout Routing
+- `<Outlet />` in `MainLayout.tsx` must **not** have a `key={location.pathname}` prop — this would cause full component remounts on every navigation, destroying local state and triggering unnecessary API refetches
+
 ### CSS Techniques for Responsiveness
 - **`calc()` for dynamic sizing**: Use for viewport-relative dimensions (e.g., `calc(100vh - 24px)`, `calc(100% - 24px)`)
 - **`transition` for smoothness**: Apply to UI state changes (sidebar collapse, hover effects, mobile menu animations)
@@ -776,6 +839,10 @@ The `publishAds()` function runs automatic diagnostics before ad set creation:
 - Don't use dark theme colors - this is a light theme (no cyan #00d4ff, no dark backgrounds)
 - Don't confuse API endpoints - Dashboard uses BOTH Meta API (ad spend, ROAS, conversions) AND Supabase funnel API (unique customers, AOV, conversion rate, CAC)
 - Don't hardcode date ranges - make them configurable when user-facing
+- Don't hardcode brand colors in CSS - use CSS variables (`var(--accent-violet)` not `#a855f7`, `var(--text-primary)` not `#1e293b`, `var(--text-muted)` not `#94a3b8`). Semantic state colors (green for success, red for error, amber for warning) may remain hardcoded since they don't have CSS variable equivalents
+- Don't log API tokens or keys - wrap diagnostic logging in `if (import.meta.env.DEV)` on frontend, never log secrets in serverless functions
+- Don't trust client-provided organization IDs - always derive from authenticated user's JWT token
+- Don't use `catch (error: any)` - use `catch (error: unknown)` and narrow the type
 
 ---
 
@@ -884,6 +951,8 @@ The Dashboard uses a hybrid data approach to ensure accurate metrics:
 
 This separation is important because Meta's pixel may fire multiple purchase events per customer (front-end, upsells, downsells), which would inflate metrics if used for per-customer calculations. The Supabase funnel tracks unique `funnel_session_id` to count actual unique buyers.
 
+**Error handling**: Meta API and funnel API failures are handled independently. If the funnel API fails, the Dashboard shows a warning banner for funnel-specific metrics rather than blocking the entire page. Never fabricate fallback data for missing metrics — show a clear "data unavailable" state instead.
+
 ---
 
 ## Sales Landing Page Structure
@@ -983,10 +1052,12 @@ To maximize AI citations:
 
 ## Accessibility
 
-- Respect `prefers-reduced-motion` - disable animations when set
+- Respect `prefers-reduced-motion` — disable animations when set (use `@media (prefers-reduced-motion: reduce)` to set `animation: none` and `transition: none`)
 - All interactive elements have hover/focus states
+- Use `focus-visible` outlines on interactive components (buttons, toggles, selectors) for keyboard navigation accessibility
 - Color contrast meets WCAG AA standards
 - Mobile navigation accessible via hamburger menu
 - Use `aria-label` on icon-only buttons (e.g., `aria-label="Open menu"`)
 - Use `aria-hidden="true"` on decorative icons and SVGs
 - User profile dropdown accessible in both desktop header and mobile navigation
+- Support safe-area-inset padding for notched/island devices via `env(safe-area-inset-top)` and `env(safe-area-inset-bottom)` behind `@supports`
