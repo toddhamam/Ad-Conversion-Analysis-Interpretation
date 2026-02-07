@@ -76,6 +76,43 @@ interface GeminiResponse {
   error?: { message: string };
 }
 
+// ─── Authentication helper ─────────────────────────────────────────────────
+
+interface AuthContext {
+  userId: string;
+  organizationId: string;
+  authUserId: string;
+}
+
+async function authenticateRequest(req: VercelRequest): Promise<AuthContext | null> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return null;
+
+  const token = authHeader.slice(7);
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return null;
+
+  const { data: profile } = await supabase
+    .from('users')
+    .select('id, organization_id')
+    .eq('auth_id', user.id)
+    .single();
+
+  if (!profile) return null;
+  return { userId: profile.id, organizationId: profile.organization_id, authUserId: user.id };
+}
+
+async function verifySiteOwnership(siteId: string, organizationId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('seo_sites')
+    .select('organization_id')
+    .eq('id', siteId)
+    .single();
+
+  if (!data) return false;
+  return data.organization_id === organizationId;
+}
+
 // ─── Main catch-all handler ────────────────────────────────────────────────
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -86,31 +123,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(404).json({ error: 'Not found' });
   }
 
+  // Routes with their own auth mechanisms
+  if (route === 'provision-org') return handleProvisionOrg(req, res);
+  if (route === 'autopilot-cron') return handleAutopilotCron(req, res);
+
+  // All other routes require JWT authentication
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
   switch (route) {
     case 'sites':
-      return handleSites(req, res);
+      return handleSites(req, res, auth);
     case 'keywords':
-      return handleKeywords(req, res);
+      return handleKeywords(req, res, auth);
     case 'articles':
-      return handleArticles(req, res);
+      return handleArticles(req, res, auth);
     case 'refresh-keywords':
-      return handleRefreshKeywords(req, res);
+      return handleRefreshKeywords(req, res, auth);
     case 'generate-article':
-      return handleGenerateArticle(req, res);
+      return handleGenerateArticle(req, res, auth);
     case 'publish-article':
-      return handlePublishArticle(req, res);
-    case 'provision-org':
-      return handleProvisionOrg(req, res);
+      return handlePublishArticle(req, res, auth);
     case 'autopilot-pick-keyword':
-      return handleAutopilotPickKeyword(req, res);
+      return handleAutopilotPickKeyword(req, res, auth);
     case 'autopilot-status':
-      return handleAutopilotStatus(req, res);
+      return handleAutopilotStatus(req, res, auth);
     case 'autopilot-config':
-      return handleAutopilotConfig(req, res);
-    case 'autopilot-cron':
-      return handleAutopilotCron(req, res);
+      return handleAutopilotConfig(req, res, auth);
     case 'autopilot-schedule':
-      return handleAutopilotSchedule(req, res);
+      return handleAutopilotSchedule(req, res, auth);
     default:
       return res.status(404).json({ error: `Unknown route: ${route}` });
   }
@@ -120,28 +163,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 // SITES HANDLER
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function handleSites(req: VercelRequest, res: VercelResponse) {
+async function handleSites(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
   const { method } = req;
 
   if (method === 'GET') {
-    return handleSitesGet(req, res);
+    return handleSitesGet(req, res, auth);
   } else if (method === 'POST') {
-    return handleSitesPost(req, res);
+    return handleSitesPost(req, res, auth);
   } else if (method === 'PUT') {
-    return handleSitesPut(req, res);
+    return handleSitesPut(req, res, auth);
   } else if (method === 'DELETE') {
-    return handleSitesDelete(req, res);
+    return handleSitesDelete(req, res, auth);
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
 }
 
-async function handleSitesGet(req: VercelRequest, res: VercelResponse) {
-  const { organizationId, siteId } = req.query;
-
-  if (!organizationId || typeof organizationId !== 'string') {
-    return res.status(400).json({ error: 'organizationId is required' });
-  }
+async function handleSitesGet(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
+  const { siteId } = req.query;
+  const organizationId = auth.organizationId;
 
   // Single site fetch
   if (siteId && typeof siteId === 'string') {
@@ -186,23 +226,12 @@ async function handleSitesGet(req: VercelRequest, res: VercelResponse) {
   return res.status(200).json(sites);
 }
 
-async function handleSitesPost(req: VercelRequest, res: VercelResponse) {
-  const { organizationId, name, domain, gsc_property, slug_prefix, voice_guide, target_supabase_url, target_supabase_key, target_table_name } = req.body;
+async function handleSitesPost(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
+  const { name, domain, gsc_property, slug_prefix, voice_guide, target_supabase_url, target_supabase_key, target_table_name } = req.body;
+  const organizationId = auth.organizationId;
 
-  if (!organizationId || !name || !domain) {
-    return res.status(400).json({ error: 'organizationId, name, and domain are required' });
-  }
-
-  // Verify the organization exists before creating a site
-  const { data: org, error: orgError } = await supabase
-    .from('organizations')
-    .select('id')
-    .eq('id', organizationId)
-    .single();
-
-  if (orgError || !org) {
-    console.error('Organization not found for site creation:', organizationId, orgError?.message);
-    return res.status(404).json({ error: 'Organization not found. Please sign out and sign back in.' });
+  if (!name || !domain) {
+    return res.status(400).json({ error: 'name and domain are required' });
   }
 
   const insertData: Record<string, unknown> = {
@@ -251,11 +280,12 @@ async function handleSitesPost(req: VercelRequest, res: VercelResponse) {
   });
 }
 
-async function handleSitesPut(req: VercelRequest, res: VercelResponse) {
-  const { siteId, organizationId, name, gsc_property, slug_prefix, voice_guide, target_supabase_url, target_supabase_key, target_table_name } = req.body;
+async function handleSitesPut(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
+  const { siteId, name, gsc_property, slug_prefix, voice_guide, target_supabase_url, target_supabase_key, target_table_name } = req.body;
+  const organizationId = auth.organizationId;
 
-  if (!siteId || !organizationId) {
-    return res.status(400).json({ error: 'siteId and organizationId are required' });
+  if (!siteId) {
+    return res.status(400).json({ error: 'siteId is required' });
   }
 
   const updateData: Record<string, unknown> = {
@@ -295,11 +325,12 @@ async function handleSitesPut(req: VercelRequest, res: VercelResponse) {
   });
 }
 
-async function handleSitesDelete(req: VercelRequest, res: VercelResponse) {
-  const { siteId, organizationId } = req.query;
+async function handleSitesDelete(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
+  const { siteId } = req.query;
+  const organizationId = auth.organizationId;
 
-  if (!siteId || typeof siteId !== 'string' || !organizationId || typeof organizationId !== 'string') {
-    return res.status(400).json({ error: 'siteId and organizationId are required' });
+  if (!siteId || typeof siteId !== 'string') {
+    return res.status(400).json({ error: 'siteId is required' });
   }
 
   const { error } = await supabase
@@ -319,7 +350,7 @@ async function handleSitesDelete(req: VercelRequest, res: VercelResponse) {
 // KEYWORDS HANDLER
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function handleKeywords(req: VercelRequest, res: VercelResponse) {
+async function handleKeywords(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -328,6 +359,10 @@ async function handleKeywords(req: VercelRequest, res: VercelResponse) {
 
   if (!siteId || typeof siteId !== 'string') {
     return res.status(400).json({ error: 'siteId is required' });
+  }
+
+  if (!(await verifySiteOwnership(siteId, auth.organizationId))) {
+    return res.status(403).json({ error: 'Access denied: site does not belong to your organization' });
   }
 
   const { data, error } = await supabase
@@ -347,23 +382,27 @@ async function handleKeywords(req: VercelRequest, res: VercelResponse) {
 // ARTICLES HANDLER
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function handleArticles(req: VercelRequest, res: VercelResponse) {
+async function handleArticles(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
   if (req.method === 'GET') {
-    return handleArticlesGet(req, res);
+    return handleArticlesGet(req, res, auth);
   } else if (req.method === 'PUT') {
-    return handleArticlesUpdate(req, res);
+    return handleArticlesUpdate(req, res, auth);
   } else if (req.method === 'DELETE') {
-    return handleArticlesDelete(req, res);
+    return handleArticlesDelete(req, res, auth);
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
 }
 
-async function handleArticlesGet(req: VercelRequest, res: VercelResponse) {
+async function handleArticlesGet(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
   const { siteId, articleId, status } = req.query;
 
   if (!siteId || typeof siteId !== 'string') {
     return res.status(400).json({ error: 'siteId is required' });
+  }
+
+  if (!(await verifySiteOwnership(siteId, auth.organizationId))) {
+    return res.status(403).json({ error: 'Access denied: site does not belong to your organization' });
   }
 
   // Single article fetch
@@ -402,11 +441,15 @@ async function handleArticlesGet(req: VercelRequest, res: VercelResponse) {
   return res.status(200).json(data || []);
 }
 
-async function handleArticlesUpdate(req: VercelRequest, res: VercelResponse) {
+async function handleArticlesUpdate(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
   const { articleId, siteId, title, slug, meta_description, content, category, status } = req.body;
 
   if (!articleId || !siteId) {
     return res.status(400).json({ error: 'articleId and siteId are required' });
+  }
+
+  if (!(await verifySiteOwnership(siteId, auth.organizationId))) {
+    return res.status(403).json({ error: 'Access denied: site does not belong to your organization' });
   }
 
   const updateData: Record<string, unknown> = {
@@ -438,11 +481,15 @@ async function handleArticlesUpdate(req: VercelRequest, res: VercelResponse) {
   return res.status(200).json(data);
 }
 
-async function handleArticlesDelete(req: VercelRequest, res: VercelResponse) {
+async function handleArticlesDelete(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
   const { articleId, siteId } = req.query;
 
   if (!articleId || typeof articleId !== 'string' || !siteId || typeof siteId !== 'string') {
     return res.status(400).json({ error: 'articleId and siteId are required' });
+  }
+
+  if (!(await verifySiteOwnership(siteId, auth.organizationId))) {
+    return res.status(403).json({ error: 'Access denied: site does not belong to your organization' });
   }
 
   const { error } = await supabase
@@ -462,7 +509,7 @@ async function handleArticlesDelete(req: VercelRequest, res: VercelResponse) {
 // REFRESH KEYWORDS HANDLER
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function handleRefreshKeywords(req: VercelRequest, res: VercelResponse) {
+async function handleRefreshKeywords(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -471,6 +518,10 @@ async function handleRefreshKeywords(req: VercelRequest, res: VercelResponse) {
 
   if (!site_id) {
     return res.status(400).json({ error: 'site_id is required' });
+  }
+
+  if (!(await verifySiteOwnership(site_id, auth.organizationId))) {
+    return res.status(403).json({ error: 'Access denied: site does not belong to your organization' });
   }
 
   try {
@@ -654,7 +705,7 @@ function classifyCluster(keyword: string): string {
 // GENERATE ARTICLE HANDLER
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function handleGenerateArticle(req: VercelRequest, res: VercelResponse) {
+async function handleGenerateArticle(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -671,6 +722,10 @@ async function handleGenerateArticle(req: VercelRequest, res: VercelResponse) {
 
   if (!keyword_id && !manualKeyword) {
     return res.status(400).json({ error: 'Either keyword_id or keyword is required' });
+  }
+
+  if (!(await verifySiteOwnership(site_id, auth.organizationId))) {
+    return res.status(403).json({ error: 'Access denied: site does not belong to your organization' });
   }
 
   try {
@@ -845,7 +900,7 @@ async function handleGenerateArticle(req: VercelRequest, res: VercelResponse) {
 // PUBLISH ARTICLE HANDLER
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function handlePublishArticle(req: VercelRequest, res: VercelResponse) {
+async function handlePublishArticle(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -866,6 +921,11 @@ async function handlePublishArticle(req: VercelRequest, res: VercelResponse) {
 
     if (articleError || !article) {
       return res.status(404).json({ error: 'Article not found' });
+    }
+
+    // Verify the article's site belongs to the user's organization
+    if (!(await verifySiteOwnership(article.site_id, auth.organizationId))) {
+      return res.status(403).json({ error: 'Access denied: article does not belong to your organization' });
     }
 
     if (article.status === 'published') {
@@ -1099,6 +1159,22 @@ async function handleProvisionOrg(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'authId and email are required' });
   }
 
+  // Verify JWT matches the authId being provisioned
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const token = authHeader.slice(7);
+  const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !authUser) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  if (authUser.id !== authId) {
+    return res.status(403).json({ error: 'Access denied: token does not match the requested authId' });
+  }
+
   try {
     // Check if user already exists
     const { data: existingUser } = await supabase
@@ -1166,7 +1242,7 @@ async function handleProvisionOrg(req: VercelRequest, res: VercelResponse) {
 // AUTOPILOT HANDLERS
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function handleAutopilotPickKeyword(req: VercelRequest, res: VercelResponse) {
+async function handleAutopilotPickKeyword(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -1174,6 +1250,10 @@ async function handleAutopilotPickKeyword(req: VercelRequest, res: VercelRespons
   const { site_id } = req.body;
   if (!site_id) {
     return res.status(400).json({ error: 'site_id is required' });
+  }
+
+  if (!(await verifySiteOwnership(site_id, auth.organizationId))) {
+    return res.status(403).json({ error: 'Access denied: site does not belong to your organization' });
   }
 
   const { data: keyword, error } = await supabase
@@ -1193,7 +1273,7 @@ async function handleAutopilotPickKeyword(req: VercelRequest, res: VercelRespons
   return res.status(200).json(keyword);
 }
 
-async function handleAutopilotStatus(req: VercelRequest, res: VercelResponse) {
+async function handleAutopilotStatus(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -1201,6 +1281,10 @@ async function handleAutopilotStatus(req: VercelRequest, res: VercelResponse) {
   const { siteId } = req.query;
   if (!siteId || typeof siteId !== 'string') {
     return res.status(400).json({ error: 'siteId is required' });
+  }
+
+  if (!(await verifySiteOwnership(siteId, auth.organizationId))) {
+    return res.status(403).json({ error: 'Access denied: site does not belong to your organization' });
   }
 
   const { data, error } = await supabase
@@ -1216,7 +1300,7 @@ async function handleAutopilotStatus(req: VercelRequest, res: VercelResponse) {
   return res.status(200).json(data);
 }
 
-async function handleAutopilotConfig(req: VercelRequest, res: VercelResponse) {
+async function handleAutopilotConfig(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
   if (req.method !== 'PUT') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -1224,6 +1308,10 @@ async function handleAutopilotConfig(req: VercelRequest, res: VercelResponse) {
   const { siteId, autopilot_enabled, autopilot_cadence, autopilot_iq_level, autopilot_articles_per_run, autopilot_pipeline_step } = req.body;
   if (!siteId) {
     return res.status(400).json({ error: 'siteId is required' });
+  }
+
+  if (!(await verifySiteOwnership(siteId, auth.organizationId))) {
+    return res.status(403).json({ error: 'Access denied: site does not belong to your organization' });
   }
 
   const updateData: Record<string, unknown> = {
@@ -1402,7 +1490,7 @@ async function handleAutopilotCron(req: VercelRequest, res: VercelResponse) {
 // CONTENT CALENDAR SCHEDULE HANDLER
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function handleAutopilotSchedule(req: VercelRequest, res: VercelResponse) {
+async function handleAutopilotSchedule(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
   const { method } = req;
 
   if (method === 'GET') {
@@ -1413,6 +1501,10 @@ async function handleAutopilotSchedule(req: VercelRequest, res: VercelResponse) 
     }
     if (!month || typeof month !== 'string') {
       return res.status(400).json({ error: 'month is required (YYYY-MM)' });
+    }
+
+    if (!(await verifySiteOwnership(siteId, auth.organizationId))) {
+      return res.status(403).json({ error: 'Access denied: site does not belong to your organization' });
     }
 
     // Calculate date range for the month
@@ -1447,6 +1539,10 @@ async function handleAutopilotSchedule(req: VercelRequest, res: VercelResponse) 
       return res.status(400).json({ error: 'dates array is required' });
     }
 
+    if (!(await verifySiteOwnership(site_id, auth.organizationId))) {
+      return res.status(403).json({ error: 'Access denied: site does not belong to your organization' });
+    }
+
     const rows = dates.map((date: string) => ({
       site_id,
       scheduled_date: date,
@@ -1470,6 +1566,10 @@ async function handleAutopilotSchedule(req: VercelRequest, res: VercelResponse) 
     const { site_id, scheduled_date } = req.body;
     if (!site_id || !scheduled_date) {
       return res.status(400).json({ error: 'site_id and scheduled_date are required' });
+    }
+
+    if (!(await verifySiteOwnership(site_id, auth.organizationId))) {
+      return res.status(403).json({ error: 'Access denied: site does not belong to your organization' });
     }
 
     const { error } = await supabase

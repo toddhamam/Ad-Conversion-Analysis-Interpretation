@@ -1,5 +1,4 @@
 // Meta Marketing API Service
-console.log('🔥🔥🔥 metaApi.ts VERSION 5.0 LOADED AT', new Date().toISOString(), '🔥🔥🔥');
 
 const META_API_VERSION = 'v24.0';
 const META_GRAPH_API = `https://graph.facebook.com/${META_API_VERSION}`;
@@ -18,9 +17,10 @@ export interface DateRangeOptions {
   };
 }
 
-// Debug: Log the token being loaded (first and last 10 chars for security)
-console.log('🔑 Loaded Access Token:', ACCESS_TOKEN ? `${ACCESS_TOKEN.substring(0, 10)}...${ACCESS_TOKEN.substring(ACCESS_TOKEN.length - 10)}` : 'MISSING');
-console.log('📊 Loaded Ad Account ID:', AD_ACCOUNT_ID);
+// Dev-only config verification (no sensitive data logged)
+if (import.meta.env.DEV) {
+  console.log('Meta API configured:', { hasToken: !!ACCESS_TOKEN, hasAccountId: !!AD_ACCOUNT_ID });
+}
 
 interface MetaAdInsight {
   ad_id: string;

@@ -54,7 +54,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
           avatar_url: null,
           organization_id: 'local-org',
           role: 'owner',
-          is_super_admin: true, // Enable admin access in dev mode (no Supabase)
+          is_super_admin: false, // Never grant super admin in fallback mode
           status: 'active',
           last_login_at: new Date().toISOString(),
           created_at: new Date().toISOString(),

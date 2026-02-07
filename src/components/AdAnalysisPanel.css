@@ -167,6 +167,18 @@
   to { transform: rotate(360deg); }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner-ai {
+    animation: none;
+    border-top-color: var(--accent-violet);
+    opacity: 0.7;
+  }
+
+  .analysis-panel {
+    animation: none;
+  }
+}
+
 .analysis-loading p {
   color: var(--text-primary);
   margin: 0;

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import './UserProfileDropdown.css';
 
 interface UserData {
@@ -12,6 +13,7 @@ interface UserData {
 
 const UserProfileDropdown = () => {
   const navigate = useNavigate();
+  const { signOut } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -59,10 +61,15 @@ const UserProfileDropdown = () => {
     return () => document.removeEventListener('keydown', handleEscape);
   }, []);
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (err) {
+      console.error('Sign out error:', err);
+    }
     localStorage.removeItem('convertra_authenticated');
     localStorage.removeItem('convertra_user');
-    navigate('/login');
+    navigate('/login', { replace: true });
   };
 
   const handleAccountSettings = () => {

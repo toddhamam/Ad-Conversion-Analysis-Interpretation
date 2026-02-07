@@ -588,17 +588,17 @@
 }
 
 .visual-card.psychological-triggers {
-  border-left: 3px solid #a855f7;
+  border-left: 3px solid var(--accent-violet);
 }
 
 .visual-card.psychological-triggers h4 {
-  color: #a855f7;
+  color: var(--accent-violet);
 }
 
 /* Psychology tag style */
 .tag.psychology {
   background: rgba(168, 85, 247, 0.15);
-  color: #a855f7;
+  color: var(--accent-violet);
   border: 1px solid rgba(168, 85, 247, 0.3);
 }
 
@@ -804,20 +804,20 @@
 
 /* NEW: Visual Preferences in Audience */
 .audience-card.visual-prefs {
-  border-left: 3px solid #a855f7;
+  border-left: 3px solid var(--accent-violet);
 }
 
 .audience-card.visual-prefs h4 {
-  color: #a855f7;
+  color: var(--accent-violet);
 }
 
 /* NEW: Creative Direction in Recommendations */
 .recommendation-card.creative-direction {
-  border-top: 3px solid #a855f7;
+  border-top: 3px solid var(--accent-violet);
 }
 
 .recommendation-card.creative-direction h4 {
-  color: #a855f7;
+  color: var(--accent-violet);
 }
 
 /* Update recommendations grid for 4 columns when creative direction present */

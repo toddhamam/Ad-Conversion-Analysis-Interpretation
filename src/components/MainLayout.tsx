@@ -63,7 +63,7 @@ const MainLayout = () => {
           <UserProfileDropdown />
         </header>
         <main className="main-content">
-          <Outlet key={location.pathname} />
+          <Outlet />
         </main>
       </div>
     </div>
