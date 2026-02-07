@@ -279,6 +279,7 @@ const Dashboard = () => {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [funnelWarning, setFunnelWarning] = useState<string | null>(null);
   const [metricsConfig, setMetricsConfig] = useState<MetricConfig[]>(loadMetricsConfig);
 
   // Date range state - default to last 30 days
@@ -309,6 +310,7 @@ const Dashboard = () => {
     const loadData = async () => {
       try {
         setLoading(true);
+        setFunnelWarning(null);
 
         // Build date parameters
         const startDateStr = dateRange.startDate.toISOString();
@@ -324,19 +326,33 @@ const Dashboard = () => {
               },
             };
 
-        // Fetch both funnel metrics and Meta API data in parallel
-        const [funnelResponse, campaigns] = await Promise.all([
-          fetch(`/api/funnel/metrics?startDate=${startDateStr}&endDate=${endDateStr}`),
-          fetchCampaignSummaries(metaDateOptions).catch((err) => {
+        // Fetch funnel metrics and Meta API data independently
+        // Each has its own error handling so one failure doesn't block the other
+        const funnelPromise = fetch(`/api/funnel/metrics?startDate=${startDateStr}&endDate=${endDateStr}`)
+          .catch((err) => {
+            console.error('Failed to fetch funnel data:', err);
+            return null;
+          });
+
+        const metaPromise = fetchCampaignSummaries(metaDateOptions)
+          .catch((err) => {
             console.error('Failed to fetch Meta data:', err);
             return [] as CampaignSummary[];
-          }),
-        ]);
+          });
+
+        const [funnelResponse, campaigns] = await Promise.all([funnelPromise, metaPromise]);
 
         // Process funnel data
-        if (funnelResponse.ok) {
+        if (funnelResponse && funnelResponse.ok) {
           const data = await funnelResponse.json();
           setMetrics(data);
+        } else if (funnelResponse && !funnelResponse.ok) {
+          console.warn('Funnel API returned non-ok status:', funnelResponse.status);
+          setFunnelWarning('Funnel data unavailable — some metrics may be incomplete.');
+          setMetrics(null);
+        } else {
+          setFunnelWarning('Funnel data unavailable — some metrics may be incomplete.');
+          setMetrics(null);
         }
 
         // Aggregate Meta campaign data
@@ -354,6 +370,8 @@ const Dashboard = () => {
             totalClicks,
             roas,
           });
+        } else {
+          setMetaData(null);
         }
       } catch (err) {
         console.error('Failed to load dashboard data:', err);
@@ -415,9 +433,9 @@ const Dashboard = () => {
   const totalRevenue = metaData?.totalPurchaseValue || metrics?.summary.totalRevenue || 0;
   const totalClicks = metaData?.totalClicks || 0;
 
-  // For per-customer metrics, prefer Supabase funnel data (tracks unique buyers)
-  // Fall back to Meta data if funnel data isn't available
-  const uniqueCustomers = metrics?.summary.uniqueCustomers || metaData?.totalPurchases || 0;
+  // For per-customer metrics, use Supabase funnel data only (tracks unique buyers)
+  // Meta totalPurchases counts pixel fires, not unique customers — don't use as fallback
+  const uniqueCustomers = metrics?.summary.uniqueCustomers || 0;
 
   // AOV: Use funnel data (total revenue / unique customers) for accurate per-customer value
   // The funnel API already calculates this correctly including upsells/downsells
@@ -516,6 +534,13 @@ const Dashboard = () => {
         <div className="dashboard-error">
           <span className="error-icon">⚠</span>
           {error}
+        </div>
+      )}
+
+      {funnelWarning && !error && (
+        <div className="dashboard-error" style={{ background: 'rgba(245, 158, 11, 0.08)', borderColor: 'rgba(245, 158, 11, 0.3)', color: '#d97706' }}>
+          <span className="error-icon">⚠</span>
+          {funnelWarning}
         </div>
       )}
 

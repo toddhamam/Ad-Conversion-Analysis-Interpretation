@@ -82,7 +82,7 @@
   background: rgba(168, 85, 247, 0.15);
   border: 1px solid rgba(168, 85, 247, 0.3);
   border-radius: 8px;
-  color: #a855f7;
+  color: var(--accent-violet);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -322,7 +322,7 @@
   display: block;
   font-size: 11px;
   font-weight: 600;
-  color: #a855f7;
+  color: var(--accent-violet);
   text-transform: uppercase;
   margin-bottom: 6px;
 }

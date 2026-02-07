@@ -75,6 +75,11 @@
   cursor: not-allowed;
 }
 
+.copy-option:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 2px;
+}
+
 /* Checkbox */
 .option-checkbox {
   flex-shrink: 0;
@@ -162,13 +167,18 @@
 }
 
 .cta-option.selected {
-  border-color: #a855f7;
+  border-color: var(--accent-violet);
   background: rgba(168, 85, 247, 0.1);
 }
 
 .cta-option.disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.cta-option:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 2px;
 }
 
 .cta-checkbox {
@@ -187,9 +197,9 @@
 }
 
 .cta-option.selected .cta-checkbox {
-  background: #a855f7;
-  border-color: #a855f7;
-  color: #0f172a;
+  background: var(--accent-violet);
+  border-color: var(--accent-violet);
+  color: var(--text-primary);
 }
 
 .cta-content {
@@ -206,7 +216,7 @@
 }
 
 .cta-option.selected .cta-text {
-  color: #a855f7;
+  color: var(--accent-violet);
 }
 
 .cta-rationale {

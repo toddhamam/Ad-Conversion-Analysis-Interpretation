@@ -86,6 +86,11 @@
   transform: none;
 }
 
+.iq-option:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 2px;
+}
+
 /* Header: Icon + Name + Tagline */
 .iq-option-header {
   display: flex;

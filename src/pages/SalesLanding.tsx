@@ -1055,6 +1055,12 @@ function SalesLanding() {
                 Schedule Custom Demo
               </a>
               <p className="cta-subtext">Limited availability. Enterprise clients only.</p>
+              <p className="cta-subtext" style={{ marginTop: '12px' }}>
+                Or email us directly at{' '}
+                <a href="mailto:hello@convertraiq.com" style={{ color: 'var(--accent-violet)', fontWeight: 600, textDecoration: 'none' }}>
+                  hello@convertraiq.com
+                </a>
+              </p>
             </div>
           </div>
         </div>

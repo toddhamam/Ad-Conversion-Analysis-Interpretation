@@ -93,6 +93,7 @@ const USE_GEMINI_FOR_IMAGES = true; // Switch to use Gemini instead of DALL-E
 const DEFAULT_VIDEO_MODEL = 'veo-3.1-generate-preview'; // Latest Veo with native audio
 const VEO_FAST_MODEL = 'veo-3.1-fast-generate-preview'; // Faster generation, still has audio
 const USE_VEO_FOR_VIDEO = true; // Use Veo instead of storyboard-only
+const DALLE_MODEL = 'dall-e-3'; // DALL-E fallback for image generation
 
 // =============================================================================
 // IMAGE SIZE CONFIGURATION - Common Meta Ads formats
@@ -193,7 +194,7 @@ console.log('🤖 Using models:', {
   image: USE_GEMINI_FOR_IMAGES ? `Gemini ${DEFAULT_IMAGE_MODEL}` : 'DALL-E 3',
   video: USE_VEO_FOR_VIDEO ? `Veo ${DEFAULT_VIDEO_MODEL}` : 'Storyboard only'
 });
-console.log('🎨 Gemini API Key:', GEMINI_API_KEY ? `${GEMINI_API_KEY.substring(0, 10)}...` : 'NOT CONFIGURED');
+console.log('🎨 Gemini API Key:', GEMINI_API_KEY ? 'configured' : 'NOT CONFIGURED');
 
 // Check if API key is configured
 export function isOpenAIConfigured(): boolean {
@@ -201,7 +202,7 @@ export function isOpenAIConfigured(): boolean {
 }
 
 // Log configuration status
-console.log('🔑 OpenAI API Key:', OPENAI_API_KEY ? `${OPENAI_API_KEY.substring(0, 10)}...` : 'NOT CONFIGURED');
+console.log('🔑 OpenAI API Key:', OPENAI_API_KEY ? 'configured' : 'NOT CONFIGURED');
 
 // Types for ad analysis
 export interface AdCreativeData {
@@ -446,8 +447,6 @@ async function callOpenAI(
   console.log('🤖 Calling OpenAI API with model:', model);
   console.log('🧠 Reasoning effort:', reasoningEffort, '(note: not applied - parameter not supported)');
   console.log('🔑 API Key present:', !!OPENAI_API_KEY);
-  console.log('🔑 API Key length:', OPENAI_API_KEY?.length || 0);
-  console.log('🔑 API Key prefix:', OPENAI_API_KEY?.substring(0, 7) || 'NONE');
 
   // Build request body - reasoning parameter is NOT supported by current OpenAI API
   const requestBody: Record<string, unknown> = {
@@ -1304,11 +1303,11 @@ export async function testOpenAIConnection(): Promise<{ success: boolean; messag
       success: true,
       message: `Connected successfully. Response: ${response}`,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ OpenAI connection test failed:', error);
     return {
       success: false,
-      message: error.message || 'Connection failed',
+      message: error instanceof Error ? error.message : 'Connection failed',
     };
   }
 }
@@ -2134,7 +2133,7 @@ async function generateAdImageWithDallE(config: {
       'Authorization': `Bearer ${OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'dall-e-3',
+      model: DALLE_MODEL,
       prompt,
       n: 1,
       size: sizeConfig.dalleSize,
@@ -2571,9 +2570,9 @@ export async function generateAdPackage(config: {
             bodyTexts: config.selectedCopy.bodyTexts,
           } : undefined,
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('❌ Veo video generation failed:', error);
-        videoError = error?.message || 'Video generation failed';
+        videoError = error instanceof Error ? error.message : 'Video generation failed';
       }
     }
 

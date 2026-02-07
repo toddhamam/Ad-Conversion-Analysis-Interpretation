@@ -357,7 +357,7 @@
 
 .channel-status.coming-soon {
   background: rgba(168, 85, 247, 0.15);
-  color: #a855f7;
+  color: var(--accent-violet);
 }
 
 .channel-arrow-dashboard {
