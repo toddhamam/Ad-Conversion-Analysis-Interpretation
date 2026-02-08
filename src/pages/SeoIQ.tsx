@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useOrganization } from '../contexts/OrganizationContext';
 import Loading from '../components/Loading';
@@ -61,6 +61,11 @@ export default function SeoIQ() {
   // Research keywords (Keyword Planner)
   const [researchSeeds, setResearchSeeds] = useState('');
   const [researching, setResearching] = useState(false);
+
+  // Smart Discover
+  const [smartDiscovering, setSmartDiscovering] = useState(false);
+  const [smartDiscoverStep, setSmartDiscoverStep] = useState('');
+  const autoDiscoveredSites = useRef<Set<string>>(new Set());
 
   // Generate
   const [selectedKeywordId, setSelectedKeywordId] = useState<string | null>(null);
@@ -273,6 +278,116 @@ export default function SeoIQ() {
     }
   };
 
+  // Smart Discover — auto-generates seeds from site domain, products, and existing keywords
+  const handleSmartDiscover = useCallback(async (auto = false) => {
+    if (!selectedSiteId || !selectedSite) return;
+    setSmartDiscovering(true);
+    setError(null);
+
+    let totalFetched = 0;
+    let totalGaps = 0;
+
+    try {
+      // Step 1: Scan site URL via Keyword Planner
+      setSmartDiscoverStep('Scanning site URL for keyword ideas...');
+      const siteUrl = `https://${selectedSite.domain}`;
+      try {
+        const urlResult = await researchKeywords(selectedSiteId, [siteUrl], true);
+        totalFetched += urlResult.keywords_fetched;
+        totalGaps += urlResult.content_gaps_found;
+      } catch (err) {
+        console.warn('Smart Discover: URL scan failed, continuing with other sources', err);
+      }
+
+      // Step 2: Extract seeds from product context
+      const productSeeds: string[] = [];
+      try {
+        const stored = localStorage.getItem('convertra_products');
+        if (stored) {
+          const products = JSON.parse(stored) as Array<{ name: string; description: string }>;
+          for (const p of products) {
+            if (p.name) productSeeds.push(p.name);
+            // Extract meaningful phrases from description (first sentence only)
+            if (p.description) {
+              const firstSentence = p.description.split(/[.!?]/)[0]?.trim();
+              if (firstSentence && firstSentence.length > 5 && firstSentence.length < 80) {
+                productSeeds.push(firstSentence);
+              }
+            }
+          }
+        }
+      } catch {
+        // localStorage parse failure — skip products
+      }
+
+      if (productSeeds.length > 0) {
+        setSmartDiscoverStep('Researching product-related keywords...');
+        // Keyword Planner accepts max 10 seeds per call
+        const seedBatch = productSeeds.slice(0, 10);
+        try {
+          const productResult = await researchKeywords(selectedSiteId, seedBatch);
+          totalFetched += productResult.keywords_fetched;
+          totalGaps += productResult.content_gaps_found;
+        } catch (err) {
+          console.warn('Smart Discover: Product seed research failed, continuing', err);
+        }
+      }
+
+      // Step 3: Use existing top keywords as expansion seeds
+      const currentKeywords = await fetchKeywords(selectedSiteId);
+      const topKeywords = currentKeywords
+        .filter((k) => k.opportunity_score > 0)
+        .sort((a, b) => b.opportunity_score - a.opportunity_score)
+        .slice(0, 5)
+        .map((k) => k.keyword);
+
+      if (topKeywords.length >= 2) {
+        setSmartDiscoverStep('Expanding from top-performing keywords...');
+        try {
+          const expandResult = await researchKeywords(selectedSiteId, topKeywords);
+          totalFetched += expandResult.keywords_fetched;
+          totalGaps += expandResult.content_gaps_found;
+        } catch (err) {
+          console.warn('Smart Discover: Keyword expansion failed', err);
+        }
+      }
+
+      // Reload final keyword list
+      await loadKeywords(selectedSiteId);
+
+      if (totalFetched > 0) {
+        setSuccess(`Smart Discover found ${totalFetched} keywords with ${totalGaps} content gaps`);
+      } else if (auto) {
+        // Silent — don't show error on auto-discovery if nothing found
+      } else {
+        setSuccess('Smart Discover complete — no new keywords found. Try adding seed keywords manually.');
+      }
+      setTimeout(() => setSuccess(null), 6000);
+    } catch (err) {
+      if (!auto) {
+        setError(err instanceof Error ? err.message : 'Smart Discover failed');
+      }
+    } finally {
+      setSmartDiscovering(false);
+      setSmartDiscoverStep('');
+    }
+  }, [selectedSiteId, selectedSite, loadKeywords]);
+
+  // Auto-trigger Smart Discover on first visit to Keywords tab with no keywords
+  useEffect(() => {
+    if (
+      activeTab === 'keywords' &&
+      selectedSiteId &&
+      keywords.length === 0 &&
+      !researching &&
+      !smartDiscovering &&
+      !autoDiscoveredSites.current.has(selectedSiteId)
+    ) {
+      autoDiscoveredSites.current.add(selectedSiteId);
+      handleSmartDiscover(true);
+    }
+  }, [activeTab, selectedSiteId, keywords.length, researching, smartDiscovering, handleSmartDiscover]);
+
   // Generate article
   const handleGenerate = async () => {
     if (!selectedSiteId) return;
@@ -335,7 +450,7 @@ export default function SeoIQ() {
   // ─── Autopilot handlers ───────────────────────────────────────────────────
 
   const handleRunAutopilot = async () => {
-    if (!selectedSiteId) return;
+    if (!selectedSiteId || !selectedSite) return;
 
     setAutopilotRunning(true);
     setAutopilotResult(null);
@@ -344,12 +459,21 @@ export default function SeoIQ() {
     const totalArticles = autopilotConfig?.autopilot_articles_per_run || 1;
     setAutopilotTotalArticles(totalArticles);
 
+    const gscConnected = selectedSite.google_status === 'active';
+
     let currentStep = 0;
     try {
-      // Step 1: Refresh keywords (once for all articles)
+      // Step 1: Smart Discover keywords (+ GSC sync if connected)
       currentStep = 1;
       setAutopilotStepStatus({ 1: 'running' });
-      await refreshKeywords(selectedSiteId);
+      await handleSmartDiscover(true);
+      if (gscConnected) {
+        try {
+          await refreshKeywords(selectedSiteId);
+        } catch {
+          // GSC refresh is optional — Smart Discover already ran
+        }
+      }
       setAutopilotStepStatus((prev) => ({ ...prev, 1: 'done' }));
 
       for (let i = 0; i < totalArticles; i++) {
@@ -811,30 +935,34 @@ export default function SeoIQ() {
                 <div className="seo-iq-card-header">
                   <span className="seo-iq-card-title">{site.name}</span>
                   <span className={`seo-iq-status ${site.google_status}`}>
-                    {site.google_status === 'active' ? 'Connected' : site.google_status === 'not_connected' ? 'Not Connected' : site.google_status}
+                    {site.google_status === 'active' ? 'GSC Connected' : site.google_status === 'not_connected' ? 'GSC Not Connected' : site.google_status}
                   </span>
                 </div>
                 <div className="seo-iq-card-domain">{site.domain}</div>
+                {site.google_status !== 'active' && (
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px 0', lineHeight: 1.5 }}>
+                    Connect Google Search Console to enable position tracking and performance scoring. Keyword discovery works without it.
+                  </p>
+                )}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {site.google_status !== 'active' ? (
+                  {site.google_status !== 'active' && (
                     <a
                       href={getGoogleConnectUrl(site.id, '/seo-iq')}
                       className="seo-iq-btn seo-iq-btn-violet"
                       style={{ textDecoration: 'none' }}
                     >
-                      Connect Google
+                      Connect Google Search Console
                     </a>
-                  ) : (
-                    <button
-                      className="seo-iq-btn seo-iq-btn-secondary"
-                      onClick={() => {
-                        setSelectedSiteId(site.id);
-                        setActiveTab('keywords');
-                      }}
-                    >
-                      View Keywords
-                    </button>
                   )}
+                  <button
+                    className="seo-iq-btn seo-iq-btn-secondary"
+                    onClick={() => {
+                      setSelectedSiteId(site.id);
+                      setActiveTab('keywords');
+                    }}
+                  >
+                    View Keywords
+                  </button>
                   <button
                     className="seo-iq-btn seo-iq-btn-secondary"
                     onClick={() => {
@@ -864,7 +992,97 @@ export default function SeoIQ() {
 
     return (
       <>
-        {/* Research keywords input */}
+        {/* Two-source explainer cards */}
+        <div className="seo-iq-keywords-intro">
+          <div className="seo-iq-source-card discovery">
+            <div className="seo-iq-source-header">
+              <div className="seo-iq-source-icon">&#128270;</div>
+              <span className="seo-iq-source-title">Discover New Keywords</span>
+              <span className="seo-iq-info-icon">
+                i
+                <span className="seo-iq-tooltip align-left">
+                  Uses Google Ads Keyword Planner to find keywords you don't rank for yet. Enter seed keywords or use your site URL to discover content gap opportunities with search volume and competition data.
+                </span>
+              </span>
+            </div>
+            <p className="seo-iq-source-desc">
+              Find untapped keywords via Google Keyword Planner. No GSC connection needed.
+            </p>
+          </div>
+          <div className={`seo-iq-source-card performance ${!gscConnected ? 'disabled' : ''}`}>
+            <div className="seo-iq-source-header">
+              <div className="seo-iq-source-icon">&#128200;</div>
+              <span className="seo-iq-source-title">Track Current Performance</span>
+              <span className="seo-iq-info-icon">
+                i
+                <span className="seo-iq-tooltip align-right">
+                  Syncs data from Google Search Console to show keywords your site already ranks for. Identifies quick wins (position 5-20) and CTR optimization opportunities (high impressions, low clicks). Requires GSC connection.
+                </span>
+              </span>
+            </div>
+            <p className="seo-iq-source-desc">
+              {gscConnected
+                ? 'Sync your Google Search Console data to find ranking opportunities.'
+                : 'Connect Google Search Console to unlock performance tracking.'}
+            </p>
+          </div>
+        </div>
+
+        {/* GSC not connected banner */}
+        {!gscConnected && (
+          <div className="seo-iq-gsc-banner">
+            <div className="seo-iq-gsc-banner-text">
+              <strong>Google Search Console not connected</strong>
+              <span>Position tracking, CTR data, and Quick Win scoring require a GSC connection. Keyword discovery still works without it.</span>
+            </div>
+            <a href={getGoogleConnectUrl(selectedSite.id, '/seo-iq')} className="seo-iq-btn seo-iq-btn-violet" style={{ textDecoration: 'none', flexShrink: 0 }}>
+              Connect GSC
+            </a>
+          </div>
+        )}
+
+        {/* Smart Discover */}
+        <div className="seo-iq-smart-discover">
+          <div className="seo-iq-smart-discover-content">
+            <div className="seo-iq-smart-discover-text">
+              <span className="seo-iq-smart-discover-title">Smart Discover</span>
+              <span className="seo-iq-info-icon">
+                i
+                <span className="seo-iq-tooltip align-left">
+                  Automatically finds keyword opportunities using three sources: your site URL, your product catalog, and your top-performing existing keywords. Runs all three in sequence to build a comprehensive keyword list. No manual input needed.
+                </span>
+              </span>
+            </div>
+            <p className="seo-iq-smart-discover-desc">
+              {smartDiscovering && smartDiscoverStep
+                ? smartDiscoverStep
+                : 'Auto-discovers keywords from your site URL, products, and existing top keywords — no manual input needed.'}
+            </p>
+          </div>
+          <button
+            className="seo-iq-btn seo-iq-btn-violet"
+            onClick={() => handleSmartDiscover()}
+            disabled={smartDiscovering || researching}
+          >
+            {smartDiscovering ? 'Discovering...' : 'Smart Discover'}
+          </button>
+        </div>
+
+        {smartDiscovering && (
+          <Loading size="medium" message={`ConversionIQ™ ${smartDiscoverStep || 'discovering keyword opportunities...'}`} />
+        )}
+
+        {/* Manual Keyword Discovery section */}
+        <div className="seo-iq-section-label">
+          <span>Manual Keyword Research</span>
+          <span className="seo-iq-source-badge planner">Keyword Planner</span>
+          <span className="seo-iq-info-icon">
+            i
+            <span className="seo-iq-tooltip">
+              Use this for targeted research with specific seed keywords. Smart Discover handles automatic research — use this when you want to explore a specific topic or niche.
+            </span>
+          </span>
+        </div>
         <div className="seo-iq-research-bar">
           <input
             type="text"
@@ -873,27 +1091,43 @@ export default function SeoIQ() {
             value={researchSeeds}
             onChange={(e) => setResearchSeeds(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && researchSeeds.trim()) handleResearchKeywords(); }}
-            disabled={researching}
+            disabled={researching || smartDiscovering}
           />
           <div className="seo-iq-research-actions">
-            <button
-              className="seo-iq-btn seo-iq-btn-violet"
-              onClick={() => handleResearchKeywords()}
-              disabled={researching || !researchSeeds.trim()}
-            >
-              {researching ? 'Researching...' : 'Research'}
-            </button>
-            <button
-              className="seo-iq-btn seo-iq-btn-secondary"
-              onClick={() => handleResearchKeywords(true)}
-              disabled={researching}
-              title={`Analyze ${selectedSite.domain} for keyword ideas`}
-            >
-              Use Site URL
-            </button>
+            <div className="seo-iq-btn-with-info">
+              <button
+                className="seo-iq-btn seo-iq-btn-violet"
+                onClick={() => handleResearchKeywords()}
+                disabled={researching || smartDiscovering || !researchSeeds.trim()}
+              >
+                {researching ? 'Researching...' : 'Discover Keywords'}
+              </button>
+              <span className="seo-iq-info-icon">
+                i
+                <span className="seo-iq-tooltip align-right">
+                  Sends your seed keywords to Google Keyword Planner to find related keywords with search volume, competition data, and content gap scores. Keywords are saved and scored automatically.
+                </span>
+              </span>
+            </div>
+            <div className="seo-iq-btn-with-info">
+              <button
+                className="seo-iq-btn seo-iq-btn-secondary"
+                onClick={() => handleResearchKeywords(true)}
+                disabled={researching || smartDiscovering}
+              >
+                Scan Site URL
+              </button>
+              <span className="seo-iq-info-icon">
+                i
+                <span className="seo-iq-tooltip align-right">
+                  Analyzes {selectedSite.domain} to automatically suggest relevant keywords based on your site's content. Uses Google Keyword Planner's URL-based research.
+                </span>
+              </span>
+            </div>
           </div>
         </div>
 
+        {/* Filters + Performance Sync */}
         <div className="seo-iq-toolbar">
           <div className="seo-iq-toolbar-left">
             <select className="seo-iq-filter" value={keywordFilter} onChange={(e) => setKeywordFilter(e.target.value)}>
@@ -903,6 +1137,14 @@ export default function SeoIQ() {
               <option value="ctr_optimization">CTR Optimization</option>
               <option value="cluster_gap">Cluster Gaps</option>
             </select>
+            <span className="seo-iq-info-icon">
+              i
+              <span className="seo-iq-tooltip">
+                <strong>Quick Win</strong> — You rank position 5-20. A targeted article could push you to page 1.<br /><br />
+                <strong>Content Gap</strong> — High search volume keyword you don't rank for yet.<br /><br />
+                <strong>CTR Optimization</strong> — You're getting impressions but low clicks. Improve your title/meta description.
+              </span>
+            </span>
             <select className="seo-iq-filter" value={keywordSort} onChange={(e) => setKeywordSort(e.target.value as typeof keywordSort)}>
               <option value="score">Sort by Score</option>
               <option value="volume">Sort by Volume</option>
@@ -910,19 +1152,23 @@ export default function SeoIQ() {
             </select>
           </div>
           <div className="seo-iq-toolbar-right">
-            {!gscConnected && (
-              <a href={getGoogleConnectUrl(selectedSite.id, '/seo-iq')} className="seo-iq-btn seo-iq-btn-secondary" style={{ textDecoration: 'none', fontSize: 12 }}>
-                Connect GSC
-              </a>
-            )}
-            <button
-              className="seo-iq-btn seo-iq-btn-primary"
-              onClick={handleRefreshKeywords}
-              disabled={refreshingKeywords || !gscConnected}
-              title={!gscConnected ? 'Connect Google Search Console to refresh keywords' : undefined}
-            >
-              {refreshingKeywords ? 'Syncing...' : 'Refresh Keywords'}
-            </button>
+            <div className="seo-iq-btn-with-info">
+              <button
+                className="seo-iq-btn seo-iq-btn-primary"
+                onClick={handleRefreshKeywords}
+                disabled={refreshingKeywords || !gscConnected}
+              >
+                {refreshingKeywords ? 'Syncing GSC...' : 'Sync GSC Performance'}
+              </button>
+              <span className="seo-iq-info-icon">
+                i
+                <span className="seo-iq-tooltip align-right">
+                  {gscConnected
+                    ? 'Pulls your current ranking data from Google Search Console — positions, impressions, clicks, and CTR. Then scores each keyword for Quick Win and CTR Optimization opportunities.'
+                    : 'Requires Google Search Console connection. Connect GSC above to enable performance syncing.'}
+                </span>
+              </span>
+            </div>
           </div>
         </div>
 
@@ -930,22 +1176,46 @@ export default function SeoIQ() {
           <Loading size="medium" message={researching ? 'ConversionIQ™ researching keyword opportunities...' : 'ConversionIQ™ syncing search data...'} />
         )}
 
-        {!refreshingKeywords && !researching && filteredKeywords.length === 0 ? (
+        {!refreshingKeywords && !researching && !smartDiscovering && filteredKeywords.length === 0 ? (
           <div className="seo-iq-empty">
             <h3>No keywords yet</h3>
-            <p>Enter seed keywords above to research opportunities, or connect GSC to pull search data</p>
+            <p>Click <strong>Smart Discover</strong> to automatically find keyword opportunities, or enter seed keywords manually above.</p>
           </div>
-        ) : !refreshingKeywords && !researching && (
+        ) : !refreshingKeywords && !researching && !smartDiscovering && (
           <div className="seo-iq-table-wrapper">
             <table className="seo-iq-table">
               <thead>
                 <tr>
                   <th>Keyword</th>
-                  <th>Score</th>
+                  <th>
+                    Score
+                    <span className="seo-iq-info-icon" style={{ marginLeft: 4, verticalAlign: 'middle' }}>
+                      i
+                      <span className="seo-iq-tooltip">
+                        Opportunity score (0-100). Higher scores indicate better opportunities for content creation. Based on position, search volume, competition, and click-through rate.
+                      </span>
+                    </span>
+                  </th>
                   <th>Type</th>
-                  <th>Volume</th>
+                  <th>
+                    Volume
+                    <span className="seo-iq-info-icon" style={{ marginLeft: 4, verticalAlign: 'middle' }}>
+                      i
+                      <span className="seo-iq-tooltip">
+                        Monthly search volume from Google Keyword Planner. Shows a dash if only GSC data is available. Use "Discover Keywords" to populate this data.
+                      </span>
+                    </span>
+                  </th>
                   <th>Competition</th>
-                  <th>Position</th>
+                  <th>
+                    Position
+                    <span className="seo-iq-info-icon" style={{ marginLeft: 4, verticalAlign: 'middle' }}>
+                      i
+                      <span className="seo-iq-tooltip">
+                        Your average ranking position in Google search results. From GSC data. Shows a dash if you don't rank for this keyword yet.
+                      </span>
+                    </span>
+                  </th>
                   <th>Impressions</th>
                   <th>CTR</th>
                   <th>Clicks</th>
@@ -1168,27 +1438,30 @@ export default function SeoIQ() {
       return <div className="seo-iq-empty"><p>Select a site first</p></div>;
     }
 
-    if (selectedSite.google_status !== 'active') {
-      return (
-        <div className="seo-iq-empty">
-          <h3>Google not connected</h3>
-          <p>Connect Google Search Console before running autopilot</p>
-          <a href={getGoogleConnectUrl(selectedSite.id, '/seo-iq')} className="seo-iq-btn seo-iq-btn-violet" style={{ textDecoration: 'none' }}>
-            Connect Google
-          </a>
-        </div>
-      );
-    }
+    const gscConnected = selectedSite.google_status === 'active';
 
     const steps = [
-      { num: 1, label: 'Refresh Keywords', desc: 'Sync latest data from GSC' },
-      { num: 2, label: 'Pick Keyword', desc: 'Select highest-opportunity keyword' },
-      { num: 3, label: 'Generate Article', desc: 'AI writes SEO-optimized content' },
-      { num: 4, label: 'Publish & Index', desc: 'Push to site + submit to Google' },
+      { num: 1, label: 'Smart Discover Keywords', desc: gscConnected ? 'Auto-discover keywords + sync GSC performance data' : 'Auto-discover keywords from site URL, products, and top keywords' },
+      { num: 2, label: 'Pick Best Keyword', desc: 'Select the highest-scored opportunity from all keywords' },
+      { num: 3, label: 'Generate Article', desc: 'AI writes SEO-optimized content for the keyword' },
+      { num: 4, label: 'Publish & Index', desc: gscConnected ? 'Push to your site + submit URL to Google for indexing' : 'Push article to your site' },
     ];
 
     return (
       <div className="autopilot-container">
+        {/* GSC optional notice */}
+        {!gscConnected && (
+          <div className="seo-iq-gsc-banner" style={{ marginBottom: 20 }}>
+            <div className="seo-iq-gsc-banner-text">
+              <strong>GSC not connected (optional)</strong>
+              <span>Autopilot works without GSC using Keyword Planner data. Connect GSC for additional performance data and Google indexing submission.</span>
+            </div>
+            <a href={getGoogleConnectUrl(selectedSite.id, '/seo-iq')} className="seo-iq-btn seo-iq-btn-secondary" style={{ textDecoration: 'none', flexShrink: 0 }}>
+              Connect GSC
+            </a>
+          </div>
+        )}
+
         {/* Run Now */}
         <div className="autopilot-run-section">
           <button
@@ -1201,7 +1474,7 @@ export default function SeoIQ() {
               : 'Run Autopilot Now'}
           </button>
           <p className="autopilot-run-desc">
-            Refreshes keywords, picks the best opportunity, generates an article, publishes it, and submits to Google for indexing.
+            Discovers keyword opportunities, picks the best one, generates an article, publishes it{gscConnected ? ', and submits to Google for indexing' : ''}.
           </p>
         </div>
 

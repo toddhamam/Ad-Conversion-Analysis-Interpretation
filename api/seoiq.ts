@@ -1571,9 +1571,8 @@ async function handleAutopilotCron(req: VercelRequest, res: VercelResponse) {
 
     const site = sites[0];
 
-    // Pick the top keyword (fast DB query, stays within 10s timeout)
-    // Keywords can come from GSC refresh OR Keyword Planner research
-    const { data: keyword } = await supabase
+    // Check if we have any active keywords — if not, try a quick URL-based discovery
+    let { data: keyword } = await supabase
       .from('seo_keywords')
       .select('id, keyword')
       .eq('site_id', site.id)
@@ -1583,9 +1582,49 @@ async function handleAutopilotCron(req: VercelRequest, res: VercelResponse) {
       .limit(1)
       .single();
 
+    if (!keyword && isGoogleAdsConfigured()) {
+      // Auto-discover keywords via Keyword Planner URL scan (single API call, fits in timeout)
+      try {
+        const { keywords: keywordIdeas } = await fetchKeywordIdeas(
+          [`https://${site.domain}`],
+          { useUrl: true }
+        );
+        if (keywordIdeas.length > 0) {
+          const keywordsToUpsert = keywordIdeas.map((k) => ({
+            site_id: site.id,
+            keyword: k.keyword,
+            search_volume: k.avgMonthlySearches,
+            competition: k.competition,
+            competition_index: k.competitionIndex,
+            opportunity_type: 'content_gap',
+            opportunity_score: scoreContentGap(k.avgMonthlySearches, k.competition, k.competitionIndex, k.keyword),
+            status: 'active',
+            impressions: 0,
+            clicks: 0,
+            ctr: 0,
+          }));
+          await supabase.from('seo_keywords').upsert(keywordsToUpsert, { onConflict: 'site_id,keyword' });
+
+          // Re-pick after discovery
+          const { data: newKeyword } = await supabase
+            .from('seo_keywords')
+            .select('id, keyword')
+            .eq('site_id', site.id)
+            .eq('status', 'active')
+            .gt('opportunity_score', 0)
+            .order('opportunity_score', { ascending: false })
+            .limit(1)
+            .single();
+          keyword = newKeyword;
+        }
+      } catch (err) {
+        console.warn('Autopilot cron: URL-based keyword discovery failed', err);
+      }
+    }
+
     if (!keyword) {
       await supabase.from('seo_sites').update({
-        autopilot_last_error: 'No active keywords found — research keywords or refresh from GSC first',
+        autopilot_last_error: 'No active keywords found — run Smart Discover or add keywords manually',
         updated_at: new Date().toISOString(),
       }).eq('id', site.id);
       return res.status(200).json({ message: 'No keywords available', siteId: site.id });
