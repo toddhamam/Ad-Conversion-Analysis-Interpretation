@@ -1,6 +1,5 @@
 import {
   AbsoluteFill,
-  Audio,
   Sequence,
   useCurrentFrame,
   useVideoConfig,
