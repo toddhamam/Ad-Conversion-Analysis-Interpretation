@@ -600,6 +600,273 @@
   cursor: pointer;
 }
 
+/* ─── Info Tooltip ──────────────────────────────────────────────────────── */
+
+.seo-iq-info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: help;
+  position: relative;
+  flex-shrink: 0;
+  font-style: normal;
+  line-height: 1;
+}
+
+.seo-iq-info-icon:hover {
+  background: var(--accent-violet-glow);
+  border-color: var(--accent-violet);
+  color: var(--accent-violet);
+}
+
+.seo-iq-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text-primary);
+  color: #ffffff;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: normal;
+  width: 260px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.seo-iq-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--text-primary);
+}
+
+.seo-iq-info-icon:hover .seo-iq-tooltip {
+  opacity: 1;
+}
+
+/* Tooltip alignment variants */
+.seo-iq-tooltip.align-right {
+  left: auto;
+  right: -8px;
+  transform: none;
+}
+
+.seo-iq-tooltip.align-right::after {
+  left: auto;
+  right: 12px;
+  transform: none;
+}
+
+.seo-iq-tooltip.align-left {
+  left: -8px;
+  transform: none;
+}
+
+.seo-iq-tooltip.align-left::after {
+  left: 12px;
+  transform: none;
+}
+
+/* ─── Keyword Source Sections ──────────────────────────────────────────── */
+
+.seo-iq-keywords-intro {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.seo-iq-source-card {
+  padding: 16px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-card);
+}
+
+.seo-iq-source-card.discovery {
+  border-color: rgba(168, 85, 247, 0.2);
+}
+
+.seo-iq-source-card.performance {
+  border-color: rgba(22, 163, 74, 0.2);
+}
+
+.seo-iq-source-card.performance.disabled {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+.seo-iq-source-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.seo-iq-source-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.seo-iq-source-card.discovery .seo-iq-source-icon {
+  background: var(--accent-violet-glow);
+  color: var(--accent-violet);
+}
+
+.seo-iq-source-card.performance .seo-iq-source-icon {
+  background: rgba(22, 163, 74, 0.1);
+  color: #16a34a;
+}
+
+.seo-iq-source-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.seo-iq-source-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ─── GSC Banner ───────────────────────────────────────────────────────── */
+
+.seo-iq-gsc-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.seo-iq-gsc-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.seo-iq-gsc-banner-text strong {
+  font-size: 13px;
+  color: #d97706;
+}
+
+.seo-iq-gsc-banner-text span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ─── Section Labels ───────────────────────────────────────────────────── */
+
+.seo-iq-section-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.seo-iq-section-label span {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.seo-iq-section-label .seo-iq-source-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 100px;
+}
+
+.seo-iq-source-badge.planner {
+  color: var(--accent-violet);
+  background: var(--accent-violet-glow);
+}
+
+.seo-iq-source-badge.gsc {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.1);
+}
+
+/* ─── Smart Discover ───────────────────────────────────────────────────── */
+
+.seo-iq-smart-discover {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.04) 0%, rgba(212, 225, 87, 0.04) 100%);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  border-radius: 12px;
+}
+
+.seo-iq-smart-discover-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.seo-iq-smart-discover-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.seo-iq-smart-discover-title {
+  font-size: 15px;
+  font-weight: 700;
+  background: var(--gradient-dual-glow);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.seo-iq-smart-discover-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ─── Button with Icon ─────────────────────────────────────────────────── */
+
+.seo-iq-btn-with-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* Responsive */
 
 @media (max-width: 900px) {
@@ -654,6 +921,16 @@
   .seo-iq-research-actions .seo-iq-btn {
     flex: 1;
     justify-content: center;
+  }
+
+  .seo-iq-keywords-intro {
+    grid-template-columns: 1fr;
+  }
+
+  .seo-iq-smart-discover {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
   }
 }
 
