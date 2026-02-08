@@ -181,7 +181,6 @@ function SalesLanding() {
                     overflow: 'hidden',
                   }}
                   controls
-                  loop
                   renderPoster={({ width, height }: { width: number; height: number }) => (
                     <VSLPoster width={width} height={height} />
                   )}

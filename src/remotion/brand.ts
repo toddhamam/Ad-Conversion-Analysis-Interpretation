@@ -50,7 +50,7 @@ export const VIDEO_CONFIG = {
   fps: 30,
   width: 1920,
   height: 1080,
-  durationInFrames: 2810, // ~94 seconds
+  durationInFrames: 3260, // ~109 seconds
 } as const;
 
 // Scene timing (in frames at 30fps)
@@ -65,6 +65,7 @@ export const SCENES = {
   generate: { from: 1580, duration: 220 },       // 53-60s  (ConversionIQ™)
   repeat: { from: 1800, duration: 220 },         // 60-67s  (ConversionIQ™)
   results: { from: 2020, duration: 250 },        // 67-76s
-  enterprise: { from: 2270, duration: 210 },     // 76-83s
-  cta: { from: 2480, duration: 330 },            // 83-94s
+  costOfWaiting: { from: 2270, duration: 450 },  // 76-91s  (urgency / risk reversal)
+  enterprise: { from: 2720, duration: 210 },     // 91-98s
+  cta: { from: 2930, duration: 330 },            // 98-109s
 } as const;
