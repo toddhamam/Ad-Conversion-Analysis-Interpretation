@@ -110,8 +110,9 @@ public/
 | `src/pages/Products.tsx` | Product CRUD manager (name, author, description, URL, mockup images) |
 | `public/robots.txt` | Search engine crawl directives (allows AI bots for GEO) |
 | `public/sitemap.xml` | XML sitemap for search engine indexing |
-| `src/remotion/ConvertraVSL.tsx` | Remotion VSL video composition — 12-scene animated sales video |
+| `src/remotion/ConvertraVSL.tsx` | Remotion VSL video composition — 13-scene animated sales video with background music |
 | `src/remotion/brand.ts` | VSL brand constants (colors, gradients, fonts, scene timing) |
+| `public/vsl-background-music.mp3` | VSL background music — cinematic inspirational track |
 | `src/remotion/Root.tsx` | Remotion composition entry point |
 | `remotion.config.ts` | Remotion CLI configuration |
 
@@ -967,7 +968,7 @@ The Convertra sales landing follows this architecture:
 
 | Section | Purpose |
 |---------|---------|
-| Hero | Headline + slogan + embedded Remotion VSL video with branded poster. |
+| Hero | Headline + slogan + embedded Remotion VSL video (no auto-replay) with background music and branded poster. |
 | Problem Agitation | Make them feel the pain of not knowing why |
 | Mechanism Reveal | Introduce ConversionIQ™—Extract, Interpret, Generate, Repeat |
 | Bespoke Differentiator | Separate from self-serve tools. Premium positioning. |
@@ -984,18 +985,18 @@ The Convertra sales landing follows this architecture:
 
 ### Overview
 
-The sales landing page includes an embedded Remotion-powered VSL — a 94-second animated video that walks through the Convertra value proposition. It plays inline in the hero section with controls, loop, and a branded poster/thumbnail.
+The sales landing page includes an embedded Remotion-powered VSL — a 109-second animated video that walks through the Convertra value proposition. It plays inline in the hero section with controls, background music, and a branded poster/thumbnail. The video plays once and stops on the CTA scene (no auto-replay).
 
 ### Architecture
 
 | File | Purpose |
 |------|---------|
-| `src/remotion/ConvertraVSL.tsx` | Main composition — 12 scene components with animations |
+| `src/remotion/ConvertraVSL.tsx` | Main composition — 13 scene components with animations and background music |
 | `src/remotion/brand.ts` | Brand constants, video config (1920x1080 @ 30fps), scene timing |
 | `src/remotion/Root.tsx` | Remotion composition registration |
 | `remotion.config.ts` | Remotion CLI entry point (`./src/remotion/Root.tsx`) |
 
-### Scene Structure (12 scenes, ~94 seconds)
+### Scene Structure (13 scenes, ~109 seconds)
 
 | Scene | Timing | Purpose |
 |-------|--------|---------|
@@ -1009,8 +1010,9 @@ The sales landing page includes an embedded Remotion-powered VSL — a 94-second
 | Generate | 53-60s | Step 3 — Engineer new creatives from proven patterns |
 | Repeat | 60-67s | Step 4 — Compounding advantage from every conversion |
 | Results | 67-76s | Metrics — 47% reduced CPA, 3.2x ROAS, 80% less waste |
-| Enterprise | 76-83s | Bespoke implementation, white glove, dedicated partnership |
-| CTA | 83-94s | Schedule a demo with Convertra logo and button |
+| Cost of Waiting | 76-91s | Urgency — animated cost cards ($275K+/yr hidden waste), pulsing total reveal |
+| Enterprise | 91-98s | Bespoke implementation, white glove, dedicated partnership |
+| CTA | 98-109s | Schedule a demo with Convertra logo and button |
 
 ### Sales Landing Integration
 
@@ -1028,7 +1030,6 @@ import { VIDEO_CONFIG } from '../remotion/brand';
   compositionWidth={VIDEO_CONFIG.width}
   compositionHeight={VIDEO_CONFIG.height}
   controls
-  loop
   renderPoster={({ width, height }) => <VSLPoster width={width} height={height} />}
   posterFillMode="player-size"
   showPosterWhenUnplayed
@@ -1055,22 +1056,24 @@ npx remotion studio    # Open Remotion Studio to preview/edit video
 npx remotion render src/remotion/Root.tsx ConvertraVSL out/vsl.mp4  # Render to MP4
 ```
 
-### Adding Audio
+### Background Music
 
-To add background music, use Remotion's `<Audio>` component with `staticFile()`:
+The VSL includes cinematic background music (`public/vsl-background-music.mp3`) with a volume envelope:
 
 ```tsx
-import { Audio } from 'remotion';
-import { staticFile } from 'remotion';
-
-// In the main composition:
 <Audio
-  src={staticFile('track-name.mp3')}
-  volume={(f) => interpolate(f, [0, 30, 2750, 2810], [0, 0.25, 0.25, 0], { extrapolateRight: 'clamp' })}
+  src={staticFile('vsl-background-music.mp3')}
+  volume={(f) =>
+    interpolate(f, [0, 45, 3170, 3260], [0, 0.25, 0.25, 0], { extrapolateRight: 'clamp' })
+  }
 />
 ```
 
-Place MP3 files in `public/` directory. Use `interpolate()` for fade-in/fade-out volume control.
+- **Fade in**: 0 → 0.25 over 1.5 seconds (frames 0-45)
+- **Sustain**: 0.25 (25% volume) through the body — present but not overpowering
+- **Fade out**: 0.25 → 0 over 3 seconds (frames 3170-3260) for a clean ending
+- Audio file is longer than the video (~134s vs ~109s); Remotion handles the truncation
+- Place MP3 files in `public/` directory. Use `interpolate()` for fade-in/fade-out volume control.
 
 ### Modifying Scenes
 
@@ -1085,6 +1088,8 @@ Place MP3 files in `public/` directory. Use `interpolate()` for fade-in/fade-out
 - All Remotion imports must be used — TypeScript strict mode rejects unused imports (TS6133)
 - The `@remotion/player` package is used for inline playback; `@remotion/cli` for studio/rendering
 - Scene components use `useCurrentFrame()` and `useVideoConfig()` from Remotion for animation timing
+- Video does **not** loop — plays once and stops on CTA scene so the call-to-action remains visible
+- When adding/removing scenes, update: scene timing in `brand.ts`, total `durationInFrames`, and audio fade-out keyframes in `ConvertraVSL.tsx`
 
 ---
 
