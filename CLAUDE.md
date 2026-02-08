@@ -57,6 +57,7 @@ src/
 ├── pages/           # Route-level components (Channels, MetaAds, AdGenerator, Insights, SalesLanding)
 ├── components/      # Reusable UI (DateRangePicker, CampaignTypeDashboard, etc.)
 ├── services/        # API integrations (metaApi.ts, openaiApi.ts, imageCache.ts, stripeApi.ts)
+├── remotion/        # Remotion VSL video composition and brand constants
 ├── types/           # TypeScript interfaces
 └── data/            # Mock data for development
 
@@ -109,6 +110,10 @@ public/
 | `src/pages/Products.tsx` | Product CRUD manager (name, author, description, URL, mockup images) |
 | `public/robots.txt` | Search engine crawl directives (allows AI bots for GEO) |
 | `public/sitemap.xml` | XML sitemap for search engine indexing |
+| `src/remotion/ConvertraVSL.tsx` | Remotion VSL video composition — 12-scene animated sales video |
+| `src/remotion/brand.ts` | VSL brand constants (colors, gradients, fonts, scene timing) |
+| `src/remotion/Root.tsx` | Remotion composition entry point |
+| `remotion.config.ts` | Remotion CLI configuration |
 
 ## Routes
 
@@ -665,6 +670,7 @@ This is required for `react-router-dom` to handle direct deep links and page ref
 npm run dev    # Start dev server (port 5175)
 npm run build  # TypeScript check + Vite build
 npm run lint   # ESLint with TypeScript rules
+npx remotion studio  # Open Remotion Studio for VSL preview/editing
 ```
 
 ### Starting the Dev Server
@@ -961,7 +967,7 @@ The Convertra sales landing follows this architecture:
 
 | Section | Purpose |
 |---------|---------|
-| Hero | Headline + slogan. Stop them. State the outcome. |
+| Hero | Headline + slogan + embedded Remotion VSL video with branded poster. |
 | Problem Agitation | Make them feel the pain of not knowing why |
 | Mechanism Reveal | Introduce ConversionIQ™—Extract, Interpret, Generate, Repeat |
 | Bespoke Differentiator | Separate from self-serve tools. Premium positioning. |
@@ -971,6 +977,114 @@ The Convertra sales landing follows this architecture:
 | Risk Reversal / Urgency | Cost of inaction. Limited availability. |
 | Final CTA | Clear next step. No friction. |
 | Footer | Brand tagline. Memorable close. |
+
+---
+
+## Remotion VSL (Video Sales Letter)
+
+### Overview
+
+The sales landing page includes an embedded Remotion-powered VSL — a 94-second animated video that walks through the Convertra value proposition. It plays inline in the hero section with controls, loop, and a branded poster/thumbnail.
+
+### Architecture
+
+| File | Purpose |
+|------|---------|
+| `src/remotion/ConvertraVSL.tsx` | Main composition — 12 scene components with animations |
+| `src/remotion/brand.ts` | Brand constants, video config (1920x1080 @ 30fps), scene timing |
+| `src/remotion/Root.tsx` | Remotion composition registration |
+| `remotion.config.ts` | Remotion CLI entry point (`./src/remotion/Root.tsx`) |
+
+### Scene Structure (12 scenes, ~94 seconds)
+
+| Scene | Timing | Purpose |
+|-------|--------|---------|
+| Hook | 0-6s | "You're spending millions on ads." |
+| Pain Question | 6-13s | "Do you actually know why your best ads convert?" |
+| The Loop | 13-22s | Endless cycle — launch, wait, guess, test, burn budget |
+| Revelation | 22-29s | "What if your ads could tell you exactly why they convert?" |
+| CIQ Reveal | 29-38s | ConversionIQ™ brand reveal with glow animation |
+| Extract | 38-45s | Step 1 — Ingest data across all ad channels |
+| Interpret | 45-53s | Step 2 — Deep analysis of why conversions happen |
+| Generate | 53-60s | Step 3 — Engineer new creatives from proven patterns |
+| Repeat | 60-67s | Step 4 — Compounding advantage from every conversion |
+| Results | 67-76s | Metrics — 47% reduced CPA, 3.2x ROAS, 80% less waste |
+| Enterprise | 76-83s | Bespoke implementation, white glove, dedicated partnership |
+| CTA | 83-94s | Schedule a demo with Convertra logo and button |
+
+### Sales Landing Integration
+
+The VSL is embedded in the hero section of `SalesLanding.tsx` using `@remotion/player`:
+
+```tsx
+import { Player } from '@remotion/player';
+import { ConvertraVSL } from '../remotion/ConvertraVSL';
+import { VIDEO_CONFIG } from '../remotion/brand';
+
+<Player
+  component={ConvertraVSL}
+  durationInFrames={VIDEO_CONFIG.durationInFrames}
+  fps={VIDEO_CONFIG.fps}
+  compositionWidth={VIDEO_CONFIG.width}
+  compositionHeight={VIDEO_CONFIG.height}
+  controls
+  loop
+  renderPoster={({ width, height }) => <VSLPoster width={width} height={height} />}
+  posterFillMode="player-size"
+  showPosterWhenUnplayed
+/>
+```
+
+The `VSLPoster` component renders a branded thumbnail with "Stop Guessing. Start Converting." headline and play button, shown before the user clicks play.
+
+### Animation Patterns
+
+The VSL uses shared animation helpers defined at the top of `ConvertraVSL.tsx`:
+
+- `fadeIn(frame, delay, duration)` — opacity 0→1
+- `fadeOut(frame, startFrame, duration)` — opacity 1→0
+- `slideUp(frame, delay, duration)` — translateY 30→0
+- `scaleIn(frame, fps, delay)` — spring-based scale 0→1
+
+Each scene manages its own fade-out near the end of its duration for smooth transitions.
+
+### Development Commands
+
+```bash
+npx remotion studio    # Open Remotion Studio to preview/edit video
+npx remotion render src/remotion/Root.tsx ConvertraVSL out/vsl.mp4  # Render to MP4
+```
+
+### Adding Audio
+
+To add background music, use Remotion's `<Audio>` component with `staticFile()`:
+
+```tsx
+import { Audio } from 'remotion';
+import { staticFile } from 'remotion';
+
+// In the main composition:
+<Audio
+  src={staticFile('track-name.mp3')}
+  volume={(f) => interpolate(f, [0, 30, 2750, 2810], [0, 0.25, 0.25, 0], { extrapolateRight: 'clamp' })}
+/>
+```
+
+Place MP3 files in `public/` directory. Use `interpolate()` for fade-in/fade-out volume control.
+
+### Modifying Scenes
+
+- **Scene timing**: Adjust `SCENES` in `src/remotion/brand.ts` — values are in frames at 30fps
+- **Total duration**: Update `VIDEO_CONFIG.durationInFrames` in `brand.ts`
+- **Scene content**: Each scene is a standalone function component in `ConvertraVSL.tsx`
+- **Brand colors**: Use constants from `brand.ts` (`COLORS`, `GRADIENTS`, `FONTS`)
+
+### Important Notes
+
+- React 19 requires `.npmrc` with `legacy-peer-deps=true` for Remotion compatibility
+- All Remotion imports must be used — TypeScript strict mode rejects unused imports (TS6133)
+- The `@remotion/player` package is used for inline playback; `@remotion/cli` for studio/rendering
+- Scene components use `useCurrentFrame()` and `useVideoConfig()` from Remotion for animation timing
 
 ---
 
