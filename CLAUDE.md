@@ -62,6 +62,7 @@ src/
 └── data/            # Mock data for development
 
 api/
+├── _lib/            # Shared backend helpers (encryption, google-auth, google-ads, seo-prompts)
 ├── billing/         # Stripe billing API routes (checkout.ts, portal.ts, webhook.ts)
 └── [feature]/       # Feature-specific API routes
 
@@ -101,7 +102,10 @@ public/
 | `src/components/StatCard.tsx` | Reusable stat card component for metrics display |
 | `api/billing/checkout.ts` | Vercel serverless function for Stripe Checkout sessions |
 | `api/billing/portal.ts` | Vercel serverless function for Stripe Customer Portal |
-| `api/seoiq.ts` | SEO IQ catch-all API — sites, keywords, articles, autopilot (JWT-protected) |
+| `api/seoiq.ts` | SEO IQ catch-all API — sites, keywords, articles, autopilot, keyword research (JWT-protected) |
+| `api/_lib/google-ads.ts` | Google Ads Keyword Planner API client — token refresh + `fetchKeywordIdeas()` |
+| `api/_lib/google-auth.ts` | Google OAuth token management — per-site access token refresh for GSC |
+| `api/_lib/seo-prompts.ts` | SEO article generation prompts + keyword scoring (`scoreQuickWin`, `scoreCTROptimization`, `scoreContentGap`) |
 | `api/funnel/metrics.ts` | Supabase funnel metrics API endpoint |
 | `src/components/IQSelector.tsx` | ConversionIQ™ reasoning level selector for AI operations |
 | `src/components/SEO.tsx` | Centralized SEO component for meta tags and structured data |
@@ -110,6 +114,10 @@ public/
 | `src/pages/Products.tsx` | Product CRUD manager (name, author, description, URL, mockup images) |
 | `public/robots.txt` | Search engine crawl directives (allows AI bots for GEO) |
 | `public/sitemap.xml` | XML sitemap for search engine indexing |
+| `src/pages/SeoIQ.tsx` | SEO IQ dashboard — sites, keywords (GSC + Keyword Planner), articles, content calendar, autopilot |
+| `src/services/seoIqApi.ts` | SEO IQ API service — all frontend API calls with auth header injection |
+| `src/types/seoiq.ts` | SEO IQ TypeScript types — sites, keywords, articles, autopilot, research responses |
+| `src/contexts/OrganizationContext.tsx` | Organization provisioning context with auth |
 | `src/remotion/ConvertraVSL.tsx` | Remotion VSL video composition — 13-scene animated sales video with background music |
 | `src/remotion/brand.ts` | VSL brand constants (colors, gradients, fonts, scene timing) |
 | `public/vsl-background-music.mp3` | VSL background music — cinematic inspirational track |
@@ -279,6 +287,119 @@ async function verifySiteOwnership(siteId: string, organizationId: string): Prom
 - **Never log API tokens, keys, or secrets** — not even partially. Wrap any diagnostic logging in `if (import.meta.env.DEV)` for frontend code
 - **Never log Bearer tokens** in serverless functions
 - **Fallback defaults must be safe** — e.g., `is_super_admin` should default to `false`, never `true`
+
+---
+
+## SEO IQ — Keyword Research & Content Automation
+
+### Overview
+
+SEO IQ is an automated SEO/GEO content pipeline that discovers keyword opportunities, generates optimized articles, and publishes them to a target Supabase instance. It combines two keyword data sources and three scoring algorithms to identify the highest-value content opportunities.
+
+### Architecture
+
+| Layer | Files | Purpose |
+|-------|-------|---------|
+| **Frontend** | `src/pages/SeoIQ.tsx`, `src/pages/SeoIQ.css` | 5-tab dashboard (Sites, Keywords, Generate, Articles, Autopilot) |
+| **Frontend Service** | `src/services/seoIqApi.ts` | API calls with Supabase auth header injection |
+| **Frontend Types** | `src/types/seoiq.ts` | TypeScript interfaces for all SEO IQ entities |
+| **Backend API** | `api/seoiq.ts` | Catch-all route handler for all SEO IQ endpoints |
+| **Google Ads Client** | `api/_lib/google-ads.ts` | Keyword Planner API — token refresh + `fetchKeywordIdeas()` |
+| **Google Auth** | `api/_lib/google-auth.ts` | Per-site Google OAuth token management for GSC |
+| **SEO Prompts** | `api/_lib/seo-prompts.ts` | Article generation prompts + keyword scoring functions |
+| **Vercel Routing** | `vercel.json` | `/api/seo-iq/:path*` → rewritten to `/api/seoiq?route=:path` |
+
+### Dual Keyword Sources
+
+SEO IQ uses two complementary keyword data sources:
+
+| Source | API | Data Provided | Use Case |
+|--------|-----|--------------|----------|
+| **Google Search Console (GSC)** | `googleapis.com/webmasters/v3/.../searchAnalytics/query` | clicks, impressions, CTR, position | Keywords you already rank for — find quick wins |
+| **Google Ads Keyword Planner** | `googleads.googleapis.com/v18/customers/{id}:generateKeywordIdeas` | search volume, competition, competition index | Keywords you don't rank for — find content gaps |
+
+- GSC requires per-site Google OAuth connection (stored encrypted in `seo_sites` table)
+- Keyword Planner uses a shared Google Ads account (env vars, not per-site)
+- Keywords tab works with either source independently — GSC connection is not required
+
+### Three Scoring Algorithms
+
+All scoring functions are in `api/_lib/seo-prompts.ts`:
+
+| Function | Opportunity Type | When Used | What It Finds |
+|----------|-----------------|-----------|---------------|
+| `scoreQuickWin()` | `quick_win` | GSC position 5-20 | Keywords already ranking that could reach page 1 |
+| `scoreCTROptimization()` | `ctr_optimization` | High impressions, low CTR | Keywords with visibility but poor click-through |
+| `scoreContentGap()` | `content_gap` | High volume, not ranking | Keywords from Keyword Planner with no existing rankings |
+
+When both data sources are available for a keyword, the system computes all applicable scores and keeps the highest.
+
+### Data Merge Rules
+
+Keywords are upserted with `onConflict: 'site_id,keyword'`, merging data from both sources:
+
+| Scenario | search_volume | competition | GSC fields | Score |
+|----------|--------------|-------------|------------|-------|
+| Keyword Planner only (no GSC) | From KP | From KP | null/0 | `scoreContentGap()` |
+| GSC only (no Keyword Planner) | 0 | UNKNOWN | From GSC | `scoreQuickWin()` or `scoreCTR()` |
+| Both sources, GSC pos ≤ 10 | From KP | From KP | From GSC | Keep existing GSC score |
+| Both sources, GSC pos > 10 | From KP | From KP | From GSC | Max of all three scores |
+
+### API Routes
+
+All routes go through `api/seoiq.ts` (catch-all handler). Key routes:
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `sites` | GET/POST/PUT/DELETE | CRUD for SEO sites |
+| `keywords` | GET | Fetch keywords for a site |
+| `refresh-keywords` | POST | Pull latest GSC data + score (also runs 3-way scoring if KP data exists) |
+| `research-keywords` | POST | Fetch Keyword Planner ideas for seed keywords, score with `scoreContentGap()` |
+| `generate-article` | POST | Generate article for a keyword using AI |
+| `articles` | GET/PUT/DELETE | CRUD for articles |
+| `publish-article` | POST | Publish article to target Supabase + submit for Google indexing |
+| `autopilot-config` | PUT | Enable/disable autopilot, set cadence |
+| `autopilot-schedule` | GET/POST/DELETE | Content calendar scheduled runs |
+| `autopilot-cron` | POST | Cron trigger — picks keyword, generates article, publishes |
+
+### Google Ads Keyword Planner Integration
+
+`api/_lib/google-ads.ts` handles the Keyword Planner API:
+
+- **Token refresh**: Uses `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` + `GOOGLE_ADS_REFRESH_TOKEN` to get access tokens (same OAuth pattern as GSC, separate refresh token)
+- **Token caching**: Caches access tokens in memory with 60s expiry buffer
+- **Keyword seeds**: Accepts up to 10 seed keywords, or a single URL seed for domain-based research
+- **Request targets**: English language (`languageConstants/1000`), United States (`geoTargetConstants/2840`)
+- **Zero-volume filtering**: Keywords with `avgMonthlySearches === 0` are automatically excluded
+
+### Autopilot Pipeline Flow
+
+The content calendar autopilot runs on a cron schedule and executes this pipeline:
+
+```
+1. Cron triggers → handleAutopilotCron()
+2. Pick highest-scored keyword (any source — GSC or Keyword Planner)
+   → ORDER BY opportunity_score DESC, status = 'active'
+3. Generate article via AI (search volume + competition injected into prompt)
+4. Publish to target Supabase instance
+5. Submit URL to Google Indexing API
+6. Mark keyword as 'used'
+```
+
+- Autopilot does **not** require GSC to be connected — it works with Keyword Planner keywords alone
+- The keyword picker selects the best opportunity regardless of source
+- Article generation prompt (`buildArticleUserPrompt()`) includes `searchVolume`, `competition`, and `opportunityType` for context-aware content
+
+### Frontend Keyword Research UI
+
+The Keywords tab includes a research toolbar:
+
+- **Seed keyword input**: Comma-separated keywords (e.g., "ad creative, conversion rate optimization")
+- **"Research" button**: Splits input, calls `researchKeywords()` API
+- **"Use Site URL" button**: Uses the site's domain as a URL seed for Keyword Planner
+- **Volume column**: Shows `search_volume` from Keyword Planner (dash if unavailable)
+- **Competition column**: Colored tags — green (LOW), amber (MEDIUM), red (HIGH)
+- **GSC not required**: Keywords tab works without GSC; "Refresh Keywords" button shows inline "Connect Google" prompt when GSC isn't connected
 
 ---
 
@@ -645,6 +766,12 @@ STRIPE_PRICE_GROWTH=        # Stripe Price ID for Growth plan
 STRIPE_PRICE_ENTERPRISE=    # Stripe Price ID for Enterprise plan
 SUPABASE_URL=               # Supabase project URL (MUST be set separately from VITE_SUPABASE_URL)
 SUPABASE_SERVICE_ROLE_KEY=  # Supabase service role key (for server-side access)
+GOOGLE_CLIENT_ID=           # Google OAuth client ID (shared across GSC + Google Ads)
+GOOGLE_CLIENT_SECRET=       # Google OAuth client secret (shared across GSC + Google Ads)
+GOOGLE_ADS_DEVELOPER_TOKEN= # From Google Ads → Tools → API Center
+GOOGLE_ADS_CUSTOMER_ID=     # Google Ads account ID (no dashes, e.g. 1234567890)
+GOOGLE_ADS_REFRESH_TOKEN=   # OAuth refresh token with adwords scope
+ENCRYPTION_KEY=             # 32-byte hex key for encrypting Google OAuth tokens at rest
 ```
 
 **Important**: `SUPABASE_URL` (backend) and `VITE_SUPABASE_URL` (frontend) must both be set in Vercel. The `VITE_` prefix makes variables available to the browser bundle only. Serverless functions in `api/` use `process.env.SUPABASE_URL` (no prefix). Missing `SUPABASE_URL` will cause funnel metrics and other backend Supabase queries to silently return empty data.
