@@ -5,9 +5,11 @@ import { getGoogleAccessToken } from './_lib/google-auth.js';
 import {
   scoreQuickWin,
   scoreCTROptimization,
+  scoreContentGap,
   buildArticleSystemPrompt,
   buildArticleUserPrompt,
 } from './_lib/seo-prompts.js';
+import { fetchKeywordIdeas, isGoogleAdsConfigured } from './_lib/google-ads.js';
 
 // ─── Shared Supabase client ────────────────────────────────────────────────
 
@@ -154,6 +156,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handleAutopilotConfig(req, res, auth);
     case 'autopilot-schedule':
       return handleAutopilotSchedule(req, res, auth);
+    case 'research-keywords':
+      return handleResearchKeywords(req, res, auth);
     default:
       return res.status(404).json({ error: `Unknown route: ${route}` });
   }
@@ -597,6 +601,16 @@ async function handleRefreshKeywords(req: VercelRequest, res: VercelResponse, au
         .filter(Boolean)
     );
 
+    // Fetch existing keyword records to check for prior search volume data
+    const { data: existingKeywordRecords } = await supabase
+      .from('seo_keywords')
+      .select('keyword, search_volume, competition, competition_index')
+      .eq('site_id', site_id);
+
+    const existingKeywordMap = new Map(
+      (existingKeywordRecords || []).map((k) => [k.keyword.toLowerCase(), k])
+    );
+
     // Score and upsert keywords
     let upsertCount = 0;
     let scoredCount = 0;
@@ -614,13 +628,30 @@ async function handleRefreshKeywords(req: VercelRequest, res: VercelResponse, au
       const quickWinScore = scoreQuickWin(position, impressions, ctr, clicks);
       const ctrScore = scoreCTROptimization(impressions, ctr, position);
 
-      // Pick the best opportunity type
+      // Check for prior search volume data from Keyword Planner research
+      const priorData = existingKeywordMap.get(keyword.toLowerCase());
+      let contentGapScore = 0;
+      if (priorData?.search_volume > 0 && position > 10) {
+        contentGapScore = scoreContentGap(
+          priorData.search_volume,
+          priorData.competition || 'UNKNOWN',
+          priorData.competition_index || 0,
+          keyword
+        );
+      }
+
+      // Pick the best opportunity type (highest of three scores)
       let opportunityType: string | null = null;
       let score = 0;
       let reasoning = '';
       let action = '';
 
-      if (quickWinScore > ctrScore && quickWinScore > 0) {
+      if (contentGapScore > quickWinScore && contentGapScore > ctrScore && contentGapScore > 0) {
+        opportunityType = 'content_gap';
+        score = contentGapScore;
+        reasoning = `${priorData!.search_volume!.toLocaleString()} monthly searches, position ${position}. High-value content gap — not ranking on page 1 despite search demand.`;
+        action = `Write a comprehensive article targeting "${keyword}" to capture ${priorData!.search_volume!.toLocaleString()} monthly searches.`;
+      } else if (quickWinScore > ctrScore && quickWinScore > 0) {
         opportunityType = 'quick_win';
         score = quickWinScore;
         reasoning = `Position ${position} with ${impressions} impressions. A dedicated article could push this to page 1.`;
@@ -699,6 +730,149 @@ function classifyCluster(keyword: string): string {
     return 'Troubleshooting';
 
   return 'General';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RESEARCH KEYWORDS HANDLER (Google Ads Keyword Planner)
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function handleResearchKeywords(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { site_id, seeds, use_url } = req.body;
+
+  if (!site_id) {
+    return res.status(400).json({ error: 'site_id is required' });
+  }
+
+  if (!seeds || !Array.isArray(seeds) || seeds.length === 0) {
+    return res.status(400).json({ error: 'seeds array is required (comma-separated keywords or a URL)' });
+  }
+
+  if (!(await verifySiteOwnership(site_id, auth.organizationId))) {
+    return res.status(403).json({ error: 'Access denied: site does not belong to your organization' });
+  }
+
+  if (!isGoogleAdsConfigured()) {
+    return res.status(400).json({ error: 'Google Ads API is not configured. Set GOOGLE_ADS_DEVELOPER_TOKEN, GOOGLE_ADS_CUSTOMER_ID, and GOOGLE_ADS_REFRESH_TOKEN.' });
+  }
+
+  try {
+    // Fetch keyword ideas from Google Ads Keyword Planner
+    const { keywords: keywordIdeas, error: apiError } = await fetchKeywordIdeas(seeds, { useUrl: !!use_url });
+
+    if (apiError) {
+      return res.status(502).json({ error: `Keyword Planner error: ${apiError}` });
+    }
+
+    if (keywordIdeas.length === 0) {
+      return res.status(200).json({ keywords_fetched: 0, keywords_upserted: 0, content_gaps_found: 0 });
+    }
+
+    // Fetch existing keywords for this site (to check overlap and preserve GSC data)
+    const { data: existingKeywords } = await supabase
+      .from('seo_keywords')
+      .select('keyword, current_position, opportunity_score')
+      .eq('site_id', site_id);
+
+    const existingMap = new Map(
+      (existingKeywords || []).map((k) => [k.keyword.toLowerCase(), k])
+    );
+
+    // Fetch existing articles (to mark used keywords)
+    const { data: existingArticles } = await supabase
+      .from('seo_articles')
+      .select('primary_keyword')
+      .eq('site_id', site_id);
+
+    const usedKeywords = new Set(
+      (existingArticles || [])
+        .map((a) => a.primary_keyword?.toLowerCase())
+        .filter(Boolean)
+    );
+
+    let upsertCount = 0;
+    let contentGapsFound = 0;
+
+    for (const idea of keywordIdeas) {
+      const existing = existingMap.get(idea.keyword.toLowerCase());
+
+      // Skip if already ranking well (position <= 10) — not a content gap
+      if (existing?.current_position && existing.current_position <= 10) {
+        // Still upsert volume/competition data but keep existing score
+        const { error: upsertError } = await supabase
+          .from('seo_keywords')
+          .upsert(
+            {
+              site_id,
+              keyword: idea.keyword,
+              search_volume: idea.avgMonthlySearches,
+              competition: idea.competition,
+              competition_index: idea.competitionIndex,
+            },
+            { onConflict: 'site_id,keyword' }
+          );
+        if (!upsertError) upsertCount++;
+        continue;
+      }
+
+      // Score as content gap
+      const gapScore = scoreContentGap(
+        idea.avgMonthlySearches,
+        idea.competition,
+        idea.competitionIndex,
+        idea.keyword
+      );
+
+      // Only override score if new score > existing score
+      const finalScore = Math.max(gapScore, existing?.opportunity_score || 0);
+      const isContentGap = gapScore >= (existing?.opportunity_score || 0);
+
+      const cluster = classifyCluster(idea.keyword);
+
+      const { error: upsertError } = await supabase
+        .from('seo_keywords')
+        .upsert(
+          {
+            site_id,
+            keyword: idea.keyword,
+            search_volume: idea.avgMonthlySearches,
+            competition: idea.competition,
+            competition_index: idea.competitionIndex,
+            opportunity_type: isContentGap ? 'content_gap' : undefined,
+            opportunity_score: finalScore,
+            reasoning: isContentGap
+              ? `${idea.avgMonthlySearches.toLocaleString()} monthly searches, ${idea.competition} competition. High-value content gap opportunity.`
+              : undefined,
+            action: isContentGap
+              ? `Write a comprehensive article targeting "${idea.keyword}" to capture ${idea.avgMonthlySearches.toLocaleString()} monthly searches.`
+              : undefined,
+            topic_cluster: cluster,
+            status: usedKeywords.has(idea.keyword.toLowerCase()) ? 'used' : 'active',
+          },
+          { onConflict: 'site_id,keyword' }
+        );
+
+      if (!upsertError) {
+        upsertCount++;
+        if (isContentGap && gapScore > 0) contentGapsFound++;
+      }
+    }
+
+    return res.status(200).json({
+      keywords_fetched: keywordIdeas.length,
+      keywords_upserted: upsertCount,
+      content_gaps_found: contentGapsFound,
+    });
+  } catch (err) {
+    console.error('Research keywords error:', err);
+    return res.status(500).json({
+      error: 'Failed to research keywords',
+      message: err instanceof Error ? err.message : 'Unknown error',
+    });
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1397,15 +1571,8 @@ async function handleAutopilotCron(req: VercelRequest, res: VercelResponse) {
 
     const site = sites[0];
 
-    if (site.google_status !== 'active') {
-      await supabase.from('seo_sites').update({
-        autopilot_last_error: 'Google not connected',
-        updated_at: new Date().toISOString(),
-      }).eq('id', site.id);
-      return res.status(200).json({ message: 'Skipped — Google not connected', siteId: site.id });
-    }
-
     // Pick the top keyword (fast DB query, stays within 10s timeout)
+    // Keywords can come from GSC refresh OR Keyword Planner research
     const { data: keyword } = await supabase
       .from('seo_keywords')
       .select('id, keyword')
@@ -1418,7 +1585,7 @@ async function handleAutopilotCron(req: VercelRequest, res: VercelResponse) {
 
     if (!keyword) {
       await supabase.from('seo_sites').update({
-        autopilot_last_error: 'No active keywords found — refresh keywords first',
+        autopilot_last_error: 'No active keywords found — research keywords or refresh from GSC first',
         updated_at: new Date().toISOString(),
       }).eq('id', site.id);
       return res.status(200).json({ message: 'No keywords available', siteId: site.id });

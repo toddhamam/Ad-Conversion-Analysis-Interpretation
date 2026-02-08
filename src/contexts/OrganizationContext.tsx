@@ -7,7 +7,7 @@ import type { Organization, User as AppUser, OrganizationContextValue } from '..
 const OrganizationContext = createContext<OrganizationContextValue | undefined>(undefined);
 
 export function OrganizationProvider({ children }: { children: React.ReactNode }) {
-  const { user: authUser, loading: authLoading, isConfigured } = useAuth();
+  const { user: authUser, session, loading: authLoading, isConfigured } = useAuth();
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -124,9 +124,13 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
           const meta = authUser.user_metadata || {};
 
           try {
+            const provisionHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (session?.access_token) {
+              provisionHeaders['Authorization'] = `Bearer ${session.access_token}`;
+            }
             const provisionRes = await fetch('/api/seo-iq/provision-org', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: provisionHeaders,
               body: JSON.stringify({
                 authId: authUser.id,
                 email: authUser.email || '',
@@ -173,7 +177,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
     } finally {
       setLoading(false);
     }
-  }, [authUser, isConfigured]);
+  }, [authUser, session, isConfigured]);
 
   // Load organization data when auth user changes
   useEffect(() => {

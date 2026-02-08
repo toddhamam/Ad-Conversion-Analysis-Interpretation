@@ -7,16 +7,23 @@ import type {
   CreateSeoSiteRequest,
   UpdateSeoSiteRequest,
   RefreshKeywordsResponse,
+  ResearchKeywordsResponse,
   GenerateArticleRequest,
   GenerateArticleResponse,
   PublishArticleRequest,
   PublishArticleResponse,
 } from '../types/seoiq';
+import { supabase } from '../lib/supabase';
 
 const API_BASE = '/api';
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(url, options);
+  const { data: { session } } = await supabase.auth.getSession();
+  const headers = new Headers(options?.headers);
+  if (session?.access_token) {
+    headers.set('Authorization', `Bearer ${session.access_token}`);
+  }
+  const response = await fetch(url, { ...options, headers });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(error.error || error.message || `Request failed: ${response.status}`);
@@ -80,6 +87,18 @@ export async function refreshKeywords(siteId: string, days?: number): Promise<Re
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ site_id: siteId, days }),
+  });
+}
+
+export async function researchKeywords(
+  siteId: string,
+  seeds: string[],
+  useUrl?: boolean
+): Promise<ResearchKeywordsResponse> {
+  return fetchJson<ResearchKeywordsResponse>(`${API_BASE}/seo-iq/research-keywords`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ site_id: siteId, seeds, use_url: useUrl }),
   });
 }
 

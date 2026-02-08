@@ -141,6 +141,18 @@ export interface RefreshKeywordsResponse {
   opportunities_scored: number;
 }
 
+export interface ResearchKeywordsRequest {
+  site_id: string;
+  seeds: string[];
+  use_url?: boolean;
+}
+
+export interface ResearchKeywordsResponse {
+  keywords_fetched: number;
+  keywords_upserted: number;
+  content_gaps_found: number;
+}
+
 export interface GenerateArticleRequest {
   site_id: string;
   keyword_id?: string;
