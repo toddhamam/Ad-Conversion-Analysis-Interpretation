@@ -73,19 +73,25 @@ const PUBLISH_MODE_OPTIONS: PublishModeOption[] = [
   },
 ];
 
-// CTA mapping
-const CTA_TEXT_TO_TYPE: Record<string, CallToActionType> = {
-  'Learn More': 'LEARN_MORE',
-  'Shop Now': 'SHOP_NOW',
-  'Sign Up': 'SIGN_UP',
-  'Subscribe': 'SUBSCRIBE',
-  'Get Offer': 'GET_OFFER',
-  'Book Now': 'BOOK_NOW',
-  'Contact Us': 'CONTACT_US',
-  'Download': 'DOWNLOAD',
-  'Apply Now': 'APPLY_NOW',
-  'Buy Now': 'BUY_NOW',
-};
+// CTA button options for dropdown
+const CTA_BUTTON_OPTIONS: { id: CallToActionType; name: string }[] = [
+  { id: 'SHOP_NOW', name: 'Shop Now' },
+  { id: 'LEARN_MORE', name: 'Learn More' },
+  { id: 'SIGN_UP', name: 'Sign Up' },
+  { id: 'SUBSCRIBE', name: 'Subscribe' },
+  { id: 'GET_OFFER', name: 'Get Offer' },
+  { id: 'BOOK_NOW', name: 'Book Now' },
+  { id: 'CONTACT_US', name: 'Contact Us' },
+  { id: 'DOWNLOAD', name: 'Download' },
+  { id: 'APPLY_NOW', name: 'Apply Now' },
+  { id: 'BUY_NOW', name: 'Buy Now' },
+  { id: 'ORDER_NOW', name: 'Order Now' },
+  { id: 'LISTEN_NOW', name: 'Listen Now' },
+  { id: 'GET_SHOWTIMES', name: 'Get Showtimes' },
+  { id: 'REQUEST_TIME', name: 'Request Time' },
+  { id: 'SEE_MENU', name: 'See Menu' },
+  { id: 'PLAY_GAME', name: 'Play Game' },
+];
 
 // Campaign objective options - Sales is default/recommended
 const OBJECTIVE_OPTIONS: { id: CampaignObjective; name: string }[] = [
@@ -153,16 +159,6 @@ interface AdMetadata {
   audienceType: string;
   conceptType: string;
   generatedAt: string;
-}
-
-function mapCTAToType(ctaText: string): CallToActionType {
-  if (!ctaText) return 'LEARN_MORE';
-  if (CTA_TEXT_TO_TYPE[ctaText]) return CTA_TEXT_TO_TYPE[ctaText];
-  const normalized = ctaText.toLowerCase();
-  for (const [text, type] of Object.entries(CTA_TEXT_TO_TYPE)) {
-    if (normalized.includes(text.toLowerCase())) return type;
-  }
-  return 'LEARN_MORE';
 }
 
 function formatDate(isoString: string): string {
@@ -389,6 +385,8 @@ const AdPublisher = () => {
 
   // Ad setup
   const [landingPageUrl, setLandingPageUrl] = useState('https://example.com/offer');
+  const [ctaButtonType, setCtaButtonType] = useState<CallToActionType>('SHOP_NOW');
+  const [urlParameters, setUrlParameters] = useState('');
 
   // Presets
   const [presets, setPresets] = useState<PublishPreset[]>(() => {
@@ -660,6 +658,8 @@ const AdPublisher = () => {
           instagramPositions: !placementAutomatic ? instagramPositions : undefined,
         },
         landingPageUrl,
+        ctaButtonType,
+        urlParameters: urlParameters || undefined,
       },
     };
 
@@ -672,7 +672,7 @@ const AdPublisher = () => {
   }, [presetName, campaignObjective, budgetMode, dailyBudget, conversionEvent, pixelId,
       targetCountries, ageMin, ageMax, genders, detailedTargeting, customAudiences,
       excludedAudiences, placementAutomatic, publisherPlatforms, facebookPositions,
-      instagramPositions, landingPageUrl, presets]);
+      instagramPositions, landingPageUrl, ctaButtonType, urlParameters, presets]);
 
   const loadPreset = useCallback((presetId: string) => {
     const preset = presets.find(p => p.id === presetId);
@@ -696,6 +696,8 @@ const AdPublisher = () => {
     if (c.placements.facebookPositions) setFacebookPositions(c.placements.facebookPositions);
     if (c.placements.instagramPositions) setInstagramPositions(c.placements.instagramPositions);
     setLandingPageUrl(c.landingPageUrl);
+    if (c.ctaButtonType) setCtaButtonType(c.ctaButtonType);
+    setUrlParameters(c.urlParameters || '');
     setSelectedPresetId(presetId);
   }, [presets]);
 
@@ -818,13 +820,18 @@ const AdPublisher = () => {
         throw new Error('No ads to publish');
       }
 
+      // Build the final landing page URL with tracking parameters
+      const finalLandingPageUrl = urlParameters.trim()
+        ? `${landingPageUrl}${landingPageUrl.includes('?') ? '&' : '?'}${urlParameters.trim()}`
+        : landingPageUrl;
+
       const config: PublishConfig = {
         mode: publishMode,
         ads: adsWithImages.map(ad => ({
           imageBase64: ad.imageUrl,
           headline: ad.headline,
-          bodyText: ad.bodyText,
-          callToAction: mapCTAToType(ad.cta),
+          bodyText: `${ad.bodyText}\n\n${finalLandingPageUrl}`,
+          callToAction: ctaButtonType,
         })),
         settings: {
           campaignName: publishMode === 'new_campaign' ? campaignName : undefined,
@@ -832,7 +839,7 @@ const AdPublisher = () => {
           budgetMode: publishMode === 'new_campaign' ? budgetMode : publishMode === 'new_adset' ? 'ABO' as BudgetMode : undefined,
           adsetName: publishMode !== 'existing_adset' ? adsetName : undefined,
           dailyBudget: publishMode !== 'existing_adset' ? dailyBudget : undefined,
-          landingPageUrl,
+          landingPageUrl: finalLandingPageUrl,
           conversionEvent: effectiveCampaignObjective === 'OUTCOME_SALES' ? conversionEvent : undefined,
           pixelId: effectiveCampaignObjective === 'OUTCOME_SALES' ? pixelId : undefined,
           targeting: publishMode !== 'existing_adset' ? buildTargeting() : undefined,
@@ -1712,6 +1719,29 @@ const AdPublisher = () => {
                       placeholder="https://example.com/offer"
                     />
                   </div>
+                  <div className="form-group">
+                    <label className="form-label">URL Parameters</label>
+                    <input
+                      type="text"
+                      value={urlParameters}
+                      onChange={e => setUrlParameters(e.target.value)}
+                      className="form-input"
+                      placeholder="utm_source=meta&utm_medium=paid&utm_campaign=ci"
+                    />
+                    <span className="form-hint">Tracking parameters appended to the landing page URL</span>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">CTA Button</label>
+                    <select
+                      value={ctaButtonType}
+                      onChange={e => setCtaButtonType(e.target.value as CallToActionType)}
+                      className="form-input"
+                    >
+                      {CTA_BUTTON_OPTIONS.map(opt => (
+                        <option key={opt.id} value={opt.id}>{opt.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               )}
             </div>
@@ -1762,7 +1792,14 @@ const AdPublisher = () => {
               </div>
               <div className="success-actions">
                 <a
-                  href="https://business.facebook.com/adsmanager"
+                  href={(() => {
+                    const accountId = import.meta.env.VITE_META_AD_ACCOUNT_ID;
+                    const numericId = accountId ? accountId.replace('act_', '') : '';
+                    let url = 'https://business.facebook.com/adsmanager/manage/campaigns';
+                    if (numericId) url += `?act=${numericId}`;
+                    if (numericId && publishResult.campaignId) url += `&campaign_id=${publishResult.campaignId}`;
+                    return url;
+                  })()}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="primary-btn"
@@ -1857,7 +1894,23 @@ const AdPublisher = () => {
                   )}
                   <div className="summary-item full-width">
                     <span className="summary-label">Landing Page</span>
-                    <span className="summary-value url-value">{landingPageUrl}</span>
+                    <span className="summary-value url-value">
+                      {urlParameters.trim()
+                        ? `${landingPageUrl}${landingPageUrl.includes('?') ? '&' : '?'}${urlParameters.trim()}`
+                        : landingPageUrl}
+                    </span>
+                  </div>
+                  {urlParameters.trim() && (
+                    <div className="summary-item full-width">
+                      <span className="summary-label">URL Parameters</span>
+                      <span className="summary-value">{urlParameters.trim()}</span>
+                    </div>
+                  )}
+                  <div className="summary-item">
+                    <span className="summary-label">CTA Button</span>
+                    <span className="summary-value">
+                      {CTA_BUTTON_OPTIONS.find(o => o.id === ctaButtonType)?.name || ctaButtonType}
+                    </span>
                   </div>
                 </div>
                 <div className="draft-reminder">
