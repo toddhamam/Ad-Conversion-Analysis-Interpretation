@@ -1,5 +1,6 @@
 import {
   AbsoluteFill,
+  Audio,
   Sequence,
   useCurrentFrame,
   useVideoConfig,
@@ -941,7 +942,306 @@ function ResultsScene() {
   );
 }
 
-// Scene 11: Enterprise Positioning
+// Scene 11: Cost of Waiting — urgency / risk reversal
+function CostOfWaitingScene() {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  // Header animations
+  const headerOpacity = fadeIn(frame, 5, 20);
+  const headerY = slideUp(frame, 5, 20);
+  const subtitleOpacity = fadeIn(frame, 25, 20);
+  const subtitleY = slideUp(frame, 25, 20);
+
+  // Warning colors
+  const red = '#ef4444';
+  const redGlow = 'rgba(239, 68, 68, 0.25)';
+  const redSubtle = 'rgba(239, 68, 68, 0.08)';
+  const amber = '#f59e0b';
+
+  // Cost items with staggered reveals — generous spacing for readability
+  const costs = [
+    { amount: 100, prefix: '$', suffix: 'K+', period: '/year', label: 'Blind Creative Testing', desc: '60–70% of ad spend wasted on creatives that never convert', delay: 70 },
+    { amount: 90, prefix: '$', suffix: 'K', period: '/year', label: 'Overpriced Media Buyers', desc: '$8–12K/month on gut instinct when data has the answers', delay: 140 },
+    { amount: 62, prefix: '$', suffix: 'K', period: '/year', label: 'Creative Fatigue & Decay', desc: 'CPA spikes 30–50% before anyone catches it', delay: 210 },
+  ];
+
+  // Total reveal — dramatic entrance after all cards have settled
+  const totalDelay = 290;
+  const totalScale = spring({ frame: frame - totalDelay, fps, config: { damping: 10, stiffness: 80 } });
+  const totalCountProgress = interpolate(
+    frame,
+    [totalDelay + 10, totalDelay + 50],
+    [0, 1],
+    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) },
+  );
+  const totalValue = Math.round(275 * totalCountProgress);
+
+  // Pulsing red glow on total
+  const totalPulse = interpolate(Math.sin(frame * 0.12), [-1, 1], [0.4, 1]);
+
+  // Background "bleeding" particles
+  const particleSeeds = Array.from({ length: 20 }, (_, i) => ({
+    x: ((i * 137.5) % 100),
+    y: ((i * 73.1) % 100),
+    size: 3 + (i % 4) * 2,
+    speed: 0.3 + (i % 3) * 0.2,
+    delay: i * 4,
+  }));
+
+  const sceneOpacity = frame > 420 ? fadeOut(frame, 420, 30) : 1;
+
+  return (
+    <AbsoluteFill
+      style={{
+        background: GRADIENTS.darkRadial,
+        opacity: sceneOpacity,
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      {/* Animated background particles — falling "money drain" effect */}
+      {particleSeeds.map((p, i) => {
+        const yOffset = ((frame * p.speed + p.delay * 10) % 120) - 10;
+        const particleOpacity = fadeIn(frame, p.delay, 20) *
+          interpolate(yOffset, [0, 50, 110], [0, 0.5, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+        return (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              width: p.size,
+              height: p.size,
+              borderRadius: '50%',
+              background: i % 3 === 0 ? red : amber,
+              left: `${p.x}%`,
+              top: `${yOffset}%`,
+              opacity: particleOpacity * 0.35,
+              filter: `blur(${p.size > 5 ? 2 : 1}px)`,
+            }}
+          />
+        );
+      })}
+
+      {/* Subtle red vignette */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: `radial-gradient(ellipse at center, transparent 40%, ${redSubtle} 100%)`,
+          opacity: fadeIn(frame, 30, 40),
+        }}
+      />
+
+      <div style={{ textAlign: 'center', width: '100%', padding: '0 60px', zIndex: 1 }}>
+        {/* Header */}
+        <h2
+          style={{
+            fontFamily: FONTS.primary,
+            fontSize: 72,
+            fontWeight: 700,
+            color: COLORS.textLight,
+            margin: '0 0 8px 0',
+            opacity: headerOpacity,
+            transform: `translateY(${headerY}px)`,
+          }}
+        >
+          The Cost of{' '}
+          <span style={{ color: red }}>Waiting</span>
+        </h2>
+        <p
+          style={{
+            fontFamily: FONTS.primary,
+            fontSize: 30,
+            fontWeight: 400,
+            color: COLORS.textLightMuted,
+            margin: '0 0 56px 0',
+            opacity: subtitleOpacity,
+            transform: `translateY(${subtitleY}px)`,
+          }}
+        >
+          Every month without ConversionIQ™, you're{' '}
+          <span style={{ color: amber, fontWeight: 600 }}>bleeding budget</span>
+        </p>
+
+        {/* Cost cards row */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: 40,
+            marginBottom: 50,
+          }}
+        >
+          {costs.map((cost, i) => {
+            const cardScale = spring({
+              frame: frame - cost.delay,
+              fps,
+              config: { damping: 12, stiffness: 100 },
+            });
+
+            // Animated counter
+            const counterProgress = interpolate(
+              frame,
+              [cost.delay + 10, cost.delay + 40],
+              [0, 1],
+              { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) },
+            );
+            const displayAmount = Math.round(cost.amount * counterProgress);
+
+            // Subtle glow pulse per card
+            const cardPulse = interpolate(
+              Math.sin((frame - cost.delay) * 0.1),
+              [-1, 1],
+              [0.5, 1],
+            );
+
+            return (
+              <div
+                key={i}
+                style={{
+                  opacity: cardScale,
+                  transform: `scale(${cardScale})`,
+                }}
+              >
+                <div
+                  style={{
+                    width: 430,
+                    padding: '44px 36px',
+                    borderRadius: 24,
+                    background: 'rgba(239, 68, 68, 0.04)',
+                    border: `1px solid rgba(239, 68, 68, ${0.15 + cardPulse * 0.1})`,
+                    boxShadow: `0 8px 32px rgba(239, 68, 68, ${0.06 * cardPulse})`,
+                    textAlign: 'center',
+                  }}
+                >
+                  {/* Amount with counter animation */}
+                  <p
+                    style={{
+                      fontFamily: FONTS.primary,
+                      fontSize: 64,
+                      fontWeight: 700,
+                      color: red,
+                      margin: '0 0 4px 0',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {cost.prefix}{displayAmount}{cost.suffix}
+                    <span
+                      style={{
+                        fontSize: 26,
+                        fontWeight: 500,
+                        color: COLORS.textLightMuted,
+                      }}
+                    >
+                      {cost.period}
+                    </span>
+                  </p>
+
+                  {/* Label */}
+                  <p
+                    style={{
+                      fontFamily: FONTS.primary,
+                      fontSize: 26,
+                      fontWeight: 600,
+                      color: COLORS.textLight,
+                      margin: '16px 0 10px 0',
+                    }}
+                  >
+                    {cost.label}
+                  </p>
+
+                  {/* Description */}
+                  <p
+                    style={{
+                      fontFamily: FONTS.primary,
+                      fontSize: 20,
+                      fontWeight: 400,
+                      color: COLORS.textLightMuted,
+                      margin: 0,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {cost.desc}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Total — dramatic reveal */}
+        <div
+          style={{
+            opacity: totalScale,
+            transform: `scale(${totalScale})`,
+          }}
+        >
+          <div
+            style={{
+              display: 'inline-block',
+              padding: '28px 72px',
+              borderRadius: 20,
+              background: `linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(245, 158, 11, 0.08) 100%)`,
+              border: `2px solid rgba(239, 68, 68, ${0.3 + totalPulse * 0.2})`,
+              boxShadow: `0 0 ${40 * totalPulse}px ${redGlow}, 0 12px 40px rgba(0, 0, 0, 0.3)`,
+            }}
+          >
+            <p
+              style={{
+                fontFamily: FONTS.primary,
+                fontSize: 22,
+                fontWeight: 500,
+                color: COLORS.textLightMuted,
+                margin: '0 0 8px 0',
+                letterSpacing: 3,
+                textTransform: 'uppercase',
+              }}
+            >
+              Hidden cost of the status quo
+            </p>
+            <p
+              style={{
+                fontFamily: FONTS.primary,
+                fontSize: 88,
+                fontWeight: 700,
+                color: red,
+                margin: '0 0 8px 0',
+                lineHeight: 1,
+                textShadow: `0 0 30px ${redGlow}`,
+              }}
+            >
+              ${totalValue}K+
+              <span
+                style={{
+                  fontSize: 36,
+                  fontWeight: 500,
+                  color: COLORS.textLightMuted,
+                }}
+              >
+                {' '}per year
+              </span>
+            </p>
+            <p
+              style={{
+                fontFamily: FONTS.primary,
+                fontSize: 22,
+                fontWeight: 400,
+                color: amber,
+                margin: 0,
+                fontStyle: 'italic',
+              }}
+            >
+              Before counting the revenue left on the table
+            </p>
+          </div>
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+}
+
+// Scene 12: Enterprise Positioning
 function EnterpriseScene() {
   const frame = useCurrentFrame();
 
@@ -1202,6 +1502,19 @@ function CTAScene() {
 export const ConvertraVSL: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: COLORS.bgDark }}>
+      {/* Background Music */}
+      <Audio
+        src={staticFile('vsl-background-music.mp3')}
+        volume={(f) =>
+          interpolate(
+            f,
+            [0, 45, 3170, 3260],
+            [0, 0.25, 0.25, 0],
+            { extrapolateRight: 'clamp' },
+          )
+        }
+      />
+
       {/* Scene 1: Hook */}
       <Sequence from={SCENES.hook.from} durationInFrames={SCENES.hook.duration}>
         <HookScene />
@@ -1276,12 +1589,17 @@ export const ConvertraVSL: React.FC = () => {
         <ResultsScene />
       </Sequence>
 
-      {/* Scene 11: Enterprise Positioning */}
+      {/* Scene 11: Cost of Waiting */}
+      <Sequence from={SCENES.costOfWaiting.from} durationInFrames={SCENES.costOfWaiting.duration}>
+        <CostOfWaitingScene />
+      </Sequence>
+
+      {/* Scene 12: Enterprise Positioning */}
       <Sequence from={SCENES.enterprise.from} durationInFrames={SCENES.enterprise.duration}>
         <EnterpriseScene />
       </Sequence>
 
-      {/* Scene 12: CTA */}
+      {/* Scene 13: CTA */}
       <Sequence from={SCENES.cta.from} durationInFrames={SCENES.cta.duration}>
         <CTAScene />
       </Sequence>
