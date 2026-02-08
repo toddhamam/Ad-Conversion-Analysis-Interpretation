@@ -818,6 +818,31 @@ The `publishAds()` function runs automatic diagnostics before ad set creation:
 3. Receive `image_hash` from response
 4. Use `image_hash` in `object_story_spec` → `link_data` for creative creation
 
+### Ad Publisher Configuration
+
+The Ad Publisher (Step 3: Configure) provides these ad-level settings that are applied uniformly across all ads in a publish batch:
+
+#### CTA Button Type
+- Configurable via dropdown in Step 3 — overrides the AI-generated CTA text
+- 16 options matching Meta's available CTA types: `SHOP_NOW`, `LEARN_MORE`, `SIGN_UP`, `SUBSCRIBE`, `GET_OFFER`, `BOOK_NOW`, `CONTACT_US`, `DOWNLOAD`, `APPLY_NOW`, `BUY_NOW`, `ORDER_NOW`, `LISTEN_NOW`, `GET_SHOWTIMES`, `REQUEST_TIME`, `SEE_MENU`, `PLAY_GAME`
+- Default: `SHOP_NOW`
+- Saved/restored with publish presets
+
+#### URL Tracking Parameters
+- Text input for UTM or custom tracking params (e.g., `utm_source=meta&utm_medium=paid&utm_campaign=ci`)
+- Appended to the landing page URL with `?` or `&` depending on whether the URL already has query params
+- Applied to both the `link` field in the Meta ad creative AND the URL appended to the body copy
+- Saved/restored with publish presets
+
+#### Body Copy URL Injection
+- The landing page URL (with tracking parameters, if set) is automatically appended to the bottom of the body copy (`message` field) when publishing
+- Format: `{bodyText}\n\n{landingPageUrlWithParams}`
+- This matches the Meta Ads Manager pattern of showing the offer link at the end of the primary text
+
+#### Post-Publish "Open Ads Manager" Link
+- After successful publish, the "Open Ads Manager" button links to the correct ad account using `VITE_META_AD_ACCOUNT_ID` (strips `act_` prefix)
+- Deep-links to the campaign: `https://business.facebook.com/adsmanager/manage/campaigns?act={numericAccountId}&campaign_id={campaignId}`
+
 ---
 
 ## UI Design Guidelines
