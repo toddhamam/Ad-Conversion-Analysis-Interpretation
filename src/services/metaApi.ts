@@ -679,7 +679,7 @@ export async function validatePageAccess(pageId?: string): Promise<{ valid: bool
 export type CampaignObjective = 'OUTCOME_SALES' | 'OUTCOME_LEADS' | 'OUTCOME_AWARENESS' | 'OUTCOME_ENGAGEMENT' | 'OUTCOME_TRAFFIC';
 
 // Call-to-action types for ads
-export type CallToActionType = 'LEARN_MORE' | 'SHOP_NOW' | 'SIGN_UP' | 'SUBSCRIBE' | 'GET_OFFER' | 'BOOK_NOW' | 'CONTACT_US' | 'DOWNLOAD' | 'APPLY_NOW' | 'BUY_NOW';
+export type CallToActionType = 'LEARN_MORE' | 'SHOP_NOW' | 'SIGN_UP' | 'SUBSCRIBE' | 'GET_OFFER' | 'BOOK_NOW' | 'CONTACT_US' | 'DOWNLOAD' | 'APPLY_NOW' | 'BUY_NOW' | 'ORDER_NOW' | 'LISTEN_NOW' | 'GET_SHOWTIMES' | 'REQUEST_TIME' | 'SEE_MENU' | 'PLAY_GAME';
 
 // Conversion event types for OUTCOME_SALES objective
 export type ConversionEvent = 'PURCHASE' | 'ADD_TO_CART' | 'LEAD' | 'COMPLETE_REGISTRATION' | 'INITIATE_CHECKOUT' | 'ADD_PAYMENT_INFO' | 'SEARCH' | 'VIEW_CONTENT';
@@ -765,6 +765,8 @@ export interface PublishPreset {
     targeting: FullTargetingSpec;
     placements: PlacementConfig;
     landingPageUrl: string;
+    ctaButtonType?: CallToActionType;
+    urlParameters?: string;
   };
 }
 
