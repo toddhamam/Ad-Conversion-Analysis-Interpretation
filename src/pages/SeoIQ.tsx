@@ -9,6 +9,7 @@ import {
   getGoogleConnectUrl,
   fetchKeywords,
   refreshKeywords,
+  researchKeywords,
   fetchArticles,
   generateArticle,
   publishArticle,
@@ -56,6 +57,10 @@ export default function SeoIQ() {
   const [refreshingKeywords, setRefreshingKeywords] = useState(false);
   const [keywordFilter, setKeywordFilter] = useState<string>('all');
   const [keywordSort, setKeywordSort] = useState<'score' | 'volume' | 'position'>('score');
+
+  // Research keywords (Keyword Planner)
+  const [researchSeeds, setResearchSeeds] = useState('');
+  const [researching, setResearching] = useState(false);
 
   // Generate
   const [selectedKeywordId, setSelectedKeywordId] = useState<string | null>(null);
@@ -238,6 +243,33 @@ export default function SeoIQ() {
       setError(err instanceof Error ? err.message : 'Failed to refresh keywords');
     } finally {
       setRefreshingKeywords(false);
+    }
+  };
+
+  // Research keywords (Keyword Planner)
+  const handleResearchKeywords = async (useUrl = false) => {
+    if (!selectedSiteId) return;
+    const seedList = useUrl
+      ? [selectedSite?.domain ? `https://${selectedSite.domain}` : '']
+      : researchSeeds.split(',').map((s) => s.trim()).filter(Boolean);
+
+    if (seedList.length === 0) {
+      setError('Enter at least one seed keyword');
+      return;
+    }
+
+    setResearching(true);
+    setError(null);
+    try {
+      const result = await researchKeywords(selectedSiteId, seedList, useUrl);
+      setSuccess(`Fetched ${result.keywords_fetched} keywords, found ${result.content_gaps_found} content gaps`);
+      await loadKeywords(selectedSiteId);
+      setResearchSeeds('');
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to research keywords');
+    } finally {
+      setResearching(false);
     }
   };
 
@@ -828,20 +860,40 @@ export default function SeoIQ() {
       return <div className="seo-iq-empty"><p>Select a site first</p></div>;
     }
 
-    if (selectedSite.google_status !== 'active') {
-      return (
-        <div className="seo-iq-empty">
-          <h3>Google not connected</h3>
-          <p>Connect Google Search Console to pull keyword data</p>
-          <a href={getGoogleConnectUrl(selectedSite.id, '/seo-iq')} className="seo-iq-btn seo-iq-btn-violet" style={{ textDecoration: 'none' }}>
-            Connect Google
-          </a>
-        </div>
-      );
-    }
+    const gscConnected = selectedSite.google_status === 'active';
 
     return (
       <>
+        {/* Research keywords input */}
+        <div className="seo-iq-research-bar">
+          <input
+            type="text"
+            className="seo-iq-research-input"
+            placeholder="Enter seed keywords (comma-separated), e.g. ad creative, conversion rate optimization"
+            value={researchSeeds}
+            onChange={(e) => setResearchSeeds(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && researchSeeds.trim()) handleResearchKeywords(); }}
+            disabled={researching}
+          />
+          <div className="seo-iq-research-actions">
+            <button
+              className="seo-iq-btn seo-iq-btn-violet"
+              onClick={() => handleResearchKeywords()}
+              disabled={researching || !researchSeeds.trim()}
+            >
+              {researching ? 'Researching...' : 'Research'}
+            </button>
+            <button
+              className="seo-iq-btn seo-iq-btn-secondary"
+              onClick={() => handleResearchKeywords(true)}
+              disabled={researching}
+              title={`Analyze ${selectedSite.domain} for keyword ideas`}
+            >
+              Use Site URL
+            </button>
+          </div>
+        </div>
+
         <div className="seo-iq-toolbar">
           <div className="seo-iq-toolbar-left">
             <select className="seo-iq-filter" value={keywordFilter} onChange={(e) => setKeywordFilter(e.target.value)}>
@@ -857,25 +909,33 @@ export default function SeoIQ() {
               <option value="position">Sort by Position</option>
             </select>
           </div>
-          <button
-            className="seo-iq-btn seo-iq-btn-primary"
-            onClick={handleRefreshKeywords}
-            disabled={refreshingKeywords}
-          >
-            {refreshingKeywords ? 'Syncing...' : 'Refresh Keywords'}
-          </button>
+          <div className="seo-iq-toolbar-right">
+            {!gscConnected && (
+              <a href={getGoogleConnectUrl(selectedSite.id, '/seo-iq')} className="seo-iq-btn seo-iq-btn-secondary" style={{ textDecoration: 'none', fontSize: 12 }}>
+                Connect GSC
+              </a>
+            )}
+            <button
+              className="seo-iq-btn seo-iq-btn-primary"
+              onClick={handleRefreshKeywords}
+              disabled={refreshingKeywords || !gscConnected}
+              title={!gscConnected ? 'Connect Google Search Console to refresh keywords' : undefined}
+            >
+              {refreshingKeywords ? 'Syncing...' : 'Refresh Keywords'}
+            </button>
+          </div>
         </div>
 
-        {refreshingKeywords && (
-          <Loading size="medium" message="ConversionIQ™ syncing search data..." />
+        {(refreshingKeywords || researching) && (
+          <Loading size="medium" message={researching ? 'ConversionIQ™ researching keyword opportunities...' : 'ConversionIQ™ syncing search data...'} />
         )}
 
-        {!refreshingKeywords && filteredKeywords.length === 0 ? (
+        {!refreshingKeywords && !researching && filteredKeywords.length === 0 ? (
           <div className="seo-iq-empty">
             <h3>No keywords yet</h3>
-            <p>Click "Refresh Keywords" to pull data from Google Search Console</p>
+            <p>Enter seed keywords above to research opportunities, or connect GSC to pull search data</p>
           </div>
-        ) : !refreshingKeywords && (
+        ) : !refreshingKeywords && !researching && (
           <div className="seo-iq-table-wrapper">
             <table className="seo-iq-table">
               <thead>
@@ -883,6 +943,8 @@ export default function SeoIQ() {
                   <th>Keyword</th>
                   <th>Score</th>
                   <th>Type</th>
+                  <th>Volume</th>
+                  <th>Competition</th>
                   <th>Position</th>
                   <th>Impressions</th>
                   <th>CTR</th>
@@ -904,6 +966,14 @@ export default function SeoIQ() {
                           {kw.opportunity_type.replace('_', ' ')}
                         </span>
                       )}
+                    </td>
+                    <td>{kw.search_volume > 0 ? kw.search_volume.toLocaleString() : '—'}</td>
+                    <td>
+                      {kw.competition && kw.competition !== 'UNKNOWN' ? (
+                        <span className={`seo-iq-comp-tag ${kw.competition.toLowerCase()}`}>
+                          {kw.competition}
+                        </span>
+                      ) : '—'}
                     </td>
                     <td>{kw.current_position ? kw.current_position.toFixed(1) : '—'}</td>
                     <td>{kw.impressions.toLocaleString()}</td>
