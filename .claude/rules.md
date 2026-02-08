@@ -233,3 +233,18 @@ When encountering performance issues or crashes (especially in Chrome), investig
   - Image aspect ratio: 1:1
   - Reasoning level: IQ Standard (fast)
 - Defaults should favor speed/efficiency for first-time users while allowing customization
+
+## SEO IQ UI Preferences
+
+### Data Source Clarity
+- **Always label data sources**: Distinguish between GSC-sourced and Keyword Planner-sourced data in the UI
+- **Tooltips for opportunity types**: Explain Quick Win, CTR Optimization, and Content Gap with hover tooltips
+- **No silent failures**: If a feature requires GSC connection and it's not connected, show an inline prompt — never silently do nothing
+
+### Progress Feedback for Multi-Step Operations
+- **Real-time step messages**: For operations like Smart Discover and Autopilot, show step-by-step progress (e.g., "Scanning site URL...", "Researching product-related keywords...")
+- **Independent step execution**: If one step in a multi-step process fails, others should still run — show partial results with clear indication of what succeeded and what failed
+
+### Feature Independence from GSC
+- **Don't gate features on GSC unnecessarily**: If a feature can work with Keyword Planner data alone, don't require GSC connection on the frontend
+- **Autopilot should work without GSC**: The keyword picker selects the best opportunity regardless of source
