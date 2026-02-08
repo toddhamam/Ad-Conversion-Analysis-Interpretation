@@ -7,12 +7,16 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "remotion:studio": "remotion studio",
+    "remotion:render": "remotion render ConvertraVSL out/convertra-vsl.mp4"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@remotion/cli": "^4.0.419",
+    "@remotion/player": "^4.0.419",
     "@stripe/stripe-js": "^8.6.4",
     "@supabase/supabase-js": "^2.91.1",
     "lucide-react": "^0.563.0",
@@ -20,6 +24,7 @@
     "react-dom": "^19.2.0",
     "react-helmet-async": "^2.0.5",
     "react-router-dom": "^6.28.0",
+    "remotion": "^4.0.419",
     "stripe": "^20.2.0"
   },
   "devDependencies": {

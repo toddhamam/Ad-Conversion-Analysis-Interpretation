@@ -1,7 +1,40 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Player } from '@remotion/player';
 import SEO, { organizationSchema, softwareApplicationSchema, faqSchema } from '../components/SEO';
+import { ConvertraVSL } from '../remotion/ConvertraVSL';
+import { VIDEO_CONFIG } from '../remotion/brand';
 import './SalesLanding.css';
+
+// VSL Thumbnail / Poster
+const VSLPoster: React.FC<{ width: number; height: number }> = () => {
+  return (
+    <div className="vsl-poster">
+      <div className="vsl-poster-bg" />
+      <div className="vsl-poster-orb vsl-poster-orb-1" />
+      <div className="vsl-poster-orb vsl-poster-orb-2" />
+      <div className="vsl-poster-orb vsl-poster-orb-3" />
+      <div className="vsl-poster-content">
+        <p className="vsl-poster-eyebrow">Convertra Presents</p>
+        <h2 className="vsl-poster-headline">
+          Stop <span className="vsl-poster-highlight">Guessing</span>.
+          <br />
+          Start <span className="vsl-poster-highlight-alt">Converting</span>.
+        </h2>
+        <p className="vsl-poster-sub">
+          See how ConversionIQ™ turns your ad data into a compounding advantage
+        </p>
+        <div className="vsl-poster-play">
+          <div className="vsl-poster-play-ring" />
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </div>
+        <p className="vsl-poster-play-label">Watch the 90-Second Breakdown</p>
+      </div>
+    </div>
+  );
+};
 
 function SalesLanding() {
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -55,7 +88,7 @@ function SalesLanding() {
     };
   }, []);
 
-  const calendarUrl = '#contact'; // Placeholder - will be replaced with LunchCal URL
+  const calendarUrl = 'https://lunacal.ai/todd-hamam/convertra-live-demo';
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -129,37 +162,32 @@ function SalesLanding() {
           <p className="hero-supporting animate-on-scroll delay-2">
             The #1 conversion intelligence & creative platform for enterprise brands who refuse to waste ad any more spend.
           </p>
-          {/* Hero Demo Placeholder */}
+
+          {/* Hero VSL */}
           <div className="hero-demo animate-on-scroll delay-3">
             <div className="demo-container">
-              <div className="demo-placeholder">
+              <div className="vsl-player-wrapper">
                 <div className="demo-gradient-border"></div>
-                <div className="demo-inner">
-                  {/* Placeholder for video/animation */}
-                  <div className="demo-preview">
-                    <div className="demo-screen">
-                      <div className="screen-header">
-                        <span className="screen-dot"></span>
-                        <span className="screen-dot"></span>
-                        <span className="screen-dot"></span>
-                      </div>
-                      <div className="screen-content">
-                        <div className="screen-chart"></div>
-                        <div className="screen-metrics">
-                          <div className="metric-bar"></div>
-                          <div className="metric-bar"></div>
-                          <div className="metric-bar"></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <button className="play-button" aria-label="Play demo video">
-                    <span className="play-pulse"></span>
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M8 5v14l11-7z"/>
-                    </svg>
-                  </button>
-                </div>
+                <Player
+                  component={ConvertraVSL}
+                  durationInFrames={VIDEO_CONFIG.durationInFrames}
+                  fps={VIDEO_CONFIG.fps}
+                  compositionWidth={VIDEO_CONFIG.width}
+                  compositionHeight={VIDEO_CONFIG.height}
+                  style={{
+                    width: '100%',
+                    aspectRatio: '16 / 9',
+                    borderRadius: 12,
+                    overflow: 'hidden',
+                  }}
+                  controls
+                  loop
+                  renderPoster={({ width, height }: { width: number; height: number }) => (
+                    <VSLPoster width={width} height={height} />
+                  )}
+                  posterFillMode="player-size"
+                  showPosterWhenUnplayed
+                />
               </div>
               <p className="demo-caption">See ConversionIQ™ in action</p>
             </div>
@@ -998,34 +1026,59 @@ function SalesLanding() {
       <section id="urgency" className="section urgency-section">
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">The Cost of Waiting</h2>
+          <p className="urgency-subtitle animate-on-scroll delay-1">
+            Every month without ConversionIQ™, you're bleeding budget across three areas most teams never audit.
+          </p>
 
-          <div className="urgency-content animate-on-scroll delay-1">
-            <p>Every month you spend guessing is a month of wasted ad spend.</p>
-            <p>Every quarter you spend testing is budget your competitors are converting.</p>
-            <p className="urgency-emphasis">
-              The data that could be generating winning ads right now is sitting in your
-              dashboards, <strong>unused</strong>.
-            </p>
-            <p>ConversionIQ™ exists to unlock it.</p>
-            <p className="urgency-scarcity">
-              But because every implementation is bespoke—built and managed by our team—we
-              only take on a <strong>limited number of clients</strong> at any time.
-            </p>
-            <p className="urgency-close">
-              If you're serious about eliminating waste and compounding performance, let's talk.
-            </p>
+          <div className="cost-cards animate-on-scroll delay-2">
+            <div className="cost-card">
+              <div className="cost-card-amount">$80–100K<span className="cost-card-period">/year</span></div>
+              <h3 className="cost-card-title">Overpriced Media Buyers</h3>
+              <p className="cost-card-desc">
+                Senior media buyers command $8–12K/month—and still rely on gut instinct for creative decisions. ConversionIQ™ replaces subjective guesswork with data-driven intelligence, letting a leaner team outperform a bloated one.
+              </p>
+            </div>
+
+            <div className="cost-card">
+              <div className="cost-card-amount">$100K+<span className="cost-card-period">/year</span></div>
+              <h3 className="cost-card-title">Blind Creative Testing</h3>
+              <p className="cost-card-desc">
+                The average brand wastes 60–70% of ad spend on creatives that never convert. Without knowing <em>why</em> your winners work, every A/B test is an expensive coin flip. ConversionIQ™ eliminates the guessing entirely.
+              </p>
+            </div>
+
+            <div className="cost-card">
+              <div className="cost-card-amount">$50–75K<span className="cost-card-period">/year</span></div>
+              <h3 className="cost-card-title">Creative Fatigue & Decay</h3>
+              <p className="cost-card-desc">
+                Winning ads have a shelf life. Most teams don't catch the decay until CPA has already spiked 30–50%. ConversionIQ™ detects fatigue patterns early and generates proven replacements before performance drops.
+              </p>
+            </div>
           </div>
 
-          {/* Urgency Visual */}
-          <div className="urgency-visual animate-on-scroll delay-2">
-            <div className="countdown-placeholder">
-              <span className="spots-label">Limited spots available</span>
-              <div className="spots-indicator">
-                <span className="spot filled"></span>
-                <span className="spot filled"></span>
-                <span className="spot filled"></span>
-                <span className="spot"></span>
-                <span className="spot"></span>
+          <div className="cost-total animate-on-scroll delay-3">
+            <div className="cost-total-inner">
+              <p className="cost-total-label">Total hidden cost of the status quo</p>
+              <p className="cost-total-amount">$230–275K <span className="cost-total-period">per year</span></p>
+              <p className="cost-total-note">And that's before counting the revenue you're leaving on the table from underperforming creatives.</p>
+            </div>
+          </div>
+
+          <div className="urgency-close-wrapper animate-on-scroll delay-3">
+            <p className="urgency-scarcity">
+              Because every implementation is bespoke—built and managed by our team—we
+              only take on a <strong>limited number of clients</strong> at any time.
+            </p>
+            <div className="urgency-visual">
+              <div className="countdown-placeholder">
+                <span className="spots-label">Limited spots available</span>
+                <div className="spots-indicator">
+                  <span className="spot filled"></span>
+                  <span className="spot filled"></span>
+                  <span className="spot filled"></span>
+                  <span className="spot"></span>
+                  <span className="spot"></span>
+                </div>
               </div>
             </div>
           </div>
