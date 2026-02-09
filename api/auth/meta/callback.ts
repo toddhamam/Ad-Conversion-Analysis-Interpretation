@@ -124,7 +124,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + expiresIn);
 
     // Encrypt the access token before storing
-    const encryptedToken = encrypt(accessToken);
+    let encryptedToken: string;
+    try {
+      encryptedToken = encrypt(accessToken);
+    } catch (encErr) {
+      throw new Error(`Encryption failed: ${encErr instanceof Error ? encErr.message : String(encErr)}`);
+    }
 
     // Upsert credentials in database
     const { error: dbError } = await supabase
@@ -150,7 +155,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (dbError) {
       console.error('Failed to store credentials:', dbError);
-      throw new Error('Failed to save Meta credentials');
+      throw new Error(`Failed to save Meta credentials: ${dbError.message || dbError.code || JSON.stringify(dbError)}`);
     }
 
     // Redirect back with success
