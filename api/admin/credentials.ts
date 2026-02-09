@@ -76,6 +76,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleCreateOrg(req, res);
       case 'get-org':
         return handleGetOrg(req, res);
+      case 'update-branding':
+        return handleUpdateBranding(req, res);
       default:
         return res.status(400).json({ error: `Unknown action: ${action}` });
     }
@@ -437,6 +439,37 @@ async function handleCreateOrg(req: VercelRequest, res: VercelResponse) {
   }
 
   return res.status(200).json({ organization: org, inviteLink: null });
+}
+
+// ─── Update Branding ────────────────────────────────────────────────────────
+
+async function handleUpdateBranding(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { organizationId, logoUrl, primaryColor, secondaryColor } = req.body || {};
+
+  if (!organizationId) {
+    return res.status(400).json({ error: 'organizationId is required' });
+  }
+
+  const { error: dbError } = await supabase
+    .from('organizations')
+    .update({
+      logo_url: logoUrl || null,
+      primary_color: primaryColor || '#d4e157',
+      secondary_color: secondaryColor || '#a855f7',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', organizationId);
+
+  if (dbError) {
+    console.error('Failed to update branding:', dbError);
+    return res.status(500).json({ error: 'Failed to update branding' });
+  }
+
+  return res.status(200).json({ success: true });
 }
 
 // ─── Get Organization ───────────────────────────────────────────────────────

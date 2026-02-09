@@ -60,6 +60,12 @@ function OrganizationDetail() {
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
 
+  // Branding settings state
+  const [brandingLogoUrl, setBrandingLogoUrl] = useState('');
+  const [brandingPrimaryColor, setBrandingPrimaryColor] = useState('#d4e157');
+  const [brandingSecondaryColor, setBrandingSecondaryColor] = useState('#a855f7');
+  const [savingBranding, setSavingBranding] = useState(false);
+
   useEffect(() => {
     if (id) {
       loadOrganizationData();
@@ -111,6 +117,9 @@ function OrganizationDetail() {
         created_at: '2024-01-15T10:00:00Z',
         updated_at: '2024-01-15T10:00:00Z',
       });
+      setBrandingLogoUrl('');
+      setBrandingPrimaryColor('#d4e157');
+      setBrandingSecondaryColor('#a855f7');
       setUsers([
         {
           id: 'u1',
@@ -142,7 +151,11 @@ function OrganizationDetail() {
       if (!res.ok) throw new Error('Failed to load organization');
       const data = await res.json();
 
-      setOrganization(data.organization as Organization);
+      const org = data.organization as Organization;
+      setOrganization(org);
+      setBrandingLogoUrl(org.logo_url || '');
+      setBrandingPrimaryColor(org.primary_color || '#d4e157');
+      setBrandingSecondaryColor(org.secondary_color || '#a855f7');
       setUsers((data.users as User[]) || []);
       setInvitations((data.invitations as OrganizationInvitation[]) || []);
 
@@ -166,9 +179,54 @@ function OrganizationDetail() {
       if (res.ok) {
         const data = await res.json();
         setMetaStatus(data as MetaCredentialStatus);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setNotification({ type: 'error', message: errData.error || `Failed to load Meta status (${res.status})` });
       }
     } catch (err) {
       console.error('Failed to load Meta status:', err);
+      setNotification({ type: 'error', message: 'Failed to load Meta connection status' });
+    }
+  };
+
+  const handleSaveBranding = async () => {
+    setSavingBranding(true);
+    try {
+      const token = await getAuthToken();
+      const res = await fetch('/api/admin/credentials/update-branding', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          organizationId: id,
+          logoUrl: brandingLogoUrl || null,
+          primaryColor: brandingPrimaryColor,
+          secondaryColor: brandingSecondaryColor,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to save branding');
+      }
+
+      // Update local state
+      if (organization) {
+        setOrganization({
+          ...organization,
+          logo_url: brandingLogoUrl || null,
+          primary_color: brandingPrimaryColor,
+          secondary_color: brandingSecondaryColor,
+        });
+      }
+      setNotification({ type: 'success', message: 'Branding updated successfully' });
+    } catch (error) {
+      console.error('Failed to save branding:', error);
+      setNotification({ type: 'error', message: error instanceof Error ? error.message : 'Failed to save branding' });
+    } finally {
+      setSavingBranding(false);
     }
   };
 
@@ -1083,7 +1141,8 @@ function OrganizationDetail() {
                 <input
                   type="url"
                   className="admin-form-input"
-                  defaultValue={organization.logo_url || ''}
+                  value={brandingLogoUrl}
+                  onChange={(e) => setBrandingLogoUrl(e.target.value)}
                   placeholder="https://example.com/logo.png"
                 />
               </div>
@@ -1091,20 +1150,25 @@ function OrganizationDetail() {
                 <div className="admin-form-group">
                   <label className="admin-form-label">Primary Color</label>
                   <div className="admin-color-picker">
-                    <input type="color" className="admin-color-swatch" defaultValue={organization.primary_color} />
-                    <input type="text" className="admin-form-input admin-color-input" defaultValue={organization.primary_color} />
+                    <input type="color" className="admin-color-swatch" value={brandingPrimaryColor} onChange={(e) => setBrandingPrimaryColor(e.target.value)} />
+                    <input type="text" className="admin-form-input admin-color-input" value={brandingPrimaryColor} onChange={(e) => setBrandingPrimaryColor(e.target.value)} />
                   </div>
                 </div>
                 <div className="admin-form-group">
                   <label className="admin-form-label">Secondary Color</label>
                   <div className="admin-color-picker">
-                    <input type="color" className="admin-color-swatch" defaultValue={organization.secondary_color} />
-                    <input type="text" className="admin-form-input admin-color-input" defaultValue={organization.secondary_color} />
+                    <input type="color" className="admin-color-swatch" value={brandingSecondaryColor} onChange={(e) => setBrandingSecondaryColor(e.target.value)} />
+                    <input type="text" className="admin-form-input admin-color-input" value={brandingSecondaryColor} onChange={(e) => setBrandingSecondaryColor(e.target.value)} />
                   </div>
                 </div>
               </div>
-              <button className="admin-btn admin-btn-primary" style={{ alignSelf: 'flex-start' }}>
-                Save Branding
+              <button
+                className="admin-btn admin-btn-primary"
+                style={{ alignSelf: 'flex-start' }}
+                onClick={handleSaveBranding}
+                disabled={savingBranding}
+              >
+                {savingBranding ? 'Saving...' : 'Save Branding'}
               </button>
             </div>
           </div>
