@@ -55,16 +55,23 @@ import Loading from '../components/Loading';
 ```
 src/
 ├── pages/           # Route-level components (Channels, MetaAds, AdGenerator, Insights, SalesLanding)
-├── components/      # Reusable UI (DateRangePicker, CampaignTypeDashboard, etc.)
+├── components/      # Reusable UI (DateRangePicker, CampaignTypeDashboard, OnboardingChecklist, etc.)
 ├── services/        # API integrations (metaApi.ts, openaiApi.ts, imageCache.ts, stripeApi.ts)
+├── lib/             # Shared frontend utilities (supabase.ts, authToken.ts)
+├── contexts/        # React contexts (AuthContext, OrganizationContext)
 ├── remotion/        # Remotion VSL video composition and brand constants
 ├── types/           # TypeScript interfaces
 └── data/            # Mock data for development
 
 api/
 ├── _lib/            # Shared backend helpers (encryption, google-auth, google-ads, seo-prompts)
+├── admin/           # Admin-only API routes (credentials.ts)
+├── auth/            # OAuth flows (meta/connect.ts, meta/callback.ts)
 ├── billing/         # Stripe billing API routes (checkout.ts, portal.ts, webhook.ts)
-└── [feature]/       # Feature-specific API routes
+├── funnel/          # Funnel metrics API routes
+├── meta.ts          # Meta API catch-all proxy (proxy, status, upload, insights, campaigns)
+├── seoiq.ts         # SEO IQ catch-all API
+└── google-auth.ts   # Google OAuth token management
 
 public/
 ├── convertra-logo.png  # Convertra brand logo
@@ -75,7 +82,7 @@ public/
 
 | File | Purpose |
 |------|---------|
-| `src/services/metaApi.ts` | Meta Marketing API - fetches ads, creatives, campaigns |
+| `src/services/metaApi.ts` | Meta Marketing API — all calls routed through backend proxy (`/api/meta/proxy`), token never reaches browser |
 | `src/services/openaiApi.ts` | AI analysis (GPT-5.2) + creative generation (Gemini/Veo). Model IDs defined as constants at top of file |
 | `src/services/imageCache.ts` | Client-side image caching with quality scoring |
 | `src/pages/MetaAds.tsx` | Main dashboard - campaign metrics, creative analysis |
@@ -117,12 +124,18 @@ public/
 | `src/pages/SeoIQ.tsx` | SEO IQ dashboard — sites, keywords (GSC + Keyword Planner), articles, content calendar, autopilot |
 | `src/services/seoIqApi.ts` | SEO IQ API service — all frontend API calls with auth header injection |
 | `src/types/seoiq.ts` | SEO IQ TypeScript types — sites, keywords, articles, autopilot, research responses |
-| `src/contexts/OrganizationContext.tsx` | Organization provisioning context with auth |
+| `src/contexts/OrganizationContext.tsx` | Organization provisioning context with auth; loads org Meta credentials on init |
 | `src/remotion/ConvertraVSL.tsx` | Remotion VSL video composition — 13-scene animated sales video with background music |
 | `src/remotion/brand.ts` | VSL brand constants (colors, gradients, fonts, scene timing) |
 | `public/vsl-background-music.mp3` | VSL background music — cinematic inspirational track |
 | `src/remotion/Root.tsx` | Remotion composition entry point |
 | `remotion.config.ts` | Remotion CLI configuration |
+| `api/meta.ts` | Meta API catch-all proxy — routes: proxy, status, upload, insights, campaigns (JWT-protected) |
+| `api/admin/credentials.ts` | Admin credential management — validate, save, status, disconnect (super-admin only) |
+| `src/lib/authToken.ts` | Supabase session access token helper for API calls |
+| `src/components/OnboardingChecklist.tsx` | Client welcome checklist shown on Dashboard for new orgs |
+| `src/components/OnboardingChecklist.css` | Onboarding checklist styles |
+| `src/types/organization.ts` | Organization & credential TypeScript types (includes `pixel_id`) |
 
 ## Routes
 
@@ -163,6 +176,10 @@ public/
 10. **Two-layer AI context** - Channel analysis provides performance patterns (account-wide); Product Context provides identity (product name, author, mockups). Both layers are injected into prompts independently — changing one never affects the other
 11. **JWT auth on API routes** - All `api/seoiq.ts` routes require Bearer token authentication and tenant isolation via `organization_id`. Only `provision-org` and `autopilot-cron` use their own auth mechanisms
 12. **404 catch-all route** - Unknown routes render a branded 404 page instead of a blank screen, preventing route enumeration
+13. **Meta API backend proxy** - All Meta Graph API calls route through `api/meta.ts` — access tokens are decrypted server-side and never sent to the browser. Frontend uses `metaProxy()` helper in `metaApi.ts` which calls `/api/meta/proxy` with JWT auth
+14. **Catch-all serverless function consolidation** - Multi-route API handlers use a single serverless function with `route` query param dispatching (e.g., `api/meta.ts`, `api/seoiq.ts`). Vercel rewrites map friendly URLs to query params. This is required to stay within Vercel Hobby plan's **12 serverless function limit**
+15. **Per-org encrypted credentials** - Meta access tokens stored encrypted (AES-256-GCM) in `organization_credentials` table via `api/_lib/encryption.ts`. Admin can enter credentials manually or use OAuth flow. Credentials include `access_token_encrypted`, `ad_account_id`, `page_id`, `pixel_id`
+16. **Dev mode fallback** - When Supabase is not configured (local dev), `metaApi.ts` falls back to `VITE_META_*` env vars so development works without auth
 
 ---
 
@@ -287,6 +304,170 @@ async function verifySiteOwnership(siteId: string, organizationId: string): Prom
 - **Never log API tokens, keys, or secrets** — not even partially. Wrap any diagnostic logging in `if (import.meta.env.DEV)` for frontend code
 - **Never log Bearer tokens** in serverless functions
 - **Fallback defaults must be safe** — e.g., `is_super_admin` should default to `false`, never `true`
+
+---
+
+## Client Onboarding & Multi-Tenant Meta Credentials
+
+### Overview
+
+Each organization has its own Meta credentials stored encrypted in `organization_credentials`. The admin sets up credentials (via OAuth or manual entry), and all Meta API calls from the frontend are proxied through the backend — the access token never reaches the browser.
+
+### Architecture
+
+| Layer | Files | Purpose |
+|-------|-------|---------|
+| **Credential Storage** | `organization_credentials` table | Encrypted access tokens, ad account IDs, page IDs, pixel IDs per org |
+| **Admin API** | `api/admin/credentials.ts` | Super-admin CRUD: validate, save, status, disconnect |
+| **Meta API Proxy** | `api/meta.ts` | Catch-all proxy — decrypts token server-side, forwards to Meta Graph API |
+| **Frontend Service** | `src/services/metaApi.ts` | All ~20 functions refactored to call `/api/meta/proxy` instead of Meta directly |
+| **Auth Token Helper** | `src/lib/authToken.ts` | Gets Supabase session JWT for API calls |
+| **Admin UI** | `src/pages/admin/OrganizationDetail.tsx` | "Meta Setup" tab with OAuth + manual credential entry |
+| **Client Onboarding** | `src/components/OnboardingChecklist.tsx` | Welcome checklist on Dashboard |
+| **Sidebar Status** | `src/components/Sidebar.tsx` | Meta connection status dot (green/amber/gray) |
+
+### Credential Flow
+
+```
+Admin enters credentials (OAuth or manual)
+  → POST /api/admin/credentials/validate (tests token + ad account against Meta API)
+  → POST /api/admin/credentials/save (encrypts token, stores in organization_credentials)
+  → Status: active
+
+Client uses app
+  → Frontend calls metaProxy() in metaApi.ts
+  → POST /api/meta/proxy with JWT auth header
+  → Backend: JWT → user → organization_id → load encrypted credentials → decrypt → forward to Meta
+  → Response returned to frontend (token never exposed)
+```
+
+### Admin Credential Management (`api/admin/credentials.ts`)
+
+All routes require `is_super_admin === true`.
+
+| Action | Method | Purpose |
+|--------|--------|---------|
+| `status` | GET | Return credential status for an org (never returns token) |
+| `validate` | POST | Test Meta token + ad account via `debug_token` and ad account endpoint |
+| `save` | POST | Encrypt token via `encrypt()`, upsert into `organization_credentials` |
+| `disconnect` | DELETE | Remove credentials for an org |
+
+### Meta API Proxy (`api/meta.ts`)
+
+Catch-all handler with route-based dispatching. Frontend URLs like `/api/meta/proxy` are rewritten to `/api/meta?route=proxy` by `vercel.json`.
+
+| Route | Method | Auth | Purpose |
+|-------|--------|------|---------|
+| `proxy` | POST | JWT → org | General-purpose Meta Graph API proxy |
+| `status` | GET | JWT → org | Non-sensitive credential status (connected, IDs, expiry) |
+| `upload` | POST | JWT → org | Image upload proxy for `adimages` endpoint |
+| `insights` | GET/POST | orgId param | Legacy insights proxy (backwards compat) |
+| `campaigns` | GET | orgId param | Legacy campaigns proxy (backwards compat) |
+
+### Frontend Proxy Helper (`metaApi.ts`)
+
+```typescript
+// All Meta API calls go through this helper
+async function metaProxy(endpoint: string, options?: {
+  method?: string;
+  params?: Record<string, string>;
+  body?: Record<string, unknown>;
+  formEncoded?: boolean;
+}): Promise<any> {
+  const token = await getAuthToken();
+  const res = await fetch('/api/meta/proxy', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      method: options?.method || 'GET',
+      endpoint,
+      params: options?.params,
+      body: options?.body,
+      formEncoded: options?.formEncoded,
+    }),
+  });
+  if (!res.ok) throw new Error(err.message || `Meta API error (${res.status})`);
+  return res.json();
+}
+```
+
+**Dev mode fallback**: When no auth token is available (Supabase not configured), `metaApi.ts` falls back to direct `VITE_META_*` env var calls so local development works without auth.
+
+### Org Credential State
+
+Module-level cache in `metaApi.ts` stores the org's IDs (loaded once from `/api/meta/status`):
+
+```typescript
+let _orgMeta: { connected: boolean; adAccountId: string; pageId: string; pixelId: string } | null = null;
+
+export async function loadOrgMetaCredentials(): Promise<void> { /* calls /api/meta/status */ }
+export function getOrgMetaIds() { return _orgMeta; }
+export function getAdAccountId(): string { return _orgMeta?.adAccountId || VITE fallback; }
+export function getPageId(): string { return _orgMeta?.pageId || VITE fallback; }
+export function getPixelId(): string { return _orgMeta?.pixelId || VITE fallback; }
+```
+
+`loadOrgMetaCredentials()` is called from `OrganizationContext.tsx` on app init.
+
+### Admin Meta Setup Tab
+
+In `OrganizationDetail.tsx`, the "Meta Setup" tab provides:
+
+1. **Connection Status Card** — Green/amber/gray indicator with account name, token expiry
+2. **OAuth Connect** — Existing "Connect via Facebook" button
+3. **Manual Credential Entry** — Form for System User token, ad account ID, page ID, pixel ID
+4. **Validate & Save** — Tests token against Meta API before storing
+5. **Collapsible Setup Guide** — Step-by-step instructions for getting Meta credentials
+
+### Client Onboarding Checklist
+
+`OnboardingChecklist.tsx` renders a dismissible welcome card on Dashboard when:
+- `organization.setup_completed === false`
+- Not previously dismissed (tracked in localStorage: `ci_onboarding_dismissed_{orgId}`)
+
+Steps shown:
+- Account created (always checked)
+- Meta Ads connected (checked if credentials active)
+- Explore your dashboard (link to /dashboard)
+- Analyze your creatives (link to /channels/meta-ads)
+- Generate new ads with CreativeIQ (link to /creatives)
+
+### Sidebar Connection Status
+
+`Sidebar.tsx` includes a `MetaConnectionDot` component next to the "Meta Ads" nav item:
+- Green dot — Meta credentials active
+- Amber dot — Token expired
+- Gray dot — Not connected
+
+Uses `getOrgMetaIds()` from `metaApi.ts` for cached status.
+
+### Admin Setup Checklist (Overview Tab)
+
+The Overview tab in `OrganizationDetail.tsx` shows a granular setup checklist:
+- Organization created (always checked)
+- Owner account active (checks user status)
+- Meta Ads connected (links to Meta Setup tab)
+- Ad Account ID configured (links to Meta Setup tab)
+- Page ID configured (links to Meta Setup tab)
+- Pixel ID configured (optional, links to Meta Setup tab)
+
+### Database: `organization_credentials` Table
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `organization_id` | UUID | Foreign key to organizations |
+| `provider` | TEXT | Always `'meta'` for Meta credentials |
+| `access_token_encrypted` | TEXT | AES-256-GCM encrypted access token |
+| `ad_account_id` | TEXT | Format: `act_XXXXXXXXX` |
+| `page_id` | TEXT | Facebook Page ID |
+| `pixel_id` | TEXT | Meta Pixel ID |
+| `status` | TEXT | `active`, `expired`, `invalid`, `not_connected` |
+| `token_expires_at` | TIMESTAMPTZ | Token expiration date |
+| `metadata` | JSONB | Additional data (e.g., `selected_account_name`) |
+| `last_error` | TEXT | Last error message from Meta API |
 
 ---
 
@@ -782,15 +963,45 @@ Funnel data (`funnel_events` table) is written by an **external system** (the fu
 
 ## Deployment (Vercel)
 
-This is a Single Page Application (SPA) deployed on Vercel. The `vercel.json` configuration includes a rewrite rule to ensure client-side routing works correctly:
+This is a Single Page Application (SPA) deployed on Vercel.
+
+### Serverless Function Limit
+
+**Critical**: Vercel Hobby plan allows a maximum of **12 serverless functions** per deployment. The project currently uses exactly 12. Before adding new `api/*.ts` files, consolidate into existing catch-all handlers or the deployment will fail.
+
+Current serverless functions (12/12):
+1. `api/admin/credentials.ts` — Admin credential management
+2. `api/auth/meta/callback.ts` — Meta OAuth callback
+3. `api/auth/meta/connect.ts` — Meta OAuth initiation
+4. `api/billing/checkout.ts` — Stripe checkout
+5. `api/billing/portal.ts` — Stripe customer portal
+6. `api/billing/subscription.ts` — Subscription management
+7. `api/billing/webhook.ts` — Stripe webhooks
+8. `api/funnel/active-sessions.ts` — Active funnel sessions
+9. `api/funnel/metrics.ts` — Funnel metrics
+10. `api/google-auth.ts` — Google OAuth tokens
+11. `api/meta.ts` — Meta API catch-all (proxy, status, upload, insights, campaigns)
+12. `api/seoiq.ts` — SEO IQ catch-all (sites, keywords, articles, autopilot)
+
+Files in `api/_lib/` are shared helpers, NOT serverless functions.
+
+### Vercel Rewrites
+
+The `vercel.json` maps friendly API URLs to catch-all handlers via query params:
 
 ```json
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/api/seo-iq/:path(.*)", "destination": "/api/seoiq?route=:path" },
+    { "source": "/api/auth/google/:action", "destination": "/api/google-auth?action=:action" },
+    { "source": "/api/admin/credentials/:action", "destination": "/api/admin/credentials?action=:action" },
+    { "source": "/api/meta/:path(.*)", "destination": "/api/meta?route=:path" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
 ```
 
-This is required for `react-router-dom` to handle direct deep links and page refreshes on non-root paths (e.g., `/login`, `/signup`, `/dashboard`).
+The catch-all `/(.*) → /index.html` must be **last** — it enables `react-router-dom` to handle client-side routing for deep links and page refreshes.
 
 ## Development Commands
 
@@ -838,7 +1049,7 @@ Always run `npm run dev` to start the development server before testing URLs. Th
 3. Use in page/component with try/catch + loading state
 
 ### Working with Meta API
-- All requests go through `metaApi.ts`
+- All requests go through `metaApi.ts` → `metaProxy()` → `/api/meta/proxy` (backend). Access tokens never reach the browser.
 - Graph API version: v24.0
 - Creative fetching includes thumbnail URL extraction
 - Campaign metrics include ROAS, CPA, CVR, CTR
@@ -1002,6 +1213,8 @@ The Ad Publisher (Step 3: Configure) provides these ad-level settings that are a
 - Don't log API tokens or keys - wrap diagnostic logging in `if (import.meta.env.DEV)` on frontend, never log secrets in serverless functions
 - Don't trust client-provided organization IDs - always derive from authenticated user's JWT token
 - Don't use `catch (error: any)` - use `catch (error: unknown)` and narrow the type
+- Don't create new `api/*.ts` files without checking the serverless function count first — Vercel Hobby plan limit is 12 functions (currently at 12/12). Add new routes to existing catch-all handlers instead
+- Don't send Meta access tokens to the browser — all Meta API calls must go through the backend proxy (`/api/meta/proxy`)
 
 ---
 
