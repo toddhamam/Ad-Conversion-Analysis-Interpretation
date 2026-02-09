@@ -832,28 +832,29 @@ async function handleResearchKeywords(req: VercelRequest, res: VercelResponse, a
 
       const cluster = classifyCluster(idea.keyword);
 
+      const upsertData: Record<string, unknown> = {
+        site_id,
+        keyword: idea.keyword,
+        search_volume: idea.avgMonthlySearches,
+        competition: idea.competition,
+        competition_index: idea.competitionIndex,
+        opportunity_score: finalScore,
+        topic_cluster: cluster,
+        status: usedKeywords.has(idea.keyword.toLowerCase()) ? 'used' : 'active',
+        impressions: existing?.impressions ?? 0,
+        clicks: existing?.clicks ?? 0,
+        ctr: existing?.ctr ?? 0,
+      };
+
+      if (isContentGap) {
+        upsertData.opportunity_type = 'content_gap';
+        upsertData.reasoning = `${idea.avgMonthlySearches.toLocaleString()} monthly searches, ${idea.competition} competition. High-value content gap opportunity.`;
+        upsertData.action = `Write a comprehensive article targeting "${idea.keyword}" to capture ${idea.avgMonthlySearches.toLocaleString()} monthly searches.`;
+      }
+
       const { error: upsertError } = await supabase
         .from('seo_keywords')
-        .upsert(
-          {
-            site_id,
-            keyword: idea.keyword,
-            search_volume: idea.avgMonthlySearches,
-            competition: idea.competition,
-            competition_index: idea.competitionIndex,
-            opportunity_type: isContentGap ? 'content_gap' : undefined,
-            opportunity_score: finalScore,
-            reasoning: isContentGap
-              ? `${idea.avgMonthlySearches.toLocaleString()} monthly searches, ${idea.competition} competition. High-value content gap opportunity.`
-              : undefined,
-            action: isContentGap
-              ? `Write a comprehensive article targeting "${idea.keyword}" to capture ${idea.avgMonthlySearches.toLocaleString()} monthly searches.`
-              : undefined,
-            topic_cluster: cluster,
-            status: usedKeywords.has(idea.keyword.toLowerCase()) ? 'used' : 'active',
-          },
-          { onConflict: 'site_id,keyword' }
-        );
+        .upsert(upsertData, { onConflict: 'site_id,keyword' });
 
       if (!upsertError) {
         upsertCount++;
