@@ -18,14 +18,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const { organizationId, returnUrl } = req.query;
+  const fallbackUrl = typeof returnUrl === 'string'
+    ? returnUrl
+    : (typeof organizationId === 'string' ? `/admin/organizations/${organizationId}` : '/admin');
+
   if (!META_APP_ID) {
-    return res.status(500).json({ error: 'META_APP_ID is not configured' });
+    return res.redirect(
+      302,
+      `${fallbackUrl}?error=config&message=${encodeURIComponent('Meta OAuth is not configured. Set META_APP_ID and META_APP_SECRET environment variables in Vercel.')}`
+    );
   }
 
-  const { organizationId, returnUrl } = req.query;
-
   if (!organizationId || typeof organizationId !== 'string') {
-    return res.status(400).json({ error: 'organizationId is required' });
+    return res.redirect(
+      302,
+      `${fallbackUrl}?error=config&message=${encodeURIComponent('Organization ID is missing from the request.')}`
+    );
   }
 
   // Generate CSRF state token to prevent attacks
