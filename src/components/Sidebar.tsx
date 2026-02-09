@@ -1,5 +1,6 @@
 import { NavLink, Link } from 'react-router-dom';
 import { useState } from 'react';
+import { getOrgMetaIds } from '../services/metaApi';
 import './Sidebar.css';
 
 interface SidebarProps {
@@ -97,6 +98,7 @@ const Sidebar = ({
               <NavLink to="/channels/meta-ads" className="nav-subitem" onClick={onCloseMobile}>
                 <span className="nav-bullet"></span>
                 <span>Meta Ads</span>
+                <MetaConnectionDot />
               </NavLink>
             </div>
           )}
@@ -154,5 +156,36 @@ const Sidebar = ({
     </>
   );
 };
+
+function MetaConnectionDot() {
+  const meta = getOrgMetaIds();
+  if (!meta) return null;
+
+  const color = meta.connected
+    ? '#22c55e'
+    : meta.status === 'expired'
+      ? '#f59e0b'
+      : '#94a3b8';
+
+  const title = meta.connected
+    ? 'Connected'
+    : meta.status === 'expired'
+      ? 'Token Expired'
+      : 'Not Connected';
+
+  return (
+    <span
+      title={title}
+      style={{
+        width: '8px',
+        height: '8px',
+        borderRadius: '50%',
+        background: color,
+        marginLeft: 'auto',
+        flexShrink: 0,
+      }}
+    />
+  );
+}
 
 export default Sidebar;

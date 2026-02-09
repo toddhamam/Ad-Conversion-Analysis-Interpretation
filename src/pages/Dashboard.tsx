@@ -42,6 +42,7 @@ import {
   Activity,
   Calculator,
 } from 'lucide-react';
+import OnboardingChecklist from '../components/OnboardingChecklist';
 import './Dashboard.css';
 
 interface DashboardStats {
@@ -513,6 +514,8 @@ const Dashboard = () => {
         canonical="/dashboard"
         noindex={true}
       />
+      <OnboardingChecklist />
+
       <div className="dashboard-header">
         <div className="dashboard-header-left">
           <h1 className="dashboard-title">Dashboard</h1>

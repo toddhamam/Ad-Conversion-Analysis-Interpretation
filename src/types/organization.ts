@@ -76,6 +76,7 @@ export interface OrganizationCredential {
   // Provider-specific fields (tokens are encrypted, not exposed to frontend)
   ad_account_id: string | null;
   page_id: string | null;
+  pixel_id: string | null;
   business_id: string | null;
 
   // Token management

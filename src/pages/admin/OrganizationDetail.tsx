@@ -1,19 +1,40 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { getAuthToken } from '../../lib/authToken';
 import Loading from '../../components/Loading';
 import type { Organization, User, OrganizationInvitation } from '../../types/organization';
 
-interface MetaCredential {
-  id: string;
-  provider: string;
-  ad_account_id: string | null;
+interface MetaCredentialStatus {
+  connected: boolean;
   status: string;
-  token_expires_at: string | null;
-  metadata?: {
-    selected_account_name?: string;
-    connected_at?: string;
+  adAccountId: string | null;
+  pageId: string | null;
+  pixelId: string | null;
+  businessId: string | null;
+  tokenExpiresAt: string | null;
+  scopes: string[] | null;
+  lastError: string | null;
+  accountName: string | null;
+  connectedAt: string | null;
+}
+
+interface ValidationResult {
+  valid: boolean;
+  tokenInfo?: {
+    appId: string;
+    type: string;
+    scopes: string[];
+    expiresAt: string | null;
+    isValid: boolean;
   };
+  accountInfo?: {
+    id: string;
+    name: string;
+    accountStatus: number;
+    currency: string;
+  };
+  errors: string[];
 }
 
 function OrganizationDetail() {
@@ -23,10 +44,21 @@ function OrganizationDetail() {
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [invitations, setInvitations] = useState<OrganizationInvitation[]>([]);
-  const [metaCredential, setMetaCredential] = useState<MetaCredential | null>(null);
+  const [metaStatus, setMetaStatus] = useState<MetaCredentialStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'meta' | 'settings'>('overview');
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Meta Setup tab state
+  const [manualToken, setManualToken] = useState('');
+  const [manualAdAccountId, setManualAdAccountId] = useState('');
+  const [manualPageId, setManualPageId] = useState('');
+  const [manualPixelId, setManualPixelId] = useState('');
+  const [showToken, setShowToken] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -96,7 +128,7 @@ function OrganizationDetail() {
         },
       ]);
       setInvitations([]);
-      setMetaCredential(null); // No Meta connection in dev mode
+      setMetaStatus(null);
       setLoading(false);
       return;
     }
@@ -129,19 +161,29 @@ function OrganizationDetail() {
 
       setInvitations((orgInvites as OrganizationInvitation[]) || []);
 
-      // Load Meta credentials
-      const { data: metaCred } = await supabase
-        .from('organization_credentials')
-        .select('id, provider, ad_account_id, status, token_expires_at, metadata')
-        .eq('organization_id', id)
-        .eq('provider', 'meta')
-        .single();
-
-      setMetaCredential(metaCred as MetaCredential | null);
+      // Load Meta credential status via admin API
+      await loadMetaStatus();
     } catch (error) {
       console.error('Failed to load organization:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMetaStatus = async () => {
+    try {
+      const token = await getAuthToken();
+      if (!token) return;
+
+      const res = await fetch(`/api/admin/credentials/status?organizationId=${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMetaStatus(data as MetaCredentialStatus);
+      }
+    } catch (err) {
+      console.error('Failed to load Meta status:', err);
     }
   };
 
@@ -156,21 +198,22 @@ function OrganizationDetail() {
       return;
     }
 
-    if (!isSupabaseConfigured()) {
-      setMetaCredential(null);
-      setNotification({ type: 'success', message: 'Meta Ads disconnected' });
-      return;
-    }
-
     try {
-      const { error } = await supabase
-        .from('organization_credentials')
-        .delete()
-        .eq('organization_id', id)
-        .eq('provider', 'meta');
+      const token = await getAuthToken();
+      if (!token) {
+        setMetaStatus(null);
+        setNotification({ type: 'success', message: 'Meta Ads disconnected' });
+        return;
+      }
 
-      if (error) throw error;
-      setMetaCredential(null);
+      const res = await fetch(`/api/admin/credentials/disconnect?organizationId=${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error('Failed to disconnect');
+      setMetaStatus(null);
+      setValidationResult(null);
       setNotification({ type: 'success', message: 'Meta Ads disconnected successfully' });
     } catch (error) {
       console.error('Failed to disconnect Meta:', error);
@@ -178,8 +221,97 @@ function OrganizationDetail() {
     }
   };
 
-  const isMetaConnected = metaCredential && metaCredential.status === 'active';
-  const isMetaExpired = metaCredential && (metaCredential.status === 'expired' || (metaCredential.token_expires_at && new Date(metaCredential.token_expires_at) < new Date()));
+  const handleValidateCredentials = async () => {
+    if (!manualToken) {
+      setNotification({ type: 'error', message: 'Access token is required' });
+      return;
+    }
+
+    setValidating(true);
+    setValidationResult(null);
+
+    try {
+      const token = await getAuthToken();
+      const res = await fetch('/api/admin/credentials/validate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          accessToken: manualToken,
+          adAccountId: manualAdAccountId || undefined,
+        }),
+      });
+
+      const result = await res.json();
+      setValidationResult(result as ValidationResult);
+
+      if (result.valid) {
+        setNotification({ type: 'success', message: 'Credentials validated successfully' });
+        // Auto-populate account name if available
+        if (result.accountInfo?.name && !manualAdAccountId) {
+          setManualAdAccountId(result.accountInfo.id);
+        }
+      } else {
+        setNotification({ type: 'error', message: result.errors?.[0] || 'Validation failed' });
+      }
+    } catch (error) {
+      console.error('Validation failed:', error);
+      setNotification({ type: 'error', message: 'Failed to validate credentials' });
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  const handleSaveCredentials = async () => {
+    if (!manualToken) {
+      setNotification({ type: 'error', message: 'Access token is required' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const token = await getAuthToken();
+      const res = await fetch('/api/admin/credentials/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          organizationId: id,
+          accessToken: manualToken,
+          adAccountId: manualAdAccountId || undefined,
+          pageId: manualPageId || undefined,
+          pixelId: manualPixelId || undefined,
+          accountName: validationResult?.accountInfo?.name || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to save');
+      }
+
+      setNotification({ type: 'success', message: 'Meta credentials saved successfully' });
+      setManualToken('');
+      setManualAdAccountId('');
+      setManualPageId('');
+      setManualPixelId('');
+      setValidationResult(null);
+      setShowToken(false);
+      await loadMetaStatus();
+    } catch (error) {
+      console.error('Save failed:', error);
+      setNotification({ type: 'error', message: error instanceof Error ? error.message : 'Failed to save credentials' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isMetaConnected = metaStatus?.connected === true;
+  const isMetaExpired = metaStatus?.status === 'expired';
 
   const handleDeleteOrganization = async () => {
     if (!confirm('Are you sure you want to delete this organization? This action cannot be undone.')) {
@@ -316,23 +448,38 @@ function OrganizationDetail() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: '1px solid var(--border-primary)', paddingBottom: '0' }}>
-        {(['overview', 'users', 'settings'] as const).map((tab) => (
+        {([
+          { key: 'overview', label: 'Overview' },
+          { key: 'meta', label: 'Meta Setup' },
+          { key: 'users', label: 'Users' },
+          { key: 'settings', label: 'Settings' },
+        ] as const).map((tab) => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
             style={{
               padding: '12px 20px',
               background: 'transparent',
               border: 'none',
-              borderBottom: activeTab === tab ? '2px solid var(--accent-violet)' : '2px solid transparent',
-              color: activeTab === tab ? 'var(--text-primary)' : 'var(--text-secondary)',
-              fontWeight: activeTab === tab ? 600 : 500,
+              borderBottom: activeTab === tab.key ? '2px solid var(--accent-violet)' : '2px solid transparent',
+              color: activeTab === tab.key ? 'var(--text-primary)' : 'var(--text-secondary)',
+              fontWeight: activeTab === tab.key ? 600 : 500,
               fontSize: '14px',
               cursor: 'pointer',
               marginBottom: '-1px',
             }}
           >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab.label}
+            {tab.key === 'meta' && (
+              <span style={{
+                display: 'inline-block',
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                marginLeft: '8px',
+                background: isMetaConnected ? '#22c55e' : isMetaExpired ? '#f59e0b' : '#94a3b8',
+              }} />
+            )}
           </button>
         ))}
       </div>
@@ -407,62 +554,437 @@ function OrganizationDetail() {
                     <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Meta Ads Manager</div>
                     {isMetaConnected ? (
                       <div style={{ fontSize: '13px', color: '#22c55e' }}>
-                        Connected{metaCredential?.metadata?.selected_account_name ? ` • ${metaCredential.metadata.selected_account_name}` : ''}
+                        Connected{metaStatus?.accountName ? ` — ${metaStatus.accountName}` : ''}
                       </div>
                     ) : isMetaExpired ? (
-                      <div style={{ fontSize: '13px', color: '#f59e0b' }}>Token expired - reconnect required</div>
+                      <div style={{ fontSize: '13px', color: '#f59e0b' }}>Token expired — reconnect required</div>
                     ) : (
                       <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Not connected</div>
                     )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {isMetaConnected && (
-                    <button onClick={handleDisconnectMeta} className="admin-btn admin-btn-secondary" style={{ padding: '8px 16px' }}>
-                      Disconnect
-                    </button>
-                  )}
-                  <button
-                    onClick={handleConnectMeta}
-                    className={isMetaConnected ? 'admin-btn admin-btn-secondary' : 'admin-btn admin-btn-primary'}
-                    style={{ padding: '8px 16px' }}
-                  >
-                    {isMetaConnected ? 'Reconnect' : isMetaExpired ? 'Reconnect' : 'Connect'}
-                  </button>
-                </div>
+                <button
+                  onClick={() => setActiveTab('meta')}
+                  className="admin-btn admin-btn-secondary"
+                  style={{ padding: '8px 16px' }}
+                >
+                  {isMetaConnected ? 'Manage' : 'Set Up'}
+                </button>
               </div>
             </div>
           </div>
 
           {/* Setup Status */}
-          {!organization.setup_completed && (
-            <div className="admin-card" style={{ borderColor: 'var(--accent-violet)', background: 'rgba(168, 85, 247, 0.05)' }}>
-              <div className="admin-card-header">
-                <h2 className="admin-card-title">Setup Checklist</h2>
-                <span className="admin-badge-pill" style={{ background: 'var(--accent-violet)', color: 'white' }}>
-                  In Progress
-                </span>
+          {!organization.setup_completed && (() => {
+            const ownerActive = users.some(u => u.role === 'owner' && u.status === 'active');
+            const hasPageId = !!metaStatus?.pageId;
+            const hasPixelId = !!metaStatus?.pixelId;
+            const checklist = [
+              { label: 'Organization created', done: true },
+              { label: 'Owner account active', done: ownerActive, tab: 'users' as const },
+              { label: 'Meta Ads connected', done: !!isMetaConnected, tab: 'meta' as const },
+              { label: 'Ad Account ID configured', done: !!metaStatus?.adAccountId, tab: 'meta' as const },
+              { label: 'Page ID configured', done: hasPageId, tab: 'meta' as const },
+              { label: 'Pixel ID configured (optional)', done: hasPixelId, tab: 'meta' as const },
+            ];
+            const requiredDone = checklist.filter((_, i) => i < 5).every(c => c.done);
+
+            return (
+              <div className="admin-card" style={{ borderColor: 'var(--accent-violet)', background: 'rgba(168, 85, 247, 0.05)' }}>
+                <div className="admin-card-header">
+                  <h2 className="admin-card-title">Setup Checklist</h2>
+                  <span className="admin-badge-pill" style={{ background: requiredDone ? '#22c55e' : 'var(--accent-violet)', color: 'white' }}>
+                    {requiredDone ? 'Ready' : 'In Progress'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {checklist.map((item, i) => (
+                    <div
+                      key={i}
+                      style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: item.tab ? 'pointer' : 'default' }}
+                      onClick={item.tab ? () => setActiveTab(item.tab!) : undefined}
+                    >
+                      <div style={{
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        background: item.done ? '#22c55e' : 'transparent',
+                        border: item.done ? 'none' : '2px solid var(--border-primary)',
+                      }}>
+                        {item.done && (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </div>
+                      <span style={{
+                        fontSize: '14px',
+                        color: item.done ? 'var(--text-muted)' : 'var(--text-primary)',
+                        textDecoration: item.done ? 'line-through' : 'none',
+                      }}>
+                        {item.label}
+                      </span>
+                      {!item.done && item.tab && (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}>
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
-                  <input type="checkbox" checked disabled style={{ width: '18px', height: '18px' }} />
-                  <span>Organization created</span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={invitations.length === 0 && users.length > 0} disabled style={{ width: '18px', height: '18px' }} />
-                  <span>Owner invitation accepted</span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={!!isMetaConnected} disabled style={{ width: '18px', height: '18px' }} />
-                  <span>Meta Ads connected</span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={!!organization.stripe_customer_id} disabled style={{ width: '18px', height: '18px' }} />
-                  <span>Billing configured</span>
-                </label>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Meta Setup Tab */}
+      {activeTab === 'meta' && (
+        <div style={{ display: 'grid', gap: '24px' }}>
+          {/* Connection Status */}
+          <div className="admin-card">
+            <div className="admin-card-header">
+              <h2 className="admin-card-title">Connection Status</h2>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '4px 12px',
+                borderRadius: '100px',
+                fontSize: '12px',
+                fontWeight: 600,
+                background: isMetaConnected ? 'rgba(34, 197, 94, 0.1)' : isMetaExpired ? 'rgba(251, 191, 36, 0.1)' : 'var(--bg-secondary)',
+                color: isMetaConnected ? '#16a34a' : isMetaExpired ? '#d97706' : 'var(--text-muted)',
+              }}>
+                <span style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: isMetaConnected ? '#22c55e' : isMetaExpired ? '#f59e0b' : '#94a3b8',
+                }} />
+                {isMetaConnected ? 'Connected' : isMetaExpired ? 'Expired' : 'Not Connected'}
+              </span>
+            </div>
+
+            {isMetaConnected || isMetaExpired ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                <div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Account Name</div>
+                  <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>
+                    {metaStatus?.accountName || '—'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Ad Account ID</div>
+                  <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)', fontFamily: 'monospace' }}>
+                    {metaStatus?.adAccountId || '—'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Page ID</div>
+                  <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)', fontFamily: 'monospace' }}>
+                    {metaStatus?.pageId || '—'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Pixel ID</div>
+                  <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)', fontFamily: 'monospace' }}>
+                    {metaStatus?.pixelId || '—'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Token Expires</div>
+                  <div style={{
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    color: isMetaExpired ? '#dc2626' : 'var(--text-primary)',
+                  }}>
+                    {metaStatus?.tokenExpiresAt
+                      ? new Date(metaStatus.tokenExpiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                      : '—'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Connected</div>
+                  <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>
+                    {metaStatus?.connectedAt
+                      ? new Date(metaStatus.connectedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                      : '—'}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p style={{ color: 'var(--text-muted)', fontSize: '14px', margin: 0 }}>
+                No Meta Ads connection configured. Use one of the methods below to connect.
+              </p>
+            )}
+
+            {(isMetaConnected || isMetaExpired) && (
+              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-primary)', display: 'flex', gap: '8px' }}>
+                <button onClick={handleDisconnectMeta} className="admin-btn admin-btn-danger" style={{ padding: '8px 16px' }}>
+                  Disconnect
+                </button>
+              </div>
+            )}
+
+            {metaStatus?.lastError && (
+              <div style={{
+                marginTop: '12px',
+                padding: '10px 14px',
+                background: 'rgba(239, 68, 68, 0.05)',
+                border: '1px solid rgba(239, 68, 68, 0.15)',
+                borderRadius: '8px',
+                fontSize: '13px',
+                color: '#dc2626',
+              }}>
+                Last error: {metaStatus.lastError}
+              </div>
+            )}
+          </div>
+
+          {/* Connect via OAuth */}
+          <div className="admin-card">
+            <div className="admin-card-header">
+              <h2 className="admin-card-title">Option 1: Connect via Facebook</h2>
+            </div>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 16px' }}>
+              Quick setup for clients who can authorize via Facebook login. This grants access through OAuth and automatically configures the ad account.
+            </p>
+            <button onClick={handleConnectMeta} className="admin-btn admin-btn-primary" style={{ padding: '10px 20px' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#1e293b" style={{ marginRight: '4px' }}>
+                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+              </svg>
+              {isMetaConnected ? 'Reconnect via Facebook' : 'Connect via Facebook'}
+            </button>
+          </div>
+
+          {/* Manual Entry */}
+          <div className="admin-card">
+            <div className="admin-card-header">
+              <h2 className="admin-card-title">Option 2: Manual Credential Entry</h2>
+            </div>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 20px' }}>
+              For System User tokens from Meta Business Manager. Use this when you have the client's credentials directly.
+            </p>
+
+            <div className="admin-form">
+              {/* Access Token */}
+              <div className="admin-form-group">
+                <label className="admin-form-label">Access Token *</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showToken ? 'text' : 'password'}
+                    className="admin-form-input"
+                    value={manualToken}
+                    onChange={(e) => setManualToken(e.target.value)}
+                    placeholder="System User token from Meta Business Manager"
+                    style={{ paddingRight: '48px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowToken(!showToken)}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--text-muted)',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {showToken ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                <span className="admin-form-help">The token is encrypted at rest and never exposed to the client's browser.</span>
+              </div>
+
+              {/* Ad Account ID + Page ID */}
+              <div className="admin-form-row">
+                <div className="admin-form-group">
+                  <label className="admin-form-label">Ad Account ID</label>
+                  <input
+                    type="text"
+                    className="admin-form-input"
+                    value={manualAdAccountId}
+                    onChange={(e) => setManualAdAccountId(e.target.value)}
+                    placeholder="act_XXXXXXXXX"
+                  />
+                  <span className="admin-form-help">Business Settings &rarr; Ad Accounts</span>
+                </div>
+                <div className="admin-form-group">
+                  <label className="admin-form-label">Page ID</label>
+                  <input
+                    type="text"
+                    className="admin-form-input"
+                    value={manualPageId}
+                    onChange={(e) => setManualPageId(e.target.value)}
+                    placeholder="XXXXXXXXXXXXXXXXX"
+                  />
+                  <span className="admin-form-help">Facebook Page &rarr; About &rarr; Page ID</span>
+                </div>
+              </div>
+
+              {/* Pixel ID */}
+              <div className="admin-form-group">
+                <label className="admin-form-label">Pixel ID <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
+                <input
+                  type="text"
+                  className="admin-form-input"
+                  value={manualPixelId}
+                  onChange={(e) => setManualPixelId(e.target.value)}
+                  placeholder="XXXXXXXXXXXXXXXXX"
+                  style={{ maxWidth: '400px' }}
+                />
+                <span className="admin-form-help">Events Manager &rarr; Data Sources &rarr; Pixel &rarr; Settings</span>
+              </div>
+
+              {/* Validation Result */}
+              {validationResult && (
+                <div style={{
+                  padding: '16px',
+                  borderRadius: '8px',
+                  background: validationResult.valid ? 'rgba(34, 197, 94, 0.05)' : 'rgba(239, 68, 68, 0.05)',
+                  border: `1px solid ${validationResult.valid ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
+                }}>
+                  <div style={{ fontWeight: 600, fontSize: '14px', color: validationResult.valid ? '#16a34a' : '#dc2626', marginBottom: '8px' }}>
+                    {validationResult.valid ? 'Validation Passed' : 'Validation Failed'}
+                  </div>
+
+                  {validationResult.tokenInfo && (
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                      <div>Token type: <strong>{validationResult.tokenInfo.type}</strong></div>
+                      <div>Scopes: {validationResult.tokenInfo.scopes.join(', ') || 'none'}</div>
+                      {validationResult.tokenInfo.expiresAt && (
+                        <div>Expires: {new Date(validationResult.tokenInfo.expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</div>
+                      )}
+                    </div>
+                  )}
+
+                  {validationResult.accountInfo && (
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                      <div>Account: <strong>{validationResult.accountInfo.name}</strong> ({validationResult.accountInfo.id})</div>
+                      <div>Currency: {validationResult.accountInfo.currency}</div>
+                    </div>
+                  )}
+
+                  {validationResult.errors.length > 0 && (
+                    <ul style={{ margin: '8px 0 0', paddingLeft: '20px', fontSize: '13px', color: '#dc2626' }}>
+                      {validationResult.errors.map((err, i) => (
+                        <li key={i}>{err}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={handleValidateCredentials}
+                  className="admin-btn admin-btn-secondary"
+                  disabled={validating || !manualToken}
+                  style={{ padding: '10px 20px' }}
+                >
+                  {validating ? 'Validating...' : 'Validate'}
+                </button>
+                <button
+                  onClick={handleSaveCredentials}
+                  className="admin-btn admin-btn-primary"
+                  disabled={saving || !manualToken}
+                  style={{ padding: '10px 20px' }}
+                >
+                  {saving ? 'Saving...' : 'Save Credentials'}
+                </button>
               </div>
             </div>
-          )}
+          </div>
+
+          {/* Setup Guide */}
+          <div className="admin-card">
+            <button
+              onClick={() => setGuideOpen(!guideOpen)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
+              }}
+            >
+              <h2 className="admin-card-title" style={{ margin: 0 }}>Setup Guide</h2>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--text-muted)"
+                strokeWidth="2"
+                style={{ transform: guideOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+
+            {guideOpen && (
+              <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                {/* Getting a Token */}
+                <div>
+                  <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 12px' }}>
+                    Getting a Meta Access Token
+                  </h3>
+                  <ol style={{ margin: 0, paddingLeft: '20px', fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+                    <li>Go to <strong>business.facebook.com</strong> &rarr; Business Settings &rarr; System Users</li>
+                    <li>Create a System User with <strong>Admin</strong> role (not Employee)</li>
+                    <li>Click <strong>"Generate New Token"</strong> and select your app</li>
+                    <li>Grant these scopes: <code style={{ background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: '4px', fontSize: '12px' }}>ads_management</code>, <code style={{ background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: '4px', fontSize: '12px' }}>ads_read</code>, <code style={{ background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: '4px', fontSize: '12px' }}>pages_read_engagement</code>, <code style={{ background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: '4px', fontSize: '12px' }}>business_management</code>, <code style={{ background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: '4px', fontSize: '12px' }}>read_insights</code></li>
+                    <li>Assign the System User access to: the <strong>Ad Account</strong>, the <strong>Page</strong>, and the <strong>Pixel</strong></li>
+                    <li>Accept the <strong>Non-Discrimination Policy</strong></li>
+                  </ol>
+                </div>
+
+                {/* Finding Ad Account ID */}
+                <div>
+                  <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 8px' }}>
+                    Finding the Ad Account ID
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                    Business Manager &rarr; Business Settings &rarr; Accounts &rarr; Ad Accounts. The ID starts with <code style={{ background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: '4px', fontSize: '12px' }}>act_</code> followed by numbers.
+                  </p>
+                </div>
+
+                {/* Finding Page ID */}
+                <div>
+                  <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 8px' }}>
+                    Finding the Page ID
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                    Go to the Facebook Page &rarr; About &rarr; Page Transparency section &rarr; Page ID. It's a long numeric string.
+                  </p>
+                </div>
+
+                {/* Finding Pixel ID */}
+                <div>
+                  <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 8px' }}>
+                    Finding the Pixel ID
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                    Events Manager &rarr; Data Sources &rarr; select your Pixel &rarr; Settings. The Pixel ID is a numeric string. This is optional but required for conversion tracking with Sales campaigns.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
