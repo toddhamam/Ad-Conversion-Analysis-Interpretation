@@ -774,7 +774,7 @@ async function handleResearchKeywords(req: VercelRequest, res: VercelResponse, a
     // Fetch existing keywords for this site (to check overlap and preserve GSC data)
     const { data: existingKeywords } = await supabase
       .from('seo_keywords')
-      .select('keyword, current_position, opportunity_score')
+      .select('keyword, current_position, opportunity_score, impressions, clicks, ctr')
       .eq('site_id', site_id);
 
     const existingMap = new Map(
