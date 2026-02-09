@@ -85,7 +85,6 @@ function OrganizationDetail() {
   // Handle OAuth callback query params
   useEffect(() => {
     const metaConnected = searchParams.get('meta_connected');
-    const adAccount = searchParams.get('ad_account');
     const error = searchParams.get('error');
     const message = searchParams.get('message');
 
@@ -97,6 +96,8 @@ function OrganizationDetail() {
       setActiveTab('meta');
       // Clear query params
       setSearchParams({});
+      // Reload Meta status to pick up the new credentials
+      loadMetaStatus();
     } else if (error) {
       setNotification({
         type: 'error',
