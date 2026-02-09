@@ -20,6 +20,19 @@ if (import.meta.env.DEV) {
 
 // ─── Per-org credential state ────────────────────────────────────────────────
 
+interface AvailableAdAccount {
+  id: string;
+  name: string;
+  account_id: string;
+  account_status: number;
+  currency: string;
+}
+
+interface AvailablePage {
+  id: string;
+  name: string;
+}
+
 interface OrgMetaIds {
   adAccountId: string;
   pageId: string;
@@ -28,6 +41,9 @@ interface OrgMetaIds {
   status: string;
   accountName: string | null;
   tokenExpiresAt: string | null;
+  availableAccounts: AvailableAdAccount[];
+  availablePages: AvailablePage[];
+  needsConfiguration: boolean;
 }
 
 let _orgMeta: OrgMetaIds | null = null;
@@ -48,6 +64,9 @@ export async function loadOrgMetaCredentials(): Promise<OrgMetaIds | null> {
       status: FALLBACK_ACCESS_TOKEN ? 'active' : 'not_connected',
       accountName: null,
       tokenExpiresAt: null,
+      availableAccounts: [],
+      availablePages: [],
+      needsConfiguration: false,
     };
     return _orgMeta;
   }
@@ -69,6 +88,9 @@ export async function loadOrgMetaCredentials(): Promise<OrgMetaIds | null> {
       status: data.status,
       accountName: data.accountName,
       tokenExpiresAt: data.tokenExpiresAt,
+      availableAccounts: data.availableAccounts || [],
+      availablePages: data.availablePages || [],
+      needsConfiguration: data.needsConfiguration || false,
     };
     return _orgMeta;
   } catch (err) {
@@ -82,6 +104,69 @@ export async function loadOrgMetaCredentials(): Promise<OrgMetaIds | null> {
  */
 export function getOrgMetaIds(): OrgMetaIds | null {
   return _orgMeta;
+}
+
+/**
+ * Clear cached org Meta credentials. Call before loadOrgMetaCredentials()
+ * to force a fresh fetch (e.g. after OAuth or configuration changes).
+ */
+export function clearOrgMetaCache(): void {
+  _orgMeta = null;
+}
+
+/**
+ * Save ad account / page / pixel selection for the current org.
+ * Used by the self-service onboarding flow.
+ */
+export async function saveMetaSelection(selection: {
+  adAccountId: string;
+  pageId: string | null;
+  pixelId: string | null;
+}): Promise<{ success: boolean }> {
+  const token = await getAuthToken();
+  if (!token) throw new Error('Not authenticated');
+
+  const res = await fetch('/api/meta/update-selection', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(selection),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to save Meta configuration');
+  }
+
+  return res.json();
+}
+
+/**
+ * Fetch available pixels for a given ad account.
+ * Used by the self-service onboarding flow.
+ */
+export async function fetchAvailablePixels(adAccountId: string): Promise<Array<{ id: string; name: string }>> {
+  const token = await getAuthToken();
+  if (!token) throw new Error('Not authenticated');
+
+  const res = await fetch('/api/meta/fetch-pixels', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ adAccountId }),
+  });
+
+  if (!res.ok) {
+    console.warn('Failed to fetch pixels');
+    return [];
+  }
+
+  const data = await res.json();
+  return data.pixels || [];
 }
 
 // ─── Unified Meta API fetch helpers ──────────────────────────────────────────

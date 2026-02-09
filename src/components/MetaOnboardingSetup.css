@@ -1,0 +1,198 @@
+.meta-onboarding {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.meta-onboarding-connect {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.meta-onboarding-connect p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+  flex: 1;
+}
+
+.meta-connect-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #1877f2;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s ease, transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.meta-connect-btn:hover {
+  background: #166fe5;
+  transform: translateY(-1px);
+}
+
+.meta-connect-btn:active {
+  transform: translateY(0);
+}
+
+/* Configure state */
+.meta-onboarding-configure {
+  display: grid;
+  gap: 14px;
+}
+
+.meta-onboarding-configure-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 2px;
+}
+
+.meta-onboarding-configure-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 4px;
+}
+
+.meta-onboarding-field {
+  display: grid;
+  gap: 4px;
+}
+
+.meta-onboarding-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.meta-onboarding-label-optional {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.meta-onboarding-select {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  border-radius: 8px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.meta-onboarding-select:focus {
+  border-color: var(--accent-violet);
+}
+
+.meta-onboarding-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.meta-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: var(--accent-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease, opacity 0.15s ease;
+  justify-self: flex-start;
+}
+
+.meta-save-btn:hover {
+  background: var(--accent-secondary);
+}
+
+.meta-save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Success state */
+.meta-onboarding-success {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(34, 197, 94, 0.06);
+  border: 1px solid rgba(34, 197, 94, 0.15);
+  border-radius: 8px;
+}
+
+.meta-onboarding-success-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #16a34a;
+}
+
+/* Error message */
+.meta-onboarding-error {
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #dc2626;
+}
+
+/* Notification banner */
+.meta-onboarding-notification {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.meta-onboarding-notification.success {
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  color: #16a34a;
+}
+
+.meta-onboarding-notification.error {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #dc2626;
+}
+
+.meta-onboarding-notification-dismiss {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: inherit;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+@media (max-width: 600px) {
+  .meta-onboarding-connect {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .meta-connect-btn {
+    justify-content: center;
+  }
+}

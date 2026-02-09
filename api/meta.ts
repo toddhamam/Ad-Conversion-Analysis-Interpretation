@@ -96,6 +96,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleInsights(req, res);
       case 'campaigns':
         return handleCampaigns(req, res);
+      case 'update-selection':
+        return handleUpdateSelection(req, res);
+      case 'fetch-pixels':
+        return handleFetchPixels(req, res);
       default:
         return res.status(400).json({ error: `Unknown route: ${route}` });
     }
@@ -227,19 +231,26 @@ async function handleStatus(req: VercelRequest, res: VercelResponse) {
       pixelId: null,
       tokenExpiresAt: null,
       accountName: null,
+      availableAccounts: [],
+      availablePages: [],
+      needsConfiguration: false,
     });
   }
 
   const isExpired = cred.token_expires_at && new Date(cred.token_expires_at) < new Date();
+  const isActive = cred.status === 'active' && !isExpired;
 
   return res.status(200).json({
-    connected: cred.status === 'active' && !isExpired,
+    connected: isActive,
     status: isExpired ? 'expired' : cred.status,
     adAccountId: cred.ad_account_id,
     pageId: cred.page_id,
     pixelId: cred.pixel_id,
     tokenExpiresAt: cred.token_expires_at,
     accountName: cred.metadata?.selected_account_name || null,
+    availableAccounts: cred.metadata?.available_accounts || [],
+    availablePages: cred.metadata?.available_pages || [],
+    needsConfiguration: isActive && (!cred.ad_account_id || !cred.page_id),
   });
 }
 
@@ -464,4 +475,100 @@ async function handleCampaigns(req: VercelRequest, res: VercelResponse) {
   }
 
   return res.status(200).json(data);
+}
+
+// ─── Route: update-selection ────────────────────────────────────────────────
+// User-facing endpoint to save ad account / page / pixel selection.
+// Organization ID is derived from JWT — never trusted from the request body.
+
+async function handleUpdateSelection(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { adAccountId, pageId, pixelId } = req.body || {};
+
+  if (!adAccountId) {
+    return res.status(400).json({ error: 'adAccountId is required' });
+  }
+
+  // Load current metadata to preserve it
+  const { data: cred } = await supabase
+    .from('organization_credentials')
+    .select('metadata')
+    .eq('organization_id', auth.organizationId)
+    .eq('provider', 'meta')
+    .single();
+
+  if (!cred) {
+    return res.status(404).json({ error: 'No Meta credentials found. Please connect your Meta account first.' });
+  }
+
+  // Find selected account name from available accounts
+  const availableAccounts = cred.metadata?.available_accounts || [];
+  const selectedAccount = availableAccounts.find((acc: { id: string }) => acc.id === adAccountId);
+
+  const { error: dbError } = await supabase
+    .from('organization_credentials')
+    .update({
+      ad_account_id: adAccountId,
+      page_id: pageId || null,
+      pixel_id: pixelId || null,
+      metadata: {
+        ...cred.metadata,
+        selected_account_name: selectedAccount?.name || null,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq('organization_id', auth.organizationId)
+    .eq('provider', 'meta');
+
+  if (dbError) {
+    console.error('Failed to update selection:', dbError);
+    return res.status(500).json({ error: 'Failed to save configuration' });
+  }
+
+  return res.status(200).json({ success: true });
+}
+
+// ─── Route: fetch-pixels ────────────────────────────────────────────────────
+// User-facing endpoint to fetch available pixels for a selected ad account.
+
+async function handleFetchPixels(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { adAccountId } = req.body || {};
+  if (!adAccountId) {
+    return res.status(400).json({ error: 'adAccountId is required' });
+  }
+
+  const creds = await loadCredentials(auth.organizationId);
+  if (!creds) {
+    return res.status(404).json({ error: 'No Meta credentials found' });
+  }
+
+  const pixelsUrl = new URL(`${GRAPH_API_BASE}/${adAccountId}/adspixels`);
+  pixelsUrl.searchParams.set('access_token', creds.accessToken);
+  pixelsUrl.searchParams.set('fields', 'id,name');
+
+  const pixelsResponse = await fetch(pixelsUrl.toString());
+  const pixelsData = await pixelsResponse.json();
+
+  if (pixelsData.error) {
+    return res.status(400).json({ error: `Meta API error: ${pixelsData.error.message}` });
+  }
+
+  return res.status(200).json({ pixels: pixelsData.data || [] });
 }
