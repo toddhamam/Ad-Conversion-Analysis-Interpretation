@@ -17,12 +17,12 @@ const VSLPoster: React.FC<{ width: number; height: number }> = () => {
       <div className="vsl-poster-content">
         <p className="vsl-poster-eyebrow">Convertra Presents</p>
         <h2 className="vsl-poster-headline">
-          Stop <span className="vsl-poster-highlight">Guessing</span>.
+          Scale <span className="vsl-poster-highlight">Creative Testing</span>.
           <br />
-          Start <span className="vsl-poster-highlight-alt">Converting</span>.
+          On <span className="vsl-poster-highlight-alt">Autopilot</span>.
         </h2>
         <p className="vsl-poster-sub">
-          See how ConversionIQ™ turns your ad data into a compounding advantage
+          See how ConversionIQ™ launches, tests, and scales winning creatives autonomously
         </p>
         <div className="vsl-poster-play">
           <div className="vsl-poster-play-ring" />

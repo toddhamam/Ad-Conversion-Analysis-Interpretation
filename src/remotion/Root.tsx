@@ -1,4 +1,4 @@
-import { Composition } from 'remotion';
+import { Composition, registerRoot } from 'remotion';
 import { ConvertraVSL } from './ConvertraVSL';
 import { VIDEO_CONFIG } from './brand';
 
@@ -16,3 +16,5 @@ export const RemotionRoot: React.FC = () => {
     </>
   );
 };
+
+registerRoot(RemotionRoot);

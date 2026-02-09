@@ -42,7 +42,7 @@ function scaleIn(frame: number, fps: number, delay = 0): number {
 
 // ─── Scene Components ─────────────────────────────────────────────
 
-// Scene 1: Hook - "You're spending millions on ads."
+// Scene 1: Hook - "While your competitors wait on designers..."
 function HookScene() {
   const frame = useCurrentFrame();
 
@@ -109,29 +109,31 @@ function HookScene() {
             margin: 0,
           }}
         >
-          You're spending{' '}
-          <span style={{ color: COLORS.lime }}>millions</span> on ads.
+          While your{' '}
+          <span style={{ color: COLORS.lime }}>competitors</span> wait
+          on designers, media buyers, and other human bottlenecks...
         </p>
       </div>
     </AbsoluteFill>
   );
 }
 
-// Scene 2: Pain Question - "But do you know WHY?"
+// Scene 2: CIQ Velocity Reveal - "ConversionIQ™ is already testing 50 creatives"
 function PainQuestionScene() {
   const frame = useCurrentFrame();
 
   const line1Opacity = fadeIn(frame, 10, 20);
   const line1Y = slideUp(frame, 10, 20);
-  const whyOpacity = fadeIn(frame, 50, 20);
-  const whyScale = interpolate(frame, [50, 80], [0.8, 1], {
+  const numberOpacity = fadeIn(frame, 50, 20);
+  const numberScale = interpolate(frame, [50, 80], [0.8, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
     easing: Easing.out(Easing.back(1.5)),
   });
   const line2Opacity = fadeIn(frame, 90, 20);
   const line2Y = slideUp(frame, 90, 20);
-  const sceneOpacity = frame > 180 ? fadeOut(frame, 180, 30) : 1;
+  const taglineOpacity = fadeIn(frame, 140, 25);
+  const sceneOpacity = frame > 210 ? fadeOut(frame, 210, 30) : 1;
 
   return (
     <AbsoluteFill
@@ -146,7 +148,7 @@ function PainQuestionScene() {
         <p
           style={{
             fontFamily: FONTS.primary,
-            fontSize: 64,
+            fontSize: 62,
             fontWeight: 600,
             color: COLORS.textLight,
             lineHeight: 1.5,
@@ -155,28 +157,28 @@ function PainQuestionScene() {
             transform: `translateY(${line1Y}px)`,
           }}
         >
-          But do you actually know
+          ConversionIQ™ is already launching, testing, and scaling
         </p>
         <p
           style={{
             fontFamily: FONTS.primary,
-            fontSize: 140,
+            fontSize: 130,
             fontWeight: 700,
             background: GRADIENTS.dualGlow,
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
-            margin: '24px 0',
-            opacity: whyOpacity,
-            transform: `scale(${whyScale})`,
+            margin: '20px 0',
+            opacity: numberOpacity,
+            transform: `scale(${numberScale})`,
           }}
         >
-          WHY
+          dozens of creatives
         </p>
         <p
           style={{
             fontFamily: FONTS.primary,
-            fontSize: 64,
+            fontSize: 62,
             fontWeight: 600,
             color: COLORS.textLight,
             lineHeight: 1.5,
@@ -185,7 +187,20 @@ function PainQuestionScene() {
             transform: `translateY(${line2Y}px)`,
           }}
         >
-          your best ads convert?
+          — before your morning standup.
+        </p>
+        <p
+          style={{
+            fontFamily: FONTS.primary,
+            fontSize: 56,
+            fontWeight: 700,
+            color: COLORS.textLight,
+            letterSpacing: 6,
+            margin: '32px 0 0 0',
+            opacity: taglineOpacity,
+          }}
+        >
+          Creative velocity. Unlimited. Autonomous.
         </p>
       </div>
     </AbsoluteFill>
@@ -195,48 +210,48 @@ function PainQuestionScene() {
 // SVG line icons for the loop scene
 const LoopIcons = {
   launch: (color: string) => (
-    <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <polyline points="17 8 12 3 7 8" />
       <line x1="12" y1="3" x2="12" y2="15" />
     </svg>
   ),
   clock: (color: string) => (
-    <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" />
       <polyline points="12 6 12 12 16 14" />
     </svg>
   ),
   question: (color: string) => (
-    <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" />
       <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
       <circle cx="12" cy="17" r="0.5" fill={color} stroke="none" />
     </svg>
   ),
   refresh: (color: string) => (
-    <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="23 4 23 10 17 10" />
       <polyline points="1 20 1 14 7 14" />
       <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
     </svg>
   ),
   burn: (color: string) => (
-    <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 2c1 3-2 5-2 8a4 4 0 0 0 8 0c0-2-1-3-2-4" />
       <path d="M12 22c-4 0-6-2.5-6-6 0-2.5 1.5-4 3-5.5" />
       <path d="M14 22c2-1 4-3.5 4-6" />
     </svg>
   ),
   arrow: (color: string) => (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M5 12h14" />
       <polyline points="12 5 19 12 12 19" />
     </svg>
   ),
 };
 
-// Scene 3: The Loop - Endless cycle of guessing
+// Scene 3: The Loop - The creative bottleneck
 function TheLoopScene() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -245,11 +260,11 @@ function TheLoopScene() {
   const headerY = slideUp(frame, 5, 20);
 
   const steps = [
-    { label: 'Launch creative', icon: LoopIcons.launch },
-    { label: 'Wait for data', icon: LoopIcons.clock },
-    { label: 'Guess what worked', icon: LoopIcons.question },
-    { label: 'Test again', icon: LoopIcons.refresh },
-    { label: 'Burn more budget', icon: LoopIcons.burn },
+    { label: 'Brief the team', icon: LoopIcons.launch },
+    { label: 'Wait for design', icon: LoopIcons.clock },
+    { label: 'Review & revise', icon: LoopIcons.refresh },
+    { label: 'Finally launch', icon: LoopIcons.question },
+    { label: 'One ad. Repeat.', icon: LoopIcons.burn },
   ];
 
   const sceneOpacity = frame > 240 ? fadeOut(frame, 240, 30) : 1;
@@ -267,7 +282,7 @@ function TheLoopScene() {
         <p
           style={{
             fontFamily: FONTS.primary,
-            fontSize: 56,
+            fontSize: 72,
             fontWeight: 600,
             color: COLORS.textLightMuted,
             marginBottom: 70,
@@ -275,8 +290,8 @@ function TheLoopScene() {
             transform: `translateY(${headerY}px)`,
           }}
         >
-          You're trapped in an{' '}
-          <span style={{ color: COLORS.lime }}>endless loop</span>
+          You're stuck in the{' '}
+          <span style={{ color: COLORS.lime }}>creative bottleneck</span>
         </p>
 
         <div
@@ -284,7 +299,7 @@ function TheLoopScene() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 20,
+            gap: 32,
           }}
         >
           {steps.map((step, i) => {
@@ -297,26 +312,26 @@ function TheLoopScene() {
             const iconColor = isActive ? COLORS.lime : 'rgba(248, 250, 252, 0.5)';
 
             return (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
                 <div
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
-                    gap: 18,
+                    gap: 24,
                     opacity: stepScale,
                     transform: `scale(${stepScale})`,
                   }}
                 >
                   <div
                     style={{
-                      width: 140,
-                      height: 140,
-                      borderRadius: 24,
+                      width: 220,
+                      height: 220,
+                      borderRadius: 32,
                       background: isActive
                         ? 'rgba(212, 225, 87, 0.1)'
                         : 'rgba(255, 255, 255, 0.03)',
-                      border: `1.5px solid ${isActive ? 'rgba(212, 225, 87, 0.4)' : 'rgba(255,255,255,0.08)'}`,
+                      border: `2px solid ${isActive ? 'rgba(212, 225, 87, 0.4)' : 'rgba(255,255,255,0.08)'}`,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -327,7 +342,7 @@ function TheLoopScene() {
                   <span
                     style={{
                       fontFamily: FONTS.primary,
-                      fontSize: 22,
+                      fontSize: 36,
                       fontWeight: 500,
                       color: isActive ? COLORS.textLight : COLORS.textLightMuted,
                       whiteSpace: 'nowrap',
@@ -357,15 +372,15 @@ function TheLoopScene() {
           <p
             style={{
               fontFamily: FONTS.primary,
-              fontSize: 40,
-              fontWeight: 500,
+              fontSize: 56,
+              fontWeight: 600,
               color: 'rgba(239, 68, 68, 0.9)',
               marginTop: 60,
               opacity: fadeIn(frame, 180, 20),
               transform: `translateY(${slideUp(frame, 180, 20)}px)`,
             }}
           >
-            Sound familiar?
+            Days per creative. Sound familiar?
           </p>
         )}
       </div>
@@ -373,7 +388,7 @@ function TheLoopScene() {
   );
 }
 
-// Scene 4: Revelation - "The answers are already in your data"
+// Scene 4: Revelation - "What if creative testing ran itself?"
 function RevelationScene() {
   const frame = useCurrentFrame();
 
@@ -384,7 +399,7 @@ function RevelationScene() {
   const highlightOpacity = fadeIn(frame, 100, 25);
   const sceneOpacity = frame > 180 ? fadeOut(frame, 180, 30) : 1;
 
-  // Particles connecting to represent data
+  // Particles converging to represent automation
   const particleCount = 12;
   const particles = Array.from({ length: particleCount }, (_, i) => {
     const angle = (i / particleCount) * Math.PI * 2;
@@ -407,7 +422,7 @@ function RevelationScene() {
         alignItems: 'center',
       }}
     >
-      {/* Data particles */}
+      {/* Automation particles */}
       {particles.map((p, i) => (
         <div
           key={i}
@@ -439,8 +454,9 @@ function RevelationScene() {
             transform: `translateY(${line1Y}px)`,
           }}
         >
-          The answers are already in{' '}
-          <span style={{ color: COLORS.lime }}>your data</span>.
+          What if{' '}
+          <span style={{ color: COLORS.lime }}>creative testing</span>{' '}
+          ran itself?
         </p>
         <p
           style={{
@@ -454,7 +470,7 @@ function RevelationScene() {
             transform: `translateY(${line2Y}px)`,
           }}
         >
-          You just can't see them.
+          At any scale. Fully autonomous.
         </p>
         <p
           style={{
@@ -467,7 +483,7 @@ function RevelationScene() {
             opacity: highlightOpacity,
           }}
         >
-          Until now.
+          Meet ConversionIQ™.
         </p>
       </div>
     </AbsoluteFill>
@@ -525,20 +541,20 @@ function CIQRevealScene() {
         <p
           style={{
             fontFamily: FONTS.primary,
-            fontSize: 28,
+            fontSize: 36,
             fontWeight: 500,
             color: COLORS.textLightMuted,
             letterSpacing: 8,
             textTransform: 'uppercase',
-            margin: '0 0 24px 0',
+            margin: '0 0 28px 0',
           }}
         >
-          Introducing Our Proprietary Technology
+          Introducing Our Agentic Technology
         </p>
         <h2
           style={{
             fontFamily: FONTS.primary,
-            fontSize: 110,
+            fontSize: 130,
             fontWeight: 700,
             background: GRADIENTS.dualGlow,
             WebkitBackgroundClip: 'text',
@@ -553,16 +569,16 @@ function CIQRevealScene() {
         <p
           style={{
             fontFamily: FONTS.primary,
-            fontSize: 30,
+            fontSize: 38,
             fontWeight: 400,
             color: COLORS.textLightMuted,
-            margin: '24px 0 0 0',
+            margin: '28px 0 0 0',
             opacity: taglineOpacity,
-            maxWidth: 900,
+            maxWidth: 1100,
           }}
         >
-          The deep-level intelligence engine that reads your entire ad ecosystem
-          and tells you exactly why conversions happen.
+          The autonomous creative intelligence engine that launches, tests,
+          and scales your winning ads — at a velocity no human team can match.
         </p>
       </div>
 
@@ -578,10 +594,10 @@ function CIQRevealScene() {
         <p
           style={{
             fontFamily: FONTS.primary,
-            fontSize: 44,
-            fontWeight: 500,
+            fontSize: 52,
+            fontWeight: 600,
             color: COLORS.textLight,
-            letterSpacing: 3,
+            letterSpacing: 4,
           }}
         >
           Extract &middot; Interpret &middot; Generate &middot; Repeat
@@ -594,7 +610,7 @@ function CIQRevealScene() {
 // SVG line art icons for mechanism steps
 const MechanismIcons = {
   extract: (color: string) => (
-    <svg width="90" height="90" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="130" height="130" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="7" height="7" rx="1" />
       <rect x="14" y="3" width="7" height="7" rx="1" />
       <rect x="3" y="14" width="7" height="7" rx="1" />
@@ -606,7 +622,7 @@ const MechanismIcons = {
     </svg>
   ),
   interpret: (color: string) => (
-    <svg width="90" height="90" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="130" height="130" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="11" cy="11" r="8" />
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
       <path d="M8 11h6" />
@@ -615,14 +631,14 @@ const MechanismIcons = {
     </svg>
   ),
   generate: (color: string) => (
-    <svg width="90" height="90" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="130" height="130" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 2L2 7l10 5 10-5-10-5z" />
       <path d="M2 17l10 5 10-5" />
       <path d="M2 12l10 5 10-5" />
     </svg>
   ),
   repeat: (color: string) => (
-    <svg width="90" height="90" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="130" height="130" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M17 2l4 4-4 4" />
       <path d="M3 11V9a4 4 0 0 1 4-4h14" />
       <path d="M7 22l-4-4 4-4" />
@@ -693,24 +709,24 @@ function MechanismStep({
         <span
           style={{
             fontFamily: FONTS.primary,
-            fontSize: 22,
+            fontSize: 30,
             fontWeight: 600,
             background: GRADIENTS.dualGlow,
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
-            letterSpacing: 3,
+            letterSpacing: 4,
           }}
         >
           ConversionIQ™ Engine
         </span>
         <div
           style={{
-            width: 60,
+            width: 80,
             height: 3,
             background: GRADIENTS.dualGlow,
             borderRadius: 2,
-            margin: '10px auto 0',
+            margin: '12px auto 0',
           }}
         />
       </div>
@@ -720,8 +736,8 @@ function MechanismStep({
           display: 'flex',
           alignItems: 'center',
           gap: 100,
-          padding: '0 120px',
-          maxWidth: 1600,
+          padding: '0 100px',
+          maxWidth: 1800,
         }}
       >
         {/* Step icon / number */}
@@ -734,9 +750,9 @@ function MechanismStep({
         >
           <div
             style={{
-              width: 260,
-              height: 260,
-              borderRadius: 36,
+              width: 340,
+              height: 340,
+              borderRadius: 44,
               background: COLORS.bgSecondary,
               border: `2px solid ${accentColor}30`,
               display: 'flex',
@@ -746,14 +762,14 @@ function MechanismStep({
               boxShadow: `0 20px 60px ${accentColor}15`,
             }}
           >
-            <div style={{ marginBottom: 12 }}>{icon}</div>
+            <div style={{ marginBottom: 16 }}>{icon}</div>
             <span
               style={{
                 fontFamily: FONTS.primary,
-                fontSize: 20,
+                fontSize: 28,
                 fontWeight: 600,
                 color: accentColor,
-                letterSpacing: 4,
+                letterSpacing: 5,
                 textTransform: 'uppercase',
               }}
             >
@@ -767,10 +783,10 @@ function MechanismStep({
           <h3
             style={{
               fontFamily: FONTS.primary,
-              fontSize: 76,
+              fontSize: 96,
               fontWeight: 700,
               color: COLORS.textPrimary,
-              margin: '0 0 20px 0',
+              margin: '0 0 24px 0',
               opacity: textOpacity,
               transform: `translateY(${textY}px)`,
             }}
@@ -780,12 +796,12 @@ function MechanismStep({
           <p
             style={{
               fontFamily: FONTS.primary,
-              fontSize: 34,
+              fontSize: 42,
               fontWeight: 400,
               color: COLORS.textSecondary,
               lineHeight: 1.6,
               margin: 0,
-              maxWidth: 850,
+              maxWidth: 950,
               opacity: descOpacity,
               transform: `translateY(${descY}px)`,
             }}
@@ -1038,10 +1054,10 @@ function CostOfWaitingScene() {
         <h2
           style={{
             fontFamily: FONTS.primary,
-            fontSize: 72,
+            fontSize: 88,
             fontWeight: 700,
             color: COLORS.textLight,
-            margin: '0 0 8px 0',
+            margin: '0 0 12px 0',
             opacity: headerOpacity,
             transform: `translateY(${headerY}px)`,
           }}
@@ -1052,7 +1068,7 @@ function CostOfWaitingScene() {
         <p
           style={{
             fontFamily: FONTS.primary,
-            fontSize: 30,
+            fontSize: 40,
             fontWeight: 400,
             color: COLORS.textLightMuted,
             margin: '0 0 56px 0',
@@ -1106,8 +1122,8 @@ function CostOfWaitingScene() {
               >
                 <div
                   style={{
-                    width: 430,
-                    padding: '44px 36px',
+                    width: 480,
+                    padding: '48px 40px',
                     borderRadius: 24,
                     background: 'rgba(239, 68, 68, 0.04)',
                     border: `1px solid rgba(239, 68, 68, ${0.15 + cardPulse * 0.1})`,
@@ -1119,17 +1135,17 @@ function CostOfWaitingScene() {
                   <p
                     style={{
                       fontFamily: FONTS.primary,
-                      fontSize: 64,
+                      fontSize: 80,
                       fontWeight: 700,
                       color: red,
-                      margin: '0 0 4px 0',
+                      margin: '0 0 6px 0',
                       lineHeight: 1,
                     }}
                   >
                     {cost.prefix}{displayAmount}{cost.suffix}
                     <span
                       style={{
-                        fontSize: 26,
+                        fontSize: 34,
                         fontWeight: 500,
                         color: COLORS.textLightMuted,
                       }}
@@ -1142,10 +1158,10 @@ function CostOfWaitingScene() {
                   <p
                     style={{
                       fontFamily: FONTS.primary,
-                      fontSize: 26,
+                      fontSize: 34,
                       fontWeight: 600,
                       color: COLORS.textLight,
-                      margin: '16px 0 10px 0',
+                      margin: '18px 0 12px 0',
                     }}
                   >
                     {cost.label}
@@ -1155,7 +1171,7 @@ function CostOfWaitingScene() {
                   <p
                     style={{
                       fontFamily: FONTS.primary,
-                      fontSize: 20,
+                      fontSize: 28,
                       fontWeight: 400,
                       color: COLORS.textLightMuted,
                       margin: 0,
@@ -1180,8 +1196,8 @@ function CostOfWaitingScene() {
           <div
             style={{
               display: 'inline-block',
-              padding: '28px 72px',
-              borderRadius: 20,
+              padding: '36px 88px',
+              borderRadius: 24,
               background: `linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(245, 158, 11, 0.08) 100%)`,
               border: `2px solid rgba(239, 68, 68, ${0.3 + totalPulse * 0.2})`,
               boxShadow: `0 0 ${40 * totalPulse}px ${redGlow}, 0 12px 40px rgba(0, 0, 0, 0.3)`,
@@ -1190,11 +1206,11 @@ function CostOfWaitingScene() {
             <p
               style={{
                 fontFamily: FONTS.primary,
-                fontSize: 22,
+                fontSize: 30,
                 fontWeight: 500,
                 color: COLORS.textLightMuted,
-                margin: '0 0 8px 0',
-                letterSpacing: 3,
+                margin: '0 0 10px 0',
+                letterSpacing: 4,
                 textTransform: 'uppercase',
               }}
             >
@@ -1203,10 +1219,10 @@ function CostOfWaitingScene() {
             <p
               style={{
                 fontFamily: FONTS.primary,
-                fontSize: 88,
+                fontSize: 104,
                 fontWeight: 700,
                 color: red,
-                margin: '0 0 8px 0',
+                margin: '0 0 10px 0',
                 lineHeight: 1,
                 textShadow: `0 0 30px ${redGlow}`,
               }}
@@ -1214,7 +1230,7 @@ function CostOfWaitingScene() {
               ${totalValue}K+
               <span
                 style={{
-                  fontSize: 36,
+                  fontSize: 44,
                   fontWeight: 500,
                   color: COLORS.textLightMuted,
                 }}
@@ -1225,7 +1241,7 @@ function CostOfWaitingScene() {
             <p
               style={{
                 fontFamily: FONTS.primary,
-                fontSize: 22,
+                fontSize: 30,
                 fontWeight: 400,
                 color: amber,
                 margin: 0,
@@ -1271,10 +1287,10 @@ function EnterpriseScene() {
         <p
           style={{
             fontFamily: FONTS.primary,
-            fontSize: 40,
+            fontSize: 56,
             fontWeight: 500,
             color: COLORS.textLightMuted,
-            margin: '0 0 16px 0',
+            margin: '0 0 24px 0',
             opacity: line1Opacity,
             transform: `translateY(${line1Y}px)`,
           }}
@@ -1284,15 +1300,15 @@ function EnterpriseScene() {
         <h2
           style={{
             fontFamily: FONTS.primary,
-            fontSize: 76,
+            fontSize: 96,
             fontWeight: 700,
             color: COLORS.textLight,
-            margin: '0 0 70px 0',
+            margin: '0 0 80px 0',
             opacity: line2Opacity,
             transform: `translateY(${line2Y}px)`,
           }}
         >
-          It's a{' '}
+          It's an{' '}
           <span
             style={{
               background: GRADIENTS.dualGlow,
@@ -1301,7 +1317,7 @@ function EnterpriseScene() {
               backgroundClip: 'text',
             }}
           >
-            system
+            automated partnership
           </span>
           .
         </h2>
@@ -1327,8 +1343,8 @@ function EnterpriseScene() {
               >
                 <div
                   style={{
-                    padding: '32px 52px',
-                    borderRadius: 16,
+                    padding: '44px 64px',
+                    borderRadius: 20,
                     background: 'rgba(255, 255, 255, 0.05)',
                     border: '1px solid rgba(255, 255, 255, 0.1)',
                     backdropFilter: 'blur(10px)',
@@ -1337,7 +1353,7 @@ function EnterpriseScene() {
                   <p
                     style={{
                       fontFamily: FONTS.primary,
-                      fontSize: 28,
+                      fontSize: 40,
                       fontWeight: 600,
                       color: COLORS.textLight,
                       margin: 0,
@@ -1401,13 +1417,13 @@ function CTAScene() {
           style={{
             opacity: logoScale,
             transform: `scale(${logoScale})`,
-            marginBottom: 16,
+            marginBottom: 24,
           }}
         >
           <Img
             src={staticFile('convertra-logo.png')}
             style={{
-              height: 80,
+              height: 110,
               objectFit: 'contain',
               filter: 'brightness(0) invert(1)',
             }}
@@ -1418,19 +1434,19 @@ function CTAScene() {
         <p
           style={{
             fontFamily: FONTS.primary,
-            fontSize: 26,
+            fontSize: 36,
             fontWeight: 600,
-            letterSpacing: 5,
+            letterSpacing: 6,
             textTransform: 'uppercase',
             background: GRADIENTS.dualGlow,
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
-            margin: '0 0 52px 0',
+            margin: '0 0 60px 0',
             opacity: logoScale,
           }}
         >
-          Enterprise Level Creative Intelligence
+          Autonomous Creative Velocity at Scale
         </p>
 
         {/* CTA Button */}
@@ -1438,22 +1454,22 @@ function CTAScene() {
           style={{
             opacity: ctaOpacity,
             transform: `translateY(${ctaY}px)`,
-            marginBottom: 48,
+            marginBottom: 56,
           }}
         >
           <div
             style={{
               display: 'inline-block',
-              padding: '32px 88px',
+              padding: '40px 110px',
               background: COLORS.lime,
-              borderRadius: 18,
+              borderRadius: 20,
               boxShadow: `0 0 ${50 * pulseIntensity}px ${COLORS.limeGlow}`,
             }}
           >
             <p
               style={{
                 fontFamily: FONTS.primary,
-                fontSize: 44,
+                fontSize: 56,
                 fontWeight: 700,
                 color: COLORS.textPrimary,
                 margin: 0,
@@ -1468,10 +1484,10 @@ function CTAScene() {
         <p
           style={{
             fontFamily: FONTS.primary,
-            fontSize: 32,
+            fontSize: 40,
             fontWeight: 500,
             color: COLORS.textLightMuted,
-            margin: '0 0 20px 0',
+            margin: '0 0 24px 0',
             opacity: taglineOpacity,
           }}
         >
@@ -1481,7 +1497,7 @@ function CTAScene() {
         <p
           style={{
             fontFamily: FONTS.primary,
-            fontSize: 28,
+            fontSize: 36,
             fontWeight: 400,
             color: COLORS.textMuted,
             margin: 0,
@@ -1490,7 +1506,7 @@ function CTAScene() {
             transform: `translateY(${subY}px)`,
           }}
         >
-          Your data already knows what converts. Now you will too.
+          Scale creative testing on autopilot. That's ConversionIQ™.
         </p>
       </div>
     </AbsoluteFill>
@@ -1508,7 +1524,7 @@ export const ConvertraVSL: React.FC = () => {
         volume={(f) =>
           interpolate(
             f,
-            [0, 45, 3170, 3260],
+            [0, 45, 3200, 3290],
             [0, 0.25, 0.25, 0],
             { extrapolateRight: 'clamp' },
           )
@@ -1545,7 +1561,7 @@ export const ConvertraVSL: React.FC = () => {
         <MechanismStep
           stepNumber="1"
           title="Extract"
-          description="ConversionIQ™ ingests every data point across your ad channels — Meta, Google, TikTok, programmatic — unifying spend, creative, audience, and conversion data into one intelligence layer."
+          description="ConversionIQ™ continuously ingests every data point across your ad channels — Meta, Google, TikTok, programmatic — building a real-time intelligence layer that powers autonomous creative decisions at scale."
           accentColor={COLORS.lime}
           icon={MechanismIcons.extract(COLORS.lime)}
         />
@@ -1567,7 +1583,7 @@ export const ConvertraVSL: React.FC = () => {
         <MechanismStep
           stepNumber="3"
           title="Generate"
-          description="ConversionIQ™ uses those proven conversion patterns to engineer new ad creatives — copy, visuals, and targeting — built from real intelligence, not templates or best guesses."
+          description="ConversionIQ™ autonomously engineers new ad creatives — copy, visuals, and targeting — from proven conversion patterns. Not templates. Not best guesses. Real intelligence, at scale."
           accentColor={COLORS.lime}
           icon={MechanismIcons.generate(COLORS.lime)}
         />
@@ -1578,7 +1594,7 @@ export const ConvertraVSL: React.FC = () => {
         <MechanismStep
           stepNumber="4"
           title="Repeat"
-          description="ConversionIQ™ learns from every single conversion. Each ad makes the next one smarter. It's not a one-time insight — it's a compounding advantage your competitors can't replicate."
+          description="Every creative tested makes the next one smarter. ConversionIQ™ compounds its advantage with each conversion — accelerating your creative velocity while your competitors stay stuck in the bottleneck."
           accentColor={COLORS.violet}
           icon={MechanismIcons.repeat(COLORS.violet)}
         />
