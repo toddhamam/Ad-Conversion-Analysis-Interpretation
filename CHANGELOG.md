@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-02-09 — 7-day free trial, billing enforcement, and pricing overhaul
+
+### Added
+- **7-day Pro trial for all new signups**: New organizations start with `plan_tier: 'pro'`, `subscription_status: 'trialing'`, and `current_period_end` set 7 days out. No credit card required.
+- **SubscriptionGate component** (`src/components/SubscriptionGate.tsx`): Wraps app content in `MainLayout` and blocks access when the subscription is invalid (expired trial, canceled). Always allows `/billing` and `/account` so users can upgrade. Blocks `/seo-iq` for trial users (paid-only feature).
+- **TrialBanner component** (`src/components/TrialBanner.tsx`): Persistent countdown banner during trial — "X days left in your free trial. Subscribe now and lock in $89/month". Turns amber when 2 or fewer days remain. Dismissible per session.
+- **Early-bird pricing**: Pro plan shows $89/month (instead of $99) during the trial period. Stripe coupon (`STRIPE_EARLY_BIRD_COUPON_ID`) applied automatically at checkout when the org is trialing.
+- **Enterprise setup fee**: $2,500 one-time charge added to the first invoice via `subscription_data.add_invoice_items` when subscribing to Enterprise.
+- **Trial computed fields** in `OrganizationContext`: `isTrialing`, `isSubscriptionValid`, `trialDaysRemaining` derived from org data and exposed via context.
+- **Trial helpers** in `stripeApi.ts`: `isInTrial(org)` and `getTrialDaysRemaining(org)` utility functions.
+- **Trial status card** on Billing page: Shows countdown and early-bird messaging when trialing.
+- **Trial expired alert** on Billing page: Prompts upgrade when trial has ended.
+
+### Changed
+- **Free tier removed**: No more free plan in pricing UI. `PRICING_PLANS` array now contains only Pro ($99/month) and Enterprise ($1,500/month).
+- **Pricing grid**: Changed from 3-column to 2-column layout (free tier removed).
+- **Enterprise pricing updated**: $1,500/month (was $499), $1,250/month yearly, with $2,500 one-time setup fee.
+- **PlanCard component**: Now supports `showEarlyBird` prop, early-bird badge, strikethrough regular price, setup fee display, and dedicated account manager feature.
+- **`isCurrentPlan` logic**: Only marks a plan as "current" when `subscription_status === 'active'` (not during trial).
+- **Webhook `customer.subscription.deleted`**: No longer resets `plan_tier` to `'free'` — keeps existing tier so user sees "resubscribe" instead of "upgrade".
+- **Checkout endpoint**: Detects trial status from Supabase and applies early-bird coupon or enterprise setup fee accordingly.
+
+### New Environment Variables
+- `STRIPE_EARLY_BIRD_COUPON_ID` — Stripe coupon ID for early-bird $10/month discount
+- `STRIPE_PRICE_ENTERPRISE_SETUP` — Stripe one-time price ID for $2,500 enterprise setup fee
+- `STRIPE_PRICE_PRO_MONTHLY` — Stripe recurring price ID for Pro $99/month
+- `STRIPE_PRICE_ENTERPRISE_MONTHLY` — Stripe recurring price ID for Enterprise $1,500/month
+
 ## 2026-02-09 — Self-service Meta onboarding for users
 
 ### Added

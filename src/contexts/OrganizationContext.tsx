@@ -195,12 +195,26 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
     }
   }, [organization]);
 
+  // Compute trial/subscription status
+  const isTrialing = organization?.subscription_status === 'trialing';
+  const trialEndDate = organization?.current_period_end ? new Date(organization.current_period_end) : null;
+  const trialDaysRemaining = isTrialing && trialEndDate
+    ? Math.max(0, Math.ceil((trialEndDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : 0;
+  const isSubscriptionValid =
+    organization?.subscription_status === 'active' ||
+    organization?.subscription_status === 'past_due' ||
+    (isTrialing && trialDaysRemaining > 0);
+
   const value: OrganizationContextValue = {
     organization,
     user,
     isOwner: user?.role === 'owner',
     isAdmin: user?.role === 'owner' || user?.role === 'admin',
     isSuperAdmin: user?.is_super_admin ?? false,
+    isTrialing,
+    isSubscriptionValid,
+    trialDaysRemaining,
     loading: authLoading || loading,
     error,
     refresh: loadOrganizationData,

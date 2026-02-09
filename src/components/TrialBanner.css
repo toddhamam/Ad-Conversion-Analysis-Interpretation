@@ -1,0 +1,64 @@
+.trial-banner {
+  background: rgba(168, 85, 247, 0.06);
+  border-bottom: 1px solid rgba(168, 85, 247, 0.15);
+  padding: 10px 24px;
+}
+
+.trial-banner-urgent {
+  background: rgba(245, 158, 11, 0.08);
+  border-bottom-color: rgba(245, 158, 11, 0.2);
+}
+
+.trial-banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1400px;
+}
+
+.trial-banner-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.trial-banner-urgent .trial-banner-text {
+  color: #b45309;
+}
+
+.trial-banner-text strong {
+  color: var(--text-primary);
+}
+
+.trial-banner-urgent .trial-banner-text strong {
+  color: #92400e;
+}
+
+.trial-banner-cta {
+  color: var(--accent-violet);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.trial-banner-cta:hover {
+  text-decoration: underline;
+}
+
+.trial-banner-urgent .trial-banner-cta {
+  color: #d97706;
+}
+
+.trial-banner-dismiss {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0 4px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.trial-banner-dismiss:hover {
+  color: var(--text-primary);
+}

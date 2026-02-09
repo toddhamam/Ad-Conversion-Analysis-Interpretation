@@ -164,13 +164,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           organizationId,
         });
 
-        // Revert organization to free tier
+        // Mark subscription as canceled (keep plan_tier so user sees "resubscribe")
         if (supabase && organizationId) {
           await supabase
             .from('organizations')
             .update({
               subscription_status: 'canceled',
-              plan_tier: 'free',
               subscription_id: null,
               current_period_start: null,
               current_period_end: null,
