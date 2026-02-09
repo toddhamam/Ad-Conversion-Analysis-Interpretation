@@ -20,6 +20,7 @@ import {
   fetchScheduledRuns,
   createScheduledRuns,
   deleteScheduledRun,
+  diagnoseGoogleAds,
 } from '../services/seoIqApi';
 import type {
   SeoSite,
@@ -365,7 +366,36 @@ export default function SeoIQ() {
       if (totalFetched > 0) {
         setSuccess(`Smart Discover found ${totalFetched} keywords with ${totalGaps} content gaps`);
       } else if (errors.length > 0 && !auto) {
-        setError(`Smart Discover failed: ${errors[0]}`);
+        // Run diagnostics for permission/config errors to get detailed report
+        const firstError = errors[0];
+        if (firstError.toLowerCase().includes('permission') || firstError.toLowerCase().includes('not configured')) {
+          try {
+            setSmartDiscoverStep('Running Google Ads diagnostics...');
+            const report = await diagnoseGoogleAds();
+            console.info('Google Ads diagnostic report:', report);
+
+            // Build a user-friendly error from the diagnostic report
+            const diagParts: string[] = [];
+            if (report.listCustomersStatus === 'FAILED') {
+              diagParts.push(String(report.listCustomersError || 'Cannot list accessible accounts'));
+            } else if (report.targetCustomerAccessible === false) {
+              diagParts.push(`Account ${report.targetCustomerId} is not accessible. Available: ${JSON.stringify(report.accessibleCustomers)}`);
+            }
+            if (report.keywordPlannerError) {
+              diagParts.push(String(report.keywordPlannerError));
+            }
+            if (report.hasAdwordsScope === false) {
+              diagParts.push('OAuth token is missing the adwords scope');
+            }
+
+            const diagMsg = diagParts.length > 0 ? diagParts[0] : firstError;
+            setError(`Smart Discover: ${diagMsg}`);
+          } catch {
+            setError(`Smart Discover failed: ${firstError}`);
+          }
+        } else {
+          setError(`Smart Discover failed: ${firstError}`);
+        }
       } else if (auto) {
         // Silent — don't show error on auto-discovery if nothing found
       } else {

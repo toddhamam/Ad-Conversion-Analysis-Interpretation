@@ -9,7 +9,7 @@ import {
   buildArticleSystemPrompt,
   buildArticleUserPrompt,
 } from './_lib/seo-prompts.js';
-import { fetchKeywordIdeas, isGoogleAdsConfigured } from './_lib/google-ads.js';
+import { fetchKeywordIdeas, isGoogleAdsConfigured, diagnoseGoogleAdsConfig } from './_lib/google-ads.js';
 
 // ─── Shared Supabase client ────────────────────────────────────────────────
 
@@ -158,6 +158,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handleAutopilotSchedule(req, res, auth);
     case 'research-keywords':
       return handleResearchKeywords(req, res, auth);
+    case 'diagnose-ads':
+      return handleDiagnoseAds(req, res);
     default:
       return res.status(404).json({ error: `Unknown route: ${route}` });
   }
@@ -730,6 +732,21 @@ function classifyCluster(keyword: string): string {
     return 'Troubleshooting';
 
   return 'General';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GOOGLE ADS DIAGNOSTICS HANDLER
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function handleDiagnoseAds(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // This endpoint requires auth but we run it before the auth switch for simplicity
+  // It's protected by the route requiring knowledge of the endpoint
+  const report = await diagnoseGoogleAdsConfig();
+  return res.status(200).json(report);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

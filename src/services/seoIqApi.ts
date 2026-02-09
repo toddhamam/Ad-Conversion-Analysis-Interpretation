@@ -74,6 +74,12 @@ export function getGoogleConnectUrl(siteId: string, returnUrl?: string): string 
   return `${API_BASE}/auth/google/connect?${params.toString()}`;
 }
 
+// ─── Diagnostics ────────────────────────────────────────────────────────────
+
+export async function diagnoseGoogleAds(): Promise<Record<string, unknown>> {
+  return fetchJson<Record<string, unknown>>(`${API_BASE}/seo-iq/diagnose-ads`);
+}
+
 // ─── Keywords ───────────────────────────────────────────────────────────────
 
 export async function fetchKeywords(siteId: string): Promise<SeoKeyword[]> {
