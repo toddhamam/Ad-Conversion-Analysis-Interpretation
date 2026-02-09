@@ -17,6 +17,8 @@ interface MetaCredentialStatus {
   lastError: string | null;
   accountName: string | null;
   connectedAt: string | null;
+  availableAccounts: Array<{ id: string; name: string; account_id: string; account_status: number; currency: string }>;
+  availablePages: Array<{ id: string; name: string }>;
 }
 
 interface ValidationResult {
@@ -60,6 +62,14 @@ function OrganizationDetail() {
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
 
+  // Selection dropdowns state
+  const [selectedAdAccountId, setSelectedAdAccountId] = useState('');
+  const [selectedPageId, setSelectedPageId] = useState('');
+  const [selectedPixelId, setSelectedPixelId] = useState('');
+  const [availablePixels, setAvailablePixels] = useState<Array<{ id: string; name: string }>>([]);
+  const [loadingPixels, setLoadingPixels] = useState(false);
+  const [savingSelection, setSavingSelection] = useState(false);
+
   // Branding settings state
   const [brandingLogoUrl, setBrandingLogoUrl] = useState('');
   const [brandingPrimaryColor, setBrandingPrimaryColor] = useState('#d4e157');
@@ -82,8 +92,9 @@ function OrganizationDetail() {
     if (metaConnected === 'true') {
       setNotification({
         type: 'success',
-        message: `Meta Ads connected successfully${adAccount ? ` (${adAccount})` : ''}`,
+        message: 'Meta Ads connected — please configure your ad account, page, and pixel below.',
       });
+      setActiveTab('meta');
       // Clear query params
       setSearchParams({});
     } else if (error) {
@@ -355,6 +366,80 @@ function OrganizationDetail() {
 
   const isMetaConnected = metaStatus?.connected === true;
   const isMetaExpired = metaStatus?.status === 'expired';
+  const needsConfiguration = isMetaConnected && (!metaStatus?.adAccountId || !metaStatus?.pageId);
+
+  const handleFetchPixels = async (adAccountId: string) => {
+    if (!adAccountId) {
+      setAvailablePixels([]);
+      return;
+    }
+    setLoadingPixels(true);
+    try {
+      const token = await getAuthToken();
+      const res = await fetch('/api/admin/credentials/fetch-pixels', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ organizationId: id, adAccountId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAvailablePixels(data.pixels || []);
+      } else {
+        console.warn('Failed to fetch pixels');
+        setAvailablePixels([]);
+      }
+    } catch {
+      setAvailablePixels([]);
+    } finally {
+      setLoadingPixels(false);
+    }
+  };
+
+  const handleAdAccountChange = (adAccountId: string) => {
+    setSelectedAdAccountId(adAccountId);
+    setSelectedPixelId('');
+    setAvailablePixels([]);
+    if (adAccountId) {
+      handleFetchPixels(adAccountId);
+    }
+  };
+
+  const handleSaveSelection = async () => {
+    if (!selectedAdAccountId) {
+      setNotification({ type: 'error', message: 'Please select an ad account' });
+      return;
+    }
+    setSavingSelection(true);
+    try {
+      const token = await getAuthToken();
+      const res = await fetch('/api/admin/credentials/update-selection', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          organizationId: id,
+          adAccountId: selectedAdAccountId,
+          pageId: selectedPageId || null,
+          pixelId: selectedPixelId || null,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to save selection');
+      }
+      setNotification({ type: 'success', message: 'Meta configuration saved successfully' });
+      await loadMetaStatus();
+    } catch (error) {
+      setNotification({ type: 'error', message: error instanceof Error ? error.message : 'Failed to save configuration' });
+    } finally {
+      setSavingSelection(false);
+    }
+  };
 
   const handleDeleteOrganization = async () => {
     if (!confirm('Are you sure you want to delete this organization? This action cannot be undone.')) {
@@ -788,6 +873,98 @@ function OrganizationDetail() {
               </div>
             )}
           </div>
+
+          {/* Configure Connection — shown when connected but selections not yet made */}
+          {needsConfiguration && (
+            <div className="admin-card" style={{ border: '1px solid rgba(212, 225, 87, 0.4)', background: 'rgba(212, 225, 87, 0.03)' }}>
+              <div className="admin-card-header">
+                <h2 className="admin-card-title">Configure Connection</h2>
+                <span style={{
+                  padding: '4px 10px',
+                  borderRadius: '100px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  background: 'rgba(212, 225, 87, 0.15)',
+                  color: '#7c8a14',
+                }}>Action Required</span>
+              </div>
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 20px' }}>
+                Select the ad account, page, and pixel to use with this organization.
+              </p>
+
+              <div style={{ display: 'grid', gap: '16px' }}>
+                {/* Ad Account Selector */}
+                <div className="admin-form-group">
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                    Ad Account <span style={{ color: '#dc2626' }}>*</span>
+                  </label>
+                  <select
+                    value={selectedAdAccountId}
+                    onChange={(e) => handleAdAccountChange(e.target.value)}
+                    className="admin-input"
+                    style={{ width: '100%', padding: '10px 12px', fontSize: '14px', borderRadius: '8px', border: '1px solid var(--border-primary)', background: 'var(--bg-card)' }}
+                  >
+                    <option value="">Select an ad account...</option>
+                    {(metaStatus?.availableAccounts || []).filter(a => a.account_status === 1).map(acc => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.id}) — {acc.currency}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Page Selector */}
+                <div className="admin-form-group">
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                    Facebook Page <span style={{ color: '#dc2626' }}>*</span>
+                  </label>
+                  <select
+                    value={selectedPageId}
+                    onChange={(e) => setSelectedPageId(e.target.value)}
+                    className="admin-input"
+                    style={{ width: '100%', padding: '10px 12px', fontSize: '14px', borderRadius: '8px', border: '1px solid var(--border-primary)', background: 'var(--bg-card)' }}
+                  >
+                    <option value="">Select a page...</option>
+                    {(metaStatus?.availablePages || []).map(page => (
+                      <option key={page.id} value={page.id}>
+                        {page.name} ({page.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Pixel Selector */}
+                <div className="admin-form-group">
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                    Meta Pixel <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span>
+                  </label>
+                  <select
+                    value={selectedPixelId}
+                    onChange={(e) => setSelectedPixelId(e.target.value)}
+                    disabled={!selectedAdAccountId || loadingPixels}
+                    className="admin-input"
+                    style={{ width: '100%', padding: '10px 12px', fontSize: '14px', borderRadius: '8px', border: '1px solid var(--border-primary)', background: 'var(--bg-card)', opacity: !selectedAdAccountId ? 0.5 : 1 }}
+                  >
+                    <option value="">{loadingPixels ? 'Loading pixels...' : !selectedAdAccountId ? 'Select an ad account first' : 'Select a pixel...'}</option>
+                    {availablePixels.map(pixel => (
+                      <option key={pixel.id} value={pixel.id}>
+                        {pixel.name || 'Unnamed Pixel'} ({pixel.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={handleSaveSelection}
+                  disabled={!selectedAdAccountId || savingSelection}
+                  className="admin-btn admin-btn-primary"
+                  style={{ padding: '10px 20px', alignSelf: 'flex-start', opacity: !selectedAdAccountId ? 0.5 : 1 }}
+                >
+                  {savingSelection ? 'Saving...' : 'Save Configuration'}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Connect via OAuth */}
           <div className="admin-card">

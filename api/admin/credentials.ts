@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { encrypt, isEncryptionConfigured } from '../_lib/encryption.js';
+import { encrypt, decrypt, isEncryptionConfigured } from '../_lib/encryption.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -78,6 +78,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleGetOrg(req, res);
       case 'update-branding':
         return handleUpdateBranding(req, res);
+      case 'fetch-pixels':
+        return handleFetchPixels(req, res);
+      case 'update-selection':
+        return handleUpdateSelection(req, res);
       default:
         return res.status(400).json({ error: `Unknown action: ${action}` });
     }
@@ -126,6 +130,8 @@ async function handleStatus(req: VercelRequest, res: VercelResponse) {
     lastError: cred.last_error,
     accountName: cred.metadata?.selected_account_name || null,
     connectedAt: cred.metadata?.connected_at || cred.created_at,
+    availableAccounts: cred.metadata?.available_accounts || [],
+    availablePages: cred.metadata?.available_pages || [],
   });
 }
 
@@ -515,4 +521,96 @@ async function handleGetOrg(req: VercelRequest, res: VercelResponse) {
     users: users || [],
     invitations,
   });
+}
+
+// ─── Fetch Pixels ────────────────────────────────────────────────────────────
+
+async function handleFetchPixels(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { organizationId, adAccountId } = req.body || {};
+  if (!organizationId || !adAccountId) {
+    return res.status(400).json({ error: 'organizationId and adAccountId are required' });
+  }
+
+  // Load encrypted token for this org
+  const { data: cred } = await supabase
+    .from('organization_credentials')
+    .select('access_token_encrypted')
+    .eq('organization_id', organizationId)
+    .eq('provider', 'meta')
+    .single();
+
+  if (!cred?.access_token_encrypted) {
+    return res.status(404).json({ error: 'No Meta credentials found for this organization' });
+  }
+
+  const accessToken = decrypt(cred.access_token_encrypted);
+
+  // Fetch pixels from Meta API
+  const pixelsUrl = new URL(`${GRAPH_API_BASE}/${adAccountId}/adspixels`);
+  pixelsUrl.searchParams.set('access_token', accessToken);
+  pixelsUrl.searchParams.set('fields', 'id,name');
+
+  const pixelsResponse = await fetch(pixelsUrl.toString());
+  const pixelsData = await pixelsResponse.json();
+
+  if (pixelsData.error) {
+    return res.status(400).json({ error: `Meta API error: ${pixelsData.error.message}` });
+  }
+
+  return res.status(200).json({ pixels: pixelsData.data || [] });
+}
+
+// ─── Update Selection ────────────────────────────────────────────────────────
+
+async function handleUpdateSelection(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { organizationId, adAccountId, pageId, pixelId } = req.body || {};
+  if (!organizationId) {
+    return res.status(400).json({ error: 'organizationId is required' });
+  }
+
+  // Load current metadata to preserve it
+  const { data: cred } = await supabase
+    .from('organization_credentials')
+    .select('metadata')
+    .eq('organization_id', organizationId)
+    .eq('provider', 'meta')
+    .single();
+
+  if (!cred) {
+    return res.status(404).json({ error: 'No Meta credentials found for this organization' });
+  }
+
+  // Find selected account name from available accounts
+  const availableAccounts = cred.metadata?.available_accounts || [];
+  const selectedAccount = availableAccounts.find((acc: { id: string }) => acc.id === adAccountId);
+
+  const { error: dbError } = await supabase
+    .from('organization_credentials')
+    .update({
+      ad_account_id: adAccountId || null,
+      page_id: pageId || null,
+      pixel_id: pixelId || null,
+      metadata: {
+        ...cred.metadata,
+        selected_account_name: selectedAccount?.name || null,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq('organization_id', organizationId)
+    .eq('provider', 'meta');
+
+  if (dbError) {
+    console.error('Failed to update selection:', dbError);
+    return res.status(500).json({ error: 'Failed to save selection' });
+  }
+
+  return res.status(200).json({ success: true });
 }
