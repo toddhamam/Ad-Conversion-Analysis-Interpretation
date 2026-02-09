@@ -33,6 +33,13 @@ interface AdAccountResponse {
   }>;
 }
 
+interface PageResponse {
+  data: Array<{
+    id: string;
+    name: string;
+  }>;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -115,9 +122,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const adAccountsResponse = await fetch(adAccountsUrl.toString());
     const adAccountsData: AdAccountResponse = await adAccountsResponse.json();
 
-    // For white-glove setup, we'll auto-select the first active ad account
-    // In a self-service flow, this would present a selection UI
-    const activeAccount = adAccountsData.data?.find((acc) => acc.account_status === 1);
+    // Fetch available Facebook Pages
+    let availablePages: PageResponse['data'] = [];
+    try {
+      const pagesUrl = new URL('https://graph.facebook.com/v21.0/me/accounts');
+      pagesUrl.searchParams.set('access_token', accessToken);
+      pagesUrl.searchParams.set('fields', 'id,name');
+
+      const pagesResponse = await fetch(pagesUrl.toString());
+      const pagesData: PageResponse = await pagesResponse.json();
+      availablePages = pagesData.data || [];
+    } catch (pageErr) {
+      console.warn('Failed to fetch pages during OAuth callback:', pageErr);
+    }
 
     // Calculate token expiration date
     const tokenExpiresAt = new Date();
@@ -131,7 +148,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new Error(`Encryption failed: ${encErr instanceof Error ? encErr.message : String(encErr)}`);
     }
 
-    // Upsert credentials in database
+    // Upsert credentials — store token and available options, user selects later
     const { error: dbError } = await supabase
       .from('organization_credentials')
       .upsert(
@@ -139,12 +156,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           organization_id: stateData.organizationId,
           provider: 'meta',
           access_token_encrypted: encryptedToken,
-          ad_account_id: activeAccount?.id || null,
+          ad_account_id: null,
+          page_id: null,
+          pixel_id: null,
           token_expires_at: tokenExpiresAt.toISOString(),
           status: 'active',
           metadata: {
             available_accounts: adAccountsData.data || [],
-            selected_account_name: activeAccount?.name || null,
+            available_pages: availablePages,
             connected_at: new Date().toISOString(),
           },
         },
@@ -158,10 +177,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new Error(`Failed to save Meta credentials: ${dbError.message || dbError.code || JSON.stringify(dbError)}`);
     }
 
-    // Redirect back with success
+    // Redirect back with success — user will configure account/page/pixel selections
     const returnUrl = new URL(stateData.returnUrl, req.headers.origin || 'https://www.convertraiq.com');
     returnUrl.searchParams.set('meta_connected', 'true');
-    returnUrl.searchParams.set('ad_account', activeAccount?.name || 'connected');
 
     return res.redirect(302, returnUrl.pathname + returnUrl.search);
   } catch (err) {
