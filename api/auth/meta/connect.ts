@@ -2,7 +2,13 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'crypto';
 
 const META_APP_ID = process.env.META_APP_ID;
-const REDIRECT_URI = process.env.META_REDIRECT_URI || 'https://app.convertra.io/api/auth/meta/callback';
+
+function getRedirectUri(req: VercelRequest): string {
+  if (process.env.META_REDIRECT_URI) return process.env.META_REDIRECT_URI;
+  const proto = req.headers['x-forwarded-proto'] || 'https';
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'www.convertraiq.com';
+  return `${proto}://${host}/api/auth/meta/callback`;
+}
 
 // Required scopes for Meta Marketing API access
 const SCOPES = [
@@ -57,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Build Facebook OAuth URL
   const authUrl = new URL('https://www.facebook.com/v21.0/dialog/oauth');
   authUrl.searchParams.set('client_id', META_APP_ID);
-  authUrl.searchParams.set('redirect_uri', REDIRECT_URI);
+  authUrl.searchParams.set('redirect_uri', getRedirectUri(req));
   authUrl.searchParams.set('scope', SCOPES);
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('state', state);

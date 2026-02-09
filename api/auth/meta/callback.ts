@@ -4,7 +4,13 @@ import { encrypt } from '../../_lib/encryption.js';
 
 const META_APP_ID = process.env.META_APP_ID;
 const META_APP_SECRET = process.env.META_APP_SECRET;
-const REDIRECT_URI = process.env.META_REDIRECT_URI || 'https://app.convertra.io/api/auth/meta/callback';
+
+function getRedirectUri(req: VercelRequest): string {
+  if (process.env.META_REDIRECT_URI) return process.env.META_REDIRECT_URI;
+  const proto = req.headers['x-forwarded-proto'] || 'https';
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'www.convertraiq.com';
+  return `${proto}://${host}/api/auth/meta/callback`;
+}
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -76,7 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const tokenUrl = new URL('https://graph.facebook.com/v21.0/oauth/access_token');
     tokenUrl.searchParams.set('client_id', META_APP_ID!);
     tokenUrl.searchParams.set('client_secret', META_APP_SECRET!);
-    tokenUrl.searchParams.set('redirect_uri', REDIRECT_URI);
+    tokenUrl.searchParams.set('redirect_uri', getRedirectUri(req));
     tokenUrl.searchParams.set('code', code);
 
     const tokenResponse = await fetch(tokenUrl.toString());
@@ -148,7 +154,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Redirect back with success
-    const returnUrl = new URL(stateData.returnUrl, req.headers.origin || 'https://app.convertra.io');
+    const returnUrl = new URL(stateData.returnUrl, req.headers.origin || 'https://www.convertraiq.com');
     returnUrl.searchParams.set('meta_connected', 'true');
     returnUrl.searchParams.set('ad_account', activeAccount?.name || 'connected');
 

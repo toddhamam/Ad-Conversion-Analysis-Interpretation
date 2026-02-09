@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-02-09 — Fix Meta OAuth redirect URI pointing to dead domain
+
+### Fixed
+- **Meta OAuth callback redirected to non-existent `app.convertra.io`**: The `META_REDIRECT_URI` env var was not set, so both `connect.ts` and `callback.ts` fell back to the hardcoded `https://app.convertra.io/api/auth/meta/callback` — a domain that doesn't exist (DNS_PROBE_FINISHED_NXDOMAIN). Replaced the static fallback with a `getRedirectUri(req)` function that derives the redirect URI dynamically from the request's host header, falling back to `www.convertraiq.com`.
+- **Callback success redirect also referenced `app.convertra.io`**: The post-OAuth return URL constructor used `app.convertra.io` as its origin fallback. Updated to `www.convertraiq.com`.
+
 ## 2026-02-09 — Fix Meta OAuth invalid scope and tab refresh issues
 
 ### Fixed
