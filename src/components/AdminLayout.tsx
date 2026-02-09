@@ -147,7 +147,7 @@ const AdminLayout = () => {
 
       {/* Main Content */}
       <main className="admin-main">
-        <Outlet key={location.pathname} />
+        <Outlet />
       </main>
     </div>
   );

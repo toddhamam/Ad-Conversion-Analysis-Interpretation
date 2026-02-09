@@ -262,32 +262,21 @@ const AdGenerator = () => {
     setImageCacheCount(0);
   };
 
-  // Load products from localStorage on mount + when tab regains focus
-  // (covers navigating back from Products page via both SPA routing and tab switching)
+  // Load products from localStorage on mount
   useEffect(() => {
-    const loadProducts = () => {
-      try {
-        const storedProducts = localStorage.getItem(PRODUCTS_STORAGE_KEY);
-        if (storedProducts) {
-          const parsed: ProductContext[] = JSON.parse(storedProducts);
-          setProducts(parsed);
-          setSelectedProductId(prev => {
-            if (!prev && parsed.length === 1) return parsed[0].id;
-            return prev;
-          });
-        }
-      } catch {
-        console.warn('Failed to load products from localStorage');
+    try {
+      const storedProducts = localStorage.getItem(PRODUCTS_STORAGE_KEY);
+      if (storedProducts) {
+        const parsed: ProductContext[] = JSON.parse(storedProducts);
+        setProducts(parsed);
+        setSelectedProductId(prev => {
+          if (!prev && parsed.length === 1) return parsed[0].id;
+          return prev;
+        });
       }
-    };
-
-    loadProducts();
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') loadProducts();
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    } catch {
+      console.warn('Failed to load products from localStorage');
+    }
   }, []);
 
   // Load cached analysis and check image cache on mount
