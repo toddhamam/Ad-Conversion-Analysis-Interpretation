@@ -1116,20 +1116,31 @@ This separation is important because Meta's pixel may fire multiple purchase eve
 
 ## Sales Landing Page Structure
 
-The Convertra sales landing follows this architecture:
+The Convertra sales landing follows this architecture. The core messaging positions ConversionIQ™ as an **autonomous creative intelligence engine** that eliminates the creative bottleneck — launching, testing, and scaling winning ads at a velocity no human team can match.
+
+### Messaging Pillars
+
+| Pillar | Key Phrase | Used In |
+|--------|-----------|---------|
+| **Creative Bottleneck** | "Days per creative. Sound familiar?" | Problem, Loop visual |
+| **Autonomous Velocity** | "Launches, tests, and scales dozens of creatives" | Hero, Mechanism, Outcome |
+| **Automated Partnership** | "This isn't software you figure out" | Bespoke, Enterprise, Pricing |
+| **Compounding Advantage** | "Every creative tested makes the next one smarter" | Repeat step, Outcome |
+
+### Section Architecture
 
 | Section | Purpose |
 |---------|---------|
-| Hero | Headline + slogan + embedded Remotion VSL video (no auto-replay) with background music and branded poster. |
-| Problem Agitation | Make them feel the pain of not knowing why |
-| Mechanism Reveal | Introduce ConversionIQ™—Extract, Interpret, Generate, Repeat |
-| Bespoke Differentiator | Separate from self-serve tools. Premium positioning. |
-| Outcome | The results they get. Life after Convertra. |
-| Credibility | Build trust. Enterprise-only positioning. |
-| Offer | Tangible deliverables. What's included. |
-| Risk Reversal / Urgency | Cost of inaction. Limited availability. |
-| Final CTA | Clear next step. No friction. |
-| Footer | Brand tagline. Memorable close. |
+| Hero | "Scale Creative Testing. On Autopilot." + embedded Remotion VSL video with branded poster |
+| Problem Agitation | Creative bottleneck pain — days per creative, human team limitations vs. autonomous velocity |
+| Mechanism Reveal | Introduce ConversionIQ™ as "The Autonomous Creative Engine That Never Sleeps" — Extract, Interpret, Generate, Repeat |
+| Bespoke Differentiator | "It's an Automated Partnership" — separate from self-serve tools, premium positioning |
+| Outcome | "Creative Velocity on Autopilot — That Compounds Every Week" |
+| Credibility | Enterprise-only positioning. "Done being bottlenecked." |
+| Offer | Tangible deliverables. Autonomous Creative Velocity as a named offering. |
+| Risk Reversal / Urgency | Cost of waiting — bloated creative teams, slow testing, creative fatigue |
+| Final CTA | "Ready to Break Free From the Creative Bottleneck?" |
+| Footer | "Scale creative testing on autopilot. That's ConversionIQ™." |
 
 ---
 
@@ -1152,18 +1163,18 @@ The sales landing page includes an embedded Remotion-powered VSL — a 109-secon
 
 | Scene | Timing | Purpose |
 |-------|--------|---------|
-| Hook | 0-6s | "You're spending millions on ads." |
-| Pain Question | 6-13s | "Do you actually know why your best ads convert?" |
-| The Loop | 13-22s | Endless cycle — launch, wait, guess, test, burn budget |
-| Revelation | 22-29s | "What if your ads could tell you exactly why they convert?" |
+| Hook | 0-6s | "While your competitors wait on designers..." — creative bottleneck framing |
+| CIQ Velocity Reveal | 6-13s | "ConversionIQ™ is already testing 50 creatives" — autonomous velocity contrast |
+| The Loop | 13-22s | Creative bottleneck cycle — brief, wait, revise, launch, one ad, repeat |
+| Revelation | 22-29s | "What if creative testing ran itself?" — autopilot positioning |
 | CIQ Reveal | 29-38s | ConversionIQ™ brand reveal with glow animation |
-| Extract | 38-45s | Step 1 — Ingest data across all ad channels |
-| Interpret | 45-53s | Step 2 — Deep analysis of why conversions happen |
-| Generate | 53-60s | Step 3 — Engineer new creatives from proven patterns |
-| Repeat | 60-67s | Step 4 — Compounding advantage from every conversion |
+| Extract | 38-45s | Step 1 — Continuously ingest data, build real-time intelligence layer |
+| Interpret | 45-53s | Step 2 — Reveal WHY conversions happen, not just what happened |
+| Generate | 53-60s | Step 3 — Autonomously engineer new creatives from proven patterns |
+| Repeat | 60-67s | Step 4 — Compounding creative velocity, each test makes the next smarter |
 | Results | 67-76s | Metrics — 47% reduced CPA, 3.2x ROAS, 80% less waste |
 | Cost of Waiting | 76-91s | Urgency — animated cost cards ($275K+/yr hidden waste), pulsing total reveal |
-| Enterprise | 91-98s | Bespoke implementation, white glove, dedicated partnership |
+| Enterprise | 91-98s | Automated partnership, white glove, dedicated implementation |
 | CTA | 98-109s | Schedule a demo with Convertra logo and button |
 
 ### Sales Landing Integration
@@ -1188,7 +1199,7 @@ import { VIDEO_CONFIG } from '../remotion/brand';
 />
 ```
 
-The `VSLPoster` component renders a branded thumbnail with "Stop Guessing. Start Converting." headline and play button, shown before the user clicks play.
+The `VSLPoster` component renders a branded thumbnail with "Scale Creative Testing. On Autopilot." headline and play button, shown before the user clicks play.
 
 ### Animation Patterns
 
@@ -1216,14 +1227,14 @@ The VSL includes cinematic background music (`public/vsl-background-music.mp3`) 
 <Audio
   src={staticFile('vsl-background-music.mp3')}
   volume={(f) =>
-    interpolate(f, [0, 45, 3170, 3260], [0, 0.25, 0.25, 0], { extrapolateRight: 'clamp' })
+    interpolate(f, [0, 45, 3200, 3290], [0, 0.25, 0.25, 0], { extrapolateRight: 'clamp' })
   }
 />
 ```
 
 - **Fade in**: 0 → 0.25 over 1.5 seconds (frames 0-45)
 - **Sustain**: 0.25 (25% volume) through the body — present but not overpowering
-- **Fade out**: 0.25 → 0 over 3 seconds (frames 3170-3260) for a clean ending
+- **Fade out**: 0.25 → 0 over 3 seconds (frames 3200-3290) for a clean ending
 - Audio file is longer than the video (~134s vs ~109s); Remotion handles the truncation
 - Place MP3 files in `public/` directory. Use `interpolate()` for fade-in/fade-out volume control.
 
