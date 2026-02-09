@@ -96,6 +96,8 @@ function OrganizationDetail() {
       setActiveTab('meta');
       // Clear query params
       setSearchParams({});
+      // Reload Meta status to pick up the new credentials
+      loadMetaStatus();
     } else if (error) {
       setNotification({
         type: 'error',
