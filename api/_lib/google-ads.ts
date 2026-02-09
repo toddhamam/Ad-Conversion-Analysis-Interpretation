@@ -10,6 +10,10 @@
  *   GOOGLE_ADS_REFRESH_TOKEN    — OAuth refresh token with adwords scope
  *   GOOGLE_CLIENT_ID            — OAuth client ID (shared with GSC)
  *   GOOGLE_CLIENT_SECRET        — OAuth client secret (shared with GSC)
+ *
+ * Optional env vars:
+ *   GOOGLE_ADS_LOGIN_CUSTOMER_ID — MCC (Manager) account ID if developer token
+ *                                  is under a manager account (no dashes)
  */
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -151,13 +155,21 @@ export async function fetchKeywordIdeas(
   try {
     const url = `https://googleads.googleapis.com/${ADS_API_VERSION}/customers/${customerId}:generateKeywordIdeas`;
 
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${accessToken}`,
+      'developer-token': developerToken,
+      'Content-Type': 'application/json',
+    };
+
+    // Required when developer token belongs to a Manager (MCC) account
+    const loginCustomerId = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID?.replace(/-/g, '');
+    if (loginCustomerId) {
+      headers['login-customer-id'] = loginCustomerId;
+    }
+
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'developer-token': developerToken,
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(body),
     });
 
@@ -169,6 +181,15 @@ export async function fetchKeywordIdeas(
       try {
         const errorData = JSON.parse(errorText);
         const msg = errorData.error?.message || `API error ${response.status}`;
+
+        // Add actionable hint for permission errors
+        if (response.status === 403 || msg.toLowerCase().includes('permission')) {
+          const hint = !loginCustomerId
+            ? ' — Try setting GOOGLE_ADS_LOGIN_CUSTOMER_ID to your MCC (Manager) account ID'
+            : '';
+          return { keywords: [], error: `${msg}${hint}` };
+        }
+
         return { keywords: [], error: msg };
       } catch {
         return { keywords: [], error: `Keyword Planner API error (${response.status})` };
