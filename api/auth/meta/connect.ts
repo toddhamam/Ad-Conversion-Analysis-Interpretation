@@ -10,7 +10,6 @@ const SCOPES = [
   'ads_read',
   'business_management',
   'pages_read_engagement',
-  'read_insights',
 ].join(',');
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
