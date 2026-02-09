@@ -17,7 +17,6 @@ import {
   Sparkles,
   BarChart3,
   Users,
-  Zap,
   Check,
   X,
   ExternalLink,
@@ -25,12 +24,13 @@ import {
   CheckCircle,
   Crown,
   Building2,
+  Clock,
 } from 'lucide-react';
 import './Billing.css';
 
 const Billing = () => {
   const [searchParams] = useSearchParams();
-  const { organization } = useOrganization();
+  const { organization, isTrialing, isSubscriptionValid, trialDaysRemaining } = useOrganization();
   const [billingData, setBillingData] = useState<BillingData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,25 +98,27 @@ const Billing = () => {
   // Use organization plan tier if available, fallback to billing data
   const currentPlanTier: PlanTier = organization?.plan_tier || billingData?.subscription?.planTier || 'free';
 
+  const trialExpired = organization?.subscription_status === 'trialing' && !isSubscriptionValid;
+
   const getTierIcon = (tier: PlanTier) => {
     switch (tier) {
-      case 'free':
-        return <Zap size={20} strokeWidth={1.5} />;
       case 'pro':
         return <Crown size={20} strokeWidth={1.5} />;
       case 'enterprise':
         return <Building2 size={20} strokeWidth={1.5} />;
+      default:
+        return <Crown size={20} strokeWidth={1.5} />;
     }
   };
 
   const getTierBadgeClass = (tier: PlanTier) => {
     switch (tier) {
-      case 'free':
-        return 'tier-badge-free';
       case 'pro':
         return 'tier-badge-pro';
       case 'enterprise':
         return 'tier-badge-enterprise';
+      default:
+        return 'tier-badge-pro';
     }
   };
 
@@ -150,6 +152,31 @@ const Billing = () => {
         <div className="billing-alert billing-alert-error">
           <AlertCircle size={20} strokeWidth={1.5} />
           <span>{error}</span>
+        </div>
+      )}
+
+      {/* Trial Expired Alert */}
+      {trialExpired && (
+        <div className="billing-alert billing-alert-error">
+          <AlertCircle size={20} strokeWidth={1.5} />
+          <span>Your free trial has expired. Upgrade to Pro to continue using Convertra.</span>
+        </div>
+      )}
+
+      {/* Trial Status Card */}
+      {isTrialing && trialDaysRemaining > 0 && (
+        <div className="trial-status-card glass">
+          <div className="trial-status-info">
+            <Clock size={20} strokeWidth={1.5} />
+            <div>
+              <p className="trial-status-title">
+                <strong>{trialDaysRemaining === 1 ? '1 day' : `${trialDaysRemaining} days`}</strong> remaining in your free trial
+              </p>
+              <p className="trial-status-desc">
+                Subscribe now to lock in the early-bird rate of <strong>$89/month</strong> (regular price $99/month)
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -291,10 +318,11 @@ const Billing = () => {
               key={plan.id}
               plan={plan}
               billingInterval={billingInterval}
-              isCurrentPlan={currentPlanTier === plan.id}
+              isCurrentPlan={currentPlanTier === plan.id && organization?.subscription_status === 'active'}
               onUpgrade={() => handleUpgrade(plan.id)}
               upgrading={upgrading === plan.id}
               currentTier={currentPlanTier}
+              showEarlyBird={isTrialing && trialDaysRemaining > 0}
             />
           ))}
         </div>
@@ -349,6 +377,7 @@ interface PlanCardProps {
   onUpgrade: () => void;
   upgrading: boolean;
   currentTier: PlanTier;
+  showEarlyBird?: boolean;
 }
 
 const PlanCard = ({
@@ -358,15 +387,19 @@ const PlanCard = ({
   onUpgrade,
   upgrading,
   currentTier,
+  showEarlyBird,
 }: PlanCardProps) => {
-  const price = billingInterval === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
+  const regularPrice = billingInterval === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
+  const hasEarlyBird = showEarlyBird && plan.earlyBirdPrice && billingInterval === 'monthly';
+  const displayPrice = hasEarlyBird ? plan.earlyBirdPrice! : regularPrice;
   const isDowngrade = getTierOrder(plan.id) < getTierOrder(currentTier);
 
   return (
     <div
       className={`plan-card glass ${plan.popular ? 'plan-popular' : ''} ${isCurrentPlan ? 'plan-current' : ''}`}
     >
-      {plan.popular && <div className="popular-badge">Most Popular</div>}
+      {hasEarlyBird && <div className="early-bird-badge">Early Bird</div>}
+      {!hasEarlyBird && plan.popular && <div className="popular-badge">Most Popular</div>}
 
       <div className="plan-header">
         <h4 className="plan-name">{plan.name}</h4>
@@ -374,9 +407,19 @@ const PlanCard = ({
       </div>
 
       <div className="plan-price">
-        <span className="price-amount">${price}</span>
-        {plan.monthlyPrice > 0 && <span className="price-interval">/ mo</span>}
+        <span className="price-amount">${displayPrice.toLocaleString()}</span>
+        <span className="price-interval">/ mo</span>
       </div>
+      {hasEarlyBird && (
+        <p className="plan-price-note">
+          <span className="plan-price-original">${regularPrice}/mo</span> regular price
+        </p>
+      )}
+      {plan.setupFee && (
+        <p className="plan-price-note">
+          + ${plan.setupFee.toLocaleString()} one-time setup fee
+        </p>
+      )}
 
       <ul className="plan-features">
         <li>
@@ -418,19 +461,23 @@ const PlanCard = ({
           )}
           <span>API access</span>
         </li>
+        {plan.features.dedicatedAccount && (
+          <li>
+            <Check size={16} strokeWidth={1.5} />
+            <span>Dedicated account manager</span>
+          </li>
+        )}
       </ul>
 
       <button
         className={`plan-cta ${isCurrentPlan ? 'plan-cta-current' : ''}`}
         onClick={onUpgrade}
-        disabled={isCurrentPlan || upgrading || plan.id === 'free'}
+        disabled={isCurrentPlan || upgrading}
       >
         {upgrading ? (
           <span className="spinner-small" />
         ) : isCurrentPlan ? (
           'Current Plan'
-        ) : plan.id === 'free' ? (
-          'Free Forever'
         ) : isDowngrade ? (
           'Downgrade'
         ) : (

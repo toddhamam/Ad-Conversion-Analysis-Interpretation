@@ -226,6 +226,9 @@ export interface OrganizationContextValue {
   isOwner: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  isTrialing: boolean;
+  isSubscriptionValid: boolean;
+  trialDaysRemaining: number;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;

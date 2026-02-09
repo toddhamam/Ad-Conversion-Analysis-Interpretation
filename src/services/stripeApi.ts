@@ -11,28 +11,12 @@ const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 // Pricing plans configuration (matches Stripe products)
 export const PRICING_PLANS: PricingPlan[] = [
   {
-    id: 'free',
-    name: 'Free',
-    description: 'Perfect for getting started',
-    monthlyPrice: 0,
-    yearlyPrice: 0,
-    features: {
-      creativesPerMonth: 10,
-      analysesPerMonth: 5,
-      channels: 1,
-      teamMembers: 1,
-      prioritySupport: false,
-      customBranding: false,
-      apiAccess: false,
-      dedicatedAccount: false,
-    },
-  },
-  {
     id: 'pro',
     name: 'Pro',
     description: 'For growing marketing teams',
     monthlyPrice: 99,
     yearlyPrice: 79,
+    earlyBirdPrice: 89,
     popular: true,
     features: {
       creativesPerMonth: 100,
@@ -49,8 +33,9 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: 'enterprise',
     name: 'Enterprise',
     description: 'For large-scale operations',
-    monthlyPrice: 499,
-    yearlyPrice: 399,
+    monthlyPrice: 1500,
+    yearlyPrice: 1250,
+    setupFee: 2500,
     features: {
       creativesPerMonth: -1,  // Unlimited
       analysesPerMonth: -1,   // Unlimited
@@ -205,4 +190,19 @@ export function isStripeConfigured(): boolean {
 export function getTierOrder(tier: PlanTier): number {
   const order: Record<PlanTier, number> = { free: 0, pro: 1, enterprise: 2 };
   return order[tier];
+}
+
+// Helper: Check if organization is in active trial
+export function isInTrial(org: { subscription_status?: string; current_period_end?: string | null } | null): boolean {
+  if (!org) return false;
+  if (org.subscription_status !== 'trialing') return false;
+  if (!org.current_period_end) return false;
+  return new Date(org.current_period_end).getTime() > Date.now();
+}
+
+// Helper: Get remaining trial days
+export function getTrialDaysRemaining(org: { subscription_status?: string; current_period_end?: string | null } | null): number {
+  if (!org || org.subscription_status !== 'trialing' || !org.current_period_end) return 0;
+  const msRemaining = new Date(org.current_period_end).getTime() - Date.now();
+  return Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
 }

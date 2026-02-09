@@ -22,6 +22,8 @@ export interface PricingPlan {
   description: string;
   monthlyPrice: number;            // In dollars, 0 for free
   yearlyPrice: number;             // Per month when billed yearly
+  earlyBirdPrice?: number;         // Early-bird monthly price (during trial)
+  setupFee?: number;               // One-time setup fee in dollars
   features: PlanFeatures;
   stripePriceIdMonthly?: string;
   stripePriceIdYearly?: string;

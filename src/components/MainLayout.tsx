@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useLocation, Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import UserProfileDropdown from './UserProfileDropdown';
+import TrialBanner from './TrialBanner';
+import SubscriptionGate from './SubscriptionGate';
 import { useOrganization } from '../contexts/OrganizationContext';
 import './MainLayout.css';
 
@@ -62,8 +64,11 @@ const MainLayout = () => {
           <div className="top-bar-spacer"></div>
           <UserProfileDropdown />
         </header>
+        <TrialBanner />
         <main className="main-content">
-          <Outlet />
+          <SubscriptionGate>
+            <Outlet />
+          </SubscriptionGate>
         </main>
       </div>
     </div>

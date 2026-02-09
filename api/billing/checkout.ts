@@ -57,17 +57,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Invalid billing interval' });
     }
 
-    // Verify organization exists (if Supabase is configured)
+    // Verify organization exists and check trial status (if Supabase is configured)
+    let isOrgTrialing = false;
     if (supabase) {
       const { data: org, error: orgError } = await supabase
         .from('organizations')
-        .select('id, name, stripe_customer_id')
+        .select('id, name, stripe_customer_id, subscription_status')
         .eq('id', organizationId)
         .single();
 
       if (orgError || !org) {
         return res.status(404).json({ error: 'Organization not found' });
       }
+
+      isOrgTrialing = org.subscription_status === 'trialing';
 
       // Use existing Stripe customer if available
       if (org.stripe_customer_id && !customerId) {
@@ -110,6 +113,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
       },
     };
+
+    // Apply early-bird coupon for trialing orgs subscribing to Pro
+    const earlyBirdCouponId = process.env.STRIPE_EARLY_BIRD_COUPON_ID;
+    if (isOrgTrialing && planTier === 'pro' && earlyBirdCouponId) {
+      sessionParams.discounts = [{ coupon: earlyBirdCouponId }];
+    }
+
+    // Add enterprise setup fee as one-time charge on first invoice
+    const enterpriseSetupPriceId = process.env.STRIPE_PRICE_ENTERPRISE_SETUP;
+    if (planTier === 'enterprise' && enterpriseSetupPriceId) {
+      sessionParams.subscription_data!.add_invoice_items = [
+        { price: enterpriseSetupPriceId, quantity: 1 },
+      ];
+    }
 
     // Attach to existing customer or create new
     if (customerId || req.body.customerId) {
