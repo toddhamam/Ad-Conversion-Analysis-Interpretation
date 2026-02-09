@@ -50,22 +50,22 @@ export const VIDEO_CONFIG = {
   fps: 30,
   width: 1920,
   height: 1080,
-  durationInFrames: 3260, // ~109 seconds
+  durationInFrames: 3290, // ~110 seconds
 } as const;
 
 // Scene timing (in frames at 30fps)
 export const SCENES = {
   hook: { from: 0, duration: 180 },             // 0-6s
-  painQuestion: { from: 180, duration: 210 },   // 6-13s
-  theLoop: { from: 390, duration: 270 },         // 13-22s
-  revelation: { from: 660, duration: 210 },      // 22-29s
-  ciqReveal: { from: 870, duration: 270 },       // 29-38s  (key moment)
-  extract: { from: 1140, duration: 220 },        // 38-45s  (ConversionIQ™)
-  interpret: { from: 1360, duration: 220 },      // 45-53s  (ConversionIQ™)
-  generate: { from: 1580, duration: 220 },       // 53-60s  (ConversionIQ™)
-  repeat: { from: 1800, duration: 220 },         // 60-67s  (ConversionIQ™)
-  results: { from: 2020, duration: 250 },        // 67-76s
-  costOfWaiting: { from: 2270, duration: 450 },  // 76-91s  (urgency / risk reversal)
-  enterprise: { from: 2720, duration: 210 },     // 91-98s
-  cta: { from: 2930, duration: 330 },            // 98-109s
+  painQuestion: { from: 180, duration: 240 },   // 6-14s   (+1s for tagline)
+  theLoop: { from: 420, duration: 270 },         // 14-23s
+  revelation: { from: 690, duration: 210 },      // 23-30s
+  ciqReveal: { from: 900, duration: 270 },       // 30-39s  (key moment)
+  extract: { from: 1170, duration: 220 },        // 39-46s  (ConversionIQ™)
+  interpret: { from: 1390, duration: 220 },      // 46-54s  (ConversionIQ™)
+  generate: { from: 1610, duration: 220 },       // 54-61s  (ConversionIQ™)
+  repeat: { from: 1830, duration: 220 },         // 61-68s  (ConversionIQ™)
+  results: { from: 2050, duration: 250 },        // 68-77s
+  costOfWaiting: { from: 2300, duration: 450 },  // 77-92s  (urgency / risk reversal)
+  enterprise: { from: 2750, duration: 210 },     // 92-99s
+  cta: { from: 2960, duration: 330 },            // 99-110s
 } as const;
