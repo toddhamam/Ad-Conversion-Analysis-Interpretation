@@ -99,7 +99,7 @@ function SalesLanding() {
       {/* SEO Meta Tags & Structured Data */}
       <SEO
         title="Winning Ads on Autopilot | Conversion Intelligence Platform"
-        description="Convertra's ConversionIQ™ technology extracts conversion insights from your ad data and automatically generates winning creatives. Stop guessing why your ads convert. The #1 conversion intelligence platform for enterprise brands spending $1M+ on paid media."
+        description="Convertra's ConversionIQ™ technology autonomously launches, tests, and scales winning ad creatives — at a velocity no human team can match. The #1 autonomous creative intelligence platform for enterprise brands spending $1M+ on paid media."
         keywords="conversion intelligence, AI ad generation, ad creative automation, ConversionIQ, enterprise ad optimization, automated ad testing, CMO ad platform, ROAS optimization, ad creative platform, conversion optimization, Meta ads optimization, Google ads AI"
         canonical="/"
         jsonLd={[organizationSchema, softwareApplicationSchema, faqSchema]}
@@ -153,14 +153,14 @@ function SalesLanding() {
       <section id="hero" className="section hero-section">
         <div className="hero-content">
           <h1 className="hero-headline animate-on-scroll">
-            <span className="headline-main">Winning Ads on Autopilot</span>
-            <span className="headline-sub">Without the Wasted Spend or the Bloated Team</span>
+            <span className="headline-main">Scale Creative Testing. On Autopilot.</span>
+            <span className="headline-sub">While Your Competitors Are Still Briefing Designers</span>
           </h1>
           <p className="hero-subhead animate-on-scroll delay-1">
-            Our <span className="highlight">ConversionIQ™</span> technology extracts the full conversion story from your data... Then uses it to generate winning ads - on autopilot.
+            <span className="highlight">ConversionIQ™</span> autonomously launches, tests, and scales dozens of winning creatives — before your morning standup.
           </p>
           <p className="hero-supporting animate-on-scroll delay-2">
-            The #1 conversion intelligence & creative platform for enterprise brands who refuse to waste ad any more spend.
+            The autonomous creative intelligence platform for enterprise brands who refuse to stay stuck in the creative bottleneck.
           </p>
 
           {/* Hero VSL */}
@@ -211,8 +211,8 @@ function SalesLanding() {
       <section id="problem" className="section problem-section">
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">
-            You're Spending Millions on Ads.<br />
-            <span className="header-emphasis">But Do You Actually Know <span className="brush-underline">Why</span> Your Best Ads Convert?</span>
+            Your Competitors Are Waiting on Designers.<br />
+            <span className="header-emphasis">You're Stuck in the <span className="brush-underline">Creative Bottleneck</span></span>
           </h2>
 
           {/* Visual Demo Placeholder - Dashboard comparison */}
@@ -221,12 +221,12 @@ function SalesLanding() {
             <div className="placeholder-inner">
               <div className="comparison-visual">
                 <div className="comparison-side">
-                  <span className="comparison-label">Standard Dashboard</span>
+                  <span className="comparison-label">Human Team</span>
                   <div className="fake-dashboard">
                     <div className="dash-row"></div>
                     <div className="dash-row"></div>
                     <div className="dash-row"></div>
-                    <div className="dash-question">?</div>
+                    <div className="dash-question">1 ad/week</div>
                   </div>
                 </div>
                 <div className="comparison-arrow">
@@ -240,7 +240,7 @@ function SalesLanding() {
                     <div className="dash-row"></div>
                     <div className="dash-row"></div>
                     <div className="dash-row"></div>
-                    <div className="dash-insight">WHY</div>
+                    <div className="dash-insight">Dozens/day</div>
                   </div>
                 </div>
               </div>
@@ -249,21 +249,21 @@ function SalesLanding() {
 
           <div className="problem-content animate-on-scroll delay-2">
             <p>
-              You've got the dashboards. The reports. The analysts. The agencies.
+              You've got the media buyers. The designers. The agencies. The creative strategists.
             </p>
             <p>
-              You can see <em>what's</em> happening—impressions, clicks, ROAS, conversions.
+              And still — launching a single new ad creative takes <em>days</em>.
             </p>
             <p className="problem-callout">
-              But here's what none of them tell you: <strong>Why.</strong>
+              Brief the team. Wait for design. Review and revise. Finally launch. <strong>One ad.</strong>
             </p>
             <ul className="problem-list">
-              <li>Why did that ad outperform the others?</li>
-              <li>Why did conversions spike last Tuesday?</li>
-              <li>Why does one audience convert at 4x the rate of another?</li>
+              <li>Days to produce a single creative variation.</li>
+              <li>Weeks to gather enough data to know what works.</li>
+              <li>Months to iterate through enough tests to find a winner.</li>
             </ul>
             <p>
-              Without the why, you're trapped in an endless loop:
+              Meanwhile, you're trapped in the same bottleneck as everyone else:
             </p>
             <div className="problem-loop-visual">
               <div className="loop-track">
@@ -275,7 +275,7 @@ function SalesLanding() {
                       <line x1="12" y1="3" x2="12" y2="15"/>
                     </svg>
                   </div>
-                  <span className="loop-text">Launch creative</span>
+                  <span className="loop-text">Brief the team</span>
                 </div>
                 <div className="loop-arrow">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -289,7 +289,7 @@ function SalesLanding() {
                       <polyline points="12 6 12 12 16 14"/>
                     </svg>
                   </div>
-                  <span className="loop-text">Wait for data</span>
+                  <span className="loop-text">Wait for design</span>
                 </div>
                 <div className="loop-arrow">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -304,7 +304,7 @@ function SalesLanding() {
                       <circle cx="12" cy="17" r="1" fill="currentColor"/>
                     </svg>
                   </div>
-                  <span className="loop-text">Guess what worked</span>
+                  <span className="loop-text">Review & revise</span>
                 </div>
                 <div className="loop-arrow">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -319,7 +319,7 @@ function SalesLanding() {
                       <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
                     </svg>
                   </div>
-                  <span className="loop-text">Test again</span>
+                  <span className="loop-text">Finally launch</span>
                 </div>
                 <div className="loop-arrow">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -340,7 +340,7 @@ function SalesLanding() {
                       <path d="M15 9l3-3"/>
                     </svg>
                   </div>
-                  <span className="loop-text">Burn more budget</span>
+                  <span className="loop-text">One ad. Repeat.</span>
                 </div>
                 <div className="loop-arrow loop-back">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -351,13 +351,13 @@ function SalesLanding() {
                   </svg>
                 </div>
               </div>
-              <div className="loop-label">The Endless Wastage Cycle $$$</div>
+              <div className="loop-label">The Creative Bottleneck</div>
             </div>
             <div className="problem-pain">
-              <p>Every failed test costs you money.</p>
-              <p>Every week spent "optimizing" is a week your competitors are pulling ahead.</p>
+              <p>Every day stuck in this cycle is a day your competitors could be pulling ahead.</p>
+              <p>Every creative that takes a week to produce is dozens of tests you never ran.</p>
               <p className="pain-emphasis">And the worst part?</p>
-              <p><strong>The answers are already in your data. You just can't see them.</strong></p>
+              <p><strong>The bottleneck isn't talent. It's velocity. And it's costing you everything.</strong></p>
             </div>
           </div>
         </div>
@@ -368,11 +368,11 @@ function SalesLanding() {
         <div className="section-container">
           <h2 className="section-header mechanism-header animate-on-scroll">
             <span className="mechanism-title">Introducing <span className="highlight">ConversionIQ™</span></span>
-            <span className="mechanism-subtitle">The Intelligence Layer Your Ad Stack Is Missing</span>
+            <span className="mechanism-subtitle">The Autonomous Creative Engine That Never Sleeps</span>
           </h2>
           <p className="mechanism-intro animate-on-scroll delay-1">
-            ConversionIQ™ is our proprietary technology that does what dashboards can't.<br />
-            <strong>It doesn't just show you data. It interprets it... And Then Generates.</strong>
+            ConversionIQ™ is our autonomous agentic technology that does what human teams can't.<br />
+            <strong>It launches, tests, and scales winning creatives — at a velocity no team can match.</strong>
           </p>
 
           {/* Animated Workflow Visualization */}
@@ -440,10 +440,10 @@ function SalesLanding() {
               <div className="step-content">
                 <h3 className="step-title">Extract</h3>
                 <p className="step-description">
-                  ConversionIQ™ pulls your ad performance data from every platform—Meta, Google,
-                  TikTok, programmatic, all of it—and unifies it into a single intelligence layer.
+                  ConversionIQ™ continuously ingests every data point across your ad channels—Meta, Google,
+                  TikTok, programmatic—building a real-time intelligence layer that powers autonomous creative decisions at scale.
                 </p>
-                <p className="step-benefit">No more siloed reports. No more fragmented insights.</p>
+                <p className="step-benefit">No more waiting for reports. The system is always learning.</p>
               </div>
               {/* Step Visual Placeholder */}
               <div className="step-visual">
@@ -464,18 +464,18 @@ function SalesLanding() {
               <div className="step-number">02</div>
               <div className="step-content">
                 <h3 className="step-title">Interpret</h3>
-                <p className="step-lead">This is where everything changes.</p>
+                <p className="step-lead">This is where the intelligence lives.</p>
                 <p className="step-description">
-                  ConversionIQ™ analyzes the patterns underneath your data—the signals that reveal
-                  <em> why</em> people convert. Not just what happened. <strong>Why it happened.</strong>
+                  ConversionIQ™ performs deep pattern analysis on every conversion — identifying the exact
+                  creative elements, copy structures, and audience signals that drive action.
                 </p>
                 <p className="step-description">
-                  What's resonating with your audience. What triggers purchases. What elements
-                  drive action—across creative, copy, audience, and timing.
+                  It maps the conversion DNA across your entire ad ecosystem —
+                  what triggers purchases, what accelerates decisions, what compounds performance.
                 </p>
                 <p className="step-benefit">
-                  Insights you'd never find in a standard dashboard.<br />
-                  Connections no analyst would catch.
+                  Insights no human team could extract at this speed.<br />
+                  Connections that power autonomous creative decisions.
                 </p>
               </div>
               {/* Step Visual Placeholder */}
@@ -494,15 +494,15 @@ function SalesLanding() {
               <div className="step-number">03</div>
               <div className="step-content">
                 <h3 className="step-title">Generate</h3>
-                <p className="step-lead">Here's where the intelligence becomes income.</p>
+                <p className="step-lead">Here's where velocity becomes real.</p>
                 <p className="step-description">
-                  ConversionIQ™ takes what it's learned and automatically generates new creative—ads
-                  engineered from your proven conversion patterns.
+                  ConversionIQ™ autonomously engineers new ad creatives—copy, visuals, and targeting—from
+                  proven conversion patterns. Not templates. Not best guesses. Real intelligence, at scale.
                 </p>
                 <ul className="step-list">
-                  <li>Not templates.</li>
-                  <li>Not "best practices" borrowed from other industries.</li>
-                  <li><strong>Ads built from your data. Your customers. Your conversion truth.</strong></li>
+                  <li>Dozens of creatives generated autonomously.</li>
+                  <li>Every variation built from your proven conversion patterns.</li>
+                  <li><strong>Launched, tested, and scaled — without waiting on a single human.</strong></li>
                 </ul>
               </div>
               {/* Step Visual Placeholder */}
@@ -521,15 +521,15 @@ function SalesLanding() {
               <div className="step-number">04</div>
               <div className="step-content">
                 <h3 className="step-title">Repeat</h3>
-                <p className="step-lead">The system learns.</p>
+                <p className="step-lead">The system compounds.</p>
                 <p className="step-description">
-                  Every conversion feeds the model. Every ad makes the next one smarter.
+                  Every creative tested makes the next one smarter. Every conversion accelerates the flywheel.
                 </p>
                 <p className="step-description">
-                  It's not a one-time insight. <strong>It's a compounding advantage.</strong>
+                  It's not a one-time optimization. <strong>It's a compounding velocity advantage.</strong>
                 </p>
                 <p className="step-benefit">
-                  Your ads get better—automatically—while your competitors keep guessing.
+                  Your creative velocity accelerates — while your competitors stay stuck in the bottleneck.
                 </p>
               </div>
               {/* Step Visual Placeholder */}
@@ -552,19 +552,19 @@ function SalesLanding() {
       <section id="bespoke" className="section bespoke-section">
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">
-            This Isn't Software.<br />
-            <span className="header-emphasis">It's a System Built Around Your Company.</span>
+            This Isn't Software You Figure Out.<br />
+            <span className="header-emphasis">It's an Automated Partnership.</span>
           </h2>
 
           <div className="bespoke-intro animate-on-scroll delay-1">
             <p>Let's be clear about what Convertra is <em>not</em>.</p>
             <ul className="not-list">
-              <li>It's not a self-serve platform you log into and figure out yourself.</li>
-              <li>It's not a generic dashboard with AI buzzwords slapped on top.</li>
-              <li>It's not another tool for your team to learn, manage, and troubleshoot.</li>
+              <li>It's not a self-serve tool you log into and figure out yourself.</li>
+              <li>It's not another AI widget that generates generic content.</li>
+              <li>It's not another platform for your team to learn, manage, and troubleshoot.</li>
             </ul>
             <p className="bespoke-statement">
-              <strong>Convertra is a fully managed conversion intelligence system—built around your business.</strong>
+              <strong>Convertra is a fully autonomous creative intelligence system—built around your business and managed end-to-end.</strong>
             </p>
           </div>
 
@@ -649,14 +649,13 @@ function SalesLanding() {
       <section id="outcome" className="section outcome-section">
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">
-            The Result: Ads That Convert From Day One—<br />
-            <span className="header-emphasis">And Get Smarter Every Week</span>
+            The Result: Creative Velocity on Autopilot—<br />
+            <span className="header-emphasis">That Compounds Every Week</span>
           </h2>
 
           <p className="outcome-intro animate-on-scroll delay-1">
-            When you work with Convertra, you're not <em>hoping</em> your next ad works.<br />
-            You're deploying creative that's <strong>engineered to convert</strong>—because
-            it's built from what's already proven.
+            When you work with Convertra, you're not <em>waiting</em> on designers or hoping your next ad works.<br />
+            You're deploying dozens of creatives <strong>engineered from proven conversion patterns</strong>—autonomously, at scale.
           </p>
 
           {/* Results Demo Placeholder */}
@@ -692,10 +691,10 @@ function SalesLanding() {
                   <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
                 </svg>
               </div>
-              <h3>Eliminate the testing lag.</h3>
+              <h3>Eliminate the creative bottleneck.</h3>
               <p>
-                No more months of A/B tests burning budget. Your first ads are built on
-                conversion truth, not guesses.
+                No more waiting days for a single ad. ConversionIQ™ autonomously generates,
+                launches, and tests dozens of creatives — while your team focuses on strategy.
               </p>
             </div>
 
@@ -705,10 +704,10 @@ function SalesLanding() {
                   <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
                 </svg>
               </div>
-              <h3>Reduce creative waste.</h3>
+              <h3>Scale without scaling headcount.</h3>
               <p>
-                Stop producing dozens of variations hoping one hits. Every ad is informed
-                by real patterns.
+                Replace the bloated creative team with an autonomous system that produces
+                more variations — informed by real conversion data — than any team could.
               </p>
             </div>
 
@@ -719,9 +718,9 @@ function SalesLanding() {
                   <path d="M17 6h6v6"/>
                 </svg>
               </div>
-              <h3>Compound performance over time.</h3>
+              <h3>Compound your creative advantage.</h3>
               <p>
-                The system learns from every conversion. Your results don't plateau—they accelerate.
+                Every creative tested makes the next one smarter. Your velocity doesn't plateau—it accelerates.
               </p>
             </div>
 
@@ -732,10 +731,10 @@ function SalesLanding() {
                   <path d="M12 6v6l4 2"/>
                 </svg>
               </div>
-              <h3>Save hundreds of thousands in headcount.</h3>
+              <h3>Cut hundreds of thousands in overhead.</h3>
               <p>
-                Replace the need for additional media buyers, analysts, and creative strategists
-                with a system that does their job—better, faster, and without the overhead.
+                Replace the need for additional designers, media buyers, and creative strategists
+                with an autonomous system that outperforms them—faster, smarter, and without the bottleneck.
               </p>
             </div>
 
@@ -771,14 +770,14 @@ function SalesLanding() {
             </p>
             <p className="credibility-emphasis">It's millions in recovered revenue.</p>
 
-            <p className="credibility-lead">Our clients come to us because they've tried the alternatives:</p>
+            <p className="credibility-lead">Our clients come to us because they've hit the ceiling with the alternatives:</p>
             <ul className="alternatives-list">
-              <li>Agencies that bill hours but can't explain what's actually working.</li>
-              <li>AI tools that generate volume but not quality.</li>
-              <li>In-house teams stretched too thin to interpret and act on data fast enough.</li>
+              <li>Agencies that bill hours but can't move fast enough.</li>
+              <li>AI tools that generate volume but not intelligence.</li>
+              <li>In-house teams stretched too thin to test at the velocity the market demands.</li>
             </ul>
             <p className="credibility-close">
-              They come to Convertra because they're <strong>done guessing</strong>.
+              They come to Convertra because they're <strong>done being bottlenecked</strong>.
             </p>
           </div>
 
@@ -841,7 +840,7 @@ function SalesLanding() {
                   </svg>
                 </div>
                 <h3>ConversionIQ™ Technology</h3>
-                <p>Our proprietary engine that extracts, interprets, and generates—configured to your business.</p>
+                <p>Our autonomous agentic engine that launches, tests, and scales winning creatives — configured to your business.</p>
               </div>
             </div>
 
@@ -882,8 +881,8 @@ function SalesLanding() {
                     <path d="M21 15l-5-5L5 21"/>
                   </svg>
                 </div>
-                <h3>Automated Creative Generation</h3>
-                <p>Ads generated from your proven conversion patterns—ready to deploy.</p>
+                <h3>Autonomous Creative Velocity</h3>
+                <p>Dozens of creatives generated, launched, and scaled autonomously from your proven conversion patterns.</p>
               </div>
             </div>
 
@@ -897,7 +896,7 @@ function SalesLanding() {
                   </svg>
                 </div>
                 <h3>Performance Reporting</h3>
-                <p>Clear, actionable insights—not vanity metrics. You'll know exactly what's working and why.</p>
+                <p>Clear, actionable insights — not vanity metrics. Real-time visibility into what's converting and what's scaling.</p>
               </div>
             </div>
 
@@ -929,7 +928,7 @@ function SalesLanding() {
           </h2>
           <p className="pricing-intro animate-on-scroll delay-1">
             Convertra isn't a self-serve tool you sign up for and figure out on your own.<br />
-            <strong>It's a partnership.</strong>
+            <strong>It's an automated partnership.</strong>
           </p>
 
           <div className="pricing-card gradient-border-card animate-on-scroll delay-2">
@@ -1026,23 +1025,23 @@ function SalesLanding() {
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">The Cost of Waiting</h2>
           <p className="urgency-subtitle animate-on-scroll delay-1">
-            Every month without ConversionIQ™, you're bleeding budget across three areas most teams never audit.
+            Every month without ConversionIQ™, the creative bottleneck is costing you across three areas most teams never audit.
           </p>
 
           <div className="cost-cards animate-on-scroll delay-2">
             <div className="cost-card">
               <div className="cost-card-amount">$80–100K<span className="cost-card-period">/year</span></div>
-              <h3 className="cost-card-title">Overpriced Media Buyers</h3>
+              <h3 className="cost-card-title">Bloated Creative Teams</h3>
               <p className="cost-card-desc">
-                Senior media buyers command $8–12K/month—and still rely on gut instinct for creative decisions. ConversionIQ™ replaces subjective guesswork with data-driven intelligence, letting a leaner team outperform a bloated one.
+                Designers, media buyers, and creative strategists commanding $8–12K/month each — and still only producing a handful of creatives per week. ConversionIQ™ replaces the bottleneck with autonomous velocity.
               </p>
             </div>
 
             <div className="cost-card">
               <div className="cost-card-amount">$100K+<span className="cost-card-period">/year</span></div>
-              <h3 className="cost-card-title">Blind Creative Testing</h3>
+              <h3 className="cost-card-title">Slow Creative Testing</h3>
               <p className="cost-card-desc">
-                The average brand wastes 60–70% of ad spend on creatives that never convert. Without knowing <em>why</em> your winners work, every A/B test is an expensive coin flip. ConversionIQ™ eliminates the guessing entirely.
+                60–70% of ad spend wasted on creatives that never convert — because your team can only test a few variations per week. ConversionIQ™ tests dozens autonomously, finding winners at a velocity humans can't match.
               </p>
             </div>
 
@@ -1050,7 +1049,7 @@ function SalesLanding() {
               <div className="cost-card-amount">$50–75K<span className="cost-card-period">/year</span></div>
               <h3 className="cost-card-title">Creative Fatigue & Decay</h3>
               <p className="cost-card-desc">
-                Winning ads have a shelf life. Most teams don't catch the decay until CPA has already spiked 30–50%. ConversionIQ™ detects fatigue patterns early and generates proven replacements before performance drops.
+                Winning ads have a shelf life. Most teams don't catch the decay until CPA has already spiked 30–50%. ConversionIQ™ autonomously detects fatigue and generates proven replacements before performance drops.
               </p>
             </div>
           </div>
@@ -1088,19 +1087,19 @@ function SalesLanding() {
       <section id="contact" className="section cta-section">
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">
-            Ready to See What Your Data Already Knows?
+            Ready to Break Free From the Creative Bottleneck?
           </h2>
 
           <div className="cta-content animate-on-scroll delay-1">
             <p className="cta-intro">Request a custom assessment and we'll show you:</p>
             <ul className="cta-list">
-              <li>Where conversion insights are hiding in your current data.</li>
-              <li>What ConversionIQ™ would reveal about your top-performing ads.</li>
-              <li>How a bespoke implementation would work for your business.</li>
+              <li>How many creatives ConversionIQ™ could be testing for you — autonomously.</li>
+              <li>The conversion patterns hiding in your current ad data.</li>
+              <li>How a bespoke autonomous implementation would work for your business.</li>
             </ul>
             <p className="cta-reassurance">
               No obligation. No generic pitch deck.<br />
-              Just a conversation about your data and what's possible.
+              Just a conversation about what autonomous creative velocity looks like for your business.
             </p>
             <div className="cta-final">
               <a href={calendarUrl} className="cta-primary cta-large pulse-glow">
@@ -1124,7 +1123,7 @@ function SalesLanding() {
           <div className="footer-brand">
             <span className="footer-logo">Convertra</span>
             <p className="footer-tagline">
-              Your data already knows what converts. Now you will too.
+              Scale creative testing on autopilot. That's ConversionIQ™.
             </p>
           </div>
           <div className="footer-links">
