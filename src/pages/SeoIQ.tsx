@@ -286,6 +286,7 @@ export default function SeoIQ() {
 
     let totalFetched = 0;
     let totalGaps = 0;
+    const errors: string[] = [];
 
     try {
       // Step 1: Scan site URL via Keyword Planner
@@ -296,7 +297,9 @@ export default function SeoIQ() {
         totalFetched += urlResult.keywords_fetched;
         totalGaps += urlResult.content_gaps_found;
       } catch (err) {
-        console.warn('Smart Discover: URL scan failed, continuing with other sources', err);
+        const msg = err instanceof Error ? err.message : 'URL scan failed';
+        errors.push(msg);
+        console.warn('Smart Discover: URL scan failed:', msg);
       }
 
       // Step 2: Extract seeds from product context
@@ -329,7 +332,9 @@ export default function SeoIQ() {
           totalFetched += productResult.keywords_fetched;
           totalGaps += productResult.content_gaps_found;
         } catch (err) {
-          console.warn('Smart Discover: Product seed research failed, continuing', err);
+          const msg = err instanceof Error ? err.message : 'Product keyword research failed';
+          if (!errors.includes(msg)) errors.push(msg);
+          console.warn('Smart Discover: Product seed research failed:', msg);
         }
       }
 
@@ -348,7 +353,9 @@ export default function SeoIQ() {
           totalFetched += expandResult.keywords_fetched;
           totalGaps += expandResult.content_gaps_found;
         } catch (err) {
-          console.warn('Smart Discover: Keyword expansion failed', err);
+          const msg = err instanceof Error ? err.message : 'Keyword expansion failed';
+          if (!errors.includes(msg)) errors.push(msg);
+          console.warn('Smart Discover: Keyword expansion failed:', msg);
         }
       }
 
@@ -357,12 +364,14 @@ export default function SeoIQ() {
 
       if (totalFetched > 0) {
         setSuccess(`Smart Discover found ${totalFetched} keywords with ${totalGaps} content gaps`);
+      } else if (errors.length > 0 && !auto) {
+        setError(`Smart Discover failed: ${errors[0]}`);
       } else if (auto) {
         // Silent — don't show error on auto-discovery if nothing found
       } else {
         setSuccess('Smart Discover complete — no new keywords found. Try adding seed keywords manually.');
       }
-      setTimeout(() => setSuccess(null), 6000);
+      setTimeout(() => { setSuccess(null); }, 6000);
     } catch (err) {
       if (!auto) {
         setError(err instanceof Error ? err.message : 'Smart Discover failed');
