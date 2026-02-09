@@ -56,7 +56,7 @@ interface GoogleAdsResponse {
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 
-const ADS_API_VERSION = 'v18';
+const ADS_API_VERSION = 'v23';
 
 export function isGoogleAdsConfigured(): boolean {
   return !!(
