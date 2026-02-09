@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { getAuthToken } from '../../lib/authToken';
 import Loading from '../../components/Loading';
 import type { Organization, PlanTier } from '../../types/organization';
 
@@ -82,13 +83,14 @@ function OrganizationsList() {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('organizations')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const token = await getAuthToken();
+      const res = await fetch('/api/admin/credentials/list-orgs', {
+        headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+      });
 
-      if (error) throw error;
-      setOrganizations((data as Organization[]) || []);
+      if (!res.ok) throw new Error('Failed to load organizations');
+      const data = await res.json();
+      setOrganizations((data.organizations as Organization[]) || []);
     } catch (error) {
       console.error('Failed to load organizations:', error);
     } finally {

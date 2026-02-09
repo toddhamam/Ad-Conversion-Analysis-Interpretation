@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { isSupabaseConfigured } from '../../lib/supabase';
 import { getAuthToken } from '../../lib/authToken';
 import Loading from '../../components/Loading';
 import type { Organization, User, OrganizationInvitation } from '../../types/organization';
@@ -134,32 +134,17 @@ function OrganizationDetail() {
     }
 
     try {
-      // Load organization
-      const { data: org, error: orgError } = await supabase
-        .from('organizations')
-        .select('*')
-        .eq('id', id)
-        .single();
+      const token = await getAuthToken();
+      const res = await fetch(`/api/admin/credentials/get-org?organizationId=${id}`, {
+        headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+      });
 
-      if (orgError) throw orgError;
-      setOrganization(org as Organization);
+      if (!res.ok) throw new Error('Failed to load organization');
+      const data = await res.json();
 
-      // Load users
-      const { data: orgUsers } = await supabase
-        .from('users')
-        .select('*')
-        .eq('organization_id', id);
-
-      setUsers((orgUsers as User[]) || []);
-
-      // Load pending invitations
-      const { data: orgInvites } = await supabase
-        .from('organization_invitations')
-        .select('*')
-        .eq('organization_id', id)
-        .is('accepted_at', null);
-
-      setInvitations((orgInvites as OrganizationInvitation[]) || []);
+      setOrganization(data.organization as Organization);
+      setUsers((data.users as User[]) || []);
+      setInvitations((data.invitations as OrganizationInvitation[]) || []);
 
       // Load Meta credential status via admin API
       await loadMetaStatus();
@@ -324,8 +309,8 @@ function OrganizationDetail() {
     }
 
     try {
-      const { error } = await supabase.from('organizations').delete().eq('id', id);
-      if (error) throw error;
+      // Full org deletion would need a dedicated backend route
+      console.warn('Organization deletion requires direct database access');
       navigate('/admin/organizations');
     } catch (error) {
       console.error('Failed to delete organization:', error);

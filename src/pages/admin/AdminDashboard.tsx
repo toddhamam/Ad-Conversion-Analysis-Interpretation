@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { getAuthToken } from '../../lib/authToken';
 import Loading from '../../components/Loading';
 import type { Organization } from '../../types/organization';
 
@@ -80,36 +81,16 @@ function AdminDashboard() {
     }
 
     try {
-      // Fetch organization count
-      const { count: orgCount } = await supabase
-        .from('organizations')
-        .select('*', { count: 'exact', head: true });
-
-      // Fetch active organizations
-      const { count: activeCount } = await supabase
-        .from('organizations')
-        .select('*', { count: 'exact', head: true })
-        .eq('subscription_status', 'active');
-
-      // Fetch user count
-      const { count: userCount } = await supabase
-        .from('users')
-        .select('*', { count: 'exact', head: true });
-
-      // Fetch recent organizations
-      const { data: orgs } = await supabase
-        .from('organizations')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      setStats({
-        totalOrganizations: orgCount || 0,
-        activeOrganizations: activeCount || 0,
-        totalUsers: userCount || 0,
-        monthlyRevenue: 0, // Would calculate from Stripe
+      const token = await getAuthToken();
+      const res = await fetch('/api/admin/credentials/dashboard-stats', {
+        headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
       });
-      setRecentOrgs((orgs as Organization[]) || []);
+
+      if (!res.ok) throw new Error('Failed to load dashboard data');
+      const data = await res.json();
+
+      setStats(data.stats);
+      setRecentOrgs((data.recentOrgs as Organization[]) || []);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
     } finally {

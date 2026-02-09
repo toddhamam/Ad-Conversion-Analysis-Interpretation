@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { getAuthToken } from '../../lib/authToken';
 import type { PlanTier } from '../../types/organization';
 
 interface FormData {
@@ -124,47 +125,34 @@ function CreateOrganization() {
     }
 
     try {
-      // Create organization
-      const { data: org, error: orgError } = await supabase
-        .from('organizations')
-        .insert({
+      const token = await getAuthToken();
+      const res = await fetch('/api/admin/credentials/create-org', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
           name: formData.name,
           slug: formData.slug,
-          plan_tier: formData.planTier,
-          setup_mode: 'white_glove',
-          setup_completed: false,
-          logo_url: formData.logoUrl || null,
-          primary_color: formData.primaryColor,
-          secondary_color: formData.secondaryColor,
-        })
-        .select()
-        .single();
-
-      if (orgError) {
-        if (orgError.code === '23505') {
-          throw new Error('This subdomain is already taken. Please go back and choose another.');
-        }
-        throw orgError;
-      }
-
-      // Create invitation
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
-
-      const { error: inviteError } = await supabase.from('organization_invitations').insert({
-        organization_id: org.id,
-        email: formData.ownerEmail,
-        role: 'owner',
-        token: invitationToken,
-        expires_at: expiresAt.toISOString(),
+          planTier: formData.planTier,
+          ownerEmail: formData.ownerEmail,
+          ownerName: formData.ownerName,
+          logoUrl: formData.logoUrl,
+          primaryColor: formData.primaryColor,
+          secondaryColor: formData.secondaryColor,
+        }),
       });
 
-      if (inviteError) {
-        await supabase.from('organizations').delete().eq('id', org.id);
-        throw inviteError;
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create organization. Please try again.');
       }
 
-      setCreatedOrg({ id: org.id, inviteLink });
+      setCreatedOrg({
+        id: data.organization.id,
+        inviteLink: data.inviteLink || inviteLink,
+      });
     } catch (err) {
       console.error('Failed to create organization:', err);
       setError(err instanceof Error ? err.message : 'Failed to create organization. Please try again.');
