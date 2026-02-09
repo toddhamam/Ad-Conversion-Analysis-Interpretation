@@ -2,9 +2,15 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useOrganization } from '../contexts/OrganizationContext';
 import { getOrgMetaIds } from '../services/metaApi';
+import MetaOnboardingSetup from './MetaOnboardingSetup';
 import './OnboardingChecklist.css';
 
-export default function OnboardingChecklist() {
+interface OnboardingChecklistProps {
+  notification?: { type: 'success' | 'error'; message: string } | null;
+  onDismissNotification?: () => void;
+}
+
+export default function OnboardingChecklist({ notification, onDismissNotification }: OnboardingChecklistProps) {
   const { organization } = useOrganization();
   const [dismissed, setDismissed] = useState(false);
 
@@ -23,11 +29,11 @@ export default function OnboardingChecklist() {
   if (organization.setup_completed) return null;
 
   const metaIds = getOrgMetaIds();
-  const metaConnected = metaIds?.connected === true;
+  const metaFullyConfigured = metaIds?.connected === true && !!metaIds?.adAccountId && !!metaIds?.pageId;
 
   const steps = [
     { label: 'Account created', done: true, link: null },
-    { label: 'Meta Ads connected', done: metaConnected, link: '/channels/meta-ads' },
+    { label: 'Meta Ads connected', done: metaFullyConfigured, link: null },
     { label: 'Explore your dashboard', done: false, link: '/dashboard' },
     { label: 'Analyze your creatives', done: false, link: '/channels/meta-ads' },
     { label: 'Generate new ads with CreativeIQ', done: false, link: '/creatives' },
@@ -38,6 +44,11 @@ export default function OnboardingChecklist() {
     if (storageKey) {
       localStorage.setItem(storageKey, 'true');
     }
+  };
+
+  const handleMetaConfigured = () => {
+    // Reload the page to refresh all cached Meta state
+    window.location.href = '/dashboard';
   };
 
   return (
@@ -77,6 +88,14 @@ export default function OnboardingChecklist() {
           </div>
         ))}
       </div>
+
+      {!metaFullyConfigured && (
+        <MetaOnboardingSetup
+          onConfigured={handleMetaConfigured}
+          notification={notification}
+          onDismissNotification={onDismissNotification}
+        />
+      )}
     </div>
   );
 }

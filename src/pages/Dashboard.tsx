@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import type { DashboardMetrics } from '../types/funnel';
-import { fetchCampaignSummaries, type CampaignSummary, type DatePreset } from '../services/metaApi';
+import { fetchCampaignSummaries, type CampaignSummary, type DatePreset, loadOrgMetaCredentials, clearOrgMetaCache } from '../services/metaApi';
 import Loading from '../components/Loading';
 import SEO from '../components/SEO';
 import DateRangePicker from '../components/DateRangePicker';
@@ -282,6 +282,32 @@ const Dashboard = () => {
   const [error, setError] = useState<string | null>(null);
   const [funnelWarning, setFunnelWarning] = useState<string | null>(null);
   const [metricsConfig, setMetricsConfig] = useState<MetricConfig[]>(loadMetricsConfig);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [metaNotification, setMetaNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Handle OAuth callback redirect (e.g., ?meta_connected=true)
+  useEffect(() => {
+    const metaConnected = searchParams.get('meta_connected');
+    const oauthError = searchParams.get('error');
+    const oauthMessage = searchParams.get('message');
+
+    if (metaConnected === 'true') {
+      clearOrgMetaCache();
+      loadOrgMetaCredentials().then(() => {
+        setMetaNotification({
+          type: 'success',
+          message: 'Meta Ads connected successfully! Please select your ad account, page, and pixel below.',
+        });
+      });
+      setSearchParams({});
+    } else if (oauthError) {
+      setMetaNotification({
+        type: 'error',
+        message: oauthMessage || 'Failed to connect Meta Ads. Please try again.',
+      });
+      setSearchParams({});
+    }
+  }, [searchParams, setSearchParams]);
 
   // Date range state - default to last 30 days
   const defaultPreset: DatePreset = 'last_30d';
@@ -514,7 +540,10 @@ const Dashboard = () => {
         canonical="/dashboard"
         noindex={true}
       />
-      <OnboardingChecklist />
+      <OnboardingChecklist
+        notification={metaNotification}
+        onDismissNotification={() => setMetaNotification(null)}
+      />
 
       <div className="dashboard-header">
         <div className="dashboard-header-left">
