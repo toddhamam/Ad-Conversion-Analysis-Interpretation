@@ -1,0 +1,104 @@
+.onboarding-checklist {
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+  border-left: 4px solid var(--accent-violet);
+}
+
+.onboarding-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.onboarding-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.onboarding-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.onboarding-dismiss {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 4px;
+  border-radius: 6px;
+  transition: color 0.2s ease, background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.onboarding-dismiss:hover {
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+}
+
+.onboarding-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.onboarding-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.onboarding-check {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.onboarding-check-empty {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border-primary);
+}
+
+.onboarding-step-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.onboarding-step.done .onboarding-step-label {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.onboarding-step-link {
+  color: var(--accent-violet);
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.onboarding-step-link:hover {
+  opacity: 0.8;
+}
+
+@media (max-width: 600px) {
+  .onboarding-checklist {
+    padding: 16px;
+  }
+
+  .onboarding-title {
+    font-size: 16px;
+  }
+}

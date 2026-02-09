@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { supabase } from '../lib/supabase';
 import { getTenantSlug } from '../lib/tenant';
 import { useAuth } from './AuthContext';
+import { loadOrgMetaCredentials } from '../services/metaApi';
 import type { Organization, User as AppUser, OrganizationContextValue } from '../types/organization';
 
 const OrganizationContext = createContext<OrganizationContextValue | undefined>(undefined);
@@ -186,10 +187,11 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
     }
   }, [authUser, authLoading, loadOrganizationData]);
 
-  // Apply branding when organization changes
+  // Apply branding and load Meta credentials when organization changes
   useEffect(() => {
     if (organization) {
       applyBranding(organization);
+      loadOrgMetaCredentials();
     }
   }, [organization]);
 
