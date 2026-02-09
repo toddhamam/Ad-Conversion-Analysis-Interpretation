@@ -68,6 +68,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleSave(req, res);
       case 'disconnect':
         return handleDisconnect(req, res);
+      case 'dashboard-stats':
+        return handleDashboardStats(req, res);
+      case 'list-orgs':
+        return handleListOrgs(req, res);
+      case 'create-org':
+        return handleCreateOrg(req, res);
+      case 'get-org':
+        return handleGetOrg(req, res);
       default:
         return res.status(400).json({ error: `Unknown action: ${action}` });
     }
@@ -299,4 +307,179 @@ async function handleDisconnect(req: VercelRequest, res: VercelResponse) {
   }
 
   return res.status(200).json({ success: true });
+}
+
+// ─── Dashboard Stats ────────────────────────────────────────────────────────
+
+async function handleDashboardStats(_req: VercelRequest, res: VercelResponse) {
+  const { count: orgCount } = await supabase
+    .from('organizations')
+    .select('*', { count: 'exact', head: true });
+
+  const { count: activeCount } = await supabase
+    .from('organizations')
+    .select('*', { count: 'exact', head: true })
+    .eq('subscription_status', 'active');
+
+  const { count: userCount } = await supabase
+    .from('users')
+    .select('*', { count: 'exact', head: true });
+
+  const { data: recentOrgs } = await supabase
+    .from('organizations')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  return res.status(200).json({
+    stats: {
+      totalOrganizations: orgCount || 0,
+      activeOrganizations: activeCount || 0,
+      totalUsers: userCount || 0,
+      monthlyRevenue: 0,
+    },
+    recentOrgs: recentOrgs || [],
+  });
+}
+
+// ─── List Organizations ─────────────────────────────────────────────────────
+
+async function handleListOrgs(_req: VercelRequest, res: VercelResponse) {
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Failed to list organizations:', error);
+    return res.status(500).json({ error: 'Failed to list organizations' });
+  }
+
+  return res.status(200).json({ organizations: data || [] });
+}
+
+// ─── Create Organization ────────────────────────────────────────────────────
+
+async function handleCreateOrg(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { name, slug, planTier, ownerEmail, ownerName, logoUrl, primaryColor, secondaryColor } = req.body || {};
+
+  if (!name || !slug) {
+    return res.status(400).json({ error: 'name and slug are required' });
+  }
+
+  // Create organization
+  const { data: org, error: orgError } = await supabase
+    .from('organizations')
+    .insert({
+      name,
+      slug,
+      plan_tier: planTier || 'enterprise',
+      setup_mode: 'white_glove',
+      setup_completed: false,
+      logo_url: logoUrl || null,
+      primary_color: primaryColor || '#d4e157',
+      secondary_color: secondaryColor || '#a855f7',
+    })
+    .select()
+    .single();
+
+  if (orgError) {
+    if (orgError.code === '23505') {
+      return res.status(409).json({ error: 'This subdomain is already taken. Please choose another.' });
+    }
+    console.error('Failed to create organization:', orgError);
+    return res.status(500).json({ error: 'Failed to create organization', details: orgError.message });
+  }
+
+  // If owner email matches an existing user, link them to this org
+  if (ownerEmail) {
+    // Check if a user with this email already exists (in auth or users table)
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id, auth_id, organization_id')
+      .eq('email', ownerEmail)
+      .single();
+
+    if (existingUser) {
+      // Update existing user to belong to this org
+      await supabase
+        .from('users')
+        .update({ organization_id: org.id, role: 'owner' })
+        .eq('id', existingUser.id);
+    }
+
+    // Try to create invitation (table may not exist yet — non-fatal)
+    try {
+      const invitationToken = require('crypto').randomUUID();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      await supabase.from('organization_invitations').insert({
+        organization_id: org.id,
+        email: ownerEmail,
+        role: 'owner',
+        token: invitationToken,
+        expires_at: expiresAt.toISOString(),
+      });
+
+      return res.status(200).json({
+        organization: org,
+        inviteLink: `${req.headers.origin || 'https://www.convertraiq.com'}/invite/${invitationToken}`,
+      });
+    } catch {
+      // organization_invitations table may not exist — still return success
+      return res.status(200).json({ organization: org, inviteLink: null });
+    }
+  }
+
+  return res.status(200).json({ organization: org, inviteLink: null });
+}
+
+// ─── Get Organization ───────────────────────────────────────────────────────
+
+async function handleGetOrg(req: VercelRequest, res: VercelResponse) {
+  const organizationId = req.query.organizationId as string;
+  if (!organizationId) {
+    return res.status(400).json({ error: 'organizationId is required' });
+  }
+
+  // Load organization
+  const { data: org, error: orgError } = await supabase
+    .from('organizations')
+    .select('*')
+    .eq('id', organizationId)
+    .single();
+
+  if (orgError || !org) {
+    return res.status(404).json({ error: 'Organization not found' });
+  }
+
+  // Load users
+  const { data: users } = await supabase
+    .from('users')
+    .select('*')
+    .eq('organization_id', organizationId);
+
+  // Load pending invitations (non-fatal if table doesn't exist)
+  let invitations: unknown[] = [];
+  try {
+    const { data: invites } = await supabase
+      .from('organization_invitations')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .is('accepted_at', null);
+    invitations = invites || [];
+  } catch {
+    // Table may not exist
+  }
+
+  return res.status(200).json({
+    organization: org,
+    users: users || [],
+    invitations,
+  });
 }
