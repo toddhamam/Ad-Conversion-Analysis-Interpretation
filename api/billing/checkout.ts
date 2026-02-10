@@ -172,19 +172,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sessionParams.allow_promotion_codes = true;
     }
 
-    // Add enterprise/velocity partner setup fee as one-time charge on first invoice
+    // Add enterprise/velocity partner setup fee as a separate one-time line item
     const enterpriseSetupPriceId = process.env.STRIPE_PRICE_ENTERPRISE_SETUP;
     if ((planTier === 'enterprise' || planTier === 'velocity_partner') && enterpriseSetupPriceId) {
-      sessionParams.subscription_data!.add_invoice_items = [
-        { price: enterpriseSetupPriceId, quantity: 1 },
-      ];
+      sessionParams.line_items!.push({
+        price: enterpriseSetupPriceId,
+        quantity: 1,
+      });
     }
 
-    // Attach to existing customer or create new
+    // Attach to existing Stripe customer if available
     if (customerId) {
       sessionParams.customer = customerId;
-    } else {
-      sessionParams.customer_creation = 'always';
     }
 
     // Create the checkout session
