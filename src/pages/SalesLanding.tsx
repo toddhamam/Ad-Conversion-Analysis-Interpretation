@@ -941,8 +941,8 @@ function SalesLanding() {
                 <p className="pricing-tagline">We set it up. Your team runs it.</p>
 
                 <div className="pricing-price-block">
-                  <div className="pricing-price">$1,500<span className="pricing-interval">/mo</span></div>
-                  <div className="pricing-setup-fee">+ $2,500 one-time setup fee</div>
+                  <div className="pricing-price-custom">Custom Pricing</div>
+                  <div className="pricing-setup-fee">Schedule a demo to learn more</div>
                 </div>
 
                 <p className="pricing-description">
@@ -993,8 +993,8 @@ function SalesLanding() {
                 <p className="pricing-tagline">We set it up. We run it for you.</p>
 
                 <div className="pricing-price-block">
-                  <div className="pricing-price">$3,500<span className="pricing-interval">/mo</span></div>
-                  <div className="pricing-setup-fee">+ $2,500 one-time setup fee</div>
+                  <div className="pricing-price-custom">Custom Pricing</div>
+                  <div className="pricing-setup-fee">Schedule a demo to learn more</div>
                 </div>
 
                 <p className="pricing-description">

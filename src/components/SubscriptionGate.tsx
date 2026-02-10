@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, Link, Navigate } from 'react-router-dom';
 import { useOrganization } from '../contexts/OrganizationContext';
 import { redirectToCheckout } from '../services/stripeApi';
 import { useState } from 'react';
@@ -10,7 +10,7 @@ interface SubscriptionGateProps {
 }
 
 /** Routes that are always accessible regardless of subscription status */
-const ALWAYS_ALLOWED_PATHS = ['/billing', '/account'];
+const ALWAYS_ALLOWED_PATHS = ['/billing', '/account', '/choose-plan'];
 
 /** Routes that require a paid subscription (not available during trial) */
 const PAID_ONLY_PATHS = ['/seo-iq'];
@@ -35,8 +35,11 @@ export default function SubscriptionGate({ children }: SubscriptionGateProps) {
     return <PaidOnlyGate onUpgrade={handleUpgrade} upgrading={upgrading} />;
   }
 
-  // Block free-plan users — they must start a trial
+  // Block free-plan users — redirect incomplete signups to plan selection
   if (organization?.plan_tier === 'free') {
+    if (organization?.subscription_status === 'incomplete') {
+      return <Navigate to="/choose-plan" replace />;
+    }
     return <FreePlanGate onUpgrade={handleUpgrade} upgrading={upgrading} />;
   }
 

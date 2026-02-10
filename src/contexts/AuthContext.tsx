@@ -212,17 +212,15 @@ async function createOrganizationAndUser(
     .replace(/\s+/g, '-')
     .substring(0, 50);
 
-  // Create organization with 7-day Pro trial
-  const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  // Create organization on free plan — Stripe checkout will activate the trial
   const { data: org, error: orgError } = await supabase
     .from('organizations')
     .insert({
       name: metadata.company_name,
       slug: `${slug}-${Date.now().toString(36)}`, // Ensure uniqueness
       setup_mode: 'self_service',
-      plan_tier: 'pro',
-      subscription_status: 'trialing',
-      current_period_end: trialEnd,
+      plan_tier: 'free',
+      subscription_status: 'incomplete',
     })
     .select()
     .single();

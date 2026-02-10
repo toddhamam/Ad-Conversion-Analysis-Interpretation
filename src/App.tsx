@@ -20,6 +20,7 @@ import AccountSettings from './pages/AccountSettings';
 import SalesLanding from './pages/SalesLanding';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ChoosePlan from './pages/ChoosePlan';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -74,6 +75,15 @@ function App() {
           <Route path="/signup" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+
+          {/* Post-Signup Plan Selection (protected, no sidebar) */}
+          <Route path="/choose-plan" element={
+            <ProtectedRoute>
+              <OrganizationProvider>
+                <ChoosePlan />
+              </OrganizationProvider>
+            </ProtectedRoute>
+          } />
 
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminWrapper />}>

@@ -1409,6 +1409,13 @@
   line-height: 1;
 }
 
+.pricing-price-custom {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
 .pricing-interval {
   font-size: 20px;
   font-weight: 400;

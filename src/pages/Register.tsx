@@ -53,7 +53,7 @@ function Register() {
         return;
       }
 
-      navigate('/dashboard');
+      navigate('/choose-plan');
     } catch {
       setError('An unexpected error occurred. Please try again.');
     } finally {
