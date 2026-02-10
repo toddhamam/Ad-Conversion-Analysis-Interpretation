@@ -85,7 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               stripe_customer_id: session.customer as string,
               subscription_id: session.subscription as string,
               subscription_status: 'active',
-              plan_tier: planTier || 'pro',
+              plan_tier: planTier || 'starter',
               billing_interval: billingInterval || 'monthly',
               updated_at: new Date().toISOString(),
             })
