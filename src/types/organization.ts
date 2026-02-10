@@ -1,6 +1,6 @@
 // Multi-Tenant Organization Types
 
-export type PlanTier = 'free' | 'pro' | 'enterprise';
+export type PlanTier = 'free' | 'pro' | 'enterprise' | 'velocity_partner';
 export type BillingInterval = 'monthly' | 'yearly';
 export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'trialing' | 'incomplete';
 export type UserRole = 'owner' | 'admin' | 'member' | 'viewer';
@@ -166,6 +166,16 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     hasDedicatedManager: false,
   },
   enterprise: {
+    creativesLimit: -1,  // Unlimited
+    analysesLimit: -1,   // Unlimited
+    channelsLimit: -1,   // Unlimited
+    teamMembersLimit: -1, // Unlimited
+    hasPrioritySupport: true,
+    hasCustomBranding: true,
+    hasApiAccess: true,
+    hasDedicatedManager: true,
+  },
+  velocity_partner: {
     creativesLimit: -1,  // Unlimited
     analysesLimit: -1,   // Unlimited
     channelsLimit: -1,   // Unlimited

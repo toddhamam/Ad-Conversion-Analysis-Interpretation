@@ -8,10 +8,11 @@ const stripe = stripeSecretKey
   : null;
 
 // Plan limits by tier
-const PLAN_LIMITS = {
+const PLAN_LIMITS: Record<string, { creativesLimit: number; analysesLimit: number }> = {
   free: { creativesLimit: 10, analysesLimit: 5 },
   pro: { creativesLimit: 100, analysesLimit: 50 },
   enterprise: { creativesLimit: -1, analysesLimit: -1 },
+  velocity_partner: { creativesLimit: -1, analysesLimit: -1 },
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

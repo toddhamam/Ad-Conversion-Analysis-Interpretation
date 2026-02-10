@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-02-10 — Enterprise Self-Service and Velocity Partner pricing tiers
+
+### Added
+- **Velocity Partner plan tier**: New highest-tier plan at $3,500/month + $2,500 setup fee. Full partnership where Convertra installs, configures, and runs the platform — including a dedicated media buyer who manages creative testing, ad launching, and optimization on behalf of the client.
+- **`velocity_partner` plan tier** across the full stack: type system (`billing.ts`, `organization.ts`), pricing config (`stripeApi.ts`), plan limits, checkout API, subscription API, billing page, sales landing, and admin portal.
+- **Two-card pricing layout on sales landing**: Replaced single enterprise card with side-by-side comparison — Enterprise (Self-Service) at $1,500/mo and Velocity Partner (Full Partnership) at $3,500/mo. Each card shows price, setup fee, feature checklist, and "Schedule a Demo" CTA.
+- **Velocity Partner badge** in billing page with lime-to-violet gradient styling.
+- **Managed media buying** and **weekly creative output quota** features shown on Velocity Partner plan card in billing.
+- **Admin support**: Velocity Partner added to organization creation form, plan filter dropdown, and pricing labels.
+
+### Changed
+- **Enterprise plan repositioned** as "Self-Service" — we install and configure, the client's team runs it day-to-day with a dedicated Convertra point of contact.
+- **Sales landing pricing header** updated from "Enterprise Pricing Only — For Now" to "Two Ways to Partner With Convertra".
+- **Tier ordering** updated: free(0) → pro(1) → enterprise(2) → velocity_partner(3).
+- **Setup fee** now applies to both Enterprise and Velocity Partner tiers in checkout API.
+- **Admin pricing labels** corrected: Enterprise shows $1,500/mo (was $499/mo).
+
+### New Environment Variables
+- `STRIPE_PRICE_VELOCITY_PARTNER_MONTHLY` — Stripe recurring price ID for Velocity Partner $3,500/month
+- `STRIPE_PRICE_VELOCITY_PARTNER_YEARLY` — Stripe recurring price ID for Velocity Partner yearly
+- `STRIPE_PRICE_PRO_YEARLY` — Stripe recurring price ID for Pro yearly
+- `STRIPE_PRICE_ENTERPRISE_YEARLY` — Stripe recurring price ID for Enterprise yearly
+
 ## 2026-02-09 — 7-day free trial, billing enforcement, and pricing overhaul
 
 ### Added

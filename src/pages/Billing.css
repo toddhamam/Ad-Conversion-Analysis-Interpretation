@@ -96,6 +96,11 @@
   color: white;
 }
 
+.tier-badge-velocity-partner {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-violet) 100%);
+  color: white;
+}
+
 .current-plan-name {
   font-size: 24px;
   font-weight: 600;
