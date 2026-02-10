@@ -1,6 +1,6 @@
 // Billing Types for Convertra
 
-export type PlanTier = 'free' | 'pro' | 'enterprise';
+export type PlanTier = 'free' | 'pro' | 'enterprise' | 'velocity_partner';
 export type BillingInterval = 'monthly' | 'yearly';
 export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'trialing' | 'incomplete';
 export type InvoiceStatus = 'paid' | 'open' | 'draft' | 'void' | 'uncollectible';

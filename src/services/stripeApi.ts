@@ -32,9 +32,27 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     id: 'enterprise',
     name: 'Enterprise',
-    description: 'For large-scale operations',
+    description: 'Self-service with white-glove setup',
     monthlyPrice: 1500,
     yearlyPrice: 1250,
+    setupFee: 2500,
+    features: {
+      creativesPerMonth: -1,  // Unlimited
+      analysesPerMonth: -1,   // Unlimited
+      channels: -1,           // Unlimited
+      teamMembers: -1,        // Unlimited
+      prioritySupport: true,
+      customBranding: true,
+      apiAccess: true,
+      dedicatedAccount: true,
+    },
+  },
+  {
+    id: 'velocity_partner',
+    name: 'Velocity Partner',
+    description: 'Full partnership — we run it for you',
+    monthlyPrice: 3500,
+    yearlyPrice: 2917,
     setupFee: 2500,
     features: {
       creativesPerMonth: -1,  // Unlimited
@@ -188,7 +206,7 @@ export function isStripeConfigured(): boolean {
 
 // Helper: Get tier order for comparison
 export function getTierOrder(tier: PlanTier): number {
-  const order: Record<PlanTier, number> = { free: 0, pro: 1, enterprise: 2 };
+  const order: Record<PlanTier, number> = { free: 0, pro: 1, enterprise: 2, velocity_partner: 3 };
   return order[tier];
 }
 

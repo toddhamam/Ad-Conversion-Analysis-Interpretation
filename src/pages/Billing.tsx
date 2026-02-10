@@ -106,6 +106,8 @@ const Billing = () => {
         return <Crown size={20} strokeWidth={1.5} />;
       case 'enterprise':
         return <Building2 size={20} strokeWidth={1.5} />;
+      case 'velocity_partner':
+        return <Building2 size={20} strokeWidth={1.5} />;
       default:
         return <Crown size={20} strokeWidth={1.5} />;
     }
@@ -117,6 +119,8 @@ const Billing = () => {
         return 'tier-badge-pro';
       case 'enterprise':
         return 'tier-badge-enterprise';
+      case 'velocity_partner':
+        return 'tier-badge-velocity-partner';
       default:
         return 'tier-badge-pro';
     }
@@ -186,7 +190,7 @@ const Billing = () => {
           <div className="current-plan-info">
             <div className={`tier-badge ${getTierBadgeClass(currentPlanTier)}`}>
               {getTierIcon(currentPlanTier)}
-              <span>{currentPlanTier.charAt(0).toUpperCase() + currentPlanTier.slice(1)}</span>
+              <span>{PRICING_PLANS.find((p) => p.id === currentPlanTier)?.name || currentPlanTier.charAt(0).toUpperCase() + currentPlanTier.slice(1)}</span>
             </div>
             <h2 className="current-plan-name">
               {PRICING_PLANS.find((p) => p.id === currentPlanTier)?.name} Plan
@@ -466,6 +470,18 @@ const PlanCard = ({
             <Check size={16} strokeWidth={1.5} />
             <span>Dedicated account manager</span>
           </li>
+        )}
+        {plan.id === 'velocity_partner' && (
+          <>
+            <li>
+              <Check size={16} strokeWidth={1.5} />
+              <span>Managed media buying</span>
+            </li>
+            <li>
+              <Check size={16} strokeWidth={1.5} />
+              <span>Weekly creative output quota</span>
+            </li>
+          </>
         )}
       </ul>
 

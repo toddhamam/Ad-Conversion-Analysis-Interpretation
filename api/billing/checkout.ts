@@ -19,6 +19,8 @@ const PRICE_IDS: Record<string, string | undefined> = {
   pro_yearly: process.env.STRIPE_PRICE_PRO_YEARLY,
   enterprise_monthly: process.env.STRIPE_PRICE_ENTERPRISE_MONTHLY,
   enterprise_yearly: process.env.STRIPE_PRICE_ENTERPRISE_YEARLY,
+  velocity_partner_monthly: process.env.STRIPE_PRICE_VELOCITY_PARTNER_MONTHLY,
+  velocity_partner_yearly: process.env.STRIPE_PRICE_VELOCITY_PARTNER_YEARLY,
 };
 
 // App URL for redirects
@@ -49,7 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Cannot checkout for free plan' });
     }
 
-    if (!['pro', 'enterprise'].includes(planTier)) {
+    if (!['pro', 'enterprise', 'velocity_partner'].includes(planTier)) {
       return res.status(400).json({ error: 'Invalid plan tier' });
     }
 
@@ -120,9 +122,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sessionParams.discounts = [{ coupon: earlyBirdCouponId }];
     }
 
-    // Add enterprise setup fee as one-time charge on first invoice
+    // Add enterprise/velocity partner setup fee as one-time charge on first invoice
     const enterpriseSetupPriceId = process.env.STRIPE_PRICE_ENTERPRISE_SETUP;
-    if (planTier === 'enterprise' && enterpriseSetupPriceId) {
+    if ((planTier === 'enterprise' || planTier === 'velocity_partner') && enterpriseSetupPriceId) {
       sessionParams.subscription_data!.add_invoice_items = [
         { price: enterpriseSetupPriceId, quantity: 1 },
       ];

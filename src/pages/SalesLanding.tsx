@@ -923,99 +923,128 @@ function SalesLanding() {
       <section id="pricing" className="section pricing-section">
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">
-            Enterprise Pricing Only—<br />
-            <span className="header-emphasis">For Now</span>
+            Two Ways to Partner<br />
+            <span className="header-emphasis">With Convertra</span>
           </h2>
           <p className="pricing-intro animate-on-scroll delay-1">
-            Convertra isn't a self-serve tool you sign up for and figure out on your own.<br />
-            <strong>It's an automated partnership.</strong>
+            Every engagement starts with white-glove implementation.<br />
+            <strong>Choose how you want to run it from there.</strong>
           </p>
 
-          <div className="pricing-card gradient-border-card animate-on-scroll delay-2">
-            <div className="card-gradient-border"></div>
-            <div className="card-inner">
-              <div className="pricing-badge">Enterprise</div>
-              <h3 className="pricing-title">White-Glove Implementation & Management</h3>
+          <div className="pricing-cards-grid">
+            {/* Enterprise Self-Service */}
+            <div className="pricing-card gradient-border-card animate-on-scroll delay-2">
+              <div className="card-gradient-border"></div>
+              <div className="card-inner">
+                <div className="pricing-badge">Enterprise</div>
+                <h3 className="pricing-title">Self-Service</h3>
+                <p className="pricing-tagline">We set it up. Your team runs it.</p>
 
-              <p className="pricing-description">
-                When you partner with Convertra, you don't just get software—you get a dedicated team
-                member who becomes an extension of your organization.
-              </p>
-
-              <div className="pricing-features">
-                <div className="pricing-feature">
-                  <div className="pricing-feature-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                      <circle cx="9" cy="7" r="4"/>
-                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                    </svg>
-                  </div>
-                  <div className="pricing-feature-content">
-                    <h4>Dedicated Partnership</h4>
-                    <p>A team member who partners with you to install, set up, and customize your solution—not a support ticket.</p>
-                  </div>
+                <div className="pricing-price-block">
+                  <div className="pricing-price">$1,500<span className="pricing-interval">/mo</span></div>
+                  <div className="pricing-setup-fee">+ $2,500 one-time setup fee</div>
                 </div>
 
-                <div className="pricing-feature">
-                  <div className="pricing-feature-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-                    </svg>
-                  </div>
-                  <div className="pricing-feature-content">
-                    <h4>Custom Software Solution</h4>
-                    <p>Your own custom-built system configured to your unique business needs, channels, and conversion goals.</p>
-                  </div>
-                </div>
-
-                <div className="pricing-feature">
-                  <div className="pricing-feature-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                      <path d="M2 17l10 5 10-5"/>
-                      <path d="M2 12l10 5 10-5"/>
-                    </svg>
-                  </div>
-                  <div className="pricing-feature-content">
-                    <h4>Managed Integration</h4>
-                    <p>We handle every integration, becoming a seamless extension of your team—so you focus on results, not setup.</p>
-                  </div>
-                </div>
-
-                <div className="pricing-feature">
-                  <div className="pricing-feature-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                    </svg>
-                  </div>
-                  <div className="pricing-feature-content">
-                    <h4>Ongoing White-Glove Service</h4>
-                    <p>Continuous optimization, monitoring, and evolution of your system—without lifting a finger.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pricing-why">
-                <p className="pricing-why-title">Why enterprise only—for now?</p>
-                <p className="pricing-why-text">
-                  Because every implementation is fully custom and bespoke. We study your business,
-                  configure the system to your patterns, and manage it end-to-end. This level of
-                  white-glove service requires dedicated attention and expertise that doesn't scale
-                  with self-serve signups—at least not yet.
+                <p className="pricing-description">
+                  We install and configure your Convertra platform, then hand the keys to your internal team. A dedicated point of contact from our team is always available to assist.
                 </p>
-              </div>
 
-              <div className="pricing-cta">
-                <a href={calendarUrl} className="cta-primary cta-large">
-                  Schedule a Demo
-                </a>
-                <p className="pricing-cta-note">
-                  Let's discuss your needs and see if we're the right fit.
-                </p>
+                <ul className="pricing-checklist">
+                  <li>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
+                    Full platform installation &amp; configuration
+                  </li>
+                  <li>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
+                    Dedicated Convertra point of contact
+                  </li>
+                  <li>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
+                    Your team member drives day-to-day
+                  </li>
+                  <li>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
+                    Unlimited creatives &amp; analyses
+                  </li>
+                  <li>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
+                    Custom branding &amp; API access
+                  </li>
+                  <li>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
+                    Priority support
+                  </li>
+                </ul>
+
+                <div className="pricing-cta">
+                  <a href={calendarUrl} className="cta-primary cta-large">
+                    Schedule a Demo
+                  </a>
+                </div>
               </div>
             </div>
+
+            {/* Velocity Partner */}
+            <div className="pricing-card pricing-card-featured gradient-border-card animate-on-scroll delay-3">
+              <div className="card-gradient-border"></div>
+              <div className="card-inner">
+                <div className="pricing-badge pricing-badge-featured">Velocity Partner</div>
+                <h3 className="pricing-title">Full Partnership</h3>
+                <p className="pricing-tagline">We set it up. We run it for you.</p>
+
+                <div className="pricing-price-block">
+                  <div className="pricing-price">$3,500<span className="pricing-interval">/mo</span></div>
+                  <div className="pricing-setup-fee">+ $2,500 one-time setup fee</div>
+                </div>
+
+                <p className="pricing-description">
+                  Everything in Enterprise, plus a dedicated Convertra media buyer who runs your entire creative testing operation. Set your weekly quota — we handle the rest.
+                </p>
+
+                <ul className="pricing-checklist">
+                  <li>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
+                    Everything in Enterprise, plus:
+                  </li>
+                  <li className="pricing-checklist-highlight">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
+                    Dedicated Convertra media buyer
+                  </li>
+                  <li className="pricing-checklist-highlight">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
+                    Weekly creative output quota
+                  </li>
+                  <li className="pricing-checklist-highlight">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
+                    Ad launching, testing &amp; optimization
+                  </li>
+                  <li className="pricing-checklist-highlight">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
+                    Ongoing creative refinement
+                  </li>
+                  <li>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
+                    More creative output, better results
+                  </li>
+                </ul>
+
+                <div className="pricing-cta">
+                  <a href={calendarUrl} className="cta-primary cta-large">
+                    Schedule a Demo
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="pricing-why animate-on-scroll delay-4">
+            <p className="pricing-why-title">Why enterprise only — for now?</p>
+            <p className="pricing-why-text">
+              Because every implementation is fully custom and bespoke. We study your business,
+              configure the system to your patterns, and manage it end-to-end. This level of
+              white-glove service requires dedicated attention and expertise that doesn't scale
+              with self-serve signups — at least not yet.
+            </p>
           </div>
         </div>
       </section>

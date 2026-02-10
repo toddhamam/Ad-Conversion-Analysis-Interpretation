@@ -150,6 +150,7 @@ function OrganizationsList() {
               <option value="free">Free</option>
               <option value="pro">Pro</option>
               <option value="enterprise">Enterprise</option>
+              <option value="velocity_partner">Velocity Partner</option>
             </select>
           </div>
           <Link to="/admin/organizations/new" className="admin-btn admin-btn-primary">

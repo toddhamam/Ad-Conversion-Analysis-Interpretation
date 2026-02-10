@@ -471,7 +471,7 @@ function CreateOrganization() {
             <div className="admin-form-group">
               <label className="admin-form-label">Plan *</label>
               <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                {(['enterprise', 'pro', 'free'] as PlanTier[]).map((tier) => (
+                {(['velocity_partner', 'enterprise', 'pro', 'free'] as PlanTier[]).map((tier) => (
                   <label
                     key={tier}
                     style={{
@@ -492,9 +492,9 @@ function CreateOrganization() {
                       onChange={() => setFormData((prev) => ({ ...prev, planTier: tier }))}
                       style={{ display: 'none' }}
                     />
-                    <div style={{ fontWeight: 600, marginBottom: '4px', textTransform: 'capitalize' }}>{tier}</div>
+                    <div style={{ fontWeight: 600, marginBottom: '4px', textTransform: 'capitalize' }}>{tier === 'velocity_partner' ? 'Velocity Partner' : tier}</div>
                     <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                      {tier === 'enterprise' ? '$499/mo' : tier === 'pro' ? '$99/mo' : 'Free'}
+                      {tier === 'velocity_partner' ? '$3,500/mo' : tier === 'enterprise' ? '$1,500/mo' : tier === 'pro' ? '$99/mo' : 'Free'}
                     </div>
                   </label>
                 ))}
