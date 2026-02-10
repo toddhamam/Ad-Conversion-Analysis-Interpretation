@@ -36,6 +36,7 @@ const Billing = () => {
   const [error, setError] = useState<string | null>(null);
   const [billingInterval, setBillingInterval] = useState<BillingInterval>('monthly');
   const [upgrading, setUpgrading] = useState<PlanTier | null>(null);
+  const [usePromoCode, setUsePromoCode] = useState(false);
 
   // Check for success/cancel from Stripe checkout
   const checkoutSuccess = searchParams.get('success') === 'true';
@@ -72,7 +73,7 @@ const Billing = () => {
     try {
       setUpgrading(planTier);
       setError(null);
-      await redirectToCheckout(planTier, billingInterval, organization.id);
+      await redirectToCheckout(planTier, billingInterval, organization.id, usePromoCode);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to start checkout';
       setError(message);
@@ -314,6 +315,22 @@ const Billing = () => {
               <span className="save-badge">Save 20%</span>
             </button>
           </div>
+        </div>
+
+        <div className="promo-code-toggle">
+          <label className="promo-toggle-label">
+            <input
+              type="checkbox"
+              checked={usePromoCode}
+              onChange={(e) => setUsePromoCode(e.target.checked)}
+            />
+            <span>I have a promo code</span>
+          </label>
+          {usePromoCode && (
+            <p className="promo-toggle-hint">
+              You'll be able to enter your code at checkout
+            </p>
+          )}
         </div>
 
         <div className="pricing-grid">

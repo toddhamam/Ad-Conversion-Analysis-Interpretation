@@ -36,7 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { planTier, billingInterval, customerId, organizationId } = req.body;
+    const { planTier, billingInterval, customerId, organizationId, usePromoCode } = req.body;
 
     // Validate inputs
     if (!planTier || !billingInterval) {
@@ -114,12 +114,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           organizationId, // Also store on subscription
         },
       },
+      // Skip card collection for fully-discounted subscriptions (e.g. beta tester 100% off)
+      payment_method_collection: 'if_required',
     };
 
-    // Apply early-bird coupon for trialing orgs subscribing to Pro
+    // Promo code mode: show Stripe's promo code field (mutually exclusive with discounts)
+    // Early-bird mode: auto-apply the early-bird coupon for trialing orgs
     const earlyBirdCouponId = process.env.STRIPE_EARLY_BIRD_COUPON_ID;
-    if (isOrgTrialing && planTier === 'pro' && earlyBirdCouponId) {
+    if (usePromoCode) {
+      sessionParams.allow_promotion_codes = true;
+    } else if (isOrgTrialing && planTier === 'pro' && earlyBirdCouponId) {
       sessionParams.discounts = [{ coupon: earlyBirdCouponId }];
+    } else {
+      sessionParams.allow_promotion_codes = true;
     }
 
     // Add enterprise/velocity partner setup fee as one-time charge on first invoice

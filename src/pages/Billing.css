@@ -265,6 +265,33 @@
   font-weight: 600;
 }
 
+/* Promo Code Toggle */
+.promo-code-toggle {
+  margin-bottom: 20px;
+}
+
+.promo-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.promo-toggle-label input[type="checkbox"] {
+  accent-color: var(--accent-violet);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.promo-toggle-hint {
+  margin: 6px 0 0 24px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 /* Plan Cards */
 .pricing-grid {
   display: grid;

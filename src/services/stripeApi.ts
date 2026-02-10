@@ -120,7 +120,8 @@ function getDefaultBillingData(): BillingData {
 export async function redirectToCheckout(
   planTier: PlanTier,
   billingInterval: BillingInterval,
-  organizationId?: string
+  organizationId?: string,
+  usePromoCode?: boolean
 ): Promise<void> {
   // Get customer ID from localStorage if available (fallback)
   const userData = localStorage.getItem('convertra_user');
@@ -133,7 +134,7 @@ export async function redirectToCheckout(
   const response = await fetch('/api/billing/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ planTier, billingInterval, customerId, organizationId }),
+    body: JSON.stringify({ planTier, billingInterval, customerId, organizationId, usePromoCode }),
   });
 
   if (!response.ok) {

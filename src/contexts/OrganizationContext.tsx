@@ -201,8 +201,10 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
   const trialDaysRemaining = isTrialing && trialEndDate
     ? Math.max(0, Math.ceil((trialEndDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
+  // Free plan is only valid for super admins — all other users must be on trial or paid
+  const isFreePlanAdmin = organization?.plan_tier === 'free' && (user?.is_super_admin ?? false);
   const isSubscriptionValid =
-    organization?.subscription_status === 'active' ||
+    (organization?.subscription_status === 'active' && (organization?.plan_tier !== 'free' || isFreePlanAdmin)) ||
     organization?.subscription_status === 'past_due' ||
     (isTrialing && trialDaysRemaining > 0);
 
