@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-02-10 — Fix billing "Organization not found" error with JWT auth
+
+### Fixed
+- **"Organization not found" error on upgrade buttons**: Clicking any upgrade button on the Billing page returned "Organization not found" because the checkout and portal API endpoints trusted client-provided `organizationId` instead of deriving it from the authenticated user's JWT token. The Supabase lookup was failing silently.
+- **Billing portal endpoint had no org resolution**: `api/billing/portal.ts` relied entirely on client-provided `customerId` with no server-side verification or org lookup.
+
+### Changed
+- **JWT authentication added to `api/billing/checkout.ts`**: Now derives `organizationId` from the authenticated user's profile via JWT (matching the `meta.ts` auth pattern). Falls back to client-provided ID only when JWT is unavailable.
+- **JWT authentication added to `api/billing/portal.ts`**: Now authenticates via JWT, looks up `stripe_customer_id` from the org record in Supabase, and falls back to client-provided customer ID.
+- **Frontend billing API calls now send auth headers**: `fetchBillingData`, `redirectToCheckout`, and `createPortalSession` in `stripeApi.ts` now include `Authorization: Bearer <token>` using `getAuthToken()`.
+- **Improved error logging in checkout endpoint**: Org lookup failures now log the actual Supabase error code and message for diagnostics.
+- **Improved error messages**: Changed generic "Organization not found" to actionable "Organization not found. Please sign out and sign back in."
+- **Removed `organizationId` from Stripe redirect URLs**: Success/cancel URLs no longer leak org IDs in query params.
+
 ## 2026-02-10 — Add Starter tier, reprice Pro, and tabbed pricing layout
 
 ### Added

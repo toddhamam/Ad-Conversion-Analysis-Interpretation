@@ -28,6 +28,33 @@ const PRICE_IDS: Record<string, string | undefined> = {
 // App URL for redirects
 const APP_URL = process.env.VITE_APP_URL || 'http://localhost:5175';
 
+// ─── Authentication ──────────────────────────────────────────────────────────
+
+interface AuthContext {
+  userId: string;
+  organizationId: string;
+}
+
+async function authenticateRequest(req: VercelRequest): Promise<AuthContext | null> {
+  if (!supabase) return null;
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return null;
+
+  const token = authHeader.slice(7);
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return null;
+
+  const { data: profile } = await supabase
+    .from('users')
+    .select('id, organization_id')
+    .eq('auth_id', user.id)
+    .single();
+
+  if (!profile) return null;
+  return { userId: profile.id, organizationId: profile.organization_id };
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -38,15 +65,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { planTier, billingInterval, customerId, organizationId, usePromoCode } = req.body;
+    const { planTier, billingInterval, usePromoCode } = req.body;
 
     // Validate inputs
     if (!planTier || !billingInterval) {
       return res.status(400).json({ error: 'Missing planTier or billingInterval' });
-    }
-
-    if (!organizationId) {
-      return res.status(400).json({ error: 'Missing organizationId' });
     }
 
     if (planTier === 'free') {
@@ -61,8 +84,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Invalid billing interval' });
     }
 
-    // Verify organization exists and check trial status (if Supabase is configured)
+    // Authenticate and derive organizationId from JWT
+    const auth = await authenticateRequest(req);
+
+    // Fall back to client-provided organizationId if JWT auth not available
+    const organizationId = auth?.organizationId || req.body.organizationId;
+
+    if (!organizationId) {
+      return res.status(401).json({ error: 'Authentication required. Please sign in and try again.' });
+    }
+
+    // Look up organization to get trial status and Stripe customer ID
     let isOrgTrialing = false;
+    let stripeCustomerId: string | null = null;
+
     if (supabase) {
       const { data: org, error: orgError } = await supabase
         .from('organizations')
@@ -71,16 +106,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .single();
 
       if (orgError || !org) {
-        return res.status(404).json({ error: 'Organization not found' });
+        console.error('[Billing Checkout] Org lookup failed:', {
+          organizationId,
+          error: orgError?.message || 'No org returned',
+          code: orgError?.code,
+          fromJWT: !!auth,
+        });
+        return res.status(404).json({ error: 'Organization not found. Please sign out and sign back in.' });
       }
 
       isOrgTrialing = org.subscription_status === 'trialing';
-
-      // Use existing Stripe customer if available
-      if (org.stripe_customer_id && !customerId) {
-        req.body.customerId = org.stripe_customer_id;
-      }
+      stripeCustomerId = org.stripe_customer_id;
     }
+
+    // Determine Stripe customer: org's stored customer > client-provided
+    const customerId = stripeCustomerId || req.body.customerId || null;
 
     // Get the price ID
     const priceKey = `${planTier}_${billingInterval}`;
@@ -102,8 +142,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           quantity: 1,
         },
       ],
-      success_url: `${APP_URL}/billing?success=true&organizationId=${organizationId}`,
-      cancel_url: `${APP_URL}/billing?canceled=true&organizationId=${organizationId}`,
+      success_url: `${APP_URL}/billing?success=true`,
+      cancel_url: `${APP_URL}/billing?canceled=true`,
       metadata: {
         planTier,
         billingInterval,
@@ -140,8 +180,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Attach to existing customer or create new
-    if (customerId || req.body.customerId) {
-      sessionParams.customer = customerId || req.body.customerId;
+    if (customerId) {
+      sessionParams.customer = customerId;
     } else {
       sessionParams.customer_creation = 'always';
     }
@@ -150,7 +190,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const session = await stripe.checkout.sessions.create(sessionParams);
 
     return res.status(200).json({ url: session.url, sessionId: session.id });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('[Billing Checkout API] Error:', error);
     const message = error instanceof Error ? error.message : 'Failed to create checkout session';
     return res.status(500).json({ error: message });
