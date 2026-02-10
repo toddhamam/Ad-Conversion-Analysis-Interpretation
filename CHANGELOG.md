@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-02-10 — Fix Stripe API errors: subscription mode constraints
+
+### Fixed
+- **`customer_creation: 'always'` error**: Removed invalid parameter from checkout — Stripe auto-creates customers in subscription mode. Was causing "customer_creation can only be used in payment mode" error.
+- **`subscription_data.add_invoice_items` error**: Moved enterprise/velocity partner setup fee from `subscription_data.add_invoice_items` (not a valid Checkout Session param) to an additional entry in `line_items`. Was causing "unknown parameter: subscription_data[add_invoice_items]" error.
+
+## 2026-02-10 — Fix super admin blocked by subscription gate, user identity, and checkout resilience
+
+### Fixed
+- **Super admins blocked by subscription gate**: `SubscriptionGate` now exempts super admins entirely — they always have full app access regardless of trial/subscription status.
+- **"Demo User" display for authenticated users**: `UserProfileDropdown` and `AccountSettings` now read user identity from `OrganizationContext` (Supabase) instead of localStorage, fixing the "Demo User" display for Supabase-authenticated users.
+- **Checkout blocked when org lookup fails**: Org lookup in checkout endpoint is now non-fatal — if Supabase lookup fails, checkout proceeds without trial coupon and stored customer ID instead of blocking entirely. Supports dev environments and edge cases.
+
 ## 2026-02-10 — Fix billing "Organization not found" error with JWT auth
 
 ### Fixed

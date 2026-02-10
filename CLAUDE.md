@@ -101,14 +101,18 @@ public/
 | `src/lib/supabase.ts` | Supabase client singleton with configuration check |
 | `src/components/UserProfileDropdown.tsx` | User profile dropdown with company branding, sign out, account actions |
 | `src/components/MainLayout.tsx` | App shell with sidebar, header, and responsive navigation |
-| `src/services/stripeApi.ts` | Stripe integration - checkout, portal, subscription management |
+| `src/services/stripeApi.ts` | Stripe integration - checkout, portal, subscription management (sends JWT auth headers) |
 | `src/pages/Billing.tsx` | Billing portal page with plan management |
+| `src/pages/AccountSettings.tsx` | Account settings — reads user identity from OrganizationContext (Supabase) |
+| `src/components/SubscriptionGate.tsx` | Subscription/trial gate — blocks free/expired users, exempts super admins |
 | `src/pages/Dashboard.tsx` | Main dashboard with customizable stat cards, date range picker, fetches from both Meta API and Supabase funnel API |
 | `src/pages/Funnels.tsx` | Funnel metrics page with ad spend configuration |
 | `src/components/DashboardCustomizer.tsx` | Drag-and-drop dashboard layout customization |
 | `src/components/StatCard.tsx` | Reusable stat card component for metrics display |
-| `api/billing/checkout.ts` | Vercel serverless function for Stripe Checkout sessions |
-| `api/billing/portal.ts` | Vercel serverless function for Stripe Customer Portal |
+| `api/billing/checkout.ts` | Stripe Checkout sessions — JWT auth, non-fatal org lookup, promo code/coupon logic |
+| `api/billing/portal.ts` | Stripe Customer Portal — JWT auth, org-derived customer ID resolution |
+| `api/billing/subscription.ts` | Subscription status lookup for billing page |
+| `api/billing/webhook.ts` | Stripe webhook handler for subscription lifecycle events |
 | `api/seoiq.ts` | SEO IQ catch-all API — sites, keywords, articles, autopilot, keyword research (JWT-protected) |
 | `api/_lib/google-ads.ts` | Google Ads Keyword Planner API client — token refresh + `fetchKeywordIdeas()` |
 | `api/_lib/google-auth.ts` | Google OAuth token management — per-site access token refresh for GSC |
@@ -174,7 +178,7 @@ public/
 8. **Vercel serverless functions** - API routes in `api/` directory using `@vercel/node` (`VercelRequest`, `VercelResponse`)
 9. **React 19 peer dependency handling** - `.npmrc` with `legacy-peer-deps=true` for libraries that haven't updated React peer deps
 10. **Two-layer AI context** - Channel analysis provides performance patterns (account-wide); Product Context provides identity (product name, author, mockups). Both layers are injected into prompts independently — changing one never affects the other
-11. **JWT auth on API routes** - All `api/seoiq.ts` routes require Bearer token authentication and tenant isolation via `organization_id`. Only `provision-org` and `autopilot-cron` use their own auth mechanisms
+11. **JWT auth on API routes** - All `api/seoiq.ts`, `api/billing/checkout.ts`, and `api/billing/portal.ts` routes require Bearer token authentication. Organization ID is derived from JWT, not client input. Billing endpoints fall back to client-provided IDs only when JWT is unavailable (dev mode)
 12. **404 catch-all route** - Unknown routes render a branded 404 page instead of a blank screen, preventing route enumeration
 13. **Meta API backend proxy** - All Meta Graph API calls route through `api/meta.ts` — access tokens are decrypted server-side and never sent to the browser. Frontend uses `metaProxy()` helper in `metaApi.ts` which calls `/api/meta/proxy` with JWT auth
 14. **Catch-all serverless function consolidation** - Multi-route API handlers use a single serverless function with `route` query param dispatching (e.g., `api/meta.ts`, `api/seoiq.ts`). Vercel rewrites map friendly URLs to query params. This is required to stay within Vercel Hobby plan's **12 serverless function limit**
@@ -186,55 +190,76 @@ public/
 ## Stripe Billing Integration
 
 ### Architecture
-- **Frontend**: `src/services/stripeApi.ts` handles UI-facing billing operations
-- **Backend**: `api/billing/*.ts` serverless functions for sensitive Stripe operations
-- **Stripe.js**: Loaded lazily on first use to minimize bundle impact
+- **Frontend**: `src/services/stripeApi.ts` handles UI-facing billing operations (sends JWT auth headers on all calls)
+- **Backend**: `api/billing/*.ts` serverless functions for sensitive Stripe operations (JWT-authenticated)
+- **Subscription gating**: `src/components/SubscriptionGate.tsx` blocks access for free/expired users
+- **Plan tiers**: `free`, `starter`, `pro`, `enterprise`, `velocity_partner` (each with monthly/yearly pricing)
 
-### Stripe Patterns
+### Checkout Flow (JWT-Authenticated)
+1. Frontend calls `redirectToCheckout()` in `stripeApi.ts` which sends `POST /api/billing/checkout` with JWT `Authorization` header
+2. Backend authenticates via JWT → derives `organizationId` from user profile (falls back to client-provided ID only in dev mode)
+3. Backend performs **non-fatal** org lookup — if Supabase fails, checkout proceeds without trial coupon or stored customer ID (logged for diagnostics but doesn't block)
+4. Backend creates Stripe Checkout Session in `subscription` mode and returns `url`
+5. Frontend redirects via `window.location.href = url`
 
-#### Lazy-loading Stripe.js
-```typescript
-import { loadStripe, Stripe } from '@stripe/stripe-js';
+**Important**: Do NOT use `customer_creation: 'always'` — it's invalid in subscription mode (Stripe auto-creates customers). Do NOT use `stripe.redirectToCheckout({ sessionId })` — use the URL redirect pattern instead.
 
-let stripePromise: Promise<Stripe | null> | null = null;
+### Customer Portal (JWT-Authenticated)
+1. Frontend calls `createPortalSession()` in `stripeApi.ts` which sends `POST /api/billing/portal` with JWT `Authorization` header
+2. Backend authenticates via JWT → derives `organizationId` → looks up `stripe_customer_id` from org record
+3. Falls back to client-provided `customerId` if org lookup fails
+4. Backend creates Stripe Billing Portal session and returns `url`
+5. Frontend redirects to Stripe-hosted portal
 
-export const getStripe = () => {
-  if (!stripePromise) {
-    stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
-  }
-  return stripePromise;
-};
-```
+### Promo Code & Coupon Logic
+The checkout endpoint handles three mutually exclusive discount scenarios:
+1. **User-entered promo code**: If `usePromoCode: true`, shows Stripe's promo code field (`allow_promotion_codes: true`)
+2. **Early-bird coupon**: If org is trialing AND plan is `starter` AND `STRIPE_EARLY_BIRD_COUPON_ID` is set, auto-applies the coupon via `discounts`
+3. **Default**: Falls back to `allow_promotion_codes: true`
 
-#### Configuration Check
-```typescript
-export const isStripeConfigured = (): boolean => {
-  return !!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
-};
-```
+### Enterprise/Velocity Partner Setup Fee
+- Setup fee is added as a **separate one-time line item** in the `line_items` array
+- Configured via `STRIPE_PRICE_ENTERPRISE_SETUP` environment variable
+- Applied to both `enterprise` and `velocity_partner` plan tiers
+- **Do NOT use** `subscription_data.add_invoice_items` — it's not a valid Checkout Session param in subscription mode
 
-#### Checkout Flow
-1. Frontend calls `POST /api/billing/checkout` with plan info
-2. Backend creates Stripe Checkout Session and returns `sessionId`
-3. Frontend redirects via `stripe.redirectToCheckout({ sessionId })`
+### Payment Method Collection
+- `payment_method_collection: 'if_required'` is set on all checkout sessions
+- This allows fully-discounted subscriptions (e.g., beta tester 100% off promo codes) to skip card collection
 
-#### Customer Portal
-1. Frontend calls `POST /api/billing/portal`
-2. Backend creates portal session and returns `url`
-3. Frontend redirects to Stripe-hosted portal
+### SubscriptionGate Access Control
+`SubscriptionGate.tsx` wraps protected routes and enforces subscription status:
+
+| User State | Behavior |
+|------------|----------|
+| Super admin (`isSuperAdmin`) | Always has full access — bypasses all gates |
+| `/billing` or `/account` paths | Always accessible regardless of subscription |
+| Free plan (`plan_tier === 'free'`) | Blocked — shown "Start free trial" gate |
+| Expired trial / canceled | Blocked — shown "Your free trial has ended" gate |
+| Trial user on paid-only route (`/seo-iq`) | Blocked — shown "SEO IQ is a paid feature" gate |
+| Active trial or paid subscription | Full access |
 
 ### API Route Pattern
 ```typescript
-// api/billing/checkout.ts
+// api/billing/checkout.ts — JWT-authenticated with non-fatal org lookup
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2023-10-16' });
+const stripe = stripeSecretKey
+  ? new Stripe(stripeSecretKey, { apiVersion: '2024-12-18.acacia' as const as any })
+  : null;
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Handle request...
-}
+// JWT auth — derive organizationId from user profile, fall back to client ID in dev
+const auth = await authenticateRequest(req);
+const organizationId = auth?.organizationId || req.body.organizationId;
 ```
+
+### Stripe Pitfalls (Learned from PRs #157-#159)
+- **`customer_creation: 'always'`** is invalid in subscription mode — Stripe auto-creates customers
+- **`subscription_data.add_invoice_items`** is not a valid Checkout Session parameter — use `line_items` for one-time charges
+- **Client-provided organizationId** must not be trusted — always derive from JWT for security
+- **Org lookup failures** should not block checkout — make them non-fatal to support dev environments and edge cases
 
 ---
 
@@ -255,7 +280,7 @@ const supabase = createClient(
 
 ## API Authentication & Tenant Isolation
 
-All multi-tenant API routes must enforce JWT authentication and tenant isolation. The pattern established in `api/seoiq.ts` should be followed for any new API routes.
+All multi-tenant API routes must enforce JWT authentication and tenant isolation. The pattern is used by `api/seoiq.ts`, `api/meta.ts`, `api/billing/checkout.ts`, and `api/billing/portal.ts`. Follow it for any new API routes.
 
 ### Authentication Pattern
 ```typescript
@@ -942,9 +967,16 @@ VITE_APP_URL=               # App URL for redirects (https://www.convertraiq.com
 ```bash
 STRIPE_SECRET_KEY=          # Stripe secret key (sk_live_* or sk_test_*)
 STRIPE_WEBHOOK_SECRET=      # Stripe webhook signing secret (whsec_*)
-STRIPE_PRICE_STARTER=       # Stripe Price ID for Starter plan
-STRIPE_PRICE_GROWTH=        # Stripe Price ID for Growth plan
-STRIPE_PRICE_ENTERPRISE=    # Stripe Price ID for Enterprise plan
+STRIPE_PRICE_STARTER_MONTHLY=   # Stripe Price ID for Starter monthly
+STRIPE_PRICE_STARTER_YEARLY=    # Stripe Price ID for Starter yearly
+STRIPE_PRICE_PRO_MONTHLY=       # Stripe Price ID for Pro monthly
+STRIPE_PRICE_PRO_YEARLY=        # Stripe Price ID for Pro yearly
+STRIPE_PRICE_ENTERPRISE_MONTHLY= # Stripe Price ID for Enterprise monthly
+STRIPE_PRICE_ENTERPRISE_YEARLY=  # Stripe Price ID for Enterprise yearly
+STRIPE_PRICE_VELOCITY_PARTNER_MONTHLY= # Stripe Price ID for Velocity Partner monthly
+STRIPE_PRICE_VELOCITY_PARTNER_YEARLY=  # Stripe Price ID for Velocity Partner yearly
+STRIPE_PRICE_ENTERPRISE_SETUP=  # Stripe Price ID for one-time enterprise/velocity setup fee
+STRIPE_EARLY_BIRD_COUPON_ID=    # Stripe Coupon ID for early-bird trial-to-starter discount
 SUPABASE_URL=               # Supabase project URL (MUST be set separately from VITE_SUPABASE_URL)
 SUPABASE_SERVICE_ROLE_KEY=  # Supabase service role key (for server-side access)
 GOOGLE_CLIENT_ID=           # Google OAuth client ID (shared across GSC + Google Ads)
@@ -973,10 +1005,10 @@ Current serverless functions (12/12):
 1. `api/admin/credentials.ts` — Admin credential management
 2. `api/auth/meta/callback.ts` — Meta OAuth callback
 3. `api/auth/meta/connect.ts` — Meta OAuth initiation
-4. `api/billing/checkout.ts` — Stripe checkout
-5. `api/billing/portal.ts` — Stripe customer portal
-6. `api/billing/subscription.ts` — Subscription management
-7. `api/billing/webhook.ts` — Stripe webhooks
+4. `api/billing/checkout.ts` — Stripe checkout (JWT-authenticated, non-fatal org lookup)
+5. `api/billing/portal.ts` — Stripe customer portal (JWT-authenticated)
+6. `api/billing/subscription.ts` — Subscription status lookup
+7. `api/billing/webhook.ts` — Stripe webhook handler
 8. `api/funnel/active-sessions.ts` — Active funnel sessions
 9. `api/funnel/metrics.ts` — Funnel metrics
 10. `api/google-auth.ts` — Google OAuth tokens
