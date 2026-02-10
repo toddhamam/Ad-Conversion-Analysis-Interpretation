@@ -21,6 +21,24 @@
 - `STRIPE_PRICE_STARTER_MONTHLY` — Stripe recurring price ID for Starter $99/month
 - `STRIPE_PRICE_STARTER_YEARLY` — Stripe recurring price ID for Starter yearly
 
+## 2026-02-10 — Enforce trial-only signup and add beta tester promo code support
+
+### Fixed
+- **Provision-org fallback created free plan instead of trial**: The `/api/seo-iq/provision-org` endpoint created organizations with `plan_tier: 'free'` and no trial period, allowing users to bypass the paywall entirely. Now creates `plan_tier: 'pro'` with `subscription_status: 'trialing'` and a 7-day trial — matching the normal signup flow.
+- **Free plan users bypassed subscription gating**: `isSubscriptionValid` returned `true` for free-plan users (since `subscription_status === 'active'`), letting them access the full app without ever subscribing. Now excludes free-plan users unless they are super admins.
+
+### Added
+- **FreePlanGate component** in `SubscriptionGate.tsx`: Dedicated gate for non-admin free-plan users with "Start your free trial" messaging and CTA.
+- **Super admin exemption for free plan**: Only `is_super_admin === true` users can remain on the free plan without hitting the paywall. All other users must be on trial or paid.
+- **Promo code support at checkout**: New `usePromoCode` flag enables Stripe's built-in promotion code field at checkout. Mutually exclusive with the auto-applied early-bird coupon — when promo mode is active, the early-bird is skipped so users can enter their own code (e.g., 100% off beta tester code).
+- **"I have a promo code" toggle** on Billing page: Checkbox above plan cards lets users opt into promo code entry at Stripe Checkout.
+- **Card-free checkout for $0 subscriptions**: Added `payment_method_collection: 'if_required'` to Stripe checkout sessions so fully-discounted subscriptions (100% off coupon) don't require a credit card.
+
+### Stripe Setup Required
+- Create a **100% off coupon** in Stripe Dashboard (Products → Coupons) with duration "forever" for beta testers
+- Create a **promotion code** from that coupon (e.g., `BETA100`) and share with beta testers
+- No new environment variables needed
+
 ## 2026-02-10 — Enterprise Self-Service and Velocity Partner pricing tiers
 
 ### Added
