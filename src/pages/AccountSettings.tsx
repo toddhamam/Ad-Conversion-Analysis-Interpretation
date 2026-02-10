@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useOrganization } from '../contexts/OrganizationContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import './AccountSettings.css';
 
@@ -13,10 +14,23 @@ interface UserData {
 
 function AccountSettings() {
   const { user, isConfigured } = useAuth();
+  const { user: orgUser, organization } = useOrganization();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Get initial user data from localStorage
+  // Get initial user data: OrganizationContext > Auth metadata > localStorage > fallback
   const getInitialUserData = (): UserData => {
+    // Primary: organization context (Supabase users/organizations tables)
+    if (orgUser && organization) {
+      return {
+        fullName: orgUser.full_name || user?.email || 'User',
+        companyName: organization.name || 'My Company',
+        companyLogo: organization.logo_url || undefined,
+        email: orgUser.email || user?.email || '',
+        role: orgUser.role || '',
+      };
+    }
+
+    // Secondary: localStorage (for backwards compatibility)
     const stored = localStorage.getItem('convertra_user');
     if (stored) {
       try {
@@ -25,10 +39,12 @@ function AccountSettings() {
         // Fallback
       }
     }
+
+    // Tertiary: auth user metadata
     return {
-      fullName: user?.user_metadata?.full_name || 'Demo User',
-      companyName: user?.user_metadata?.company_name || 'Demo Company',
-      email: user?.email || 'demo@company.com',
+      fullName: user?.user_metadata?.full_name || user?.email || 'User',
+      companyName: user?.user_metadata?.company_name || 'My Company',
+      email: user?.email || '',
       role: '',
     };
   };

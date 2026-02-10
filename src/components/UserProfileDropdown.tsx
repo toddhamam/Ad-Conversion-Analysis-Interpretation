@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useOrganization } from '../contexts/OrganizationContext';
 import './UserProfileDropdown.css';
 
 interface UserData {
@@ -13,12 +14,34 @@ interface UserData {
 
 const UserProfileDropdown = () => {
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { signOut, user: authUser } = useAuth();
+  const { user: orgUser, organization } = useOrganization();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Get user data from localStorage
-  const getUserData = (): UserData => {
+  // Resolve user data: OrganizationContext > Auth metadata > localStorage > fallback
+  const userData = useMemo((): UserData => {
+    // Primary source: organization context (loaded from Supabase users/organizations tables)
+    if (orgUser && organization) {
+      return {
+        fullName: orgUser.full_name || authUser?.email || 'User',
+        companyName: organization.name || 'My Company',
+        companyLogo: organization.logo_url || undefined,
+        email: orgUser.email || authUser?.email || '',
+        role: orgUser.role || undefined,
+      };
+    }
+
+    // Secondary source: auth user metadata
+    if (authUser) {
+      return {
+        fullName: authUser.user_metadata?.full_name || authUser.email || 'User',
+        companyName: authUser.user_metadata?.company_name || 'My Company',
+        email: authUser.email || '',
+      };
+    }
+
+    // Tertiary source: localStorage (for backwards compatibility)
     const stored = localStorage.getItem('convertra_user');
     if (stored) {
       try {
@@ -27,15 +50,13 @@ const UserProfileDropdown = () => {
         // Fallback if parsing fails
       }
     }
-    // Default fallback for demo
-    return {
-      fullName: 'Demo User',
-      companyName: 'Demo Company',
-      email: 'demo@company.com',
-    };
-  };
 
-  const userData = getUserData();
+    return {
+      fullName: 'User',
+      companyName: 'My Company',
+      email: '',
+    };
+  }, [orgUser, organization, authUser]);
 
   // Close dropdown when clicking outside
   useEffect(() => {

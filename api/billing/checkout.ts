@@ -95,6 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Look up organization to get trial status and Stripe customer ID
+    // Non-fatal: if lookup fails, proceed with checkout (skip trial coupon, skip stored customer)
     let isOrgTrialing = false;
     let stripeCustomerId: string | null = null;
 
@@ -106,17 +107,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .single();
 
       if (orgError || !org) {
-        console.error('[Billing Checkout] Org lookup failed:', {
+        // Log for diagnostics but don't block checkout
+        console.error('[Billing Checkout] Org lookup failed (proceeding anyway):', {
           organizationId,
           error: orgError?.message || 'No org returned',
           code: orgError?.code,
           fromJWT: !!auth,
         });
-        return res.status(404).json({ error: 'Organization not found. Please sign out and sign back in.' });
+      } else {
+        isOrgTrialing = org.subscription_status === 'trialing';
+        stripeCustomerId = org.stripe_customer_id;
       }
-
-      isOrgTrialing = org.subscription_status === 'trialing';
-      stripeCustomerId = org.stripe_customer_id;
     }
 
     // Determine Stripe customer: org's stored customer > client-provided
