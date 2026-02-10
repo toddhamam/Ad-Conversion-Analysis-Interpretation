@@ -25,13 +25,18 @@ export default function SubscriptionGate({ children }: SubscriptionGateProps) {
     return <>{children}</>;
   }
 
+  // Super admins always have full access regardless of subscription status
+  if (isSuperAdmin) {
+    return <>{children}</>;
+  }
+
   // Block paid-only routes for trial users
   if (PAID_ONLY_PATHS.some(p => location.pathname.startsWith(p)) && isTrialing) {
     return <PaidOnlyGate onUpgrade={handleUpgrade} upgrading={upgrading} />;
   }
 
-  // Block free-plan users who are not super admins — they must start a trial
-  if (organization?.plan_tier === 'free' && !isSuperAdmin) {
+  // Block free-plan users — they must start a trial
+  if (organization?.plan_tier === 'free') {
     return <FreePlanGate onUpgrade={handleUpgrade} upgrading={upgrading} />;
   }
 
