@@ -86,6 +86,11 @@
   color: var(--text-secondary);
 }
 
+.tier-badge-starter {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  color: var(--text-primary);
+}
+
 .tier-badge-pro {
   background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
   color: var(--text-primary);
@@ -297,6 +302,7 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 24px;
+  align-items: start;
 }
 
 .plan-card {
@@ -307,17 +313,128 @@
   transition: all 0.2s ease;
 }
 
-.plan-card:hover {
+.plan-card:hover:not(.plan-card-embedded) {
   transform: translateY(-4px);
   box-shadow: var(--shadow-md);
+}
+
+.plan-card.plan-card-embedded {
+  padding: 24px 28px 28px;
+  border: none;
+  box-shadow: none;
+  background: transparent;
 }
 
 .plan-card.plan-popular {
   border-color: var(--accent-violet);
 }
 
-.plan-card.plan-current {
+.plan-card.plan-current:not(.plan-card-embedded) {
   border-color: var(--accent-primary);
+}
+
+/* Tabbed Plan Cards (shared) */
+.smallbiz-tabbed-card,
+.enterprise-tabbed-card {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: all 0.2s ease;
+  margin-top: 12px;
+}
+
+.smallbiz-tabbed-card {
+  border: 1px solid var(--border-primary);
+}
+
+.enterprise-tabbed-card {
+  border: 1px solid var(--border-violet);
+}
+
+.smallbiz-tabbed-card:hover,
+.enterprise-tabbed-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.smallbiz-tabbed-card.plan-current,
+.enterprise-tabbed-card.plan-current {
+  border-color: var(--accent-primary);
+}
+
+.smallbiz-label,
+.enterprise-label {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 14px;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 100px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.smallbiz-label {
+  background: var(--gradient-cyan);
+  color: var(--text-primary);
+}
+
+.enterprise-label {
+  background: var(--gradient-violet);
+}
+
+.tabbed-card-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.tabbed-card-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.tabbed-card-tab:first-child {
+  border-radius: 12px 0 0 0;
+}
+
+.tabbed-card-tab:last-child {
+  border-radius: 0 12px 0 0;
+}
+
+.tabbed-card-tab:hover:not(.active) {
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+}
+
+.tabbed-card-tab.active {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.tabbed-card-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 16px;
+  right: 16px;
+  height: 2px;
+  background: var(--gradient-dual-glow);
+  border-radius: 1px;
 }
 
 .popular-badge {
@@ -569,12 +686,6 @@
 }
 
 /* Responsive */
-@media (max-width: 1024px) {
-  .pricing-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
 @media (max-width: 768px) {
   .billing-title {
     font-size: 32px;

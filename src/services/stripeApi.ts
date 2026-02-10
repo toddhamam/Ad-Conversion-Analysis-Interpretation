@@ -11,18 +11,34 @@ const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 // Pricing plans configuration (matches Stripe products)
 export const PRICING_PLANS: PricingPlan[] = [
   {
-    id: 'pro',
-    name: 'Pro',
-    description: 'For growing marketing teams',
+    id: 'starter',
+    name: 'Starter',
+    description: 'For solopreneurs getting started',
     monthlyPrice: 99,
     yearlyPrice: 79,
     earlyBirdPrice: 89,
-    popular: true,
     features: {
       creativesPerMonth: 100,
       analysesPerMonth: 50,
       channels: 3,
-      teamMembers: 5,
+      teamMembers: 3,
+      prioritySupport: false,
+      customBranding: false,
+      apiAccess: false,
+      dedicatedAccount: false,
+    },
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    description: 'For growing marketing teams',
+    monthlyPrice: 149,
+    yearlyPrice: 119,
+    features: {
+      creativesPerMonth: 250,
+      analysesPerMonth: 100,
+      channels: 5,
+      teamMembers: 10,
       prioritySupport: true,
       customBranding: false,
       apiAccess: true,
@@ -31,8 +47,8 @@ export const PRICING_PLANS: PricingPlan[] = [
   },
   {
     id: 'enterprise',
-    name: 'Enterprise',
-    description: 'Self-service with white-glove setup',
+    name: 'Enterprise Self-Service',
+    description: 'White-glove setup + ongoing support',
     monthlyPrice: 1500,
     yearlyPrice: 1250,
     setupFee: 2500,
@@ -49,7 +65,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   },
   {
     id: 'velocity_partner',
-    name: 'Velocity Partner',
+    name: 'Enterprise Velocity Partner',
     description: 'Full partnership — we run it for you',
     monthlyPrice: 3500,
     yearlyPrice: 2917,
@@ -207,7 +223,7 @@ export function isStripeConfigured(): boolean {
 
 // Helper: Get tier order for comparison
 export function getTierOrder(tier: PlanTier): number {
-  const order: Record<PlanTier, number> = { free: 0, pro: 1, enterprise: 2, velocity_partner: 3 };
+  const order: Record<PlanTier, number> = { free: 0, starter: 1, pro: 2, enterprise: 3, velocity_partner: 4 };
   return order[tier];
 }
 

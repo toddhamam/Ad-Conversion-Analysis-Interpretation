@@ -25,6 +25,7 @@ import {
   Crown,
   Building2,
   Clock,
+  Zap,
 } from 'lucide-react';
 import './Billing.css';
 
@@ -36,6 +37,8 @@ const Billing = () => {
   const [error, setError] = useState<string | null>(null);
   const [billingInterval, setBillingInterval] = useState<BillingInterval>('monthly');
   const [upgrading, setUpgrading] = useState<PlanTier | null>(null);
+  const [smallBizTab, setSmallBizTab] = useState<'starter' | 'pro'>('starter');
+  const [enterpriseTab, setEnterpriseTab] = useState<'enterprise' | 'velocity_partner'>('enterprise');
   const [usePromoCode, setUsePromoCode] = useState(false);
 
   // Check for success/cancel from Stripe checkout
@@ -103,6 +106,8 @@ const Billing = () => {
 
   const getTierIcon = (tier: PlanTier) => {
     switch (tier) {
+      case 'starter':
+        return <Sparkles size={20} strokeWidth={1.5} />;
       case 'pro':
         return <Crown size={20} strokeWidth={1.5} />;
       case 'enterprise':
@@ -110,12 +115,14 @@ const Billing = () => {
       case 'velocity_partner':
         return <Building2 size={20} strokeWidth={1.5} />;
       default:
-        return <Crown size={20} strokeWidth={1.5} />;
+        return <Sparkles size={20} strokeWidth={1.5} />;
     }
   };
 
   const getTierBadgeClass = (tier: PlanTier) => {
     switch (tier) {
+      case 'starter':
+        return 'tier-badge-starter';
       case 'pro':
         return 'tier-badge-pro';
       case 'enterprise':
@@ -123,7 +130,7 @@ const Billing = () => {
       case 'velocity_partner':
         return 'tier-badge-velocity-partner';
       default:
-        return 'tier-badge-pro';
+        return 'tier-badge-starter';
     }
   };
 
@@ -334,18 +341,82 @@ const Billing = () => {
         </div>
 
         <div className="pricing-grid">
-          {PRICING_PLANS.map((plan) => (
-            <PlanCard
-              key={plan.id}
-              plan={plan}
-              billingInterval={billingInterval}
-              isCurrentPlan={currentPlanTier === plan.id && organization?.subscription_status === 'active'}
-              onUpgrade={() => handleUpgrade(plan.id)}
-              upgrading={upgrading === plan.id}
-              currentTier={currentPlanTier}
-              showEarlyBird={isTrialing && trialDaysRemaining > 0}
-            />
-          ))}
+          {/* Small Business Card with Tabs */}
+          {(() => {
+            const smallBizPlan = PRICING_PLANS.find((p) => p.id === smallBizTab);
+            if (!smallBizPlan) return null;
+            const isCurrentSmallBiz = currentPlanTier === smallBizTab && organization?.subscription_status === 'active';
+            return (
+              <div className={`smallbiz-tabbed-card glass ${isCurrentSmallBiz ? 'plan-current' : ''}`}>
+                <div className="smallbiz-label">Small Business</div>
+                <div className="tabbed-card-tabs">
+                  <button
+                    className={`tabbed-card-tab ${smallBizTab === 'starter' ? 'active' : ''}`}
+                    onClick={() => setSmallBizTab('starter')}
+                  >
+                    <Sparkles size={16} strokeWidth={1.5} />
+                    Starter
+                  </button>
+                  <button
+                    className={`tabbed-card-tab ${smallBizTab === 'pro' ? 'active' : ''}`}
+                    onClick={() => setSmallBizTab('pro')}
+                  >
+                    <Crown size={16} strokeWidth={1.5} />
+                    Pro
+                  </button>
+                </div>
+
+                <PlanCard
+                  plan={smallBizPlan}
+                  billingInterval={billingInterval}
+                  isCurrentPlan={isCurrentSmallBiz}
+                  onUpgrade={() => handleUpgrade(smallBizTab)}
+                  upgrading={upgrading === smallBizTab}
+                  currentTier={currentPlanTier}
+                  showEarlyBird={smallBizTab === 'starter' && isTrialing && trialDaysRemaining > 0}
+                  embedded
+                />
+              </div>
+            );
+          })()}
+
+          {/* Enterprise Card with Tabs */}
+          {(() => {
+            const enterprisePlan = PRICING_PLANS.find((p) => p.id === enterpriseTab);
+            if (!enterprisePlan) return null;
+            const isCurrentEnterprise = currentPlanTier === enterpriseTab && organization?.subscription_status === 'active';
+            return (
+              <div className={`enterprise-tabbed-card glass ${isCurrentEnterprise ? 'plan-current' : ''}`}>
+                <div className="enterprise-label">Enterprise Solutions</div>
+                <div className="tabbed-card-tabs">
+                  <button
+                    className={`tabbed-card-tab ${enterpriseTab === 'enterprise' ? 'active' : ''}`}
+                    onClick={() => setEnterpriseTab('enterprise')}
+                  >
+                    <Building2 size={16} strokeWidth={1.5} />
+                    Self-Service
+                  </button>
+                  <button
+                    className={`tabbed-card-tab ${enterpriseTab === 'velocity_partner' ? 'active' : ''}`}
+                    onClick={() => setEnterpriseTab('velocity_partner')}
+                  >
+                    <Zap size={16} strokeWidth={1.5} />
+                    Velocity Partner
+                  </button>
+                </div>
+
+                <PlanCard
+                  plan={enterprisePlan}
+                  billingInterval={billingInterval}
+                  isCurrentPlan={isCurrentEnterprise}
+                  onUpgrade={() => handleUpgrade(enterpriseTab)}
+                  upgrading={upgrading === enterpriseTab}
+                  currentTier={currentPlanTier}
+                  embedded
+                />
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -399,6 +470,7 @@ interface PlanCardProps {
   upgrading: boolean;
   currentTier: PlanTier;
   showEarlyBird?: boolean;
+  embedded?: boolean;
 }
 
 const PlanCard = ({
@@ -409,6 +481,7 @@ const PlanCard = ({
   upgrading,
   currentTier,
   showEarlyBird,
+  embedded,
 }: PlanCardProps) => {
   const regularPrice = billingInterval === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
   const hasEarlyBird = showEarlyBird && plan.earlyBirdPrice && billingInterval === 'monthly';
@@ -417,10 +490,10 @@ const PlanCard = ({
 
   return (
     <div
-      className={`plan-card glass ${plan.popular ? 'plan-popular' : ''} ${isCurrentPlan ? 'plan-current' : ''}`}
+      className={`plan-card ${embedded ? 'plan-card-embedded' : 'glass'} ${plan.popular ? 'plan-popular' : ''} ${isCurrentPlan ? 'plan-current' : ''}`}
     >
-      {hasEarlyBird && <div className="early-bird-badge">Early Bird</div>}
-      {!hasEarlyBird && plan.popular && <div className="popular-badge">Most Popular</div>}
+      {!embedded && hasEarlyBird && <div className="early-bird-badge">Early Bird</div>}
+      {!embedded && !hasEarlyBird && plan.popular && <div className="popular-badge">Most Popular</div>}
 
       <div className="plan-header">
         <h4 className="plan-name">{plan.name}</h4>

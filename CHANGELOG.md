@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-02-10 — Add Starter tier, reprice Pro, and tabbed pricing layout
+
+### Added
+- **Starter plan tier** ($99/month, $79/month yearly): New entry-level plan for solopreneurs — 100 creatives/month, 50 analyses, 3 channels, 3 team members. Early-bird price of $89/month during trial.
+- **`starter` plan tier** across the full stack: type system (`billing.ts`, `organization.ts`), pricing config (`stripeApi.ts`), plan limits, checkout API, subscription API, and webhook handler.
+- **Tabbed pricing cards on Billing page**: Replaced 3 separate plan cards with 2 side-by-side tabbed cards — "Small Business" (Starter/Pro tabs) and "Enterprise Solutions" (Self-Service/Velocity Partner tabs). Creates price anchoring effect with enterprise pricing visible next to small business pricing.
+- **"Small Business" label badge**: Lime gradient pill badge above the small business tabbed card.
+- **"Enterprise Solutions" label badge**: Violet gradient pill badge above the enterprise tabbed card.
+- **Embedded PlanCard mode**: `embedded` prop removes card wrapper styling (glass, shadow, border) when PlanCard is rendered inside a tabbed container.
+
+### Changed
+- **Pro plan repriced**: $149/month (was $99), $119/month yearly (was $79). Features bumped to 250 creatives, 100 analyses, 5 channels, 10 team members.
+- **Early-bird coupon target**: Checkout API now applies early-bird coupon to `starter` tier (was `pro`).
+- **Tier ordering** updated: free(0) → starter(1) → pro(2) → enterprise(3) → velocity_partner(4).
+- **Webhook default fallback**: Default plan tier changed from `'pro'` to `'starter'` on subscription events.
+- **Pricing grid layout**: Changed from flat card row to two tabbed card containers with `align-items: start`.
+
+### New Environment Variables
+- `STRIPE_PRICE_STARTER_MONTHLY` — Stripe recurring price ID for Starter $99/month
+- `STRIPE_PRICE_STARTER_YEARLY` — Stripe recurring price ID for Starter yearly
+
 ## 2026-02-10 — Enforce trial-only signup and add beta tester promo code support
 
 ### Fixed

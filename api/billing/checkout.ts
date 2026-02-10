@@ -15,6 +15,8 @@ const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_K
 
 // Price ID mapping (set via environment variables)
 const PRICE_IDS: Record<string, string | undefined> = {
+  starter_monthly: process.env.STRIPE_PRICE_STARTER_MONTHLY,
+  starter_yearly: process.env.STRIPE_PRICE_STARTER_YEARLY,
   pro_monthly: process.env.STRIPE_PRICE_PRO_MONTHLY,
   pro_yearly: process.env.STRIPE_PRICE_PRO_YEARLY,
   enterprise_monthly: process.env.STRIPE_PRICE_ENTERPRISE_MONTHLY,
@@ -51,7 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Cannot checkout for free plan' });
     }
 
-    if (!['pro', 'enterprise', 'velocity_partner'].includes(planTier)) {
+    if (!['starter', 'pro', 'enterprise', 'velocity_partner'].includes(planTier)) {
       return res.status(400).json({ error: 'Invalid plan tier' });
     }
 
@@ -123,7 +125,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const earlyBirdCouponId = process.env.STRIPE_EARLY_BIRD_COUPON_ID;
     if (usePromoCode) {
       sessionParams.allow_promotion_codes = true;
-    } else if (isOrgTrialing && planTier === 'pro' && earlyBirdCouponId) {
+    } else if (isOrgTrialing && planTier === 'starter' && earlyBirdCouponId) {
       sessionParams.discounts = [{ coupon: earlyBirdCouponId }];
     } else {
       sessionParams.allow_promotion_codes = true;
