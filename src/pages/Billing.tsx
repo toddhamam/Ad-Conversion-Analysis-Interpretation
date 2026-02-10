@@ -69,7 +69,7 @@ const Billing = () => {
     }
 
     if (!organization?.id) {
-      setError('Organization not found. Please refresh the page.');
+      setError('Organization not found. Please sign out and sign back in.');
       return;
     }
 

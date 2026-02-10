@@ -5,6 +5,7 @@ import type {
   BillingData,
   PricingPlan,
 } from '../types/billing';
+import { getAuthToken } from '../lib/authToken';
 
 const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 
@@ -86,6 +87,9 @@ export const PRICING_PLANS: PricingPlan[] = [
 // Get user's billing data from API
 export async function fetchBillingData(organizationId?: string): Promise<BillingData> {
   try {
+    // Get auth token for authenticated requests
+    const token = await getAuthToken();
+
     // Get customer ID from localStorage user data if available (fallback)
     const userData = localStorage.getItem('convertra_user');
     const customerId = userData ? JSON.parse(userData).stripeCustomerId : null;
@@ -100,12 +104,17 @@ export async function fetchBillingData(organizationId?: string): Promise<Billing
 
     const url = `/api/billing/subscription${params.toString() ? `?${params.toString()}` : ''}`;
 
-    const response = await fetch(url);
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(url, { headers });
     if (!response.ok) {
       throw new Error('Failed to fetch billing data');
     }
     return await response.json();
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error fetching billing data:', error);
     // Return default free tier data
     return getDefaultBillingData();
@@ -139,17 +148,25 @@ export async function redirectToCheckout(
   organizationId?: string,
   usePromoCode?: boolean
 ): Promise<void> {
+  // Get auth token for JWT-based org resolution on the backend
+  const token = await getAuthToken();
+
   // Get customer ID from localStorage if available (fallback)
   const userData = localStorage.getItem('convertra_user');
   const customerId = userData ? JSON.parse(userData).stripeCustomerId : null;
 
-  if (!organizationId) {
+  if (!organizationId && !token) {
     throw new Error('Organization ID is required for checkout');
+  }
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
   const response = await fetch('/api/billing/checkout', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ planTier, billingInterval, customerId, organizationId, usePromoCode }),
   });
 
@@ -170,19 +187,23 @@ export async function redirectToCheckout(
 
 // Create portal session for managing payment methods
 export async function createPortalSession(organizationId?: string, customerId?: string): Promise<string> {
+  // Get auth token for JWT-based org resolution on the backend
+  const token = await getAuthToken();
+
   // Get customer ID from localStorage if not provided (fallback)
   if (!customerId) {
     const userData = localStorage.getItem('convertra_user');
     customerId = userData ? JSON.parse(userData).stripeCustomerId : null;
   }
 
-  if (!customerId) {
-    throw new Error('No customer ID found. Please upgrade to a paid plan first.');
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
   const response = await fetch('/api/billing/portal', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ customerId, organizationId }),
   });
 
