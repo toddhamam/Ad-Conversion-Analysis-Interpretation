@@ -16,7 +16,7 @@ const ALWAYS_ALLOWED_PATHS = ['/billing', '/account'];
 const PAID_ONLY_PATHS = ['/seo-iq'];
 
 export default function SubscriptionGate({ children }: SubscriptionGateProps) {
-  const { organization, isTrialing, isSubscriptionValid } = useOrganization();
+  const { organization, isTrialing, isSubscriptionValid, isSuperAdmin } = useOrganization();
   const location = useLocation();
   const [upgrading, setUpgrading] = useState(false);
 
@@ -28,6 +28,11 @@ export default function SubscriptionGate({ children }: SubscriptionGateProps) {
   // Block paid-only routes for trial users
   if (PAID_ONLY_PATHS.some(p => location.pathname.startsWith(p)) && isTrialing) {
     return <PaidOnlyGate onUpgrade={handleUpgrade} upgrading={upgrading} />;
+  }
+
+  // Block free-plan users who are not super admins — they must start a trial
+  if (organization?.plan_tier === 'free' && !isSuperAdmin) {
+    return <FreePlanGate onUpgrade={handleUpgrade} upgrading={upgrading} />;
   }
 
   // Block if subscription is not valid (expired trial, canceled, etc.)
@@ -69,6 +74,36 @@ function ExpiredTrialGate({ onUpgrade, upgrading }: { onUpgrade: () => void; upg
           className="subscription-gate-cta"
         >
           {upgrading ? 'Redirecting...' : 'Upgrade to Pro — $99/month'}
+        </button>
+        <Link to="/billing" className="subscription-gate-link">
+          View all plans
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function FreePlanGate({ onUpgrade, upgrading }: { onUpgrade: () => void; upgrading: boolean }) {
+  return (
+    <div className="subscription-gate">
+      <div className="subscription-gate-card">
+        <div className="subscription-gate-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-violet)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5z" />
+            <path d="M2 17l10 5 10-5" />
+            <path d="M2 12l10 5 10-5" />
+          </svg>
+        </div>
+        <h2 className="subscription-gate-title">Start your free trial</h2>
+        <p className="subscription-gate-desc">
+          Get full access to Convertra for 7 days — no credit card required. Experience ConversionIQ™ ad intelligence, creative generation, and more.
+        </p>
+        <button
+          onClick={onUpgrade}
+          disabled={upgrading}
+          className="subscription-gate-cta"
+        >
+          {upgrading ? 'Redirecting...' : 'Start Free Trial — Then $89/month'}
         </button>
         <Link to="/billing" className="subscription-gate-link">
           View all plans

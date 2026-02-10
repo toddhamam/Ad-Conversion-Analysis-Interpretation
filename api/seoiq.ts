@@ -1386,13 +1386,16 @@ async function handleProvisionOrg(req: VercelRequest, res: VercelResponse) {
     const name = companyName || fullName || 'My Company';
     const slug = name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
 
+    const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const { data: org, error: orgErr } = await supabase
       .from('organizations')
       .insert({
         name,
         slug: `${slug}-${Date.now().toString(36)}`,
         setup_mode: 'self_service',
-        plan_tier: 'free',
+        plan_tier: 'pro',
+        subscription_status: 'trialing',
+        current_period_end: trialEnd,
       })
       .select()
       .single();
