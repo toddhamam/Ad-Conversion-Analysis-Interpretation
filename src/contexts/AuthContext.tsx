@@ -12,7 +12,7 @@ interface AuthContextValue {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
-  signUp: (email: string, password: string, metadata: SignUpMetadata) => Promise<{ error: AuthError | null }>;
+  signUp: (email: string, password: string, metadata: SignUpMetadata) => Promise<{ error: AuthError | null; confirmationPending?: boolean }>;
   signOut: () => Promise<void>;
   resetPasswordForEmail: (email: string) => Promise<{ error: AuthError | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: AuthError | null }>;
@@ -97,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = useCallback(async (email: string, password: string, metadata: SignUpMetadata) => {
     if (!isConfigured) {
-      // Fallback to localStorage auth
+      // Fallback to localStorage auth — no email confirmation
       localStorage.setItem('convertra_authenticated', 'true');
       localStorage.setItem('convertra_user', JSON.stringify({
         fullName: metadata.full_name,
@@ -109,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email,
         user_metadata: metadata,
       } as unknown as User);
-      return { error: null };
+      return { error: null, confirmationPending: false };
     }
 
     // Sign up with Supabase Auth
@@ -117,6 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email,
       password,
       options: {
+        emailRedirectTo: `${window.location.origin}/dashboard`,
         data: {
           full_name: metadata.full_name,
           company_name: metadata.company_name,
@@ -128,25 +129,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { error };
     }
 
-    // Set user state immediately so ProtectedRoute allows navigation
-    if (data.user) {
+    // If session exists, email confirmation is disabled (dev mode) — proceed immediately
+    if (data.session) {
+      setSession(data.session);
       setUser(data.user);
-      if (data.session) {
-        setSession(data.session);
-      }
+      return { error: null, confirmationPending: false };
     }
 
-    // After successful signup, create organization and user records
-    if (data.user) {
-      try {
-        await createOrganizationAndUser(data.user.id, email, metadata);
-      } catch (err) {
-        console.error('Failed to create organization:', err);
-        // Don't return error - auth succeeded, org creation can be retried
-      }
-    }
-
-    return { error: null };
+    // Email confirmation required — do NOT set user/session state.
+    // User will click the confirmation link, which redirects to /dashboard.
+    // Supabase's detectSessionInUrl will establish the session at that point.
+    return { error: null, confirmationPending: true };
   }, [isConfigured]);
 
   const signOut = useCallback(async () => {
@@ -207,51 +200,3 @@ export function useAuth() {
   return context;
 }
 
-// Helper function to create organization and user records after signup
-async function createOrganizationAndUser(
-  authId: string,
-  email: string,
-  metadata: SignUpMetadata
-) {
-  // Generate slug from company name
-  const slug = metadata.company_name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .substring(0, 50);
-
-  // Create organization on free plan — Stripe checkout will activate the trial
-  const { data: org, error: orgError } = await supabase
-    .from('organizations')
-    .insert({
-      name: metadata.company_name,
-      slug: `${slug}-${Date.now().toString(36)}`, // Ensure uniqueness
-      setup_mode: 'self_service',
-      plan_tier: 'free',
-      subscription_status: 'incomplete',
-    })
-    .select()
-    .single();
-
-  if (orgError) {
-    throw new Error(`Failed to create organization: ${orgError.message}`);
-  }
-
-  // Create user linked to organization
-  const { error: userError } = await supabase
-    .from('users')
-    .insert({
-      auth_id: authId,
-      email,
-      full_name: metadata.full_name,
-      organization_id: org.id,
-      role: 'owner',
-      status: 'active',
-    });
-
-  if (userError) {
-    // Rollback organization creation
-    await supabase.from('organizations').delete().eq('id', org.id);
-    throw new Error(`Failed to create user: ${userError.message}`);
-  }
-}

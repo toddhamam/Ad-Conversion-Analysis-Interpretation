@@ -25,7 +25,12 @@ function Login() {
       const { error: signInError } = await signIn(email, password);
 
       if (signInError) {
-        setError(signInError.message || 'Invalid email or password');
+        const msg = signInError.message || '';
+        if (msg.toLowerCase().includes('rate limit')) {
+          setError('Too many sign-in attempts. Please wait a few minutes and try again.');
+        } else {
+          setError(msg || 'Invalid email or password');
+        }
         return;
       }
 

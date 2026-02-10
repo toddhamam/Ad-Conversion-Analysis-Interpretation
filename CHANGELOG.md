@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-02-10 — Email confirmation flow, explore-first onboarding, and rate limit UX
+
+### Added
+- **Email confirmation screen on signup**: After registration, users see a "Check your email" confirmation screen instead of being silently redirected. Shows the submitted email address and a "try again" link to re-show the form.
+- **Explore-first onboarding flow**: New users on the free plan can now freely browse data pages (Dashboard, Channels, Meta Ads, Products, Funnels) before choosing a plan. Action features (ConversionIQ, CreativeIQ, Ad Publisher, SEO IQ) are gated with a "Choose a Plan to Begin Your Free Trial" screen that links to `/choose-plan`.
+- **User-friendly rate limit errors**: Login, Register, and Forgot Password pages now detect Supabase rate limit errors and show helpful messages ("Too many attempts. Please wait a few minutes...") instead of raw API error strings.
+
+### Fixed
+- **Org provisioning bypassed Stripe billing**: `handleProvisionOrg` was creating orgs with `plan_tier: 'pro'` and `subscription_status: 'trialing'` with a fake 7-day trial end date, letting users skip Stripe checkout entirely. Now creates orgs as `plan_tier: 'free'` with `subscription_status: 'incomplete'`.
+- **Onboarding checklist not showing**: Added `setup_completed: false` to org provisioning insert so the welcome checklist appears on the dashboard for new self-service signups.
+- **Frontend org creation failed silently due to RLS**: Removed `createOrganizationAndUser()` from `AuthContext.tsx` — this function used the anon key which was blocked by Row Level Security. Org creation is now handled exclusively by the backend `handleProvisionOrg` endpoint (via OrganizationContext fallback) which uses the service role key.
+
+### Changed
+- **Signup redirect flow**: After email confirmation, users land on `/dashboard` (was `/choose-plan`). The `emailRedirectTo` option is now set on `supabase.auth.signUp()`.
+- **AuthContext signUp return type**: Now returns `{ confirmationPending?: boolean }` so the Register page can distinguish between email-confirmation-required (show confirmation screen) and dev-mode (navigate directly to dashboard).
+- **SubscriptionGate gating logic**: Free-plan users are no longer hard-redirected to `/choose-plan`. Instead, data exploration routes pass through and only action routes (`/insights`, `/creatives`, `/publish`, `/seo-iq`) show the plan selection gate.
+- **FreePlanGate component**: Updated title to "Choose a Plan to Begin Your Free Trial", uses `<Link to="/choose-plan">` instead of direct Stripe checkout redirect.
+
+### Files Changed
+- `api/seoiq.ts` — Fix org provisioning: free/incomplete instead of pro/trialing, add setup_completed: false
+- `src/contexts/AuthContext.tsx` — Add email confirmation support, remove frontend org creation
+- `src/pages/Register.tsx` — Add "Check your email" confirmation screen, rate limit error handling
+- `src/pages/Register.css` — Add confirmation screen styles
+- `src/components/SubscriptionGate.tsx` — Explore-first gating with ACTION_PATHS
+- `src/pages/Login.tsx` — Rate limit error handling
+- `src/pages/ForgotPassword.tsx` — Rate limit error handling
+
 ## 2026-02-10 — Reconfigure signup flow with Stripe-native trial & plan selection
 
 ### Added
