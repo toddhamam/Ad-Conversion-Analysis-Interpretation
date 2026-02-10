@@ -1,0 +1,337 @@
+.choose-plan-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  padding: 32px 24px;
+}
+
+.choose-plan-container {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+/* ── Header ─────────────────────────────────────────── */
+
+.choose-plan-header {
+  text-align: center;
+}
+
+.choose-plan-logo img {
+  height: 36px;
+  width: auto;
+}
+
+.choose-plan-title {
+  margin: 20px 0 8px;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.choose-plan-subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+/* ── Alert ──────────────────────────────────────────── */
+
+.choose-plan-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  width: 100%;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 8px;
+  color: #b45309;
+  font-size: 14px;
+}
+
+.choose-plan-alert svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* ── Billing Toggle ─────────────────────────────────── */
+
+.choose-plan-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 10px;
+}
+
+.toggle-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toggle-option.active {
+  background: var(--accent-primary);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.toggle-badge {
+  padding: 2px 8px;
+  background: rgba(168, 85, 247, 0.1);
+  color: var(--accent-violet);
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 100px;
+}
+
+.toggle-option.active .toggle-badge {
+  background: rgba(168, 85, 247, 0.15);
+}
+
+/* ── Plan Cards Grid ────────────────────────────────── */
+
+.choose-plan-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  width: 100%;
+}
+
+.choose-plan-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 32px 28px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.choose-plan-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.choose-plan-card.popular {
+  border-color: var(--accent-violet);
+  box-shadow: var(--shadow-md), 0 0 20px var(--accent-violet-glow);
+}
+
+.popular-badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 16px;
+  background: var(--gradient-violet);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 100px;
+  white-space: nowrap;
+}
+
+/* ── Card Content ───────────────────────────────────── */
+
+.plan-card-header {
+  margin-bottom: 20px;
+}
+
+.plan-card-name {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.plan-card-desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.plan-card-price {
+  margin-bottom: 24px;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.price-amount {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.price-period {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* ── CTA Button ─────────────────────────────────────── */
+
+.plan-card-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 24px;
+  margin-bottom: 24px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  border: 1px solid var(--border-primary);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.plan-card-cta:hover:not(:disabled) {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+.plan-card-cta:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.plan-card-cta.cta-popular {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.plan-card-cta.cta-popular:hover:not(:disabled) {
+  background: var(--accent-secondary);
+  border-color: var(--accent-secondary);
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+.cta-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top-color: var(--text-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Feature List ───────────────────────────────────── */
+
+.plan-card-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.feature-check {
+  color: var(--accent-violet);
+  flex-shrink: 0;
+}
+
+/* ── Enterprise & Footer ────────────────────────────── */
+
+.choose-plan-enterprise {
+  text-align: center;
+}
+
+.choose-plan-enterprise p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.enterprise-link {
+  color: var(--accent-violet);
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.enterprise-link:hover {
+  color: var(--accent-secondary);
+}
+
+.choose-plan-trust {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.choose-plan-tagline {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.brand-highlight {
+  background: var(--gradient-dual-glow);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 500;
+}
+
+/* ── Responsive ─────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .choose-plan-page {
+    padding: 24px 16px;
+  }
+
+  .choose-plan-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .choose-plan-title {
+    font-size: 24px;
+  }
+
+  .choose-plan-card {
+    padding: 28px 24px;
+  }
+
+  .price-amount {
+    font-size: 30px;
+  }
+}

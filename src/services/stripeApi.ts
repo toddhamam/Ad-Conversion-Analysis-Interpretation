@@ -146,7 +146,12 @@ export async function redirectToCheckout(
   planTier: PlanTier,
   billingInterval: BillingInterval,
   organizationId?: string,
-  usePromoCode?: boolean
+  usePromoCode?: boolean,
+  options?: {
+    successUrl?: string;
+    cancelUrl?: string;
+    trialDays?: number;
+  }
 ): Promise<void> {
   // Get auth token for JWT-based org resolution on the backend
   const token = await getAuthToken();
@@ -167,7 +172,16 @@ export async function redirectToCheckout(
   const response = await fetch('/api/billing/checkout', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ planTier, billingInterval, customerId, organizationId, usePromoCode }),
+    body: JSON.stringify({
+      planTier,
+      billingInterval,
+      customerId,
+      organizationId,
+      usePromoCode,
+      successUrl: options?.successUrl,
+      cancelUrl: options?.cancelUrl,
+      trialDays: options?.trialDays,
+    }),
   });
 
   if (!response.ok) {

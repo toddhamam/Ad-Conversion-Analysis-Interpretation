@@ -65,11 +65,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { planTier, billingInterval, usePromoCode } = req.body;
+    const { planTier, billingInterval, usePromoCode, successUrl, cancelUrl, trialDays } = req.body;
 
     // Validate inputs
     if (!planTier || !billingInterval) {
       return res.status(400).json({ error: 'Missing planTier or billingInterval' });
+    }
+
+    if (trialDays !== undefined && (typeof trialDays !== 'number' || trialDays < 1 || trialDays > 30)) {
+      return res.status(400).json({ error: 'Invalid trial period' });
     }
 
     if (planTier === 'free') {
@@ -143,8 +147,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           quantity: 1,
         },
       ],
-      success_url: `${APP_URL}/billing?success=true`,
-      cancel_url: `${APP_URL}/billing?canceled=true`,
+      success_url: successUrl || `${APP_URL}/billing?success=true`,
+      cancel_url: cancelUrl || `${APP_URL}/billing?canceled=true`,
       metadata: {
         planTier,
         billingInterval,
@@ -156,6 +160,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           billingInterval,
           organizationId, // Also store on subscription
         },
+        ...(trialDays ? { trial_period_days: trialDays } : {}),
       },
       // Skip card collection for fully-discounted subscriptions (e.g. beta tester 100% off)
       payment_method_collection: 'if_required',

@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-02-10 — Reconfigure signup flow with Stripe-native trial & plan selection
+
+### Added
+- **Plan selection page (`/choose-plan`)**: New standalone page shown after signup where users choose Starter or Pro to start a 7-day free trial via Stripe Checkout (credit card required). Enterprise option links to demo scheduling.
+- **Stripe-native trial support**: Checkout API now accepts `trialDays` param, adding `subscription_data.trial_period_days` to the Stripe session. Trial is managed by Stripe instead of database-only.
+- **Dynamic checkout redirect URLs**: Checkout API accepts optional `successUrl` and `cancelUrl` params, falling back to `/billing` defaults for existing upgrade flows.
+- **Post-checkout polling**: After Stripe Checkout, the choose-plan page polls the organization status every 2 seconds until the webhook updates the subscription, then redirects to the dashboard.
+
+### Changed
+- **Signup flow**: Register now redirects to `/choose-plan` instead of `/dashboard`. New orgs are created with `plan_tier: 'free'` and `subscription_status: 'incomplete'` (previously auto-granted a 7-day Pro trial).
+- **Webhook accuracy**: `checkout.session.completed` handler now retrieves the actual Stripe subscription status (`trialing`/`active`) instead of hardcoding `'active'`. Also stores `current_period_start` and `current_period_end` from the Stripe subscription.
+- **SubscriptionGate**: Users with `incomplete` status are redirected to `/choose-plan` instead of seeing the free-plan gate. `/choose-plan` added to always-allowed paths.
+- **Sales landing pricing**: Enterprise pricing cards now show "Custom Pricing" instead of dollar amounts, encouraging demo call scheduling.
+
+### Files Changed
+- `api/billing/checkout.ts` — Accept `trialDays`, `successUrl`, `cancelUrl` params
+- `api/billing/webhook.ts` — Retrieve actual subscription status from Stripe
+- `src/contexts/AuthContext.tsx` — Create orgs as `free`/`incomplete` instead of `pro`/`trialing`
+- `src/pages/Register.tsx` — Redirect to `/choose-plan`
+- `src/services/stripeApi.ts` — Add options param to `redirectToCheckout()`
+- `src/components/SubscriptionGate.tsx` — Redirect incomplete users to plan selection
+- `src/App.tsx` — Add `/choose-plan` protected route
+- `src/pages/ChoosePlan.tsx` + `ChoosePlan.css` — New plan selection page
+- `src/pages/SalesLanding.tsx` + `SalesLanding.css` — Hide enterprise pricing
+
 ## 2026-02-10 — Fix Stripe API errors: subscription mode constraints
 
 ### Fixed
