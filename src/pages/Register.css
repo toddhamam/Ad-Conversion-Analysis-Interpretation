@@ -229,6 +229,55 @@
   font-weight: 500;
 }
 
+/* Email confirmation success screen */
+.register-success {
+  text-align: center;
+  padding: 16px 0;
+}
+
+.register-success h3 {
+  margin: 16px 0 8px;
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.register-success p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0 0 16px;
+}
+
+.register-success p strong {
+  color: var(--text-primary);
+}
+
+.register-success .success-icon svg {
+  width: 48px;
+  height: 48px;
+  color: #22c55e;
+}
+
+.register-success .email-note {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.register-success .resend-link {
+  background: none;
+  border: none;
+  color: var(--accent-violet);
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.register-success .resend-link:hover {
+  color: var(--accent-secondary);
+}
+
 /* Mobile */
 @media (max-width: 480px) {
   .register-card {

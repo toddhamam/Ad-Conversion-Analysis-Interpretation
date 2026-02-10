@@ -20,7 +20,12 @@ function ForgotPassword() {
       const { error: resetError } = await resetPasswordForEmail(email);
 
       if (resetError) {
-        setError(resetError.message || 'Failed to send reset email');
+        const msg = resetError.message || '';
+        if (msg.toLowerCase().includes('rate limit')) {
+          setError('Too many requests. Please wait a few minutes before trying again.');
+        } else {
+          setError(msg || 'Failed to send reset email');
+        }
         return;
       }
 

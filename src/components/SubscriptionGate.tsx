@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useLocation, Link, Navigate } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { useOrganization } from '../contexts/OrganizationContext';
 import { redirectToCheckout } from '../services/stripeApi';
 import { useState } from 'react';
@@ -11,6 +11,9 @@ interface SubscriptionGateProps {
 
 /** Routes that are always accessible regardless of subscription status */
 const ALWAYS_ALLOWED_PATHS = ['/billing', '/account', '/choose-plan'];
+
+/** Routes that require a subscription (action features) */
+const ACTION_PATHS = ['/insights', '/creatives', '/publish', '/seo-iq'];
 
 /** Routes that require a paid subscription (not available during trial) */
 const PAID_ONLY_PATHS = ['/seo-iq'];
@@ -35,12 +38,13 @@ export default function SubscriptionGate({ children }: SubscriptionGateProps) {
     return <PaidOnlyGate onUpgrade={handleUpgrade} upgrading={upgrading} />;
   }
 
-  // Block free-plan users — redirect incomplete signups to plan selection
+  // Free-plan users can explore data pages but are gated on action features
   if (organization?.plan_tier === 'free') {
-    if (organization?.subscription_status === 'incomplete') {
-      return <Navigate to="/choose-plan" replace />;
+    const isActionRoute = ACTION_PATHS.some(p => location.pathname.startsWith(p));
+    if (!isActionRoute) {
+      return <>{children}</>;
     }
-    return <FreePlanGate onUpgrade={handleUpgrade} upgrading={upgrading} />;
+    return <FreePlanGate />;
   }
 
   // Block if subscription is not valid (expired trial, canceled, etc.)
@@ -91,7 +95,7 @@ function ExpiredTrialGate({ onUpgrade, upgrading }: { onUpgrade: () => void; upg
   );
 }
 
-function FreePlanGate({ onUpgrade, upgrading }: { onUpgrade: () => void; upgrading: boolean }) {
+function FreePlanGate() {
   return (
     <div className="subscription-gate">
       <div className="subscription-gate-card">
@@ -102,17 +106,13 @@ function FreePlanGate({ onUpgrade, upgrading }: { onUpgrade: () => void; upgradi
             <path d="M2 12l10 5 10-5" />
           </svg>
         </div>
-        <h2 className="subscription-gate-title">Start your free trial</h2>
+        <h2 className="subscription-gate-title">Choose a Plan to Begin Your Free Trial</h2>
         <p className="subscription-gate-desc">
-          Get full access to Convertra for 7 days — no credit card required. Experience ConversionIQ™ ad intelligence, creative generation, and more.
+          Get full access to ConversionIQ™, CreativeIQ™, and all ad intelligence tools with a 7-day free trial.
         </p>
-        <button
-          onClick={onUpgrade}
-          disabled={upgrading}
-          className="subscription-gate-cta"
-        >
-          {upgrading ? 'Redirecting...' : 'Start Free Trial — Then $89/month'}
-        </button>
+        <Link to="/choose-plan" className="subscription-gate-cta">
+          Choose a Plan
+        </Link>
         <Link to="/billing" className="subscription-gate-link">
           View all plans
         </Link>
