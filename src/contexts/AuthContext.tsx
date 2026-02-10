@@ -128,6 +128,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { error };
     }
 
+    // Set user state immediately so ProtectedRoute allows navigation
+    if (data.user) {
+      setUser(data.user);
+      if (data.session) {
+        setSession(data.session);
+      }
+    }
+
     // After successful signup, create organization and user records
     if (data.user) {
       try {
