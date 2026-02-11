@@ -80,7 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Update organization with Stripe customer and subscription info
         if (supabase && organizationId) {
           // Get actual subscription status (may be 'trialing' for trial checkouts)
-          let subscriptionStatus = 'active';
+          let subscriptionStatus: string | null = null;
           let currentPeriodStart: string | null = null;
           let currentPeriodEnd: string | null = null;
 
@@ -91,7 +91,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               currentPeriodStart = new Date((sub as any).current_period_start * 1000).toISOString();
               currentPeriodEnd = new Date((sub as any).current_period_end * 1000).toISOString();
             } catch (subErr) {
-              console.error('[Billing Webhook] Failed to retrieve subscription:', subErr);
+              // Don't default to 'active' — let customer.subscription.created webhook set correct status
+              console.error('[Billing Webhook] Failed to retrieve subscription (will rely on subscription.created event):', subErr);
             }
           }
 
@@ -100,7 +101,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .update({
               stripe_customer_id: session.customer as string,
               subscription_id: session.subscription as string,
-              subscription_status: subscriptionStatus,
+              ...(subscriptionStatus ? { subscription_status: subscriptionStatus } : {}),
               plan_tier: planTier || 'starter',
               billing_interval: billingInterval || 'monthly',
               ...(currentPeriodStart ? { current_period_start: currentPeriodStart } : {}),

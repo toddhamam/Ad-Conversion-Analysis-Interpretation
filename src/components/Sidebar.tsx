@@ -1,6 +1,7 @@
 import { NavLink, Link } from 'react-router-dom';
 import { useState } from 'react';
 import { getOrgMetaIds } from '../services/metaApi';
+import { useOrganization } from '../contexts/OrganizationContext';
 import './Sidebar.css';
 
 interface SidebarProps {
@@ -21,6 +22,7 @@ const Sidebar = ({
   logoAlt = 'Convertra',
 }: SidebarProps) => {
   const [channelsExpanded, setChannelsExpanded] = useState(false);
+  const { isTrialing, trialDaysRemaining } = useOrganization();
 
   return (
     <>
@@ -139,6 +141,25 @@ const Sidebar = ({
           {!collapsed && <span className="creative-cta-label">CreativeIQ™</span>}
         </NavLink>
       </div>
+
+      {isTrialing && trialDaysRemaining > 0 && (
+        <div className="sidebar-trial-badge">
+          {collapsed ? (
+            <Link to="/billing" className="sidebar-trial-collapsed" title={`${trialDaysRemaining} days left in trial`}>
+              {trialDaysRemaining}d
+            </Link>
+          ) : (
+            <Link to="/billing" className="sidebar-trial-pill" onClick={onCloseMobile}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <span>{trialDaysRemaining}d left</span>
+              <span className="sidebar-trial-upgrade">Upgrade</span>
+            </Link>
+          )}
+        </div>
+      )}
 
       <div className="sidebar-footer">
         <button className="collapse-toggle" onClick={onToggleCollapse} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>

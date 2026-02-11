@@ -257,6 +257,61 @@
   padding: 12px;
 }
 
+/* Sidebar Trial Badge */
+.sidebar-trial-badge {
+  padding: 8px 12px;
+}
+
+.sidebar-trial-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(168, 85, 247, 0.06);
+  border: 1px solid rgba(168, 85, 247, 0.15);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+.sidebar-trial-pill:hover {
+  background: rgba(168, 85, 247, 0.1);
+}
+
+.sidebar-trial-pill svg {
+  color: var(--accent-violet);
+  flex-shrink: 0;
+}
+
+.sidebar-trial-upgrade {
+  margin-left: auto;
+  color: var(--accent-violet);
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.sidebar-trial-collapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0 auto;
+  background: rgba(168, 85, 247, 0.08);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent-violet);
+  text-decoration: none;
+}
+
+.sidebar-trial-collapsed:hover {
+  background: rgba(168, 85, 247, 0.14);
+}
+
 /* Sidebar Footer */
 .sidebar-footer {
   padding: 12px;

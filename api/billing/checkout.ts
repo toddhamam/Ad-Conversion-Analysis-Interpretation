@@ -119,7 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           fromJWT: !!auth,
         });
       } else {
-        isOrgTrialing = org.subscription_status === 'trialing';
+        isOrgTrialing = ['trialing', 'incomplete'].includes(org.subscription_status);
         stripeCustomerId = org.stripe_customer_id;
       }
     }

@@ -1,20 +1,30 @@
 .trial-banner {
-  background: rgba(168, 85, 247, 0.06);
-  border-bottom: 1px solid rgba(168, 85, 247, 0.15);
+  background: rgba(168, 85, 247, 0.08);
+  border-bottom: 1px solid rgba(168, 85, 247, 0.18);
   padding: 10px 24px;
 }
 
 .trial-banner-urgent {
-  background: rgba(245, 158, 11, 0.08);
-  border-bottom-color: rgba(245, 158, 11, 0.2);
+  background: rgba(245, 158, 11, 0.1);
+  border-bottom-color: rgba(245, 158, 11, 0.25);
 }
 
 .trial-banner-content {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
   max-width: 1400px;
+}
+
+.trial-banner-icon {
+  vertical-align: -2px;
+  margin-right: 6px;
+  color: var(--accent-violet);
+  flex-shrink: 0;
+}
+
+.trial-banner-urgent .trial-banner-icon {
+  color: #d97706;
 }
 
 .trial-banner-text {
@@ -46,19 +56,4 @@
 
 .trial-banner-urgent .trial-banner-cta {
   color: #d97706;
-}
-
-.trial-banner-dismiss {
-  background: none;
-  border: none;
-  font-size: 18px;
-  cursor: pointer;
-  color: var(--text-muted);
-  padding: 0 4px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.trial-banner-dismiss:hover {
-  color: var(--text-primary);
 }
