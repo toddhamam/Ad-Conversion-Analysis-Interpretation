@@ -1,6 +1,30 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 
+// Supabase client (module-level for connection reuse)
+const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+  : null;
+
+/** Derive organizationId from JWT Bearer token */
+async function getOrganizationId(req: VercelRequest): Promise<string | null> {
+  if (!supabase) return null;
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return null;
+
+  const token = authHeader.slice(7);
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return null;
+
+  const { data: profile } = await supabase
+    .from('users')
+    .select('organization_id')
+    .eq('auth_id', user.id)
+    .single();
+
+  return profile?.organization_id || null;
+}
+
 // Types (duplicated here to avoid import path issues in serverless)
 type FunnelStep = 'landing' | 'checkout' | 'upsell-1' | 'downsell-1' | 'upsell-2' | 'thank-you';
 
@@ -74,24 +98,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const startDate = (req.query.startDate as string) || thirtyDaysAgo.toISOString();
     const endDate = (req.query.endDate as string) || now.toISOString();
 
-    // Create Supabase client inline (with env var check)
-    const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-      ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-      : null;
+    const EMPTY_METRICS: DashboardMetrics = {
+      summary: { sessions: 0, purchases: 0, conversionRate: 0, totalRevenue: 0, uniqueCustomers: 0, aovPerCustomer: 0 },
+      stepMetrics: FUNNEL_STEPS.map((step) => ({ step, sessions: 0, purchases: 0, conversionRate: 0, revenue: 0 })),
+      abTests: [],
+    };
 
     if (!supabase) {
-      // Return empty metrics when Supabase is not configured
-      return res.status(200).json({
-        summary: { sessions: 0, purchases: 0, conversionRate: 0, totalRevenue: 0, uniqueCustomers: 0, aovPerCustomer: 0 },
-        stepMetrics: FUNNEL_STEPS.map((step) => ({ step, sessions: 0, purchases: 0, conversionRate: 0, revenue: 0 })),
-        abTests: [],
-      } as DashboardMetrics);
+      return res.status(200).json(EMPTY_METRICS);
     }
 
-    // Query all events in date range
+    // Derive organization from JWT — return empty metrics if unauthenticated
+    const organizationId = await getOrganizationId(req);
+    if (!organizationId) {
+      return res.status(200).json(EMPTY_METRICS);
+    }
+
+    // Query events scoped to this organization
     const { data: events, error } = await supabase
       .from('funnel_events')
       .select('funnel_step, event_type, revenue_cents, funnel_session_id, variant')
+      .eq('organization_id', organizationId)
       .gte('created_at', startDate)
       .lte('created_at', endDate);
 

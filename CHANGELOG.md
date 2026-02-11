@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-02-11 — Funnel tenant isolation, onboarding checklist UX, and clean new-account experience
+
+### Fixed
+- **Funnel data leaking across accounts**: `api/funnel/metrics.ts` and `api/funnel/active-sessions.ts` had no `organization_id` filter — all users saw all funnel events from every account. Added JWT authentication and org-scoped queries so each account only sees its own data.
+- **Onboarding checklist not appearing**: Changed `setup_completed` check from truthiness (`if (organization.setup_completed)`) to strict equality (`if (organization.setup_completed === true)`). The original check hid the checklist when the field was `null` or `undefined` (e.g., column not yet populated), not just when explicitly `true`.
+- **Hardcoded mock data on Channels page**: Removed static "2,138 conversions" display from channel cards — new accounts no longer see phantom metrics from `mockData.ts`.
+
+### Added
+- **Onboarding progress bar**: Violet-to-lime gradient bar showing "1/5 steps complete" for visual progress tracking.
+- **Collapsible onboarding checklist**: Chevron button collapses/expands the checklist (persisted per-org in localStorage). Dismiss button still fully hides it.
+- **Branded checklist icon**: Checkmark icon in header with violet/lime gradient background for visual prominence.
+
+### Changed
+- **Dashboard funnel fetch sends JWT**: `Dashboard.tsx` now includes `Authorization: Bearer` header when calling `/api/funnel/metrics` so the backend can scope data to the authenticated user's org.
+- **Funnels page fetch sends JWT**: `Funnels.tsx` now sends auth headers on both `/api/funnel/metrics` and `/api/funnel/active-sessions` calls.
+- **Funnel API Supabase client**: Moved from inline creation per-request to module-level singleton for connection reuse in both funnel endpoints.
+
+### Files Changed
+- `api/funnel/metrics.ts` — Add JWT auth, org-scoped queries, module-level Supabase client
+- `api/funnel/active-sessions.ts` — Add JWT auth, org-scoped queries, module-level Supabase client
+- `src/pages/Dashboard.tsx` — Send auth headers with funnel API fetch
+- `src/pages/Funnels.tsx` — Send auth headers with both funnel API fetches
+- `src/pages/Channels.tsx` — Remove hardcoded conversion count display
+- `src/components/OnboardingChecklist.tsx` — Strict setup_completed check, progress bar, collapsible UI
+- `src/components/OnboardingChecklist.css` — Progress bar, collapse/expand button, icon styles
+
 ## 2026-02-10 — Email confirmation flow, explore-first onboarding, and rate limit UX
 
 ### Added
