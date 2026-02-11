@@ -144,6 +144,42 @@ export async function saveMetaSelection(selection: {
 }
 
 /**
+ * Save manually-entered Meta credentials (bypass OAuth).
+ * Validates the token server-side, encrypts, and stores.
+ */
+export async function saveManualCredentials(credentials: {
+  accessToken: string;
+  adAccountId?: string;
+  pageId?: string;
+  pixelId?: string;
+}): Promise<{
+  success: boolean;
+  needsConfiguration: boolean;
+  availableAccounts: AvailableAdAccount[];
+  availablePages: AvailablePage[];
+}> {
+  const token = await getAuthToken();
+  if (!token) throw new Error('Not authenticated');
+
+  const res = await fetch('/api/meta/save-credentials', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(credentials),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const errorMsg = data.errors?.join('. ') || data.error || 'Failed to save credentials';
+    throw new Error(errorMsg);
+  }
+
+  return res.json();
+}
+
+/**
  * Fetch available pixels for a given ad account.
  * Used by the self-service onboarding flow.
  */

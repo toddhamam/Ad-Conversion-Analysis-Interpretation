@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { decrypt } from './_lib/encryption.js';
+import { decrypt, encrypt, isEncryptionConfigured } from './_lib/encryption.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -100,6 +100,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleUpdateSelection(req, res);
       case 'fetch-pixels':
         return handleFetchPixels(req, res);
+      case 'save-credentials':
+        return handleSaveCredentials(req, res);
       default:
         return res.status(400).json({ error: `Unknown route: ${route}` });
     }
@@ -534,6 +536,158 @@ async function handleUpdateSelection(req: VercelRequest, res: VercelResponse) {
   }
 
   return res.status(200).json({ success: true });
+}
+
+// ─── Route: save-credentials ────────────────────────────────────────────────
+// Self-service credential entry for users who can't use OAuth
+// (e.g. when the Facebook App is in Development mode).
+// JWT-authenticated — org derived from user's profile, never trusted from body.
+
+async function handleSaveCredentials(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { accessToken, adAccountId, pageId, pixelId } = req.body || {};
+
+  if (!accessToken) {
+    return res.status(400).json({ error: 'accessToken is required' });
+  }
+
+  if (!isEncryptionConfigured()) {
+    return res.status(500).json({ error: 'Encryption is not configured on the server' });
+  }
+
+  const errors: string[] = [];
+
+  // 1. Validate token via debug_token
+  try {
+    const debugUrl = new URL(`${GRAPH_API_BASE}/debug_token`);
+    debugUrl.searchParams.set('input_token', accessToken);
+    debugUrl.searchParams.set('access_token', accessToken);
+
+    const debugRes = await fetch(debugUrl.toString());
+    const debugData = await debugRes.json();
+
+    if (debugData.data) {
+      if (!debugData.data.is_valid) {
+        errors.push('Token is not valid — it may be expired or revoked');
+      }
+    } else if (debugData.error) {
+      errors.push(`Token validation failed: ${debugData.error.message}`);
+    }
+  } catch (err: unknown) {
+    errors.push(`Token validation request failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  }
+
+  if (errors.length > 0) {
+    return res.status(400).json({ error: 'Token validation failed', errors });
+  }
+
+  // 2. Fetch available ad accounts
+  let availableAccounts: Array<{ id: string; name: string; account_id: string; account_status: number; currency: string }> = [];
+  try {
+    const acctUrl = new URL(`${GRAPH_API_BASE}/me/adaccounts`);
+    acctUrl.searchParams.set('access_token', accessToken);
+    acctUrl.searchParams.set('fields', 'account_id,id,name,account_status,currency');
+
+    const acctRes = await fetch(acctUrl.toString());
+    const acctData = await acctRes.json();
+    availableAccounts = acctData.data || [];
+  } catch {
+    // Non-fatal — user may still enter ad account ID manually
+  }
+
+  // 3. Fetch available pages
+  let availablePages: Array<{ id: string; name: string }> = [];
+  try {
+    const pagesUrl = new URL(`${GRAPH_API_BASE}/me/accounts`);
+    pagesUrl.searchParams.set('access_token', accessToken);
+    pagesUrl.searchParams.set('fields', 'id,name');
+
+    const pagesRes = await fetch(pagesUrl.toString());
+    const pagesData = await pagesRes.json();
+    availablePages = pagesData.data || [];
+  } catch {
+    // Non-fatal
+  }
+
+  // 4. Verify ad account access if provided
+  let accountName: string | null = null;
+  if (adAccountId) {
+    try {
+      const accountUrl = new URL(`${GRAPH_API_BASE}/${adAccountId}`);
+      accountUrl.searchParams.set('access_token', accessToken);
+      accountUrl.searchParams.set('fields', 'id,name,account_status');
+
+      const accountRes = await fetch(accountUrl.toString());
+      const accountData = await accountRes.json();
+
+      if (accountData.error) {
+        errors.push(`Ad account access failed: ${accountData.error.message}`);
+      } else {
+        accountName = accountData.name;
+        if (accountData.account_status !== 1) {
+          errors.push(`Ad account is not active (status: ${accountData.account_status})`);
+        }
+      }
+    } catch (err: unknown) {
+      errors.push(`Ad account validation failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }
+
+  if (errors.length > 0) {
+    return res.status(400).json({ error: 'Validation failed', errors });
+  }
+
+  // 5. Encrypt and store
+  const encryptedToken = encrypt(accessToken);
+
+  const tokenExpiresAt = new Date();
+  tokenExpiresAt.setDate(tokenExpiresAt.getDate() + 60);
+
+  const needsConfiguration = !adAccountId;
+
+  const { error: dbError } = await supabase
+    .from('organization_credentials')
+    .upsert(
+      {
+        organization_id: auth.organizationId,
+        provider: 'meta',
+        access_token_encrypted: encryptedToken,
+        ad_account_id: adAccountId || null,
+        page_id: pageId || null,
+        pixel_id: pixelId || null,
+        token_expires_at: tokenExpiresAt.toISOString(),
+        status: 'active',
+        last_error: null,
+        metadata: {
+          selected_account_name: accountName,
+          available_accounts: availableAccounts,
+          available_pages: availablePages,
+          connected_at: new Date().toISOString(),
+          connection_method: 'manual',
+        },
+      },
+      { onConflict: 'organization_id,provider' }
+    );
+
+  if (dbError) {
+    console.error('Failed to save credentials:', dbError);
+    return res.status(500).json({ error: 'Failed to save credentials' });
+  }
+
+  return res.status(200).json({
+    success: true,
+    needsConfiguration,
+    availableAccounts,
+    availablePages,
+  });
 }
 
 // ─── Route: fetch-pixels ────────────────────────────────────────────────────

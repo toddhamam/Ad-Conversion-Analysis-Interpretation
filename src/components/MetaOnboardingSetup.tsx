@@ -4,6 +4,7 @@ import {
   getOrgMetaIds,
   loadOrgMetaCredentials,
   saveMetaSelection,
+  saveManualCredentials,
   fetchAvailablePixels,
   clearOrgMetaCache,
 } from '../services/metaApi';
@@ -27,6 +28,15 @@ export default function MetaOnboardingSetup({ onConfigured, notification, onDism
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Manual entry state
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [manualToken, setManualToken] = useState('');
+  const [manualAdAccountId, setManualAdAccountId] = useState('');
+  const [manualPageId, setManualPageId] = useState('');
+  const [manualPixelId, setManualPixelId] = useState('');
+  const [manualSaving, setManualSaving] = useState(false);
+  const [manualError, setManualError] = useState<string | null>(null);
+
   const isConnected = metaIds?.connected === true || metaIds?.status === 'active';
   const needsConfiguration = isConnected && metaIds?.needsConfiguration === true;
   const isFullyConfigured = isConnected && !needsConfiguration;
@@ -35,6 +45,34 @@ export default function MetaOnboardingSetup({ onConfigured, notification, onDism
     if (!organization?.id) return;
     const returnUrl = '/dashboard';
     window.location.href = `/api/auth/meta/connect?organizationId=${organization.id}&returnUrl=${encodeURIComponent(returnUrl)}`;
+  };
+
+  const handleManualSave = async () => {
+    if (!manualToken.trim()) {
+      setManualError('Access token is required');
+      return;
+    }
+    setManualSaving(true);
+    setManualError(null);
+    try {
+      const result = await saveManualCredentials({
+        accessToken: manualToken.trim(),
+        adAccountId: manualAdAccountId.trim() || undefined,
+        pageId: manualPageId.trim() || undefined,
+        pixelId: manualPixelId.trim() || undefined,
+      });
+      clearOrgMetaCache();
+      await loadOrgMetaCredentials();
+      if (!result.needsConfiguration) {
+        onConfigured?.();
+      }
+      // Force re-render — credentials are now loaded
+      window.location.reload();
+    } catch (err: unknown) {
+      setManualError(err instanceof Error ? err.message : 'Failed to save credentials');
+    } finally {
+      setManualSaving(false);
+    }
   };
 
   const handleAdAccountChange = async (adAccountId: string) => {
@@ -77,7 +115,7 @@ export default function MetaOnboardingSetup({ onConfigured, notification, onDism
     }
   };
 
-  // Not connected — show connect button
+  // Not connected — show connect button + manual entry fallback
   if (!isConnected) {
     return (
       <div className="meta-onboarding">
@@ -98,6 +136,87 @@ export default function MetaOnboardingSetup({ onConfigured, notification, onDism
             Connect Meta Ads
           </button>
         </div>
+
+        <div className="meta-onboarding-manual-toggle">
+          <button
+            onClick={() => setShowManualEntry(!showManualEntry)}
+            className="meta-manual-toggle-btn"
+          >
+            {showManualEntry ? 'Hide manual setup' : 'Having trouble connecting? Enter credentials manually'}
+          </button>
+        </div>
+
+        {showManualEntry && (
+          <div className="meta-onboarding-manual">
+            <p className="meta-onboarding-configure-desc">
+              Enter your Meta System User access token and account details. You can find these in your{' '}
+              <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noopener noreferrer">
+                Meta Business Settings
+              </a>.
+            </p>
+
+            <div className="meta-onboarding-field">
+              <label className="meta-onboarding-label">Access Token</label>
+              <input
+                type="password"
+                value={manualToken}
+                onChange={(e) => setManualToken(e.target.value)}
+                placeholder="Paste your Meta access token..."
+                className="meta-onboarding-input"
+                autoComplete="off"
+              />
+            </div>
+
+            <div className="meta-onboarding-field">
+              <label className="meta-onboarding-label">
+                Ad Account ID <span className="meta-onboarding-label-optional">(format: act_XXXXXXXXX)</span>
+              </label>
+              <input
+                type="text"
+                value={manualAdAccountId}
+                onChange={(e) => setManualAdAccountId(e.target.value)}
+                placeholder="act_123456789"
+                className="meta-onboarding-input"
+              />
+            </div>
+
+            <div className="meta-onboarding-field">
+              <label className="meta-onboarding-label">
+                Facebook Page ID <span className="meta-onboarding-label-optional">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={manualPageId}
+                onChange={(e) => setManualPageId(e.target.value)}
+                placeholder="123456789"
+                className="meta-onboarding-input"
+              />
+            </div>
+
+            <div className="meta-onboarding-field">
+              <label className="meta-onboarding-label">
+                Meta Pixel ID <span className="meta-onboarding-label-optional">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={manualPixelId}
+                onChange={(e) => setManualPixelId(e.target.value)}
+                placeholder="123456789"
+                className="meta-onboarding-input"
+              />
+            </div>
+
+            {manualError && <div className="meta-onboarding-error">{manualError}</div>}
+
+            <button
+              onClick={handleManualSave}
+              disabled={!manualToken.trim() || manualSaving}
+              className="meta-save-btn"
+            >
+              {manualSaving ? 'Validating & saving...' : 'Validate & Connect'}
+            </button>
+          </div>
+        )}
       </div>
     );
   }
