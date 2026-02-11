@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-02-11 — Gate Funnels feature to super admin only
+
+### Changed
+- **Funnels page restricted to super admins**: The `/funnels` route is now wrapped with `SuperAdminRoute` — non-super-admin users are redirected to the dashboard if they navigate there directly.
+- **Funnels nav link hidden for regular users**: The "Funnels" item in the sidebar only renders when `isSuperAdmin` is true.
+- **Dashboard skips funnel API for non-super-admins**: The funnel metrics fetch (`/api/funnel/metrics`) is skipped entirely for regular users, avoiding unnecessary API calls and error states.
+- **Funnel-only dashboard metrics hidden**: Unique Customers, AOV, Sessions, and CAC stat cards are hidden from the dashboard grid and the Customize panel for non-super-admin users. Meta-only metrics (Revenue, Conversions, Conversion Rate, Ad Spend, ROAS) remain visible.
+- **Funnel warning banner suppressed**: The "Funnel data unavailable" warning no longer appears for non-super-admin users.
+
+### Files Changed
+- `src/App.tsx` — Wrapped `/funnels` route with `<SuperAdminRoute>`
+- `src/components/Sidebar.tsx` — Conditional render of Funnels nav link based on `isSuperAdmin`
+- `src/pages/Dashboard.tsx` — Skip funnel fetch, hide funnel-only metrics and warning for non-super-admins
+
+---
+
 ## 2026-02-11 — Meta manual credential fallback and comprehensive legal pages
 
 ### Fixed

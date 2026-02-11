@@ -109,6 +109,9 @@ const STATIC_PERIODS: Record<string, string> = {
 // Metrics that should show the date range
 const DATE_RANGE_METRICS = ['totalRevenue', 'uniqueCustomers', 'adSpend'];
 
+// Funnel-only metrics — hidden for non-super-admins (requires Supabase funnel data)
+const FUNNEL_ONLY_METRICS = ['uniqueCustomers', 'aov', 'sessions', 'cac'];
+
 // Load metrics config from localStorage
 function loadMetricsConfig(): MetricConfig[] {
   if (typeof window !== 'undefined') {
@@ -272,7 +275,7 @@ function formatDateForApi(date: Date): string {
 }
 
 const Dashboard = () => {
-  const { isTrialing, trialDaysRemaining } = useOrganization();
+  const { isTrialing, trialDaysRemaining, isSuperAdmin } = useOrganization();
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [metaData, setMetaData] = useState<{
     totalSpend: number;
@@ -358,17 +361,17 @@ const Dashboard = () => {
 
         // Fetch funnel metrics and Meta API data independently
         // Each has its own error handling so one failure doesn't block the other
+        // Funnel data is only fetched for super admins
         const token = await getAuthToken();
-        const funnelHeaders: Record<string, string> = {};
-        if (token) funnelHeaders['Authorization'] = `Bearer ${token}`;
 
-        const funnelPromise = fetch(`/api/funnel/metrics?startDate=${startDateStr}&endDate=${endDateStr}`, {
-            headers: funnelHeaders,
-          })
-          .catch((err) => {
-            console.error('Failed to fetch funnel data:', err);
-            return null;
-          });
+        const funnelPromise: Promise<Response | null> = isSuperAdmin
+          ? fetch(`/api/funnel/metrics?startDate=${startDateStr}&endDate=${endDateStr}`, {
+              headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+            }).catch((err) => {
+              console.error('Failed to fetch funnel data:', err);
+              return null;
+            })
+          : Promise.resolve(null);
 
         const metaPromise = fetchCampaignSummaries(metaDateOptions)
           .catch((err) => {
@@ -378,16 +381,18 @@ const Dashboard = () => {
 
         const [funnelResponse, campaigns] = await Promise.all([funnelPromise, metaPromise]);
 
-        // Process funnel data
+        // Process funnel data (super admin only)
         if (funnelResponse && funnelResponse.ok) {
           const data = await funnelResponse.json();
           setMetrics(data);
-        } else if (funnelResponse && !funnelResponse.ok) {
+        } else if (isSuperAdmin && funnelResponse && !funnelResponse.ok) {
           console.warn('Funnel API returned non-ok status:', funnelResponse.status);
           setFunnelWarning('Funnel data unavailable — some metrics may be incomplete.');
           setMetrics(null);
-        } else {
+        } else if (isSuperAdmin) {
           setFunnelWarning('Funnel data unavailable — some metrics may be incomplete.');
+          setMetrics(null);
+        } else {
           setMetrics(null);
         }
 
@@ -538,8 +543,10 @@ const Dashboard = () => {
 
   const dateRangeLabel = getDateRangeLabel();
 
-  // Get visible metrics for rendering
-  const visibleMetrics = metricsConfig.filter((m) => m.visible);
+  // Funnel-only metrics are hidden for non-super-admins
+  const visibleMetrics = metricsConfig.filter((m) =>
+    m.visible && (isSuperAdmin || !FUNNEL_ONLY_METRICS.includes(m.id))
+  );
 
   return (
     <div className="dashboard-page">
@@ -578,7 +585,7 @@ const Dashboard = () => {
             onChange={handleDateRangeChange}
           />
           <DashboardCustomizer
-            metrics={metricsConfig}
+            metrics={isSuperAdmin ? metricsConfig : metricsConfig.filter((m) => !FUNNEL_ONLY_METRICS.includes(m.id))}
             onMetricsChange={handleMetricsConfigChange}
           />
         </div>
