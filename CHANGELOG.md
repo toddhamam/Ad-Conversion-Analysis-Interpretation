@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-02-11 — Fix infinite resync loop on Meta Ads page
+
+### Fixed
+- **Meta Ads page stuck in perpetual "Syncing your ad data..." loop**: The `autoFetchingRefs` guard flag was stored as `useState`, causing an infinite re-render cascade: state change → `autoFetchTopImages` callback recreated → `loadMetaData` callback recreated → `useEffect` re-fires → fetches all data again → repeat. Changed to `useRef` since the flag is only a concurrency guard and doesn't need to trigger re-renders.
+
+### Files Changed
+- `src/pages/MetaAds.tsx` — Changed `autoFetchingRefs` from `useState` to `useRef`, removed it from `useCallback` dependency array
+
+---
+
 ## 2026-02-11 — Gate Funnels feature to super admin only
 
 ### Changed
