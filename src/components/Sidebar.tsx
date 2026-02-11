@@ -22,7 +22,7 @@ const Sidebar = ({
   logoAlt = 'Convertra',
 }: SidebarProps) => {
   const [channelsExpanded, setChannelsExpanded] = useState(false);
-  const { isTrialing, trialDaysRemaining } = useOrganization();
+  const { isTrialing, trialDaysRemaining, isSuperAdmin } = useOrganization();
 
   return (
     <>
@@ -106,12 +106,14 @@ const Sidebar = ({
           )}
         </div>
 
-        <NavLink to="/funnels" className="nav-item" title="Funnels" onClick={onCloseMobile}>
-          <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>
-          </svg>
-          <span className="nav-label">Funnels</span>
-        </NavLink>
+        {isSuperAdmin && (
+          <NavLink to="/funnels" className="nav-item" title="Funnels" onClick={onCloseMobile}>
+            <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>
+            </svg>
+            <span className="nav-label">Funnels</span>
+          </NavLink>
+        )}
 
         <NavLink to="/insights" className="nav-item" title="ConversionIQ™" onClick={onCloseMobile}>
           <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

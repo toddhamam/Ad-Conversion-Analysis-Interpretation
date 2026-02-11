@@ -112,7 +112,7 @@ function App() {
             <Route path="/products" element={<Products />} />
             <Route path="/insights" element={<Insights />} />
             <Route path="/seo-iq" element={<SeoIQ />} />
-            <Route path="/funnels" element={<Funnels />} />
+            <Route path="/funnels" element={<SuperAdminRoute><Funnels /></SuperAdminRoute>} />
             <Route path="/billing" element={<Billing />} />
             <Route path="/account" element={<AccountSettings />} />
           </Route>
