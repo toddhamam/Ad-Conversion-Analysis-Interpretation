@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { DashboardMetrics } from '../types/funnel';
 import { fetchCampaignSummaries, type CampaignSummary, type DatePreset, loadOrgMetaCredentials, clearOrgMetaCache } from '../services/metaApi';
+import { getAuthToken } from '../lib/authToken';
 import Loading from '../components/Loading';
 import SEO from '../components/SEO';
 import DateRangePicker from '../components/DateRangePicker';
@@ -355,7 +356,13 @@ const Dashboard = () => {
 
         // Fetch funnel metrics and Meta API data independently
         // Each has its own error handling so one failure doesn't block the other
-        const funnelPromise = fetch(`/api/funnel/metrics?startDate=${startDateStr}&endDate=${endDateStr}`)
+        const token = await getAuthToken();
+        const funnelHeaders: Record<string, string> = {};
+        if (token) funnelHeaders['Authorization'] = `Bearer ${token}`;
+
+        const funnelPromise = fetch(`/api/funnel/metrics?startDate=${startDateStr}&endDate=${endDateStr}`, {
+            headers: funnelHeaders,
+          })
           .catch((err) => {
             console.error('Failed to fetch funnel data:', err);
             return null;

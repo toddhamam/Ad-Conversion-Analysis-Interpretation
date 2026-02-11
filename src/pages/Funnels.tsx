@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Loading from '../components/Loading';
 import type { DashboardMetrics, FunnelStep, ABTestMetrics } from '../types/funnel';
+import { getAuthToken } from '../lib/authToken';
 import './Funnels.css';
 
 // Date range options
@@ -53,7 +54,10 @@ export default function Funnels() {
   useEffect(() => {
     async function fetchActiveSessions() {
       try {
-        const response = await fetch('/api/funnel/active-sessions');
+        const token = await getAuthToken();
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const response = await fetch('/api/funnel/active-sessions', { headers });
         const data = await response.json();
         setActiveSessions(data.count || 0);
       } catch {
@@ -76,7 +80,11 @@ export default function Funnels() {
         const endDate = new Date().toISOString();
         const startDate = new Date(Date.now() - selectedRange * 24 * 60 * 60 * 1000).toISOString();
 
-        const response = await fetch(`/api/funnel/metrics?startDate=${startDate}&endDate=${endDate}`);
+        const token = await getAuthToken();
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`/api/funnel/metrics?startDate=${startDate}&endDate=${endDate}`, { headers });
 
         if (!response.ok) {
           throw new Error('Failed to fetch metrics');

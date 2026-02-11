@@ -36,14 +36,6 @@ const Channels = () => {
                 </h3>
                 <p className="channel-description">{channel.description}</p>
               </div>
-              {channel.conversions && (
-                <div className="channel-stats">
-                  <div className="channel-conversions">
-                    {channel.conversions.toLocaleString()}
-                  </div>
-                  <div className="channel-conversions-label">conversions</div>
-                </div>
-              )}
             </div>
             {!channel.comingSoon && <span className="channel-arrow">›</span>}
           </Link>
