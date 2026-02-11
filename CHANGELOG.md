@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-02-11 — Meta manual credential fallback and comprehensive legal pages
+
+### Fixed
+- **External users blocked by Meta OAuth "Feature unavailable" error**: When a Facebook App is in Development mode, external users cannot use the OAuth connect flow. Added a manual credential entry fallback in the onboarding setup so users can paste their Meta access token, ad account ID, page ID, and pixel ID directly.
+
+### Added
+- **Manual Meta credential entry** (`api/meta.ts` → `save-credentials` route): JWT-authenticated endpoint that validates the token via `debug_token`, fetches available ad accounts and pages, encrypts the token with AES-256-GCM, and upserts to `organization_credentials`. Added to existing catch-all handler (no new serverless function).
+- **`saveManualCredentials()` frontend service** (`src/services/metaApi.ts`): Calls the new backend route with JWT auth.
+- **Manual entry UI in onboarding** (`src/components/MetaOnboardingSetup.tsx`): Expandable "Enter credentials manually" section with form fields, validation, and save flow. Appears below the OAuth connect button.
+- **Privacy Policy page** (`/privacy`): Comprehensive policy covering data collection (Meta API, Stripe, AI processing), sharing, security (AES-256-GCM encryption), retention, user rights, and Meta Platform compliance.
+- **Terms of Service page** (`/terms`): Full terms covering eligibility, subscription/billing, acceptable use, IP (ConversionIQ™/CreativeIQ™), AI-generated content, liability, and governing law (Delaware).
+- **Cookie Policy page** (`/cookies`): Covers essential auth cookies (Supabase), CSRF cookies, localStorage usage (dashboard prefs, analysis cache, image cache, product data, publisher presets), and third-party cookies (Stripe, Meta).
+- **Data Deletion page** (`/data-deletion`): Data deletion instructions required by Meta App Review — request methods, 30-day timeline, retained data, Meta disconnect option, and Facebook data deletion callback compliance.
+- **Shared legal page layout** (`src/pages/LegalPage.tsx` + `LegalPage.css`): Reusable wrapper with sticky header (Convertra logo + back to home link), content area, and footer with cross-links to all legal pages. Uses SEO component for meta tags.
+- **Legal links in sales landing footer** (`src/pages/SalesLanding.tsx`): Privacy Policy, Terms of Service, Cookie Policy, and Data Deletion links added below the existing footer navigation.
+
+### Files Changed
+- `api/meta.ts` — Added `save-credentials` route with token validation, encryption, and credential upsert
+- `src/services/metaApi.ts` — Added `saveManualCredentials()` export
+- `src/components/MetaOnboardingSetup.tsx` — Manual credential entry UI with toggle, form, and save handler
+- `src/components/MetaOnboardingSetup.css` — Manual entry section styles
+- `src/App.tsx` — Added 4 public routes: `/privacy`, `/terms`, `/cookies`, `/data-deletion`
+- `src/pages/SalesLanding.tsx` — Added legal links to footer
+- `src/pages/SalesLanding.css` — Added `.footer-legal` styles
+
+### Files Created
+- `src/pages/LegalPage.tsx` — Shared legal page layout wrapper
+- `src/pages/LegalPage.css` — Legal page layout styles
+- `src/pages/PrivacyPolicy.tsx` — Privacy Policy content
+- `src/pages/TermsOfService.tsx` — Terms of Service content
+- `src/pages/CookiePolicy.tsx` — Cookie Policy content
+- `src/pages/DataDeletion.tsx` — Data Deletion instructions
+
+---
+
 ## 2026-02-11 — Trial billing hardening and early-bird discount UX
 
 ### Fixed

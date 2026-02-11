@@ -1162,6 +1162,12 @@ function SalesLanding() {
             <a href="#pricing">Pricing</a>
             <a href={calendarUrl}>Contact</a>
           </div>
+          <div className="footer-legal">
+            <a href="/privacy">Privacy Policy</a>
+            <a href="/terms">Terms of Service</a>
+            <a href="/cookies">Cookie Policy</a>
+            <a href="/data-deletion">Data Deletion</a>
+          </div>
           <p className="footer-copyright">
             &copy; {new Date().getFullYear()} Convertra. All rights reserved.
           </p>

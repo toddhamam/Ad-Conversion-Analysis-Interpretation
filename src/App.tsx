@@ -23,6 +23,10 @@ import Register from './pages/Register';
 import ChoosePlan from './pages/ChoosePlan';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
+import CookiePolicy from './pages/CookiePolicy';
+import DataDeletion from './pages/DataDeletion';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import OrganizationsList from './pages/admin/OrganizationsList';
 import CreateOrganization from './pages/admin/CreateOrganization';
@@ -75,6 +79,10 @@ function App() {
           <Route path="/signup" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/cookies" element={<CookiePolicy />} />
+          <Route path="/data-deletion" element={<DataDeletion />} />
 
           {/* Post-Signup Plan Selection (protected, no sidebar) */}
           <Route path="/choose-plan" element={
