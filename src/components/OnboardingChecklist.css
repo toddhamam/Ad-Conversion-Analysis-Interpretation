@@ -141,6 +141,49 @@
   opacity: 0.8;
 }
 
+/* Error state */
+.onboarding-checklist-error {
+  border-left-color: #ef4444;
+}
+
+.onboarding-icon-error {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05));
+  color: #ef4444;
+}
+
+.onboarding-retry-btn {
+  margin-top: 12px;
+  padding: 8px 20px;
+  background: var(--accent-violet);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.onboarding-retry-btn:hover {
+  opacity: 0.9;
+}
+
+.onboarding-retry-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Indeterminate progress animation */
+.onboarding-progress-indeterminate {
+  width: 40% !important;
+  animation: onboarding-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes onboarding-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
 @media (max-width: 600px) {
   .onboarding-checklist {
     padding: 16px;

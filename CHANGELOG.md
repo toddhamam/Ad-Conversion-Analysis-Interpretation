@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-02-11 — Fix org provisioning diagnostics and onboarding error states
+
+### Fixed
+- **Onboarding checklist invisible when org provisioning fails**: The checklist returned `null` when `organization` was `null` (during loading or after provisioning failure). New users saw a blank dashboard with no onboarding. Now shows loading state during provisioning, error state with retry button on failure, and full checklist on success.
+- **Provisioning errors silently swallowed**: `OrganizationContext` set an error string but nothing displayed it. The `OnboardingChecklist` now reads `orgError` from context and renders an "Account Setup Issue" card with the actual error message and a "Retry Setup" button.
+
+### Added
+- **Provision endpoint diagnostics**: `api/seoiq.ts` `handleProvisionOrg` now logs `[Provision]` prefixed messages for every failure path — missing env vars, token validation failures, org/user insert errors (with Supabase error code and details). Returns `detail` field in error responses.
+- **Env var guard on provisioning**: Returns 503 with a clear message if `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` are missing from Vercel environment variables.
+- **Onboarding loading state**: Animated indeterminate progress bar with "Setting up your account..." while org is being provisioned.
+- **Onboarding error state**: Red-bordered card showing the provisioning error message with a retry button.
+
+### Changed
+- **Error detail surfaced in UI**: `OrganizationContext` now extracts `detail` from provision API error responses and appends it to the user-facing error message.
+
+### Files Changed
+- `api/seoiq.ts` — Env var guard, detailed error logging and response fields in provision handler
+- `src/components/OnboardingChecklist.tsx` — Loading, error, and retry states; reads orgLoading/orgError/refresh from context
+- `src/components/OnboardingChecklist.css` — Error card styles, retry button, indeterminate progress animation
+- `src/contexts/OrganizationContext.tsx` — Surface `detail` field from provision API errors
+
 ## 2026-02-11 — Funnel tenant isolation, onboarding checklist UX, and clean new-account experience
 
 ### Fixed

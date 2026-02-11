@@ -1345,6 +1345,15 @@ async function handleProvisionOrg(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Check that backend Supabase env vars are configured
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('[Provision] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars');
+    return res.status(503).json({
+      error: 'Server configuration error: database not configured',
+      detail: 'SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set in environment variables',
+    });
+  }
+
   const { authId, email, fullName, companyName } = req.body || {};
 
   if (!authId || !email) {
@@ -1354,13 +1363,18 @@ async function handleProvisionOrg(req: VercelRequest, res: VercelResponse) {
   // Verify JWT matches the authId being provisioned
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Authentication required' });
+    console.error('[Provision] No Bearer token provided');
+    return res.status(401).json({ error: 'Authentication required — no Bearer token' });
   }
 
   const token = authHeader.slice(7);
   const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
   if (authError || !authUser) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    console.error('[Provision] Token validation failed:', authError?.message || 'No user returned');
+    return res.status(401).json({
+      error: 'Invalid or expired token',
+      detail: authError?.message || 'supabase.auth.getUser returned no user',
+    });
   }
 
   if (authUser.id !== authId) {
@@ -1400,8 +1414,12 @@ async function handleProvisionOrg(req: VercelRequest, res: VercelResponse) {
       .single();
 
     if (orgErr || !org) {
-      console.error('Failed to create organization:', orgErr);
-      return res.status(500).json({ error: 'Failed to create organization' });
+      console.error('[Provision] Failed to create organization:', orgErr?.message, orgErr?.code, orgErr?.details);
+      return res.status(500).json({
+        error: 'Failed to create organization',
+        detail: orgErr?.message || 'Insert returned no data',
+        code: orgErr?.code,
+      });
     }
 
     // Create user linked to organization
@@ -1419,15 +1437,20 @@ async function handleProvisionOrg(req: VercelRequest, res: VercelResponse) {
       .single();
 
     if (userErr || !user) {
-      console.error('Failed to create user:', userErr);
+      console.error('[Provision] Failed to create user:', userErr?.message, userErr?.code, userErr?.details);
       // Rollback org creation
       await supabase.from('organizations').delete().eq('id', org.id);
-      return res.status(500).json({ error: 'Failed to create user profile' });
+      return res.status(500).json({
+        error: 'Failed to create user profile',
+        detail: userErr?.message || 'Insert returned no data',
+        code: userErr?.code,
+      });
     }
 
+    console.log('[Provision] Success — org:', org.id, 'user:', user.id, 'email:', email);
     return res.status(201).json({ organization: org, user });
   } catch (err) {
-    console.error('Provision org error:', err);
+    console.error('[Provision] Unexpected error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }

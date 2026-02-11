@@ -143,7 +143,8 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
             if (!provisionRes.ok) {
               const errData = await provisionRes.json().catch(() => ({}));
               console.error('Provision API error:', provisionRes.status, errData);
-              setError(`Failed to set up organization (${provisionRes.status}). Please try again.`);
+              const detail = errData.detail ? ` — ${errData.detail}` : '';
+              setError(`Failed to set up organization (${provisionRes.status})${detail}. Please try again.`);
               setLoading(false);
               return;
             }
