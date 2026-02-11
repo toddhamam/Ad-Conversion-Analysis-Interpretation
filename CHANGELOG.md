@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-02-11 — Fix Supabase security linter errors and warnings
+
+### Fixed (SQL Migration 005)
+- **`funnel_events` table exposed without RLS** (ERROR): Enabled Row Level Security on the `funnel_events` table. All access is via service role key (backend API), so no policies are needed — RLS with no policies blocks all direct PostgREST/client access while service role key bypasses RLS. This also resolves the sensitive `session_id` column exposure.
+- **`update_updated_at_column()` and `update_updated_at()` mutable search_path** (WARN): Added `SET search_path = ''` to both trigger functions to prevent schema shadowing attacks.
+- **Overly permissive INSERT policies on `organizations` and `users`** (WARN): Dropped 3 RLS policies that allowed unrestricted inserts via PostgREST — "Allow signup inserts for organizations" (anon), "Authenticated users can create organizations" (authenticated), and "Allow signup inserts for users" (anon). All org/user creation goes through `handleProvisionOrg()` in `api/seoiq.ts` using service role key, so these policies were unused security holes.
+
+### Not Changed (Manual / No Action)
+- **Leaked password protection** (WARN): Requires Supabase Pro plan — cannot enable on Hobby tier.
+- **`organization_credentials` RLS enabled with no policies** (INFO): Correct behavior — credentials table is only accessed via service role key. No policies = no PostgREST access, which is the intended security model.
+
+### Files Created
+- `supabase/migrations/005_security_fixes.sql` — RLS enablement, search_path fixes, policy drops
+
+---
+
 ## 2026-02-11 — Fix infinite resync loop on Meta Ads page
 
 ### Fixed
