@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { creatives as mockCreatives } from '../data/mockData';
 import {
   fetchAdCreatives,
@@ -114,7 +114,7 @@ const MetaAds = () => {
   // Reference image tracking
   const [cachedImageIds, setCachedImageIds] = useState<Set<string>>(new Set());
   const [fetchingImageId, setFetchingImageId] = useState<string | null>(null);
-  const [autoFetchingRefs, setAutoFetchingRefs] = useState(false);
+  const autoFetchingRefsRef = useRef(false);
 
   // Update cached image IDs when cache changes
   const refreshCachedIds = useCallback(() => {
@@ -152,7 +152,7 @@ const MetaAds = () => {
   // Auto-fetch top performing ad images until we have 3 HIGH-QUALITY references
   // This ensures we always have enough quality references for ad generation
   const autoFetchTopImages = useCallback(async (creativesData: AdCreative[]) => {
-    if (autoFetchingRefs) return;
+    if (autoFetchingRefsRef.current) return;
 
     const TARGET_HIGH_QUALITY_COUNT = 3;
     const MIN_QUALITY_SCORE = 60; // Same threshold as used in ad generation
@@ -183,7 +183,7 @@ const MetaAds = () => {
       return;
     }
 
-    setAutoFetchingRefs(true);
+    autoFetchingRefsRef.current = true;
     console.log(`🔄 Will try up to ${allWithImages.length} ads to find ${needed} high-quality images...`);
 
     let successCount = 0;
@@ -237,8 +237,8 @@ const MetaAds = () => {
     }
 
     refreshCachedIds();
-    setAutoFetchingRefs(false);
-  }, [autoFetchingRefs, refreshCachedIds]);
+    autoFetchingRefsRef.current = false;
+  }, [refreshCachedIds]);
 
   // Date range state - default to last 30 days
   const defaultPreset: DatePreset = 'last_30d';
