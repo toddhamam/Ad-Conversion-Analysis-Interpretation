@@ -44,6 +44,7 @@ import {
   Calculator,
 } from 'lucide-react';
 import OnboardingChecklist from '../components/OnboardingChecklist';
+import { useOrganization } from '../contexts/OrganizationContext';
 import './Dashboard.css';
 
 interface DashboardStats {
@@ -271,6 +272,7 @@ function formatDateForApi(date: Date): string {
 }
 
 const Dashboard = () => {
+  const { isTrialing, trialDaysRemaining } = useOrganization();
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [metaData, setMetaData] = useState<{
     totalSpend: number;
@@ -551,6 +553,19 @@ const Dashboard = () => {
         notification={metaNotification}
         onDismissNotification={() => setMetaNotification(null)}
       />
+
+      {isTrialing && trialDaysRemaining > 0 && (
+        <div className="early-bird-card glass">
+          <div className="early-bird-card-content">
+            <Sparkles size={18} strokeWidth={1.5} className="early-bird-card-icon" />
+            <span className="early-bird-card-text">
+              <strong>Early Bird Offer:</strong> Subscribe before your trial ends and save 10% on Starter
+              <span className="early-bird-card-days"> — {trialDaysRemaining} {trialDaysRemaining === 1 ? 'day' : 'days'} left</span>
+            </span>
+            <Link to="/billing" className="early-bird-card-cta">View Plans</Link>
+          </div>
+        </div>
+      )}
 
       <div className="dashboard-header">
         <div className="dashboard-header-left">

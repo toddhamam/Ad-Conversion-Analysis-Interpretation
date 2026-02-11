@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-02-11 — Trial billing hardening and early-bird discount UX
+
+### Fixed
+- **Early-bird coupon never applied for new signups**: `api/billing/checkout.ts` checked `subscription_status === 'trialing'` to apply the early-bird coupon, but new signups have status `'incomplete'` at checkout time. Now checks for both `'trialing'` and `'incomplete'` so the coupon fires on first checkout.
+- **Webhook silently defaulted to 'active' on failure**: `api/billing/webhook.ts` defaulted `subscriptionStatus` to `'active'` if `stripe.subscriptions.retrieve()` failed during `checkout.session.completed`. Now skips the status update entirely and relies on the separate `customer.subscription.created` webhook to set the correct status.
+
+### Changed
+- **TrialBanner made non-dismissible**: Removed dismiss button and state. Banner now persists throughout the entire trial period with a star icon and stronger copy: "Subscribe before it ends and save 10% on Starter." Shows "Hurry!" urgency when <= 2 days remain.
+
+### Added
+- **Dashboard early-bird card**: Trial users see a violet-accented card below the onboarding checklist with "Early Bird Offer" messaging and a "View Plans" CTA linking to `/billing`.
+- **Sidebar trial countdown badge**: Compact pill showing "{days}d left — Upgrade" in the sidebar nav. Collapses to a small number badge when sidebar is collapsed. Links to `/billing`.
+
+### Files Changed
+- `api/billing/checkout.ts` — Early-bird coupon condition includes `'incomplete'` status
+- `api/billing/webhook.ts` — Subscription retrieval fallback no longer defaults to `'active'`
+- `src/components/TrialBanner.tsx` — Non-dismissible, star icon, stronger discount messaging
+- `src/components/TrialBanner.css` — Removed dismiss styles, added icon styles, bolder background
+- `src/pages/Dashboard.tsx` — Early-bird offer card for trial users
+- `src/pages/Dashboard.css` — Early-bird card styles
+- `src/components/Sidebar.tsx` — Trial countdown badge
+- `src/components/Sidebar.css` — Trial badge styles
+
+---
+
 ## 2026-02-11 — Fix org provisioning diagnostics and onboarding error states
 
 ### Fixed

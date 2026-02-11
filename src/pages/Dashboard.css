@@ -2,6 +2,56 @@
   max-width: 1400px;
 }
 
+/* Early-bird trial offer card */
+.early-bird-card {
+  margin-bottom: 20px;
+  padding: 14px 20px;
+  border-left: 3px solid var(--accent-violet);
+  border-radius: 8px;
+}
+
+.early-bird-card-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.early-bird-card-icon {
+  color: var(--accent-violet);
+  flex-shrink: 0;
+}
+
+.early-bird-card-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.early-bird-card-text strong {
+  color: var(--text-primary);
+}
+
+.early-bird-card-days {
+  color: var(--accent-violet);
+  font-weight: 600;
+}
+
+.early-bird-card-cta {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-violet);
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 6px 16px;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.early-bird-card-cta:hover {
+  background: rgba(168, 85, 247, 0.06);
+}
+
 .dashboard-header {
   display: flex;
   justify-content: space-between;
