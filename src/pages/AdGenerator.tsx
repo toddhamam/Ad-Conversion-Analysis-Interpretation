@@ -400,9 +400,11 @@ const AdGenerator = () => {
         const sizeInMB = json.length / (1024 * 1024);
         debugLog(`Saving ${toSave.length} ads (${sizeInMB.toFixed(2)}MB)`);
 
-        // Warn if approaching problematic size
+        // Warn if approaching problematic size, clear warning if under threshold
         if (sizeInMB > MAX_DATA_SIZE_MB) {
           setStorageWarning(`Storage is ${sizeInMB.toFixed(1)}MB. Delete old ads to prevent issues.`);
+        } else {
+          setStorageWarning(null);
         }
 
         // Refuse to save if too large (prevent future crash)
@@ -413,11 +415,27 @@ const AdGenerator = () => {
         }
 
         localStorage.setItem(GENERATED_ADS_STORAGE_KEY, json);
+        setStorageWarning(null);
         debugLog(`Saved ${toSave.length} ads to storage`);
       } catch (e: unknown) {
         console.error('[AdGenerator] Failed to save ads:', e);
         if (e instanceof Error && e.name === 'QuotaExceededError') {
-          setStorageWarning('Storage full! Please delete some ads to continue saving.');
+          // Clear the image reference cache to free space and retry
+          clearImageCache();
+          try {
+            const limited = generatedAds.slice(0, MAX_STORED_ADS);
+            const fallback = limited.map((ad, index) => {
+              if (index >= MAX_ADS_WITH_IMAGES && ad.images) {
+                return { ...ad, images: ad.images.map(img => ({ ...img, imageUrl: '' })) };
+              }
+              return ad;
+            });
+            localStorage.setItem(GENERATED_ADS_STORAGE_KEY, JSON.stringify(fallback));
+            setStorageWarning(null);
+            debugLog('Saved ads after clearing image cache');
+          } catch {
+            setStorageWarning('Storage full! Please delete some ads to continue saving.');
+          }
         }
       }
     }, 1000);
@@ -442,7 +460,13 @@ const AdGenerator = () => {
       const json = JSON.stringify(toSave);
       const sizeInMB = json.length / (1024 * 1024);
       if (sizeInMB <= 5) {
-        localStorage.setItem(GENERATED_ADS_STORAGE_KEY, json);
+        try {
+          localStorage.setItem(GENERATED_ADS_STORAGE_KEY, json);
+        } catch {
+          // If quota exceeded, clear image cache and retry
+          clearImageCache();
+          localStorage.setItem(GENERATED_ADS_STORAGE_KEY, json);
+        }
       }
     } catch (e: unknown) {
       console.error('[AdGenerator] Failed to flush ads to storage:', e);
@@ -454,6 +478,7 @@ const AdGenerator = () => {
     if (window.confirm('Are you sure you want to delete all generated ads? This cannot be undone.')) {
       setGeneratedAds([]);
       localStorage.removeItem(GENERATED_ADS_STORAGE_KEY);
+      clearImageCache(); // Also clear reference image cache to free storage space
       setStorageWarning(null);
       setVisibleAdsCount(ADS_PER_PAGE);
     }
@@ -740,7 +765,13 @@ const AdGenerator = () => {
       scheduleIdleWork(() => {
         try {
           const toSave = updatedAds.slice(0, MAX_STORED_ADS);
-          localStorage.setItem(GENERATED_ADS_STORAGE_KEY, JSON.stringify(toSave));
+          const json = JSON.stringify(toSave);
+          try {
+            localStorage.setItem(GENERATED_ADS_STORAGE_KEY, json);
+          } catch {
+            clearImageCache();
+            localStorage.setItem(GENERATED_ADS_STORAGE_KEY, json);
+          }
           console.log('✅ Image regenerated and saved successfully');
         } catch (storageError) {
           console.warn('Failed to save to localStorage:', storageError);
