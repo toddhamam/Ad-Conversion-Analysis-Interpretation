@@ -50,7 +50,14 @@ export const VIDEO_CONFIG = {
   fps: 30,
   width: 1920,
   height: 1080,
-  durationInFrames: 3290, // ~110 seconds
+  durationInFrames: 5860, // ~195 seconds (~3:15)
+} as const;
+
+// Demo reel configuration — adjust playbackRate to control speed
+export const DEMO_CONFIG = {
+  videoDuration: 141,  // 2:21 native video length in seconds
+  playbackRate: 2,     // Speed multiplier (1 = real-time, 2 = 2x speed, etc.)
+  // Computed: playback frames = 142 * 30 / 2 = 2130
 } as const;
 
 // Scene timing (in frames at 30fps)
@@ -64,8 +71,11 @@ export const SCENES = {
   interpret: { from: 1390, duration: 220 },      // 46-54s  (ConversionIQ™)
   generate: { from: 1610, duration: 220 },       // 54-61s  (ConversionIQ™)
   repeat: { from: 1830, duration: 220 },         // 61-68s  (ConversionIQ™)
-  results: { from: 2050, duration: 250 },        // 68-77s
-  costOfWaiting: { from: 2300, duration: 450 },  // 77-92s  (urgency / risk reversal)
-  enterprise: { from: 2750, duration: 210 },     // 92-99s
-  cta: { from: 2960, duration: 330 },            // 99-110s
+  demoIntro: { from: 2050, duration: 240 },      // 68-76s  (intro + 3,2,1 countdown)
+  demoPlayback: { from: 2290, duration: 2130 },  // 76-147s (full video at 2x, 141s native)
+  demoComplete: { from: 4420, duration: 200 },   // 147-154s (completion reveal)
+  results: { from: 4620, duration: 250 },        // 154-162s
+  costOfWaiting: { from: 4870, duration: 450 },  // 162-177s
+  enterprise: { from: 5320, duration: 210 },     // 177-184s
+  cta: { from: 5530, duration: 330 },            // 184-195s
 } as const;

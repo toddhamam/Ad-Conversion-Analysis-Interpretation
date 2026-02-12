@@ -30,7 +30,7 @@ const VSLPoster: React.FC<{ width: number; height: number }> = () => {
             <path d="M8 5v14l11-7z" />
           </svg>
         </div>
-        <p className="vsl-poster-play-label">Watch the 90-Second Breakdown</p>
+        <p className="vsl-poster-play-label">Watch the Full Demo</p>
       </div>
     </div>
   );
@@ -166,6 +166,7 @@ function SalesLanding() {
           {/* Hero VSL */}
           <div className="hero-demo animate-on-scroll delay-3">
             <div className="demo-container">
+              <p className="demo-caption">Launch high-converting ads in under 3 minutes — <span className="highlight">See ConversionIQ™ in action</span></p>
               <div className="vsl-player-wrapper">
                 <div className="demo-gradient-border"></div>
                 <Player
@@ -188,7 +189,6 @@ function SalesLanding() {
                   showPosterWhenUnplayed
                 />
               </div>
-              <p className="demo-caption">See ConversionIQ™ in action</p>
             </div>
           </div>
 
@@ -542,6 +542,45 @@ function SalesLanding() {
                     <div className="chart-bar" style={{ height: '90%' }}></div>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Mid-Page VSL Replay — after mechanism, before bespoke */}
+      <section className="section vsl-midpage-section">
+        <div className="section-container">
+          <h2 className="section-header animate-on-scroll">
+            Don't Take Our Word for It.<br />
+            <span className="header-emphasis">Watch It Happen in Under 3 Minutes.</span>
+          </h2>
+          <p className="vsl-midpage-sub animate-on-scroll delay-1">
+            From login to published high-converting ads — powered by <span className="highlight">ConversionIQ™</span>.
+          </p>
+          <div className="vsl-midpage-player animate-on-scroll delay-2">
+            <div className="demo-container">
+              <div className="vsl-player-wrapper">
+                <div className="demo-gradient-border"></div>
+                <Player
+                  component={ConvertraVSL}
+                  durationInFrames={VIDEO_CONFIG.durationInFrames}
+                  fps={VIDEO_CONFIG.fps}
+                  compositionWidth={VIDEO_CONFIG.width}
+                  compositionHeight={VIDEO_CONFIG.height}
+                  style={{
+                    width: '100%',
+                    aspectRatio: '16 / 9',
+                    borderRadius: 12,
+                    overflow: 'hidden',
+                  }}
+                  controls
+                  renderPoster={({ width, height }: { width: number; height: number }) => (
+                    <VSLPoster width={width} height={height} />
+                  )}
+                  posterFillMode="player-size"
+                  showPosterWhenUnplayed
+                />
               </div>
             </div>
           </div>
