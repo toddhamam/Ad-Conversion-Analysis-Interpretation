@@ -1162,10 +1162,187 @@
   color: var(--accent-primary);
 }
 
-/* ==================== Additional Responsive Styles ==================== */
+/* Copy Source Options */
+.copy-source-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.copy-source-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 20px 16px;
+  background: var(--bg-card);
+  border: 2px solid var(--border-primary);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.copy-source-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-violet);
+}
+
+.copy-source-btn.active {
+  background: rgba(212, 225, 87, 0.12);
+  border-color: var(--accent-primary);
+}
+
+.copy-source-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.copy-source-btn.active .copy-source-name {
+  color: var(--accent-primary);
+}
+
+.copy-source-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* Import Date Options */
+.import-date-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.import-date-btn {
+  padding: 8px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.import-date-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-violet);
+}
+
+.import-date-btn.active {
+  background: rgba(212, 225, 87, 0.12);
+  border-color: var(--accent-primary);
+  color: var(--accent-secondary);
+  font-weight: 600;
+}
+
+/* Manual Copy Entry */
+.manual-copy-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.manual-entry-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.manual-entry-input {
+  flex: 1;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text-primary);
+  font-family: inherit;
+  transition: border-color 0.2s ease;
+}
+
+.manual-entry-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.manual-entry-textarea {
+  flex: 1;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text-primary);
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 0.2s ease;
+}
+
+.manual-entry-textarea:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.manual-entry-remove {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  transition: color 0.2s ease, border-color 0.2s ease;
+  margin-top: 4px;
+}
+
+.manual-entry-remove:hover {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.manual-entry-add {
+  align-self: flex-start;
+  padding: 8px 16px;
+  background: none;
+  border: 1px dashed var(--border-primary);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.manual-entry-add:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.manual-entry-optional {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 400;
+  font-style: italic;
+}
+
+/* ==================== Additional Responsive Styles ====================
 
 /* Tablet breakpoint - 768px */
 @media (max-width: 768px) {
+  .copy-source-options {
+    grid-template-columns: 1fr;
+  }
+
   .ad-generator-page .config-panel {
     padding: 24px;
   }

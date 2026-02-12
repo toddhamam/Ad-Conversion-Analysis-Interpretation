@@ -186,40 +186,42 @@ export default memo(function CopySelectionPanel({
         </div>
       </div>
 
-      {/* CTAs Section */}
-      <div className="copy-section">
-        <div className="section-header">
-          <h4 className="section-title">Call-to-Actions</h4>
-          <span className="selection-count">
-            {selectedCTAs.length}/{maxCTAs} selected
-            {selectedCTAs.length < minCTAs && (
-              <span className="min-warning"> (min {minCTAs})</span>
-            )}
-          </span>
+      {/* CTAs Section — hidden when no CTAs available (e.g. import mode) */}
+      {callToActions.length > 0 && (
+        <div className="copy-section">
+          <div className="section-header">
+            <h4 className="section-title">Call-to-Actions</h4>
+            <span className="selection-count">
+              {selectedCTAs.length}/{maxCTAs} selected
+              {selectedCTAs.length < minCTAs && (
+                <span className="min-warning"> (min {minCTAs})</span>
+              )}
+            </span>
+          </div>
+          <div className="copy-options-grid">
+            {callToActions.map((option) => {
+              const isSelected = selectedCTAs.includes(option.id);
+              const isDisabled = !isSelected && !canSelectMoreCTAs;
+              return (
+                <button
+                  key={option.id}
+                  className={`cta-option ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`}
+                  onClick={() => handleCTAClick(option.id)}
+                  disabled={isDisabled}
+                >
+                  <div className="cta-checkbox">
+                    {isSelected ? '✓' : ''}
+                  </div>
+                  <div className="cta-content">
+                    <div className="cta-text">{option.text}</div>
+                    <div className="cta-rationale">{option.rationale}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div className="copy-options-grid">
-          {callToActions.map((option) => {
-            const isSelected = selectedCTAs.includes(option.id);
-            const isDisabled = !isSelected && !canSelectMoreCTAs;
-            return (
-              <button
-                key={option.id}
-                className={`cta-option ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`}
-                onClick={() => handleCTAClick(option.id)}
-                disabled={isDisabled}
-              >
-                <div className="cta-checkbox">
-                  {isSelected ? '✓' : ''}
-                </div>
-                <div className="cta-content">
-                  <div className="cta-text">{option.text}</div>
-                  <div className="cta-rationale">{option.rationale}</div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      )}
     </div>
   );
 });
