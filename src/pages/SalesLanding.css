@@ -1837,7 +1837,8 @@
   }
 
   .demo-caption {
-    font-size: 13px;
+    font-size: 16px;
+    margin-bottom: 14px;
   }
 
   .hero-headline {
@@ -2451,9 +2452,41 @@
 }
 
 .demo-caption {
-  margin-top: 16px;
-  font-size: 14px;
-  color: var(--text-muted);
+  margin-bottom: 20px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+}
+
+.demo-caption .highlight {
+  color: var(--accent-violet);
+  font-weight: 700;
+}
+
+/* Mid-page VSL replay */
+.vsl-midpage-section {
+  background: var(--bg-secondary);
+}
+
+.vsl-midpage-sub {
+  text-align: center;
+  font-size: 20px;
+  color: var(--text-secondary);
+  margin-bottom: 40px;
+}
+
+.vsl-midpage-player {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+@media (max-width: 600px) {
+  .vsl-midpage-sub {
+    font-size: 16px;
+    margin-bottom: 24px;
+  }
 }
 
 /* ============================================

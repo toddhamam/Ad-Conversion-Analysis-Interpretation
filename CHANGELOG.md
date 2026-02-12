@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-02-12 — Add full demo video to VSL and sales landing page
+
+### Added (VSL — Remotion)
+- **Demo Intro scene**: "Think that sounds too good to be true? Watch it happen. In real time." with animated 3-2-1 countdown and white flash transition
+- **Demo Playback scene**: Full app walkthrough video plays at 2x speed with a synced countdown timer (top-center, 64px, lime brand color, includes milliseconds), LIVE DEMO badge, and ConversionIQ™ branding
+- **Demo Complete scene**: Animated checkmark reveal — "Brand-new high-converting creatives. Published from scratch. In exactly 2 minutes and 21 seconds." with "Powered by ConversionIQ™" badge
+- **`DEMO_CONFIG`** in `brand.ts`: Configurable `videoDuration` (141s) and `playbackRate` (2x) for easy tuning
+- **Music looping**: Two `<Audio>` elements in separate `<Sequence>` components with shared `musicVolume()` volume envelope — music dips to 8% during demo playback
+- **Web-optimized demo video**: Converted 66MB .mov to 12MB .mp4 (H.264, faststart, 30fps, CRF 23, no audio)
+
+### Changed (VSL — Remotion)
+- **Total VSL duration**: Increased from ~110s to ~195s (~3:15) to accommodate full demo showcase
+- **Scene timing**: Added `demoIntro`, `demoPlayback`, `demoComplete` scenes; shifted Results, Cost of Waiting, Enterprise, and CTA scenes accordingly
+
+### Changed (Sales Landing Page)
+- **Hero VSL caption**: Moved from below the video to above it with compelling copy — "Launch high-converting ads in under 3 minutes — See ConversionIQ™ in action"
+- **VSL poster label**: Updated from "Watch the 90-Second Breakdown" to "Watch the Full Demo"
+- **Mid-page VSL player**: Added a second VSL player between Mechanism Reveal and Bespoke Differentiator sections — "Don't Take Our Word for It. Watch It Happen in Under 3 Minutes." — catches users who scroll past the hero
+
+### Files Changed
+- `src/remotion/ConvertraVSL.tsx` — DemoIntroScene, DemoPlaybackScene, DemoCompleteScene, music looping with `musicVolume()` helper
+- `src/remotion/brand.ts` — DEMO_CONFIG, updated SCENES timing, VIDEO_CONFIG.durationInFrames
+- `src/pages/SalesLanding.tsx` — Above-video headline, mid-page VSL section, poster label update
+- `src/pages/SalesLanding.css` — Demo caption restyled as headline, mid-page VSL section styles
+
+### Files Added
+- `public/vsl-broll.mp4` — Web-optimized demo video (12MB)
+
+---
+
 ## 2026-02-11 — Fix Supabase security linter errors and warnings
 
 ### Fixed (SQL Migration 005)
