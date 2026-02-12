@@ -885,23 +885,22 @@ const analysis = await analyzeAdCreative(adId, {
 });
 ```
 
-### Non-Blocking localStorage Loading
-```tsx
-// Use requestIdleCallback with setTimeout fallback to avoid blocking the main thread
-const extractMetadataAsync = () => {
-  const run = () => {
-    const stored = localStorage.getItem('large_data_key');
-    if (stored) {
-      // Parse and set state
-    }
-  };
-  if ('requestIdleCallback' in window) {
-    requestIdleCallback(run);
-  } else {
-    setTimeout(run, 0);
-  }
-};
-```
+### localStorage Storage Management
+
+Browser localStorage is limited to ~5MB per origin. Two caches compete for this space:
+
+| Cache | Key | Contents | Limit |
+|-------|-----|----------|-------|
+| Generated ads | `conversion_intelligence_generated_ads` | Ad packages with base64 images | Max 10 packages, images on latest 5 |
+| Image reference cache | `conversion_intelligence_image_cache` | Base64 reference images from Meta ads | Max 20 images |
+
+**Storage safety patterns:**
+- **Flush before navigate**: When navigating from AdGenerator to AdPublisher, synchronously write to localStorage before `navigate()` — `requestIdleCallback` writes get cancelled on component unmount
+- **Auto-clear on publish**: After successful Meta publish, clear generated ads from localStorage
+- **Retry on QuotaExceededError**: Clear image reference cache first, then retry the save — generated ads take priority over reference images
+- **Warning auto-clear**: Storage warnings should clear themselves when data drops below the 3MB threshold — never leave sticky warnings
+
+**Critical pitfall**: Never use `requestIdleCallback` for writes that must complete before navigation. The cleanup function will cancel the pending callback when the component unmounts, causing data loss.
 
 ### Debounced Search Input
 ```tsx
@@ -1200,14 +1199,20 @@ The Ad Publisher (Step 3: Configure) provides these ad-level settings that are a
 
 #### URL Tracking Parameters
 - Text input for UTM or custom tracking params (e.g., `utm_source=meta&utm_medium=paid&utm_campaign=ci`)
-- Appended to the landing page URL with `?` or `&` depending on whether the URL already has query params
-- Applied to both the `link` field in the Meta ad creative AND the URL appended to the body copy
+- Passed via Meta's native `url_tags` field on the ad creative — Meta appends them invisibly at click time
+- **Never bake UTM params into `link_data.link`** — this breaks click tracking and creates ugly URLs in Ads Manager
 - Saved/restored with publish presets
 
 #### Body Copy URL Injection
-- The landing page URL (with tracking parameters, if set) is automatically appended to the bottom of the body copy (`message` field) when publishing
-- Format: `{bodyText}\n\n{landingPageUrlWithParams}`
-- This matches the Meta Ads Manager pattern of showing the offer link at the end of the primary text
+- The **clean** landing page URL (without tracking parameters) is automatically appended to the bottom of the body copy (`message` field) when publishing
+- Format: `{bodyText}\n\n{landingPageUrl}` — no UTM params in visible ad copy
+- UTM tracking is handled separately via `url_tags` on the creative
+
+#### Post-Publish Auto-Cleanup
+- After a successful publish to Meta (`publishResult.success`), generated ads are automatically cleared from localStorage
+- This prevents the "Storage full" warning from accumulating across sessions
+- Ads are **only** cleared after confirmed success — if publish fails, ads are preserved for retry
+- The image reference cache (`conversion_intelligence_image_cache`) is also cleared on `QuotaExceededError` and when "Clear All Ads" is clicked
 
 #### Post-Publish "Open Ads Manager" Link
 - After successful publish, the "Open Ads Manager" button links to the correct ad account using `VITE_META_AD_ACCOUNT_ID` (strips `act_` prefix)
@@ -1247,6 +1252,9 @@ The Ad Publisher (Step 3: Configure) provides these ad-level settings that are a
 - Don't use `catch (error: any)` - use `catch (error: unknown)` and narrow the type
 - Don't create new `api/*.ts` files without checking the serverless function count first — Vercel Hobby plan limit is 12 functions (currently at 12/12). Add new routes to existing catch-all handlers instead
 - Don't send Meta access tokens to the browser — all Meta API calls must go through the backend proxy (`/api/meta/proxy`)
+- Don't bake UTM parameters into `link_data.link` or body copy — use Meta's `url_tags` field on the ad creative instead
+- Don't use `requestIdleCallback` for localStorage writes that must complete before navigation — the cleanup function cancels pending callbacks on unmount, causing data loss. Use synchronous writes before `navigate()`
+- Don't leave localStorage storage warnings sticky — always clear them when the data size drops below threshold or after successful save
 
 ---
 
