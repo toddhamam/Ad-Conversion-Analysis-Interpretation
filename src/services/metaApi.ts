@@ -224,33 +224,46 @@ async function metaFetch(
 
   if (token) {
     // Proxy mode — token stays server-side
-    const res = await fetch('/api/meta/proxy', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        method: options?.method || 'GET',
-        endpoint,
-        params: options?.params,
-        body: options?.body,
-        formEncoded: options?.formEncoded,
-      }),
-    });
+    // Retry transient Meta errors (code 2) up to 3 times with exponential backoff
+    const MAX_RETRIES = 3;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const res = await fetch('/api/meta/proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          method: options?.method || 'GET',
+          endpoint,
+          params: options?.params,
+          body: options?.body,
+          formEncoded: options?.formEncoded,
+        }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (!res.ok) {
-      const msg = data.message || data.error || `Meta API error (${res.status})`;
-      const err = new Error(msg);
-      (err as any).metaCode = data.code;
-      (err as any).metaSubcode = data.subcode;
-      (err as any).fullResponse = data;
-      throw err;
+      if (!res.ok) {
+        // Meta error code 2 = transient server error — retry with backoff
+        const isTransient = data.code === 2 || (data.message && data.message.includes('unexpected error'));
+        if (isTransient && attempt < MAX_RETRIES) {
+          const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+          console.warn(`⚠️ Meta transient error on ${endpoint}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        const msg = data.message || data.error || `Meta API error (${res.status})`;
+        const err = new Error(msg);
+        (err as any).metaCode = data.code;
+        (err as any).metaSubcode = data.subcode;
+        (err as any).fullResponse = data;
+        throw err;
+      }
+
+      return data;
     }
-
-    return data;
   }
 
   // Dev fallback — direct Meta API call
