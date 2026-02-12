@@ -182,82 +182,63 @@ function formatAudienceSize(size?: number): string {
   return size.toString();
 }
 
-// ASYNC metadata extraction - non-blocking to prevent Chrome crashes
-async function extractMetadataAsync(): Promise<AdMetadata[]> {
-  return new Promise((resolve) => {
-    const scheduleWork = (callback: () => void) => {
-      if ('requestIdleCallback' in window) {
-        (window as any).requestIdleCallback(callback, { timeout: 2000 });
-      } else {
-        setTimeout(callback, 50);
+// Extract metadata from localStorage - synchronous since data is small (metadata only)
+function extractMetadata(): AdMetadata[] {
+  try {
+    const stored = localStorage.getItem(GENERATED_ADS_STORAGE_KEY);
+    if (!stored) {
+      return [];
+    }
+
+    const sizeInMB = (stored.length / (1024 * 1024)).toFixed(2);
+    console.log(`[AdPublisher] localStorage data size: ${sizeInMB}MB`);
+
+    let packages: any[];
+    try {
+      packages = JSON.parse(stored);
+    } catch (parseErr) {
+      console.error('[AdPublisher] JSON parse error:', parseErr);
+      return [];
+    }
+
+    if (!Array.isArray(packages)) {
+      return [];
+    }
+
+    const items: AdMetadata[] = [];
+
+    for (let pkgIndex = 0; pkgIndex < packages.length; pkgIndex++) {
+      const pkg = packages[pkgIndex];
+      if (!pkg) continue;
+
+      const images = pkg.images || [];
+      if (!Array.isArray(images) || images.length === 0) continue;
+
+      const copy = pkg.copy || {};
+      const headlines = Array.isArray(copy.headlines) ? copy.headlines : ['Ad Creative'];
+      const bodyTexts = Array.isArray(copy.bodyTexts) ? copy.bodyTexts : [''];
+      const ctas = Array.isArray(copy.callToActions) ? copy.callToActions : ['Learn More'];
+
+      for (let imgIndex = 0; imgIndex < images.length; imgIndex++) {
+        items.push({
+          id: `${pkg.id || pkgIndex}_${imgIndex}`,
+          packageIndex: pkgIndex,
+          imageIndex: imgIndex,
+          headline: headlines[imgIndex % headlines.length] || 'Ad Creative',
+          bodyText: bodyTexts[imgIndex % bodyTexts.length] || '',
+          cta: ctas[imgIndex % ctas.length] || 'Learn More',
+          audienceType: pkg.audienceType || 'prospecting',
+          conceptType: pkg.conceptType || 'auto',
+          generatedAt: pkg.generatedAt || new Date().toISOString(),
+        });
       }
-    };
+    }
 
-    scheduleWork(() => {
-      try {
-        const stored = localStorage.getItem(GENERATED_ADS_STORAGE_KEY);
-        if (!stored) {
-          resolve([]);
-          return;
-        }
-
-        const sizeInMB = (stored.length / (1024 * 1024)).toFixed(2);
-        console.log(`[AdPublisher] localStorage data size: ${sizeInMB}MB`);
-
-        if (stored.length > 3 * 1024 * 1024) {
-          console.warn('[AdPublisher] Large localStorage detected, parsing may be slow');
-        }
-
-        let packages: any[];
-        try {
-          packages = JSON.parse(stored);
-        } catch (parseErr) {
-          console.error('[AdPublisher] JSON parse error:', parseErr);
-          resolve([]);
-          return;
-        }
-
-        if (!Array.isArray(packages)) {
-          resolve([]);
-          return;
-        }
-
-        const items: AdMetadata[] = [];
-
-        for (let pkgIndex = 0; pkgIndex < packages.length; pkgIndex++) {
-          const pkg = packages[pkgIndex];
-          if (!pkg) continue;
-
-          const images = pkg.images || [];
-          if (!Array.isArray(images) || images.length === 0) continue;
-
-          const copy = pkg.copy || {};
-          const headlines = Array.isArray(copy.headlines) ? copy.headlines : ['Ad Creative'];
-          const bodyTexts = Array.isArray(copy.bodyTexts) ? copy.bodyTexts : [''];
-          const ctas = Array.isArray(copy.callToActions) ? copy.callToActions : ['Learn More'];
-
-          for (let imgIndex = 0; imgIndex < images.length; imgIndex++) {
-            items.push({
-              id: `${pkg.id || pkgIndex}_${imgIndex}`,
-              packageIndex: pkgIndex,
-              imageIndex: imgIndex,
-              headline: headlines[imgIndex % headlines.length] || 'Ad Creative',
-              bodyText: bodyTexts[imgIndex % bodyTexts.length] || '',
-              cta: ctas[imgIndex % ctas.length] || 'Learn More',
-              audienceType: pkg.audienceType || 'prospecting',
-              conceptType: pkg.conceptType || 'auto',
-              generatedAt: pkg.generatedAt || new Date().toISOString(),
-            });
-          }
-        }
-
-        resolve(items);
-      } catch (err) {
-        console.error('[AdPublisher] Error extracting metadata:', err);
-        resolve([]);
-      }
-    });
-  });
+    return items;
+  } catch (err) {
+    console.error('[AdPublisher] Error extracting metadata:', err);
+    return [];
+  }
 }
 
 async function loadImageDataForPublish(metadata: AdMetadata[]): Promise<{ imageUrl: string; headline: string; bodyText: string; cta: string }[]> {
@@ -432,35 +413,23 @@ const AdPublisher = () => {
     mountedRef.current = true;
 
     debugLog(`Component mounted (instance: ${instanceIdRef.current})`);
-    let isCancelled = false;
 
     const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     setCampaignName(`CI Campaign - ${dateStr}`);
     setAdsetName(`CI Ad Set - ${dateStr}`);
 
-    const loadMetadata = async () => {
-      if (SKIP_LOCALSTORAGE) {
-        if (!isCancelled) { setAdMetadata([]); setIsLoading(false); }
-        return;
-      }
-
+    if (SKIP_LOCALSTORAGE) {
+      setAdMetadata([]);
+      setIsLoading(false);
+    } else {
       try {
-        const metadata = await extractMetadataAsync();
-        if (!isCancelled) {
-          setAdMetadata(metadata.slice(0, MAX_TOTAL_ADS));
-        }
+        const metadata = extractMetadata();
+        setAdMetadata(metadata.slice(0, MAX_TOTAL_ADS));
       } catch (err) {
         console.error('[AdPublisher] Load error:', err);
       }
-      if (!isCancelled) setIsLoading(false);
-    };
-
-    const timeoutId = setTimeout(loadMetadata, 100);
-
-    return () => {
-      isCancelled = true;
-      clearTimeout(timeoutId);
-    };
+      setIsLoading(false);
+    }
   }, []);
 
   // Debounced targeting search

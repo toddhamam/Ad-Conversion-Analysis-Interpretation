@@ -425,6 +425,30 @@ const AdGenerator = () => {
     return () => cancelIdleWork(idleCallbackId);
   }, [generatedAds, isLoadingAds]);
 
+  // Synchronous flush of ads to localStorage (used before navigation)
+  const flushAdsToStorage = useCallback(() => {
+    if (generatedAds.length === 0) return;
+    try {
+      const limited = generatedAds.slice(0, MAX_STORED_ADS);
+      const toSave = limited.map((ad, index) => {
+        if (index >= MAX_ADS_WITH_IMAGES && ad.images) {
+          return {
+            ...ad,
+            images: ad.images.map(img => ({ ...img, imageUrl: '' })),
+          };
+        }
+        return ad;
+      });
+      const json = JSON.stringify(toSave);
+      const sizeInMB = json.length / (1024 * 1024);
+      if (sizeInMB <= 5) {
+        localStorage.setItem(GENERATED_ADS_STORAGE_KEY, json);
+      }
+    } catch (e: unknown) {
+      console.error('[AdGenerator] Failed to flush ads to storage:', e);
+    }
+  }, [generatedAds]);
+
   // Clear all generated ads
   const handleClearAllAds = useCallback(() => {
     if (window.confirm('Are you sure you want to delete all generated ads? This cannot be undone.')) {
@@ -1463,7 +1487,7 @@ const AdGenerator = () => {
               </button>
               <button
                 className="publish-ads-btn"
-                onClick={() => navigate('/publish')}
+                onClick={() => { flushAdsToStorage(); navigate('/publish'); }}
               >
                 <span className="publish-icon">🚀</span>
                 Publish to Meta
