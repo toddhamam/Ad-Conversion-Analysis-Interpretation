@@ -422,7 +422,7 @@ export interface CopyOptionsResult {
 
 /**
  * Make a request to OpenAI API (text-only)
- * When reasoning effort is active, temperature is omitted to avoid API conflicts.
+ * The reasoningEffort parameter is accepted for future use but not currently sent to the API.
  */
 async function callOpenAI(
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
@@ -448,14 +448,13 @@ async function callOpenAI(
   console.log('🧠 Reasoning effort:', reasoningEffort);
   console.log('🔑 API Key present:', !!OPENAI_API_KEY);
 
-  // Build request body — when reasoning is active, omit temperature to avoid API conflicts
-  const useReasoning = reasoningEffort !== 'none';
+  // Build request body — reasoning.effort is not supported by the current model API
+  // IQ level is used to adjust prompt depth instead (handled by callers)
   const requestBody: Record<string, unknown> = {
     model,
     messages,
-    ...(!useReasoning ? { temperature } : {}),
+    temperature,
     max_completion_tokens: maxTokens,
-    ...(useReasoning ? { reasoning: { effort: reasoningEffort } } : {}),
   };
 
   const response = await fetch(OPENAI_API_URL, {
@@ -497,8 +496,7 @@ async function callOpenAI(
 
 /**
  * Make a request to OpenAI API with vision/image support
- * GPT-5.2 supports reasoning with multimodal inputs.
- * When reasoning effort is active, temperature is omitted to avoid API conflicts.
+ * The reasoningEffort parameter is accepted for future use but not currently sent to the API.
  */
 async function callOpenAIWithVision(
   messages: ChatMessage[],
@@ -525,14 +523,13 @@ async function callOpenAIWithVision(
   console.log('🧠 Reasoning effort:', reasoningEffort);
   console.log('📸 Processing images for analysis...');
 
-  // Build request body — when reasoning is active, omit temperature to avoid API conflicts
-  const useReasoning = reasoningEffort !== 'none';
+  // Build request body — reasoning.effort is not supported by the current model API
+  // IQ level is used to adjust prompt depth instead (handled by callers)
   const requestBody: Record<string, unknown> = {
     model,
     messages,
-    ...(!useReasoning ? { temperature } : {}),
+    temperature,
     max_completion_tokens: maxTokens,
-    ...(useReasoning ? { reasoning: { effort: reasoningEffort } } : {}),
   };
 
   const response = await fetch(OPENAI_API_URL, {
