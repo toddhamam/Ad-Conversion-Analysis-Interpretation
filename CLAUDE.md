@@ -942,6 +942,11 @@ const handleSearchChange = (query: string) => {
 - **`isolation: isolate`**: Use on `.main-content` to prevent style bleed in complex layouts
 - **CSS-only when possible**: Prefer CSS for layout and responsiveness over JavaScript state changes
 
+### CSS Performance Rules (Critical — Prevents UI Crashes)
+
+- **NEVER use `transition: all`** — When base64 images (1-5MB each) load into the DOM, `transition: all` forces Chrome to recalculate every CSS property on every frame, causing paint storms, UI freezes, and browser crashes. Always use targeted transitions listing only the properties that actually change (e.g., `transition: background-color 0.2s ease, border-color 0.2s ease`). This bug has been fixed three times (#181, #182) and must not be reintroduced.
+- **Use CSS containment on image-heavy containers** — Add `contain: content` on card wrappers and `contain: layout style` on image grids to isolate paint contexts and prevent layout recalculations from propagating when base64 images render.
+
 ---
 
 ## Environment Variables
@@ -1093,6 +1098,7 @@ Always run `npm run dev` to start the development server before testing URLs. Th
 - **Permission nuances**: `pages_read_engagement` and `ads_management` are distinct permissions. A token may have sufficient permissions to *create ads* (`ads_management`) even if it lacks permissions to *read page metadata* (`pages_read_engagement`). Don't block publishing solely because a page metadata check fails.
 - **`promote_pages` fallback**: When direct page access validation fails (error codes `10` or `100`), use the `promote_pages` endpoint as a fallback to verify ad account/page linkage via `ads_management` permission.
 - **Progressive validation**: Implement validation in stages. If a direct check fails with a permission-specific error (not an outright access denial), attempt a secondary validation using alternative permissions or endpoints before failing entirely. Log warnings (`console.warn`) for non-critical check failures instead of blocking the operation.
+- **Transient errors (code 2)**: Meta Graph API returns error code 2 ("An unexpected error has occurred. Please retry your request later.") for transient server issues. `metaFetch` automatically retries these up to 3 times with exponential backoff (1s, 2s, 4s). Do not remove this retry logic — it prevents publish failures from intermittent Meta server hiccups.
 
 ### Meta API Token Management
 - **Short-lived tokens** (Graph API Explorer): Expire in 1-2 hours. Only for quick testing.
@@ -1255,6 +1261,9 @@ The Ad Publisher (Step 3: Configure) provides these ad-level settings that are a
 - Don't bake UTM parameters into `link_data.link` or body copy — use Meta's `url_tags` field on the ad creative instead
 - Don't use `requestIdleCallback` for localStorage writes that must complete before navigation — the cleanup function cancels pending callbacks on unmount, causing data loss. Use synchronous writes before `navigate()`
 - Don't leave localStorage storage warnings sticky — always clear them when the data size drops below threshold or after successful save
+- Don't use `transition: all` in CSS — causes browser crashes when base64 images render. Always list specific properties (e.g., `transition: background-color 0.2s ease, border-color 0.2s ease`). This has caused production crashes multiple times (#181, #182)
+- Don't hold large base64 data in memory after use — explicitly null out reference image arrays (`precomputedRefs`, `requestParts`) after they've been serialized. Gemini reference images can be 25-50MB and cause out-of-memory crashes if not freed for GC
+- Don't `JSON.stringify` full API responses in error logs — Gemini responses with base64 image data can be enormous. Log concise summaries (candidate count, part types, truncated text) instead
 
 ---
 
@@ -1307,6 +1316,18 @@ The ad generator uses these frameworks:
 5. Gemini 3 Pro generates images (with product mockups as reference images) or Veo generates video
 6. User reviews results — can regenerate individual images without regenerating the full set
 7. User exports to Meta via Ad Publisher
+
+### Gemini Image Generation — Memory Management (Critical)
+
+Reference images sent to Gemini (cached ad images + product mockups) can total 25-50MB of base64 data. Without explicit cleanup, this data stays in memory across all parallel generation calls and causes browser crashes.
+
+**Required cleanup patterns in `openaiApi.ts`:**
+- **After the generation loop**: Null out `precomputedRefs` (the pre-analyzed reference image set) once all variations are generated — `precomputedRefs.referenceImages.length = 0; precomputedRefs = undefined;`
+- **After JSON.stringify in `generateAdImageWithGemini`**: Clear `requestParts.length = 0` after serializing the request body so base64 data can be GC'd during the network fetch
+- **After JSON.stringify in `analyzeReferenceImages`**: Same pattern — clear `requestParts` after serializing the analysis request
+- **Concurrency limit**: `MAX_CONCURRENT = 2` for parallel Gemini calls. Do not increase this — each call holds ~10-15MB of base64 in flight
+- **Error logging**: Never `JSON.stringify` the full Gemini response in error handlers — it may contain base64 image data. Log concise summaries instead (candidate count, part types, truncated text)
+- **Memory error detection**: The error handler in `generateAdImageWithGemini` checks for `RangeError`, `Invalid string length`, and `out of memory` to surface a user-friendly message instead of a cryptic crash
 
 ### Product Context Architecture
 
