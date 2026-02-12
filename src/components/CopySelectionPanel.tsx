@@ -1,3 +1,4 @@
+import { memo, useState, useCallback } from 'react';
 import type { CopyOption } from '../services/openaiApi';
 import './CopySelectionPanel.css';
 
@@ -19,7 +20,66 @@ interface CopySelectionPanelProps {
   maxCTAs?: number;
 }
 
-export default function CopySelectionPanel({
+// Threshold for truncating body copy text (characters)
+const BODY_TRUNCATE_THRESHOLD = 250;
+
+function BodyCopyOption({
+  option,
+  isSelected,
+  isDisabled,
+  onClick,
+}: {
+  option: CopyOption;
+  isSelected: boolean;
+  isDisabled: boolean;
+  onClick: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = option.text.length > BODY_TRUNCATE_THRESHOLD;
+
+  const handleExpandClick = useCallback((e: React.MouseEvent | React.KeyboardEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setExpanded(prev => !prev);
+  }, []);
+
+  const handleExpandKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      handleExpandClick(e);
+    }
+  }, [handleExpandClick]);
+
+  return (
+    <button
+      className={`copy-option body-option ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`}
+      onClick={onClick}
+      disabled={isDisabled}
+    >
+      <div className="option-checkbox">
+        {isSelected ? '✓' : ''}
+      </div>
+      <div className="option-content">
+        <div className={`option-text ${isLong && !expanded ? 'truncated' : ''}`}>
+          {option.text}
+        </div>
+        {isLong && (
+          <span
+            className="expand-toggle"
+            onClick={handleExpandClick}
+            onKeyDown={handleExpandKeyDown}
+            role="button"
+            tabIndex={0}
+          >
+            {expanded ? 'Show less' : 'Show more'}
+          </span>
+        )}
+        <div className="option-rationale">{option.rationale}</div>
+      </div>
+    </button>
+  );
+}
+
+export default memo(function CopySelectionPanel({
   headlines,
   bodyTexts,
   callToActions,
@@ -114,20 +174,13 @@ export default function CopySelectionPanel({
             const isSelected = selectedBodyTexts.includes(option.id);
             const isDisabled = !isSelected && !canSelectMoreBodyTexts;
             return (
-              <button
+              <BodyCopyOption
                 key={option.id}
-                className={`copy-option body-option ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`}
+                option={option}
+                isSelected={isSelected}
+                isDisabled={isDisabled}
                 onClick={() => handleBodyTextClick(option.id)}
-                disabled={isDisabled}
-              >
-                <div className="option-checkbox">
-                  {isSelected ? '✓' : ''}
-                </div>
-                <div className="option-content">
-                  <div className="option-text">{option.text}</div>
-                  <div className="option-rationale">{option.rationale}</div>
-                </div>
-              </button>
+              />
             );
           })}
         </div>
@@ -169,4 +222,4 @@ export default function CopySelectionPanel({
       </div>
     </div>
   );
-}
+});

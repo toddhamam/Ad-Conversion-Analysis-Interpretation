@@ -424,24 +424,24 @@ const AdGenerator = () => {
     setVisibleAdsCount(prev => prev + ADS_PER_PAGE);
   }, []);
 
-  // Toggle handlers for selections
-  const handleHeadlineToggle = (id: string) => {
+  // Toggle handlers for selections — memoized to prevent CopySelectionPanel re-renders
+  const handleHeadlineToggle = useCallback((id: string) => {
     setSelectedHeadlines(prev =>
       prev.includes(id) ? prev.filter(h => h !== id) : [...prev, id]
     );
-  };
+  }, []);
 
-  const handleBodyTextToggle = (id: string) => {
+  const handleBodyTextToggle = useCallback((id: string) => {
     setSelectedBodyTexts(prev =>
       prev.includes(id) ? prev.filter(b => b !== id) : [...prev, id]
     );
-  };
+  }, []);
 
-  const handleCTAToggle = (id: string) => {
+  const handleCTAToggle = useCallback((id: string) => {
     setSelectedCTAs(prev =>
       prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
     );
-  };
+  }, []);
 
   // Generate copy options
   const handleGenerateCopyOptions = async () => {
