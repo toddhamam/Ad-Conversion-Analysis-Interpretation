@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-02-12 — Document Meta App Review permissions and submission process
+
+### Added (CLAUDE.md)
+- **Meta App Review — Permissions & Submission Guide**: Comprehensive documentation section covering the full Meta App Review process for future reference, including:
+  - Key concepts: Development vs Live/Published mode, "Ready for testing" vs "Ready to publish" vs "Advanced Access" — and the critical distinction that app-level publish status and per-permission access levels are independent
+  - Required OAuth scopes (`ads_management`, `ads_read`, `business_management`, `pages_read_engagement`) and what each is used for in the codebase
+  - Permissions NOT needed (`pages_manage_ads`, `email`) with rationale
+  - Prerequisites checklist (Privacy Policy URL, Terms of Service, Data Deletion URL, App Icon, Business Verification, Data Use Checkup)
+  - Step-by-step submission process for bundling multiple permissions in a single review
+  - Copy-paste description templates for all 5 permissions: `ads_management`, `ads_read`, `pages_read_engagement`, `business_management`, `pages_show_list`
+  - Data handling questionnaire answers with processor justifications (Vercel, Supabase, Google LLC, OpenAI LLC)
+  - Reviewer instructions template with testing steps and credential format
+  - Troubleshooting guide for common errors: "Feature unavailable" OAuth error, permissions stuck at "Ready for testing", "Data handling questions" gray dot, app published but users still blocked
+
+### Context
+External users were blocked with "Feature unavailable — Facebook Login is currently unavailable for this app" error. Root cause: only "Ads Management Standard Access" had been submitted for App Review, but the OAuth flow requests `ads_management`, `ads_read`, `business_management`, and `pages_read_engagement` — all of which need Advanced Access independently. Submitted all 5 permissions for review on 2026-02-12.
+
+### Files Changed
+- `CLAUDE.md` — Added "Meta App Review — Permissions & Submission Guide" section
+
+---
+
 ## 2026-02-12 — Add full demo video to VSL and sales landing page
 
 ### Added (VSL — Remotion)
