@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import type { GeneratedAdPackage } from '../services/openaiApi';
 import { Image, Video, AlertTriangle, Clock, Lightbulb, Timer, Ruler, Download, Loader, RefreshCw } from 'lucide-react';
 import './GeneratedAdCard.css';
@@ -84,7 +84,9 @@ function LazyImage({ src, alt, onLoad }: { src: string; alt: string; onLoad?: ()
   );
 }
 
-export default function GeneratedAdCard({ ad, onRegenerateImage }: GeneratedAdCardProps) {
+// Memoized to prevent all cards re-rendering when one ad changes in the parent array.
+// Each card holds potentially large base64 images, so unnecessary re-renders are expensive.
+const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage }: GeneratedAdCardProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [downloadingImage, setDownloadingImage] = useState<number | null>(null);
   const [downloadingVideo, setDownloadingVideo] = useState(false);
@@ -390,4 +392,6 @@ export default function GeneratedAdCard({ ad, onRegenerateImage }: GeneratedAdCa
       </div>
     </div>
   );
-}
+});
+
+export default GeneratedAdCard;

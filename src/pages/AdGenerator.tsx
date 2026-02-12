@@ -46,27 +46,11 @@ const debugLog = (...args: unknown[]) => {
   if (DEBUG_MODE) console.log('[AdGenerator]', ...args);
 };
 
-// Helper to schedule work during browser idle time (prevents Chrome crashes)
-// Uses requestIdleCallback when available, falls back to setTimeout
-const scheduleIdleWork = (callback: () => void, timeout = 2000): number => {
-  const win = window as typeof window & {
-    requestIdleCallback?: (cb: () => void, opts: { timeout: number }) => number;
-  };
-  if (win.requestIdleCallback) {
-    return win.requestIdleCallback(callback, { timeout });
-  }
-  return setTimeout(callback, 50) as unknown as number;
-};
-
-const cancelIdleWork = (id: number): void => {
-  const win = window as typeof window & {
-    cancelIdleCallback?: (id: number) => void;
-  };
-  if (win.cancelIdleCallback) {
-    win.cancelIdleCallback(id);
-  } else {
-    clearTimeout(id);
-  }
+// Schedule deferred work using setTimeout (short delay to avoid blocking UI)
+// NOTE: requestIdleCallback was removed because its cleanup function cancels
+// pending callbacks on component unmount, causing data loss before navigation.
+const scheduleDeferredWork = (callback: () => void, delayMs = 100): ReturnType<typeof setTimeout> => {
+  return setTimeout(callback, delayMs);
 };
 
 interface AudienceOption {
@@ -307,10 +291,10 @@ const AdGenerator = () => {
     setImageCacheCount(imageStats.count);
     debugLog(`Image cache: ${imageStats.count} reference images available`);
 
-    // Load previously generated ads from localStorage using idle callback
-    // This prevents blocking the main thread and causing Chrome crashes
-    const idleCallbackId = scheduleIdleWork(() => {
-      debugLog('Starting ads load (idle callback)');
+    // Load previously generated ads from localStorage using deferred callback
+    // Short delay prevents blocking the initial render
+    const loadTimerId = scheduleDeferredWork(() => {
+      debugLog('Starting ads load (deferred)');
       try {
         const storedAds = localStorage.getItem(GENERATED_ADS_STORAGE_KEY);
         if (!storedAds) {
@@ -365,18 +349,18 @@ const AdGenerator = () => {
       } finally {
         setIsLoadingAds(false);
       }
-    }, 3000); // 3 second timeout for idle callback
+    }, 100);
 
-    return () => cancelIdleWork(idleCallbackId);
+    return () => clearTimeout(loadTimerId);
   }, []);
 
   // Save generated ads to localStorage whenever they change
-  // Use requestIdleCallback to prevent blocking the main thread
+  // Uses short setTimeout to avoid blocking the main thread during renders
   // Strip image data from older ads to keep storage manageable
   useEffect(() => {
     if (generatedAds.length === 0 || isLoadingAds) return;
 
-    const idleCallbackId = scheduleIdleWork(() => {
+    const saveTimerId = scheduleDeferredWork(() => {
       try {
         // Strictly limit to MAX_STORED_ADS before saving
         const limited = generatedAds.slice(0, MAX_STORED_ADS);
@@ -400,13 +384,6 @@ const AdGenerator = () => {
         const sizeInMB = json.length / (1024 * 1024);
         debugLog(`Saving ${toSave.length} ads (${sizeInMB.toFixed(2)}MB)`);
 
-        // Warn if approaching problematic size, clear warning if under threshold
-        if (sizeInMB > MAX_DATA_SIZE_MB) {
-          setStorageWarning(`Storage is ${sizeInMB.toFixed(1)}MB. Delete old ads to prevent issues.`);
-        } else {
-          setStorageWarning(null);
-        }
-
         // Refuse to save if too large (prevent future crash)
         if (sizeInMB > 5) {
           console.error('[AdGenerator] Refusing to save - data too large');
@@ -415,7 +392,14 @@ const AdGenerator = () => {
         }
 
         localStorage.setItem(GENERATED_ADS_STORAGE_KEY, json);
-        setStorageWarning(null);
+
+        // Warn if approaching problematic size, clear only if previously warned
+        if (sizeInMB > MAX_DATA_SIZE_MB) {
+          setStorageWarning(`Storage is ${sizeInMB.toFixed(1)}MB. Delete old ads to prevent issues.`);
+        } else {
+          // Only clear warning if one was previously set (avoids unnecessary re-render)
+          setStorageWarning(prev => prev !== null ? null : prev);
+        }
         debugLog(`Saved ${toSave.length} ads to storage`);
       } catch (e: unknown) {
         console.error('[AdGenerator] Failed to save ads:', e);
@@ -438,9 +422,9 @@ const AdGenerator = () => {
           }
         }
       }
-    }, 1000);
+    }, 200);
 
-    return () => cancelIdleWork(idleCallbackId);
+    return () => clearTimeout(saveTimerId);
   }, [generatedAds, isLoadingAds]);
 
   // Synchronous flush of ads to localStorage (used before navigation)
@@ -761,22 +745,8 @@ const AdGenerator = () => {
 
       setGeneratedAds(updatedAds);
 
-      // Update localStorage asynchronously to avoid blocking the main thread
-      scheduleIdleWork(() => {
-        try {
-          const toSave = updatedAds.slice(0, MAX_STORED_ADS);
-          const json = JSON.stringify(toSave);
-          try {
-            localStorage.setItem(GENERATED_ADS_STORAGE_KEY, json);
-          } catch {
-            clearImageCache();
-            localStorage.setItem(GENERATED_ADS_STORAGE_KEY, json);
-          }
-          console.log('✅ Image regenerated and saved successfully');
-        } catch (storageError) {
-          console.warn('Failed to save to localStorage:', storageError);
-        }
-      });
+      // Note: localStorage save is handled by the useEffect that watches generatedAds changes
+      console.log('✅ Image regenerated successfully');
     } catch (err: any) {
       console.error('❌ Failed to regenerate image:', err);
       throw new Error(err.message || 'Failed to regenerate image');
