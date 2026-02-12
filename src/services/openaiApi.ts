@@ -1661,19 +1661,23 @@ Be EXTREMELY specific - your descriptions will be used to generate new images th
   requestParts.push({ text: analysisPrompt });
 
   try {
+    // Stringify once then free requestParts to release base64 references during fetch
+    const analysisBody = JSON.stringify({
+      contents: [{ parts: requestParts }],
+      generationConfig: {
+        temperature: 0.3, // Lower temperature for more precise analysis
+        maxOutputTokens: 1000,
+      }
+    });
+    requestParts.length = 0; // Free base64 references for GC during fetch
+
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-goog-api-key': GEMINI_API_KEY,
       },
-      body: JSON.stringify({
-        contents: [{ parts: requestParts }],
-        generationConfig: {
-          temperature: 0.3, // Lower temperature for more precise analysis
-          maxOutputTokens: 1000,
-        }
-      }),
+      body: analysisBody,
     });
 
     if (!response.ok) {
@@ -2008,13 +2012,18 @@ Explore fresh visual directions while maintaining professional quality.`,
 
   console.log(`📤 Sending request to Gemini with ${referenceImages.length} reference images, aspect ratio: ${imageSize}`);
 
+  // Stringify once, then free the request object to release base64 references sooner
+  const requestBodyStr = JSON.stringify(requestBody);
+  // Clear references from requestParts to allow GC of base64 data during fetch
+  requestParts.length = 0;
+
   const response = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-goog-api-key': GEMINI_API_KEY,
     },
-    body: JSON.stringify(requestBody),
+    body: requestBodyStr,
   });
 
   if (!response.ok) {
@@ -2053,8 +2062,11 @@ Explore fresh visual directions while maintaining professional quality.`,
   }
 
   if (!imageData) {
-    console.error('❌ No image data in Gemini response:', JSON.stringify(data, null, 2));
-    throw new Error('Gemini did not return an image. Response: ' + textResponse);
+    // Don't stringify the full response — it may contain large binary data that crashes the console
+    const candidateCount = data.candidates?.length ?? 0;
+    const partTypes = parts?.map((p: Record<string, unknown>) => Object.keys(p).join(',')).join('; ') ?? 'none';
+    console.error(`❌ No image data in Gemini response. Candidates: ${candidateCount}, Part types: ${partTypes}, Text: ${textResponse?.substring(0, 200) || '(none)'}`);
+    throw new Error('Gemini did not return an image. Response: ' + (textResponse || 'No text response'));
   }
 
   // Convert base64 to data URL
@@ -2589,6 +2601,12 @@ export async function generateAdPackage(config: {
       allResults.push(...batchResults);
     }
 
+    // Free reference image memory now that all images are generated
+    if (precomputedRefs) {
+      precomputedRefs.referenceImages.length = 0;
+      precomputedRefs = undefined;
+    }
+
     const imageResults = allResults;
     images = imageResults
       .filter((r): r is PromiseFulfilledResult<GeneratedImageResult> => r.status === 'fulfilled')
@@ -2602,6 +2620,8 @@ export async function generateAdPackage(config: {
       const errorMessage = firstError?.message || String(firstError);
       if (errorMessage.includes('429') || errorMessage.includes('quota')) {
         imageError = 'Image generation quota exceeded. Please wait for the quota to reset or enable billing on your Gemini/OpenAI account.';
+      } else if (errorMessage.includes('RangeError') || errorMessage.includes('Invalid string length') || errorMessage.includes('out of memory')) {
+        imageError = 'Image generation ran out of memory. Try reducing variation count or clearing reference images.';
       } else {
         imageError = `Image generation failed: ${errorMessage}`;
       }

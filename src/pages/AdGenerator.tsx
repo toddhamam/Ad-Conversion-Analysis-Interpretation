@@ -520,9 +520,9 @@ const AdGenerator = () => {
       setSelectedCTAs([]);
       setCurrentStep('copy-selection');
       setGenerationProgress('');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Copy generation failed:', err);
-      setError(err.message || 'Failed to generate copy options. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to generate copy options. Please try again.');
     } finally {
       setIsGeneratingCopy(false);
       setGenerationProgress('');
@@ -586,9 +586,9 @@ const AdGenerator = () => {
       setSelectedHeadlines([]);
       setSelectedBodyTexts([]);
       setSelectedCTAs([]);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Generation failed:', err);
-      setError(err.message || 'Failed to generate ad. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to generate ad. Please try again.');
     } finally {
       setIsGeneratingCreatives(false);
       setGenerationProgress('');
@@ -747,9 +747,9 @@ const AdGenerator = () => {
 
       // Note: localStorage save is handled by the useEffect that watches generatedAds changes
       console.log('✅ Image regenerated successfully');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('❌ Failed to regenerate image:', err);
-      throw new Error(err.message || 'Failed to regenerate image');
+      throw new Error(err instanceof Error ? err.message : 'Failed to regenerate image');
     }
   }, [generatedAds, analysisData, similarityValue, imageSize, selectedProduct]);
 

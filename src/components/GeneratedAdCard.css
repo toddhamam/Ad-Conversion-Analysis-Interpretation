@@ -4,8 +4,9 @@
   border: 1px solid var(--border-primary);
   border-radius: 16px;
   padding: 24px;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   box-shadow: var(--shadow-sm);
+  contain: content;
 }
 
 .generated-ad-card:hover {
@@ -86,7 +87,7 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease;
 }
 
 .toggle-images-btn:hover {
@@ -97,6 +98,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
+  contain: layout style;
 }
 
 .image-card {
@@ -184,7 +186,7 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .action-btn:hover:not(:disabled) {
@@ -403,7 +405,7 @@
   border-radius: 6px;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .copy-btn:hover {
@@ -430,7 +432,7 @@
   font-weight: 600;
   color: var(--text-primary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.2s ease, transform 0.2s ease;
 }
 
 .cta-tag:hover {
