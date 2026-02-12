@@ -23,6 +23,7 @@ import {
   type ProductContext,
 } from '../services/openaiApi';
 import { getCacheStats as getImageCacheStats, uploadBrandImages, clearImageCache } from '../services/imageCache';
+import { fetchAdCreatives, type DatePreset } from '../services/metaApi';
 import GeneratedAdCard from '../components/GeneratedAdCard';
 import CopySelectionPanel from '../components/CopySelectionPanel';
 import IQSelector from '../components/IQSelector';
@@ -171,6 +172,13 @@ function calculateCost(adType: AdType, variationCount: number, includeCopyGenera
 }
 
 type WorkflowStep = 'config' | 'copy-selection' | 'final-config';
+type CopySource = 'generate' | 'import' | 'manual';
+
+const IMPORT_DATE_OPTIONS: { id: DatePreset; label: string }[] = [
+  { id: 'last_7d', label: 'Last 7 days' },
+  { id: 'last_30d', label: 'Last 30 days' },
+  { id: 'maximum', label: 'All Time' },
+];
 
 const AdGenerator = () => {
   const navigate = useNavigate();
@@ -190,6 +198,14 @@ const AdGenerator = () => {
   const [iqLevel, setIqLevel] = useState<ReasoningEffort>('medium');
   const [imageSize, setImageSize] = useState<ImageSize>(DEFAULT_IMAGE_SIZE);
   const [copyLength, setCopyLength] = useState<CopyLength>(DEFAULT_COPY_LENGTH);
+
+  // Copy source mode
+  const [copySource, setCopySource] = useState<CopySource>('generate');
+  const [manualHeadlines, setManualHeadlines] = useState<string[]>(['']);
+  const [manualBodyTexts, setManualBodyTexts] = useState<string[]>(['']);
+  const [manualCTAs, setManualCTAs] = useState<string[]>(['']);
+  const [isImportingCopy, setIsImportingCopy] = useState(false);
+  const [importDatePreset, setImportDatePreset] = useState<DatePreset>('last_30d');
 
   // Product context
   const [products, setProducts] = useState<ProductContext[]>([]);
@@ -490,7 +506,8 @@ const AdGenerator = () => {
       return;
     }
 
-    if (!hasTextApi) {
+    // Only require OpenAI for AI-generated copy; import/manual copy doesn't need it
+    if (!hasTextApi && copySource === 'generate') {
       setError('OpenAI API key required for copy generation. Please add VITE_OPENAI_API_KEY to your .env file.');
       return;
     }
@@ -554,8 +571,110 @@ const AdGenerator = () => {
     setCurrentStep('final-config');
   };
 
-  const handleBackToCopySelection = () => {
-    setCurrentStep('copy-selection');
+  const handleBackFromFinalConfig = () => {
+    if (copySource === 'manual') {
+      setCurrentStep('config');
+    } else {
+      setCurrentStep('copy-selection');
+    }
+  };
+
+  // Copy source change handler — reset copy state to avoid stale data
+  const handleCopySourceChange = (source: CopySource) => {
+    setCopySource(source);
+    setCopyOptions(null);
+    setSelectedHeadlines([]);
+    setSelectedBodyTexts([]);
+    setSelectedCTAs([]);
+    setError(null);
+    if (source === 'manual') {
+      setManualHeadlines(['']);
+      setManualBodyTexts(['']);
+      setManualCTAs(['']);
+    }
+  };
+
+  // Import top-performing copy from Meta ad account
+  const handleImportCopy = async () => {
+    setIsImportingCopy(true);
+    setError(null);
+
+    try {
+      const creatives = await fetchAdCreatives({ datePreset: importDatePreset });
+
+      const sorted = [...creatives]
+        .filter(c => c.conversions > 0)
+        .sort((a, b) => b.conversionRate - a.conversionRate);
+
+      if (sorted.length === 0) {
+        setError('No converting ads found in the selected date range. Try a wider range or generate new copy instead.');
+        return;
+      }
+
+      const seenHeadlines = new Set<string>();
+      const seenBodies = new Set<string>();
+      const headlines: CopyOption[] = [];
+      const bodyTexts: CopyOption[] = [];
+
+      for (const ad of sorted) {
+        if (ad.headline && !seenHeadlines.has(ad.headline) && headlines.length < 8) {
+          seenHeadlines.add(ad.headline);
+          headlines.push({
+            id: `imported_h_${headlines.length}`,
+            text: ad.headline,
+            rationale: `${ad.conversionRate.toFixed(1)}% CVR | $${ad.costPerConversion.toFixed(2)} CPA | ${ad.conversions} conv`,
+          });
+        }
+
+        const body = ad.bodySnippet;
+        if (body && body !== 'No ad copy available' && !seenBodies.has(body) && bodyTexts.length < 6) {
+          seenBodies.add(body);
+          bodyTexts.push({
+            id: `imported_b_${bodyTexts.length}`,
+            text: body,
+            rationale: `From: "${ad.headline}" | ${ad.conversionRate.toFixed(1)}% CVR | $${ad.costPerConversion.toFixed(2)} CPA`,
+          });
+        }
+      }
+
+      if (headlines.length === 0) {
+        setError('Could not extract usable copy from your ads. Try generating new copy instead.');
+        return;
+      }
+
+      // No CTAs — user sets CTA button type in the Ad Publisher
+      setCopyOptions({ headlines, bodyTexts, callToActions: [] });
+      setSelectedHeadlines([]);
+      setSelectedBodyTexts([]);
+      setSelectedCTAs([]);
+      setCurrentStep('copy-selection');
+    } catch (err: unknown) {
+      console.error('Import copy failed:', err);
+      setError(err instanceof Error ? err.message : 'Failed to import copy from ad account.');
+    } finally {
+      setIsImportingCopy(false);
+    }
+  };
+
+  // Submit manually entered copy — skip Step 2, go to final-config
+  const handleManualCopySubmit = () => {
+    const headlines: CopyOption[] = manualHeadlines
+      .filter(h => h.trim())
+      .map((h, i) => ({ id: `manual_h_${i}`, text: h.trim(), rationale: 'Manually entered' }));
+    const bodyTexts: CopyOption[] = manualBodyTexts
+      .filter(b => b.trim())
+      .map((b, i) => ({ id: `manual_b_${i}`, text: b.trim(), rationale: 'Manually entered' }));
+    const callToActions: CopyOption[] = manualCTAs
+      .filter(c => c.trim())
+      .map((c, i) => ({ id: `manual_cta_${i}`, text: c.trim(), rationale: 'Manually entered' }));
+
+    setCopyOptions({ headlines, bodyTexts, callToActions });
+    // Auto-select all manual entries
+    setSelectedHeadlines(headlines.map(h => h.id));
+    setSelectedBodyTexts(bodyTexts.map(b => b.id));
+    setSelectedCTAs(callToActions.map(c => c.id));
+    // Skip Step 2 — go directly to final-config
+    setCurrentStep('final-config');
   };
 
   // Regenerate a single image within an ad package
@@ -615,8 +734,11 @@ const AdGenerator = () => {
 
   // Validation for proceeding
   const canProceedToCopySelection = audienceType && conceptType;
-  const canProceedToFinalConfig = selectedHeadlines.length >= 1 && selectedBodyTexts.length >= 1 && selectedCTAs.length >= 1;
-  const canGenerateCreatives = selectedHeadlines.length >= 1 && selectedBodyTexts.length >= 1 && selectedCTAs.length >= 1;
+  // CTAs are optional when using import/manual copy (user sets CTA button type in publisher)
+  const ctaOk = copySource === 'generate' ? selectedCTAs.length >= 1 : true;
+  const canProceedToFinalConfig = selectedHeadlines.length >= 1 && selectedBodyTexts.length >= 1 && ctaOk;
+  const canGenerateCreatives = selectedHeadlines.length >= 1 && selectedBodyTexts.length >= 1 && ctaOk;
+  const canSubmitManualCopy = manualHeadlines.some(h => h.trim().length > 0) && manualBodyTexts.some(b => b.trim().length > 0);
 
   return (
     <div className="page ad-generator-page">
@@ -712,12 +834,12 @@ const AdGenerator = () => {
       <div className="step-indicator">
         <div className={`step ${currentStep === 'config' ? 'active' : 'completed'}`}>
           <span className="step-number">1</span>
-          <span className="step-label">Audience & Concept</span>
+          <span className="step-label">{copySource === 'generate' ? 'Audience & Concept' : 'Audience & Copy'}</span>
         </div>
         <div className="step-connector"></div>
         <div className={`step ${currentStep === 'copy-selection' ? 'active' : currentStep === 'final-config' ? 'completed' : ''}`}>
           <span className="step-number">2</span>
-          <span className="step-label">Select Copy</span>
+          <span className="step-label">{copySource === 'manual' ? 'Copy Entered' : 'Select Copy'}</span>
         </div>
         <div className="step-connector"></div>
         <div className={`step ${currentStep === 'final-config' ? 'active' : ''}`}>
@@ -737,7 +859,36 @@ const AdGenerator = () => {
       {/* Step 1: Configuration */}
       {currentStep === 'config' && (
         <section className="config-panel">
-          <h3 className="config-title">Step 1: Audience & Concept</h3>
+          <h3 className="config-title">Step 1: {copySource === 'generate' ? 'Audience & Concept' : 'Audience & Copy'}</h3>
+
+          {/* Copy Source Selection */}
+          <div className="config-section">
+            <label className="config-label">Copy Source</label>
+            <p className="config-hint">Generate new copy with AI, import winning copy from your ad account, or enter your own</p>
+            <div className="copy-source-options">
+              <button
+                className={`copy-source-btn ${copySource === 'generate' ? 'active' : ''}`}
+                onClick={() => handleCopySourceChange('generate')}
+              >
+                <span className="copy-source-name">Generate New</span>
+                <span className="copy-source-desc">AI-generated copy options</span>
+              </button>
+              <button
+                className={`copy-source-btn ${copySource === 'import' ? 'active' : ''}`}
+                onClick={() => handleCopySourceChange('import')}
+              >
+                <span className="copy-source-name">Import from Ads</span>
+                <span className="copy-source-desc">Reuse top-performing copy</span>
+              </button>
+              <button
+                className={`copy-source-btn ${copySource === 'manual' ? 'active' : ''}`}
+                onClick={() => handleCopySourceChange('manual')}
+              >
+                <span className="copy-source-name">Enter Manually</span>
+                <span className="copy-source-desc">Paste your own copy</span>
+              </button>
+            </div>
+          </div>
 
           {/* Product Selection */}
           <div className="config-section">
@@ -782,73 +933,243 @@ const AdGenerator = () => {
             </div>
           </div>
 
-          {/* Concept Selection */}
-          <div className="config-section">
-            <label className="config-label">Core Concept</label>
-            <p className="config-hint">Select the psychological angle for your creative</p>
-            <div className="concept-options">
-              {CONCEPT_OPTIONS.map(option => (
-                <button
-                  key={option.id}
-                  className={`concept-btn ${conceptType === option.id ? 'active' : ''} ${option.id === 'auto' ? 'auto-concept' : ''}`}
-                  onClick={() => setConceptType(option.id)}
-                >
-                  <div className="concept-header">
-                    <span className="concept-icon">{option.icon}</span>
-                    <span className="concept-name">{option.name}</span>
-                  </div>
-                  <span className="concept-desc">{option.description}</span>
-                </button>
-              ))}
+          {/* Concept Selection — AI generation only */}
+          {copySource === 'generate' && (
+            <div className="config-section">
+              <label className="config-label">Core Concept</label>
+              <p className="config-hint">Select the psychological angle for your creative</p>
+              <div className="concept-options">
+                {CONCEPT_OPTIONS.map(option => (
+                  <button
+                    key={option.id}
+                    className={`concept-btn ${conceptType === option.id ? 'active' : ''} ${option.id === 'auto' ? 'auto-concept' : ''}`}
+                    onClick={() => setConceptType(option.id)}
+                  >
+                    <div className="concept-header">
+                      <span className="concept-icon">{option.icon}</span>
+                      <span className="concept-name">{option.name}</span>
+                    </div>
+                    <span className="concept-desc">{option.description}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Copy Length Selection */}
-          <div className="config-section">
-            <label className="config-label">Body Copy Length</label>
-            <p className="config-hint">Choose short-form for quick impact or long-form for full storytelling</p>
-            <div className="copy-length-options">
-              {COPY_LENGTH_OPTIONS.map(option => (
-                <button
-                  key={option.id}
-                  className={`copy-length-btn ${copyLength === option.id ? 'active' : ''}`}
-                  onClick={() => setCopyLength(option.id)}
-                >
-                  <span className="copy-length-icon">{option.icon}</span>
-                  <span className="copy-length-name">{option.name}</span>
-                  <span className="copy-length-desc">{option.description}</span>
-                </button>
-              ))}
+          {/* Copy Length Selection — AI generation only */}
+          {copySource === 'generate' && (
+            <div className="config-section">
+              <label className="config-label">Body Copy Length</label>
+              <p className="config-hint">Choose short-form for quick impact or long-form for full storytelling</p>
+              <div className="copy-length-options">
+                {COPY_LENGTH_OPTIONS.map(option => (
+                  <button
+                    key={option.id}
+                    className={`copy-length-btn ${copyLength === option.id ? 'active' : ''}`}
+                    onClick={() => setCopyLength(option.id)}
+                  >
+                    <span className="copy-length-icon">{option.icon}</span>
+                    <span className="copy-length-name">{option.name}</span>
+                    <span className="copy-length-desc">{option.description}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* ConversionIQ Level Selection */}
-          <div className="config-section">
-            <IQSelector
-              value={iqLevel}
-              onChange={setIqLevel}
-              disabled={isGeneratingCopy}
-            />
-          </div>
+          {/* ConversionIQ Level Selection — AI generation only */}
+          {copySource === 'generate' && (
+            <div className="config-section">
+              <IQSelector
+                value={iqLevel}
+                onChange={setIqLevel}
+                disabled={isGeneratingCopy}
+              />
+            </div>
+          )}
 
-          {/* Generate Copy Options Button */}
-          <button
-            className="generate-btn step-btn"
-            onClick={handleGenerateCopyOptions}
-            disabled={isGeneratingCopy || !canProceedToCopySelection}
-          >
-            {isGeneratingCopy ? (
-              <>
-                <span className="spinner"></span>
-                {generationProgress}
-              </>
-            ) : (
-              <>
-                <span className="generate-icon">📝</span>
-                Generate Copy Options
-              </>
-            )}
-          </button>
+          {/* Import from Ads: Date range + import button */}
+          {copySource === 'import' && (
+            <>
+              <div className="config-section">
+                <label className="config-label">Date Range</label>
+                <p className="config-hint">Select the date range to find your top-performing ad copy</p>
+                <div className="import-date-options">
+                  {IMPORT_DATE_OPTIONS.map(option => (
+                    <button
+                      key={option.id}
+                      className={`import-date-btn ${importDatePreset === option.id ? 'active' : ''}`}
+                      onClick={() => setImportDatePreset(option.id)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button
+                className="generate-btn step-btn"
+                onClick={handleImportCopy}
+                disabled={isImportingCopy}
+              >
+                {isImportingCopy ? (
+                  <>
+                    <span className="spinner"></span>
+                    ConversionIQ™ fetching top creatives...
+                  </>
+                ) : (
+                  <>
+                    <span className="generate-icon">📥</span>
+                    Import Top-Performing Copy
+                  </>
+                )}
+              </button>
+            </>
+          )}
+
+          {/* Manual Copy Entry */}
+          {copySource === 'manual' && (
+            <>
+              <div className="config-section">
+                <label className="config-label">Headlines</label>
+                <p className="config-hint">Enter 1–4 headline variations</p>
+                <div className="manual-copy-entries">
+                  {manualHeadlines.map((text, idx) => (
+                    <div key={idx} className="manual-entry-row">
+                      <input
+                        type="text"
+                        className="manual-entry-input"
+                        value={text}
+                        onChange={(e) => {
+                          const updated = [...manualHeadlines];
+                          updated[idx] = e.target.value;
+                          setManualHeadlines(updated);
+                        }}
+                        placeholder={`Headline ${idx + 1}`}
+                        maxLength={150}
+                      />
+                      {manualHeadlines.length > 1 && (
+                        <button
+                          className="manual-entry-remove"
+                          onClick={() => setManualHeadlines(manualHeadlines.filter((_, i) => i !== idx))}
+                          aria-label="Remove headline"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {manualHeadlines.length < 4 && (
+                    <button className="manual-entry-add" onClick={() => setManualHeadlines([...manualHeadlines, ''])}>
+                      + Add Headline
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="config-section">
+                <label className="config-label">Body Copy</label>
+                <p className="config-hint">Enter 1–3 body copy variations</p>
+                <div className="manual-copy-entries">
+                  {manualBodyTexts.map((text, idx) => (
+                    <div key={idx} className="manual-entry-row">
+                      <textarea
+                        className="manual-entry-textarea"
+                        value={text}
+                        onChange={(e) => {
+                          const updated = [...manualBodyTexts];
+                          updated[idx] = e.target.value;
+                          setManualBodyTexts(updated);
+                        }}
+                        placeholder={`Body copy ${idx + 1}`}
+                        rows={3}
+                      />
+                      {manualBodyTexts.length > 1 && (
+                        <button
+                          className="manual-entry-remove"
+                          onClick={() => setManualBodyTexts(manualBodyTexts.filter((_, i) => i !== idx))}
+                          aria-label="Remove body copy"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {manualBodyTexts.length < 3 && (
+                    <button className="manual-entry-add" onClick={() => setManualBodyTexts([...manualBodyTexts, ''])}>
+                      + Add Body Copy
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="config-section">
+                <label className="config-label">Call-to-Actions <span className="manual-entry-optional">(optional)</span></label>
+                <p className="config-hint">Enter CTA text variations, or skip — you can set the CTA button type when publishing</p>
+                <div className="manual-copy-entries">
+                  {manualCTAs.map((text, idx) => (
+                    <div key={idx} className="manual-entry-row">
+                      <input
+                        type="text"
+                        className="manual-entry-input"
+                        value={text}
+                        onChange={(e) => {
+                          const updated = [...manualCTAs];
+                          updated[idx] = e.target.value;
+                          setManualCTAs(updated);
+                        }}
+                        placeholder={`CTA ${idx + 1}`}
+                        maxLength={50}
+                      />
+                      {manualCTAs.length > 1 && (
+                        <button
+                          className="manual-entry-remove"
+                          onClick={() => setManualCTAs(manualCTAs.filter((_, i) => i !== idx))}
+                          aria-label="Remove CTA"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {manualCTAs.length < 2 && (
+                    <button className="manual-entry-add" onClick={() => setManualCTAs([...manualCTAs, ''])}>
+                      + Add CTA
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <button
+                className="generate-btn step-btn"
+                onClick={handleManualCopySubmit}
+                disabled={!canSubmitManualCopy}
+              >
+                <span className="generate-icon">→</span>
+                Continue to Generate Creatives
+              </button>
+            </>
+          )}
+
+          {/* Generate Copy Options Button — AI generation only */}
+          {copySource === 'generate' && (
+            <button
+              className="generate-btn step-btn"
+              onClick={handleGenerateCopyOptions}
+              disabled={isGeneratingCopy || !canProceedToCopySelection}
+            >
+              {isGeneratingCopy ? (
+                <>
+                  <span className="spinner"></span>
+                  {generationProgress}
+                </>
+              ) : (
+                <>
+                  <span className="generate-icon">📝</span>
+                  Generate Copy Options
+                </>
+              )}
+            </button>
+          )}
         </section>
       )}
 
@@ -875,13 +1196,21 @@ const AdGenerator = () => {
               <span className="summary-label">Audience:</span> {AUDIENCE_OPTIONS.find(a => a.id === audienceType)?.name}
             </span>
             <span className="summary-divider">|</span>
-            <span className="summary-item">
-              <span className="summary-label">Concept:</span> {CONCEPT_ANGLES[conceptType].name}
-            </span>
-            <span className="summary-divider">|</span>
-            <span className="summary-item">
-              <span className="summary-label">Copy:</span> {COPY_LENGTH_OPTIONS.find(c => c.id === copyLength)?.name}
-            </span>
+            {copySource === 'generate' ? (
+              <>
+                <span className="summary-item">
+                  <span className="summary-label">Concept:</span> {CONCEPT_ANGLES[conceptType].name}
+                </span>
+                <span className="summary-divider">|</span>
+                <span className="summary-item">
+                  <span className="summary-label">Copy:</span> {COPY_LENGTH_OPTIONS.find(c => c.id === copyLength)?.name}
+                </span>
+              </>
+            ) : (
+              <span className="summary-item">
+                <span className="summary-label">Source:</span> Imported from Ads
+              </span>
+            )}
           </div>
 
           <CopySelectionPanel
@@ -898,7 +1227,7 @@ const AdGenerator = () => {
             maxHeadlines={4}
             minBodyTexts={1}
             maxBodyTexts={3}
-            minCTAs={1}
+            minCTAs={copySource === 'generate' ? 1 : 0}
             maxCTAs={2}
           />
 
@@ -917,7 +1246,7 @@ const AdGenerator = () => {
       {currentStep === 'final-config' && (
         <section className="config-panel">
           <div className="step-header">
-            <button className="back-btn" onClick={handleBackToCopySelection}>
+            <button className="back-btn" onClick={handleBackFromFinalConfig}>
               ← Back
             </button>
             <h3 className="config-title">Step 3: Generate Creatives</h3>
@@ -937,14 +1266,23 @@ const AdGenerator = () => {
                 <span className="summary-card-label">Audience</span>
                 <span className="summary-card-value">{AUDIENCE_OPTIONS.find(a => a.id === audienceType)?.name}</span>
               </div>
-              <div className="summary-card">
-                <span className="summary-card-label">Concept</span>
-                <span className="summary-card-value">{CONCEPT_ANGLES[conceptType].name}</span>
-              </div>
-              <div className="summary-card">
-                <span className="summary-card-label">Copy Length</span>
-                <span className="summary-card-value">{COPY_LENGTH_OPTIONS.find(c => c.id === copyLength)?.name}</span>
-              </div>
+              {copySource === 'generate' ? (
+                <>
+                  <div className="summary-card">
+                    <span className="summary-card-label">Concept</span>
+                    <span className="summary-card-value">{CONCEPT_ANGLES[conceptType].name}</span>
+                  </div>
+                  <div className="summary-card">
+                    <span className="summary-card-label">Copy Length</span>
+                    <span className="summary-card-value">{COPY_LENGTH_OPTIONS.find(c => c.id === copyLength)?.name}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="summary-card">
+                  <span className="summary-card-label">Copy Source</span>
+                  <span className="summary-card-value">{copySource === 'import' ? 'Imported from Ads' : 'Manually Entered'}</span>
+                </div>
+              )}
               <div className="summary-card">
                 <span className="summary-card-label">Headlines</span>
                 <span className="summary-card-value">{selectedHeadlines.length} selected</span>
@@ -953,10 +1291,12 @@ const AdGenerator = () => {
                 <span className="summary-card-label">Body Copy</span>
                 <span className="summary-card-value">{selectedBodyTexts.length} selected</span>
               </div>
-              <div className="summary-card">
-                <span className="summary-card-label">CTAs</span>
-                <span className="summary-card-value">{selectedCTAs.length} selected</span>
-              </div>
+              {selectedCTAs.length > 0 && (
+                <div className="summary-card">
+                  <span className="summary-card-label">CTAs</span>
+                  <span className="summary-card-value">{selectedCTAs.length} selected</span>
+                </div>
+              )}
             </div>
           </div>
 
