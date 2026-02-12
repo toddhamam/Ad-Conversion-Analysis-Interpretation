@@ -789,17 +789,12 @@ const AdPublisher = () => {
         throw new Error('No ads to publish');
       }
 
-      // Build the final landing page URL with tracking parameters
-      const finalLandingPageUrl = urlParameters.trim()
-        ? `${landingPageUrl}${landingPageUrl.includes('?') ? '&' : '?'}${urlParameters.trim()}`
-        : landingPageUrl;
-
       const config: PublishConfig = {
         mode: publishMode,
         ads: adsWithImages.map(ad => ({
           imageBase64: ad.imageUrl,
           headline: ad.headline,
-          bodyText: `${ad.bodyText}\n\n${finalLandingPageUrl}`,
+          bodyText: `${ad.bodyText}\n\n${landingPageUrl}`,
           callToAction: ctaButtonType,
         })),
         settings: {
@@ -808,7 +803,8 @@ const AdPublisher = () => {
           budgetMode: publishMode === 'new_campaign' ? budgetMode : publishMode === 'new_adset' ? 'ABO' as BudgetMode : undefined,
           adsetName: publishMode !== 'existing_adset' ? adsetName : undefined,
           dailyBudget: publishMode !== 'existing_adset' ? dailyBudget : undefined,
-          landingPageUrl: finalLandingPageUrl,
+          landingPageUrl,
+          urlTags: urlParameters.trim() || undefined,
           conversionEvent: effectiveCampaignObjective === 'OUTCOME_SALES' ? conversionEvent : undefined,
           pixelId: effectiveCampaignObjective === 'OUTCOME_SALES' ? pixelId : undefined,
           targeting: publishMode !== 'existing_adset' ? buildTargeting() : undefined,
@@ -1866,15 +1862,11 @@ const AdPublisher = () => {
                   )}
                   <div className="summary-item full-width">
                     <span className="summary-label">Landing Page</span>
-                    <span className="summary-value url-value">
-                      {urlParameters.trim()
-                        ? `${landingPageUrl}${landingPageUrl.includes('?') ? '&' : '?'}${urlParameters.trim()}`
-                        : landingPageUrl}
-                    </span>
+                    <span className="summary-value url-value">{landingPageUrl}</span>
                   </div>
                   {urlParameters.trim() && (
                     <div className="summary-item full-width">
-                      <span className="summary-label">URL Parameters</span>
+                      <span className="summary-label">URL Tracking (url_tags)</span>
                       <span className="summary-value">{urlParameters.trim()}</span>
                     </div>
                   )}

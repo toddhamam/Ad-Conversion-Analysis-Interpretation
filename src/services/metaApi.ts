@@ -887,6 +887,7 @@ export interface PublishConfig {
     adsetName?: string;
     dailyBudget?: number;
     landingPageUrl: string;
+    urlTags?: string;
     pageId?: string;
     conversionEvent?: ConversionEvent;
     pixelId?: string;
@@ -1208,11 +1209,12 @@ export async function createAdWithCreative(request: {
   linkUrl: string;
   callToAction: string;
   pixelId?: string;
+  urlTags?: string;
 }): Promise<{ adId: string; creativeId: string }> {
   const adAccountId = getAdAccountId();
   if (!adAccountId) throw new Error('No ad account configured');
 
-  const creative = {
+  const creative: Record<string, unknown> = {
     name: request.name,
     object_story_spec: {
       page_id: request.pageId,
@@ -1229,6 +1231,10 @@ export async function createAdWithCreative(request: {
       },
     },
   };
+
+  if (request.urlTags) {
+    creative.url_tags = request.urlTags;
+  }
 
   const body: Record<string, unknown> = {
     name: request.name,
@@ -1459,6 +1465,7 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
         linkUrl: config.settings.landingPageUrl,
         callToAction: ad.callToAction,
         pixelId: config.settings.pixelId,
+        urlTags: config.settings.urlTags,
       });
       result.adIds!.push(adId);
       if (creativeId) result.creativeIds!.push(creativeId);
