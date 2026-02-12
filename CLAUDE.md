@@ -1588,3 +1588,228 @@ To maximize AI citations:
 - Use `aria-hidden="true"` on decorative icons and SVGs
 - User profile dropdown accessible in both desktop header and mobile navigation
 - Support safe-area-inset padding for notched/island devices via `env(safe-area-inset-top)` and `env(safe-area-inset-bottom)` behind `@supports`
+
+---
+
+## Meta App Review — Permissions & Submission Guide
+
+### Overview
+
+Meta requires App Review for each individual permission before external (non-tester) users can use the OAuth flow. The app being "Published" and having an approved App Review are **not sufficient** — each permission listed in the OAuth scopes must independently have **Advanced Access** for public users. Permissions stuck at "Ready for testing" will cause the error: **"Feature unavailable — Facebook Login is currently unavailable for this app as we are updating additional details for this app."**
+
+### Key Concepts
+
+| Term | Meaning |
+|------|---------|
+| **Development Mode** | Only app role users (admins, developers, testers) can use the app |
+| **Live/Published Mode** | App is published, but individual permissions may still be restricted |
+| **Ready for testing** | Permission is approved for app role users only — NOT available to the public |
+| **Ready to publish** | Permission has been approved via App Review but needs activation |
+| **Advanced Access** | Permission is fully live and available to all public users |
+
+**Critical distinction**: An app can be "Published" while individual permissions remain at "Ready for testing." The app-level publish status and per-permission access levels are independent.
+
+### Required OAuth Scopes
+
+Defined in `api/auth/meta/connect.ts`:
+
+```typescript
+const SCOPES = [
+  'ads_management',
+  'ads_read',
+  'business_management',
+  'pages_read_engagement',
+].join(',');
+```
+
+**All scopes requested in the OAuth flow must have Advanced Access**, or external users will be blocked at the Facebook Login dialog.
+
+### Permissions Required & Their Usage
+
+| Permission | API Calls | What It's Used For |
+|---|---|---|
+| **`ads_management`** | High | Create campaigns (PAUSED), ad sets, ads, upload images, validate page linkage via `promote_pages` |
+| **`ads_read`** | High | Fetch insights, campaigns, ad sets, creative details, custom audiences, pixels, targeting suggestions, ad account details |
+| **`pages_read_engagement`** | Medium | Validate Facebook Page access, fetch available Pages during OAuth (`me/accounts`), read Page metadata for `object_story_spec` |
+| **`business_management`** | High | Access Business Manager-scoped assets — `me/adaccounts`, `me/accounts`, `debug_token` validation, ad account metadata verification |
+| **`pages_show_list`** | Low | Display list of Pages the user manages for selection during credential setup |
+
+### Permissions NOT Used (Do Not Request)
+
+| Permission | Why Not Needed |
+|---|---|
+| `pages_manage_ads` | Ads are created at the ad account level via `ads_management`, not through page endpoints |
+| `email` | App uses Supabase auth, not Facebook Login for end-user authentication |
+
+### App Review Submission Process
+
+#### Prerequisites (Settings → Basic)
+
+Before submitting, ensure all of these are set:
+
+- **Privacy Policy URL**: `https://www.convertraiq.com/privacy`
+- **Terms of Service URL**: `https://www.convertraiq.com/terms`
+- **User Data Deletion URL**: `https://www.convertraiq.com/data-deletion`
+- **App Icon**: Uploaded (1024x1024)
+- **Category**: Utility & productivity
+- **Business Verification**: Completed (green dot)
+- **Data Use Checkup**: Completed (green dot)
+
+#### Submission Steps
+
+1. **Navigate to**: Review → App Review → Start a New Submission (or edit existing)
+2. **Add all permissions** to the same submission — Meta allows bundling multiple permissions in one review
+3. **For each permission**, fill in:
+   - **Description**: How the app uses it (see templates below)
+   - **Screen recording**: Upload a video showing the full user flow
+   - **API test calls**: Must be completed beforehand (check via Review → Testing)
+   - **Agree to allowed usage**: Check the compliance box
+4. **Complete Data Handling section** (see below)
+5. **Complete Reviewer Instructions** with test credentials and testing steps
+6. **Submit** — review takes up to 10 business days
+
+#### Submitting Multiple Permissions Together
+
+You can and should add all permissions to a single submission. On the "Allowed usage" step, each permission gets its own section. Meta may also auto-add dependencies (e.g., `ads_management` requires `pages_read_engagement`).
+
+### Description Templates
+
+#### `ads_management`
+
+> Convertra is an AI-powered ad creative platform that helps advertisers generate and publish high-converting ad creatives to their Meta ad accounts.
+>
+> We use the ads_management permission to allow authenticated users to publish AI-generated ad creatives directly to their own Meta ad account. The full workflow is:
+>
+> 1. The user connects their Meta ad account via OAuth
+> 2. The user uses our AI creative tools to generate ad headlines, body copy, and images
+> 3. The user reviews and selects their preferred creatives
+> 4. The user configures campaign settings — budget, targeting, placements, scheduling, CTA button type, and tracking parameters
+> 5. The user clicks "Publish" to create the campaign in their ad account
+>
+> Specifically, ads_management is used to:
+> - Create campaigns in PAUSED status (never live without user review in Ads Manager)
+> - Create ad sets with user-configured targeting, budget, and optimization goals
+> - Create ads with inline creative specs containing the AI-generated headline, body copy, image, and call-to-action
+> - Upload AI-generated images to the user's ad account via the adimages endpoint
+> - Validate that the user's Facebook Page is linked to their ad account via the promote_pages endpoint
+>
+> All ad creation is explicitly user-initiated. No campaigns are created automatically. All campaigns are created in PAUSED status so the user retains full control. Access tokens are encrypted at rest (AES-256-GCM) and stored server-side only.
+
+#### `ads_read`
+
+> Convertra uses ads_read to pull ad performance data from the user's Meta ad account and display it in our analytics dashboard, enabling advertisers to identify their best-performing creatives and optimize future campaigns.
+>
+> Specifically, we use this permission to:
+> 1. Fetch ad-level insights — performance metrics (impressions, clicks, conversions, spend, ROAS, CPA, CTR) displayed in our Meta Ads dashboard
+> 2. Fetch ad creative details — creative specs (headlines, body copy, images, thumbnails) displayed alongside performance metrics
+> 3. Fetch campaigns and ad sets — campaign data (names, statuses, budgets, objectives) for dashboard organization and campaign selection during publishing
+> 4. Fetch custom audiences — available audiences for targeting configuration when publishing
+> 5. Fetch ad pixels — available Meta pixels for conversion tracking configuration
+> 6. Search targeting suggestions — interest and behavior suggestions for ad set targeting
+> 7. AI-powered creative analysis — ad metrics and creative copy analyzed by ConversionIQ™ to identify patterns in high-converting creatives
+
+**Allowed usage selection**: "Provide API access to your ad performance data for use in custom dashboards and data analytics."
+
+#### `pages_read_engagement`
+
+> Convertra uses pages_read_engagement to read Facebook Page metadata when users connect their Meta ad account for ad publishing.
+>
+> Specifically, we use this permission to:
+> 1. Validate Facebook Page access — verify the user's Page is accessible and linked to their ad account before publishing ads
+> 2. Display Page name — fetch available Pages via me/accounts during OAuth so the admin can select which Page to use
+> 3. Build ad creatives with object_story_spec — read the Page ID and name to correctly construct ad creatives that reference the user's Page
+>
+> We do not store Page content (posts, photos, videos). We only read Page metadata (ID and name).
+
+#### `business_management`
+
+> Convertra uses business_management to access and manage Business Manager assets when users connect their Meta ad account via OAuth.
+>
+> Specifically, we use this permission to:
+> 1. Retrieve available ad accounts — call me/adaccounts to list accessible ad accounts during OAuth connection
+> 2. Retrieve available Pages — call me/accounts to list Facebook Pages associated with the user's Business Manager
+> 3. Token validation — use debug_token to validate token scopes, permissions, and expiration during credential setup
+> 4. Ad account verification — read ad account metadata (status, currency, capabilities, disable reason) to verify eligibility for ad creation
+
+#### `pages_show_list`
+
+> Convertra uses pages_show_list to display the list of Facebook Pages that the user manages, so they can select which Page to associate with their ad account for ad creative publishing.
+>
+> We only read the list of Pages (ID and name). We do not modify, post to, or manage Page content.
+
+### Data Handling Answers
+
+These are completed during the "Data handling" step of the submission:
+
+| Question | Answer |
+|---|---|
+| **Do you have data processors with access to Platform Data?** | **Yes** |
+| **List all data processors** | Google LLC, OpenAI LLC, Supabase Inc., Vercel |
+| **Responsible entity for Platform Data** | Spire Enterprises Pty Ltd |
+| **Country** | Australia |
+| **Shared data with public authorities in past 12 months?** | No |
+| **Policies for public authority requests** | Select all four: required legality review, provisions for challenging, data minimization, documentation |
+
+**Why each processor is listed:**
+
+| Processor | Platform Data Access |
+|---|---|
+| **Vercel** | Serverless functions decrypt and process Meta access tokens, API requests pass through Vercel infrastructure |
+| **Supabase** | Stores encrypted Meta access tokens, ad account IDs, and page IDs in `organization_credentials` table |
+| **Google LLC** | Cached ad creative images (originating from Meta) sent to Gemini as reference images for AI generation |
+| **OpenAI, LLC** | Ad metrics and creative copy (from Meta) sent to GPT for AI-powered analysis |
+
+### Reviewer Instructions Template
+
+**Site URL**: `https://www.convertraiq.com/login`
+
+**Testing instructions**:
+
+> Convertra uses Facebook Login to authenticate users and connect their Meta ad accounts. After login, the app uses the following Meta APIs:
+>
+> 1. ads_management — Create new ad campaigns, ad sets, and ads in PAUSED status, upload ad images
+> 2. ads_read — Read ad performance data (impressions, clicks, conversions, spend, ROAS)
+> 3. pages_read_engagement — Read Facebook Page metadata for displaying page names and building ad creatives
+> 4. business_management — Access Business Manager assets (ad accounts, pages, pixels)
+>
+> Testing steps:
+> 1. Go to https://www.convertraiq.com/login
+> 2. Log in with the test credentials provided below
+> 3. The Dashboard loads with live Meta ad performance metrics
+> 4. Click "Meta Ads" in the left sidebar — view ad creatives with images, conversion rates, cost per conversion
+> 5. Click "ConversionIQ" then "Run Channel Analysis"
+> 6. Click "CreativeIQ" in the sidebar to open the ad generation workflow
+> 7. Select a product, audience type, and concept angle, then click Generate
+> 8. Select preferred headlines, body text, and CTAs from the generated options
+> 9. Generate ad images, then click "Publish" to open the Ad Publisher
+> 10. Configure campaign settings and publish ads in PAUSED status to the connected Meta ad account
+
+**Test credentials**: Provide a pre-configured account with a connected Meta ad account containing live campaign data.
+
+**Screen recording**: Attach a video demonstrating the complete workflow from login through ad publishing.
+
+### Troubleshooting
+
+#### "Feature unavailable — Facebook Login is currently unavailable for this app"
+
+**Cause**: OAuth scopes include permissions that are still at "Ready for testing" (not Advanced Access). External users can't use permissions that haven't passed App Review.
+
+**Fix**: Submit all requested OAuth scopes for App Review. All scopes in the `SCOPES` array in `api/auth/meta/connect.ts` must have Advanced Access.
+
+#### Permissions show "Ready for testing" after App Review approval
+
+**Cause**: App Review was only submitted for a subset of permissions (e.g., only "Ads Management Standard Access" but not the individual `ads_management`, `ads_read`, etc. permissions).
+
+**Fix**: Submit a new App Review for each individual permission that's still at "Ready for testing."
+
+#### "Data handling questions" gray dot in Requirements
+
+**Cause**: The Data Handling section of the App Review submission hasn't been completed, or a new submission needs fresh Data Handling answers.
+
+**Fix**: Complete the Data Handling questionnaire during the App Review submission process. Answers are pre-filled from previous submissions.
+
+#### App is "Published" but external users still blocked
+
+**Cause**: App publish status and individual permission access levels are independent. The app can be "Published" while permissions remain at "Ready for testing."
+
+**Fix**: Verify each permission in Use Cases → Customize → Permissions and features shows Advanced Access (not "Ready for testing" or "Ready to publish").
