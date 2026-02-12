@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-02-12 — Fix browser crashes during ad generation from memory exhaustion
+
+### Fixed
+- **Redundant Gemini API calls causing memory explosion**: Each parallel image variation was independently calling `analyzeReferenceImages()` — a full Gemini API call sending up to 6 large base64 reference images. With 5 variations, this meant 5 redundant analysis calls + 10 total API requests with ~60-180MB of base64 data held in memory simultaneously. Now pre-computes reference analysis once and shares it across all parallel calls.
+- **Unbounded parallel image generation**: All image variations (up to 5) fired simultaneously via `Promise.allSettled`, each carrying large base64 payloads. Now batches in pairs (max 2 concurrent) to prevent memory exhaustion.
+- **`requestIdleCallback` causing data loss**: `requestIdleCallback` cleanup cancels pending callbacks on component unmount, losing localStorage saves before navigation. Replaced with simple `setTimeout` (100-200ms) throughout AdGenerator.
+- **`handleRegenerateImage` bypassed image stripping**: Was saving all ads with full base64 images directly, bypassing the `MAX_ADS_WITH_IMAGES` safety limit. Now relies on the `useEffect` save path which correctly strips images from older ads.
+- **Storage warning always cleared on save**: Line 418 (`setStorageWarning(null)`) ran unconditionally after save, overwriting the warning set when data exceeded 3MB. Warning mechanism was effectively non-functional for 3-5MB data sizes.
+- **Unnecessary re-renders on all GeneratedAdCards**: Component was not memoized, causing all cards (with large base64 images) to re-render whenever any ad in the array changed.
+
+### Changed
+- **`generateAdPackage()`**: Pre-computes reference images and analysis once before parallel generation loop, passes `precomputedRefs` to each `generateAdImage()` call
+- **`generateAdImageWithGemini()`**: Accepts optional `precomputedRefs` parameter; computes references on-the-fly only for single image regeneration
+- **`GeneratedAdCard`**: Wrapped in `React.memo()` to prevent expensive re-renders
+- **Initial ads load**: Reduced delay from 3000ms to 100ms for faster page load
+
+### Files Changed
+- `src/services/openaiApi.ts` — Pre-computed reference analysis, concurrency limit of 2 for image generation
+- `src/pages/AdGenerator.tsx` — Removed `requestIdleCallback`, fixed storage warning logic, simplified save paths
+- `src/components/GeneratedAdCard.tsx` — Added `React.memo()` wrapper
+
+---
+
 ## 2026-02-12 — Fix copy selection crash and enable ConversionIQ™ reasoning levels
 
 ### Fixed

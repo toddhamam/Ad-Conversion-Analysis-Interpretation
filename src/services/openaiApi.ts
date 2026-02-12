@@ -1727,6 +1727,11 @@ export async function generateAdImage(config: {
   similarityLevel?: number; // 0 = identical to references, 100 = completely different
   imageSize?: ImageSize; // Aspect ratio for generated images
   productContext?: ProductContext;
+  // Pre-computed reference data to avoid redundant API calls during parallel generation
+  precomputedRefs?: {
+    referenceImages: Array<{ data: string; mimeType: string }>;
+    refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
+  };
 }): Promise<GeneratedImageResult> {
   // Check if we should use Gemini or fall back to DALL-E
   if (USE_GEMINI_FOR_IMAGES && isGeminiConfigured()) {
@@ -1750,6 +1755,11 @@ async function generateAdImageWithGemini(config: {
   similarityLevel?: number; // 0 = identical to references, 100 = completely different
   imageSize?: ImageSize; // Aspect ratio for generated images
   productContext?: ProductContext;
+  // Pre-computed reference data to avoid redundant API calls when generating in parallel
+  precomputedRefs?: {
+    referenceImages: Array<{ data: string; mimeType: string }>;
+    refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
+  };
 }): Promise<GeneratedImageResult> {
   const similarity = config.similarityLevel ?? 30; // Default to 30% variation
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
@@ -1760,39 +1770,44 @@ async function generateAdImageWithGemini(config: {
   const topAds = config.analysisData?.topAds || [];
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
 
-  // CRITICAL: Get HIGH-QUALITY reference images from the browser-captured image cache
-  // This solves the Facebook CDN authentication issue AND filters out blurry/low-res images
-  const MIN_QUALITY_SCORE = 60; // At least 480px on shortest dimension
-  const cachedImages = getTopHighQualityCachedImages(3, MIN_QUALITY_SCORE);
+  let referenceImages: Array<{ data: string; mimeType: string }>;
+  let refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
 
-  console.log(`📸 Found ${cachedImages.length} high-quality reference images (quality >= ${MIN_QUALITY_SCORE})`);
-
-  // Convert cached images to the format needed for Gemini
-  const referenceImages: Array<{ data: string; mimeType: string }> = cachedImages.map(cached => ({
-    data: cached.base64Data,
-    mimeType: cached.mimeType
-  }));
-
-  // Add product mockup images as additional references
-  if (config.productContext?.productImages?.length) {
-    const productImgs = config.productContext.productImages.slice(0, 3); // Max 3 product mockups
-    productImgs.forEach(img => {
-      referenceImages.push({ data: img.base64Data, mimeType: img.mimeType });
-    });
-    console.log(`📦 Added ${productImgs.length} product mockup images as references`);
-  }
-
-  if (cachedImages.length > 0) {
-    console.log('📸 Using high-quality reference images:',
-      cachedImages.map(c => `${c.width}x${c.height} (Q:${c.qualityScore}, ${c.conversionRate?.toFixed(1)}%)`).join(', '));
+  if (config.precomputedRefs) {
+    // Use pre-computed references (avoids redundant API calls during parallel generation)
+    referenceImages = config.precomputedRefs.referenceImages;
+    refAnalysis = config.precomputedRefs.refAnalysis;
+    console.log(`📸 Using pre-computed reference data (${referenceImages.length} images)`);
   } else {
-    console.log('⚠️ No high-quality cached images available. Visit Meta Ads page and cache higher-resolution images.');
-  }
+    // Compute references on-the-fly (single image regeneration)
+    const MIN_QUALITY_SCORE = 60;
+    const cachedImages = getTopHighQualityCachedImages(3, MIN_QUALITY_SCORE);
 
-  // CRITICAL: Analyze reference images to extract SPECIFIC visual characteristics
-  // This enables precise style replication rather than vague "copy this style" instructions
-  const refAnalysis = await analyzeReferenceImages(referenceImages);
-  console.log('🎨 Reference analysis:', refAnalysis);
+    console.log(`📸 Found ${cachedImages.length} high-quality reference images (quality >= ${MIN_QUALITY_SCORE})`);
+
+    referenceImages = cachedImages.map(cached => ({
+      data: cached.base64Data,
+      mimeType: cached.mimeType
+    }));
+
+    if (config.productContext?.productImages?.length) {
+      const productImgs = config.productContext.productImages.slice(0, 3);
+      productImgs.forEach(img => {
+        referenceImages.push({ data: img.base64Data, mimeType: img.mimeType });
+      });
+      console.log(`📦 Added ${productImgs.length} product mockup images as references`);
+    }
+
+    if (cachedImages.length > 0) {
+      console.log('📸 Using high-quality reference images:',
+        cachedImages.map(c => `${c.width}x${c.height} (Q:${c.qualityScore}, ${c.conversionRate?.toFixed(1)}%)`).join(', '));
+    } else {
+      console.log('⚠️ No high-quality cached images available. Visit Meta Ads page and cache higher-resolution images.');
+    }
+
+    refAnalysis = await analyzeReferenceImages(referenceImages);
+    console.log('🎨 Reference analysis:', refAnalysis);
+  }
 
   // Build a detailed prompt for Gemini
   const promptParts = [
@@ -2523,20 +2538,58 @@ export async function generateAdPackage(config: {
   let imageError: string | undefined;
 
   if (config.adType === 'image') {
-    // Generate images in parallel
-    const imagePromises = Array.from({ length: config.variationCount }, (_, i) =>
-      generateAdImage({
-        audienceType: config.audienceType,
-        analysisData: config.analysisData,
-        variationIndex: i,
-        totalVariations: config.variationCount,
-        similarityLevel: config.similarityLevel,
-        imageSize: config.imageSize,
-        productContext: config.productContext,
-      })
-    );
+    // Pre-compute reference images and analysis ONCE before parallel generation
+    // This prevents each parallel call from redundantly fetching and analyzing references
+    // (Previously caused 5x redundant Gemini API calls + ~60-180MB of duplicate base64 data in memory)
+    let precomputedRefs: {
+      referenceImages: Array<{ data: string; mimeType: string }>;
+      refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
+    } | undefined;
 
-    const imageResults = await Promise.allSettled(imagePromises);
+    if (USE_GEMINI_FOR_IMAGES && isGeminiConfigured()) {
+      const MIN_QUALITY_SCORE = 60;
+      const cachedImages = getTopHighQualityCachedImages(3, MIN_QUALITY_SCORE);
+      const referenceImages: Array<{ data: string; mimeType: string }> = cachedImages.map(cached => ({
+        data: cached.base64Data,
+        mimeType: cached.mimeType
+      }));
+
+      if (config.productContext?.productImages?.length) {
+        const productImgs = config.productContext.productImages.slice(0, 3);
+        productImgs.forEach(img => {
+          referenceImages.push({ data: img.base64Data, mimeType: img.mimeType });
+        });
+      }
+
+      console.log(`📸 Pre-computing reference analysis for ${referenceImages.length} images (shared across ${config.variationCount} variations)`);
+      const refAnalysis = await analyzeReferenceImages(referenceImages);
+      precomputedRefs = { referenceImages, refAnalysis };
+    }
+
+    // Generate images with concurrency limit of 2 to prevent memory exhaustion
+    // Each Gemini request carries large base64 payloads; too many in parallel crashes Chrome
+    const MAX_CONCURRENT = 2;
+    const allResults: PromiseSettledResult<GeneratedImageResult>[] = [];
+
+    for (let batch = 0; batch < config.variationCount; batch += MAX_CONCURRENT) {
+      const batchEnd = Math.min(batch + MAX_CONCURRENT, config.variationCount);
+      const batchPromises = Array.from({ length: batchEnd - batch }, (_, i) =>
+        generateAdImage({
+          audienceType: config.audienceType,
+          analysisData: config.analysisData,
+          variationIndex: batch + i,
+          totalVariations: config.variationCount,
+          similarityLevel: config.similarityLevel,
+          imageSize: config.imageSize,
+          productContext: config.productContext,
+          precomputedRefs,
+        })
+      );
+      const batchResults = await Promise.allSettled(batchPromises);
+      allResults.push(...batchResults);
+    }
+
+    const imageResults = allResults;
     images = imageResults
       .filter((r): r is PromiseFulfilledResult<GeneratedImageResult> => r.status === 'fulfilled')
       .map(r => r.value);
