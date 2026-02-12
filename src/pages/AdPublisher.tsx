@@ -820,7 +820,10 @@ const AdPublisher = () => {
 
       const result = await publishAds(config);
       setPublishResult(result);
-      if (!result?.success) {
+      if (result?.success) {
+        // Clear generated ads from localStorage after successful publish to Meta
+        localStorage.removeItem(GENERATED_ADS_STORAGE_KEY);
+      } else {
         setError(result?.error || 'Failed to publish');
       }
     } catch (err: any) {
