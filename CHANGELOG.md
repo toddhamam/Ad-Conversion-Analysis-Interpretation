@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-02-12 — Fix copy selection crash and enable ConversionIQ™ reasoning levels
+
+### Fixed
+- **Chrome crash on copy selection panel**: Replaced `transition: all 0.2s ease` with targeted property transitions (`border-color`, `background-color`) on all copy option buttons and checkboxes — eliminates expensive layout recalculations that caused Chrome to freeze with long body copy text
+- **Body copy text overwhelming the DOM**: Long body copy (>250 chars) is now truncated to 4 lines with a "Show more" / "Show less" toggle, preventing massive text walls from crashing the browser
+- **Unnecessary re-renders on toggle clicks**: Wrapped `CopySelectionPanel` in `React.memo` and stabilized toggle handlers with `useCallback` to prevent cascading re-renders from the parent `AdGenerator` component
+- **ConversionIQ™ reasoning levels had no effect**: The `reasoning.effort` parameter was accepted by the IQ selector UI but silently ignored — never sent to the GPT-5.2 API. All IQ levels (Standard, Deep, Maximum) produced identical results
+- **Temperature + reasoning API conflict**: When reasoning effort is active, temperature is now omitted from the request body to avoid potential GPT-5.2 API conflicts. When reasoning is `'none'`, the reasoning parameter is omitted entirely
+
+### Added
+- **`BodyCopyOption` component**: Dedicated component for body copy items with local expand/collapse state and keyboard accessibility (`onKeyDown` for Enter/Space)
+- **CSS `contain: content`**: Added to `.copy-option` for isolated paint contexts, preventing layout shifts from propagating between options
+
+### Changed
+- **`callOpenAI()`**: Now sends `reasoning: { effort }` parameter to GPT-5.2 when effort is not `'none'`
+- **`callOpenAIWithVision()`**: Same reasoning parameter fix — channel analysis IQ levels now work too
+- Updated stale JSDoc comments that incorrectly stated reasoning was "not supported"
+
+### Files Changed
+- `src/components/CopySelectionPanel.tsx` — `React.memo`, `BodyCopyOption` with truncation and keyboard a11y
+- `src/components/CopySelectionPanel.css` — Targeted transitions, `contain: content`, truncation styles
+- `src/pages/AdGenerator.tsx` — `useCallback` on toggle handlers
+- `src/services/openaiApi.ts` — Reasoning parameter sent to API, temperature/reasoning conflict handling
+
+---
+
 ## 2026-02-12 — Document Meta App Review permissions and submission process
 
 ### Added (CLAUDE.md)

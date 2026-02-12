@@ -421,8 +421,8 @@ export interface CopyOptionsResult {
 }
 
 /**
- * Make a request to OpenAI API (supports both text and vision)
- * Note: The reasoning parameter is not supported by the current OpenAI API
+ * Make a request to OpenAI API (text-only)
+ * When reasoning effort is active, temperature is omitted to avoid API conflicts.
  */
 async function callOpenAI(
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
@@ -445,15 +445,17 @@ async function callOpenAI(
   } = options;
 
   console.log('🤖 Calling OpenAI API with model:', model);
-  console.log('🧠 Reasoning effort:', reasoningEffort, '(note: not applied - parameter not supported)');
+  console.log('🧠 Reasoning effort:', reasoningEffort);
   console.log('🔑 API Key present:', !!OPENAI_API_KEY);
 
-  // Build request body - reasoning parameter is NOT supported by current OpenAI API
+  // Build request body — when reasoning is active, omit temperature to avoid API conflicts
+  const useReasoning = reasoningEffort !== 'none';
   const requestBody: Record<string, unknown> = {
     model,
     messages,
-    temperature,
+    ...(!useReasoning ? { temperature } : {}),
     max_completion_tokens: maxTokens,
+    ...(useReasoning ? { reasoning: { effort: reasoningEffort } } : {}),
   };
 
   const response = await fetch(OPENAI_API_URL, {
@@ -495,7 +497,8 @@ async function callOpenAI(
 
 /**
  * Make a request to OpenAI API with vision/image support
- * Note: The reasoning parameter is not supported for multimodal/vision requests
+ * GPT-5.2 supports reasoning with multimodal inputs.
+ * When reasoning effort is active, temperature is omitted to avoid API conflicts.
  */
 async function callOpenAIWithVision(
   messages: ChatMessage[],
@@ -519,15 +522,17 @@ async function callOpenAIWithVision(
   } = options;
 
   console.log('🖼️ Calling OpenAI Vision API with model:', model);
-  console.log('🧠 Reasoning effort:', reasoningEffort, '(note: not applied to vision requests)');
+  console.log('🧠 Reasoning effort:', reasoningEffort);
   console.log('📸 Processing images for analysis...');
 
-  // Build request body - reasoning parameter is NOT supported for vision/multimodal requests
+  // Build request body — when reasoning is active, omit temperature to avoid API conflicts
+  const useReasoning = reasoningEffort !== 'none';
   const requestBody: Record<string, unknown> = {
     model,
     messages,
-    temperature,
+    ...(!useReasoning ? { temperature } : {}),
     max_completion_tokens: maxTokens,
+    ...(useReasoning ? { reasoning: { effort: reasoningEffort } } : {}),
   };
 
   const response = await fetch(OPENAI_API_URL, {
