@@ -1,6 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { initSentry, captureError, flushSentry } from '../_lib/sentry.js';
+
+initSentry();
 
 // Initialize Stripe (handle missing key gracefully)
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
@@ -197,6 +200,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ url: session.url, sessionId: session.id });
   } catch (error: unknown) {
     console.error('[Billing Checkout API] Error:', error);
+    captureError(error, { route: 'billing/checkout' });
+    await flushSentry();
     const message = error instanceof Error ? error.message : 'Failed to create checkout session';
     return res.status(500).json({ error: message });
   }

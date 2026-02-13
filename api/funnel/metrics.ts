@@ -1,5 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import { initSentry, captureError, flushSentry } from '../_lib/sentry.js';
+
+initSentry();
 
 // Supabase client (module-level for connection reuse)
 const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -255,6 +258,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(metrics);
   } catch (error) {
     console.error('[Funnel Metrics API] Error:', error);
+    captureError(error, { route: 'funnel/metrics' });
+    await flushSentry();
     return res.status(500).json({ error: 'Internal server error' });
   }
 }

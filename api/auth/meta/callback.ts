@@ -1,6 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { encrypt } from '../../_lib/encryption.js';
+import { initSentry, captureError, flushSentry } from '../../_lib/sentry.js';
+
+initSentry();
 
 const META_APP_ID = process.env.META_APP_ID;
 const META_APP_SECRET = process.env.META_APP_SECRET;
@@ -184,6 +187,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.redirect(302, returnUrl.pathname + returnUrl.search);
   } catch (err) {
     console.error('OAuth callback error:', err);
+    captureError(err, { route: 'auth/meta/callback' });
+    await flushSentry();
     const returnUrl = stateData?.returnUrl || '/admin';
     return res.redirect(302, `${returnUrl}?error=meta_connection_failed&message=${encodeURIComponent(err instanceof Error ? err.message : 'Unknown error')}`);
   }

@@ -1,5 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'crypto';
+import { initSentry } from '../../_lib/sentry.js';
+
+initSentry();
 
 const META_APP_ID = process.env.META_APP_ID;
 

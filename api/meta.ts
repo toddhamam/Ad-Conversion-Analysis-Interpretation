@@ -1,6 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { decrypt, encrypt, isEncryptionConfigured } from './_lib/encryption.js';
+import { initSentry, captureError, flushSentry } from './_lib/sentry.js';
+
+initSentry();
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -107,6 +110,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   } catch (err: unknown) {
     console.error(`Meta API error (${route}):`, err);
+    captureError(err, { route: `meta/${route}` });
+    await flushSentry();
     return res.status(500).json({
       error: 'Internal server error',
       message: err instanceof Error ? err.message : 'Unknown error',
@@ -532,6 +537,8 @@ async function handleUpdateSelection(req: VercelRequest, res: VercelResponse) {
 
   if (dbError) {
     console.error('Failed to update selection:', dbError);
+    captureError(dbError, { route: 'meta/update-selection', organizationId: auth.organizationId });
+    await flushSentry();
     return res.status(500).json({ error: 'Failed to save configuration' });
   }
 
@@ -679,6 +686,8 @@ async function handleSaveCredentials(req: VercelRequest, res: VercelResponse) {
 
   if (dbError) {
     console.error('Failed to save credentials:', dbError);
+    captureError(dbError, { route: 'meta/save-credentials', organizationId: auth.organizationId });
+    await flushSentry();
     return res.status(500).json({ error: 'Failed to save credentials' });
   }
 

@@ -1,5 +1,9 @@
+// Sentry must be imported before all other modules
+import './instrument';
+
 // import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import * as Sentry from '@sentry/react'
 import { HelmetProvider } from 'react-helmet-async'
 import './index.css'
 import App from './App.tsx'
@@ -13,7 +17,12 @@ if (import.meta.env.DEV) {
 // Note: StrictMode temporarily disabled to debug rendering issues
 // StrictMode causes double-rendering in development which can cause issues
 // with async operations and localStorage parsing
-createRoot(document.getElementById('root')!).render(
+// React 19 error handlers forward errors to Sentry
+createRoot(document.getElementById('root')!, {
+  onUncaughtError: Sentry.reactErrorHandler(),
+  onCaughtError: Sentry.reactErrorHandler(),
+  onRecoverableError: Sentry.reactErrorHandler(),
+}).render(
   // <StrictMode>
     <HelmetProvider>
       <App />

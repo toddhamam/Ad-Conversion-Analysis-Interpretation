@@ -1,6 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { initSentry, captureError, flushSentry } from '../_lib/sentry.js';
+
+initSentry();
 
 // Initialize Stripe
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
@@ -242,6 +245,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ received: true });
   } catch (error) {
     console.error('[Billing Webhook] Error:', error);
+    captureError(error, { route: 'billing/webhook' });
+    await flushSentry();
     return res.status(500).json({ error: 'Webhook handler failed' });
   }
 }

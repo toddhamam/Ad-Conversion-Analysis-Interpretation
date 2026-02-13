@@ -1,5 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
+import { initSentry, captureError, flushSentry } from '../_lib/sentry.js';
+
+initSentry();
 
 // Initialize Stripe (handle missing key gracefully for dev)
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
@@ -132,6 +135,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error) {
     console.error('[Billing Subscription API] Error:', error);
+    captureError(error, { route: 'billing/subscription' });
+    await flushSentry();
     return res.status(500).json({ error: 'Failed to fetch subscription data' });
   }
 }

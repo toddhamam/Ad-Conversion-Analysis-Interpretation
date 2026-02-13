@@ -1,6 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { encrypt, decrypt, isEncryptionConfigured } from '../_lib/encryption.js';
+import { initSentry, captureError, flushSentry } from '../_lib/sentry.js';
+
+initSentry();
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -87,6 +90,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   } catch (err: unknown) {
     console.error(`Admin credentials error (${action}):`, err);
+    captureError(err, { route: `admin/credentials/${action}` });
+    await flushSentry();
     return res.status(500).json({
       error: 'Internal server error',
       message: err instanceof Error ? err.message : 'Unknown error',

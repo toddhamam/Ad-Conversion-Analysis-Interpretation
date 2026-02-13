@@ -2,6 +2,9 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { encrypt } from './_lib/encryption.js';
+import { initSentry, captureError, flushSentry } from './_lib/sentry.js';
+
+initSentry();
 
 // ── Shared config ──────────────────────────────────────────────────────────────
 
@@ -194,6 +197,8 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
     return res.redirect(302, `${returnUrl}${separator}google_connected=true&site_id=${stateData.siteId}`);
   } catch (err) {
     console.error('Google OAuth callback error:', err);
+    captureError(err, { route: 'google-auth/callback' });
+    await flushSentry();
     const returnUrl = stateData?.returnUrl || '/seo-iq';
     return res.redirect(302, `${returnUrl}?error=google_connection_failed&message=${encodeURIComponent(err instanceof Error ? err.message : 'Unknown error')}`);
   }
