@@ -10,6 +10,9 @@ import {
   buildArticleUserPrompt,
 } from './_lib/seo-prompts.js';
 import { fetchKeywordIdeas, isGoogleAdsConfigured, diagnoseGoogleAdsConfig } from './_lib/google-ads.js';
+import { initSentry, captureError, flushSentry } from './_lib/sentry.js';
+
+initSentry();
 
 // ─── Shared Supabase client ────────────────────────────────────────────────
 
@@ -705,6 +708,8 @@ async function handleRefreshKeywords(req: VercelRequest, res: VercelResponse, au
     });
   } catch (err) {
     console.error('Refresh keywords error:', err);
+    captureError(err, { route: 'seoiq/refresh-keywords', organizationId: auth.organizationId, userId: auth.userId });
+    await flushSentry();
     return res.status(500).json({ error: 'Failed to refresh keywords', message: err instanceof Error ? err.message : 'Unknown error' });
   }
 }
@@ -886,6 +891,8 @@ async function handleResearchKeywords(req: VercelRequest, res: VercelResponse, a
     });
   } catch (err) {
     console.error('Research keywords error:', err);
+    captureError(err, { route: 'seoiq/research-keywords', organizationId: auth.organizationId, userId: auth.userId });
+    await flushSentry();
     return res.status(500).json({
       error: 'Failed to research keywords',
       message: err instanceof Error ? err.message : 'Unknown error',
@@ -1081,6 +1088,8 @@ async function handleGenerateArticle(req: VercelRequest, res: VercelResponse, au
     return res.status(201).json({ article });
   } catch (err) {
     console.error('Generate article error:', err);
+    captureError(err, { route: 'seoiq/generate-article', organizationId: auth.organizationId, userId: auth.userId });
+    await flushSentry();
     return res.status(500).json({
       error: 'Failed to generate article',
       message: err instanceof Error ? err.message : 'Unknown error',
@@ -1243,7 +1252,9 @@ async function handlePublishArticle(req: VercelRequest, res: VercelResponse, aut
     });
   } catch (err) {
     console.error('Publish article error:', err);
+    captureError(err, { route: 'seoiq/publish-article', organizationId: auth.organizationId, userId: auth.userId });
     await markFailed(article_id, err instanceof Error ? err.message : 'Unknown error');
+    await flushSentry();
     return res.status(500).json({
       error: 'Failed to publish article',
       message: err instanceof Error ? err.message : 'Unknown error',
@@ -1451,6 +1462,8 @@ async function handleProvisionOrg(req: VercelRequest, res: VercelResponse) {
     return res.status(201).json({ organization: org, user });
   } catch (err) {
     console.error('[Provision] Unexpected error:', err);
+    captureError(err, { route: 'seoiq/provision-org' });
+    await flushSentry();
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
@@ -1728,6 +1741,8 @@ async function handleAutopilotCron(req: VercelRequest, res: VercelResponse) {
     });
   } catch (err) {
     console.error('Autopilot cron error:', err);
+    captureError(err, { route: 'seoiq/autopilot-cron' });
+    await flushSentry();
     return res.status(500).json({
       error: 'Cron handler failed',
       message: err instanceof Error ? err.message : 'Unknown error',

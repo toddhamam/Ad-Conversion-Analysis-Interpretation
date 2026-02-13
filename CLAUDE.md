@@ -64,7 +64,7 @@ src/
 └── data/            # Mock data for development
 
 api/
-├── _lib/            # Shared backend helpers (encryption, google-auth, google-ads, seo-prompts)
+├── _lib/            # Shared backend helpers (encryption, google-auth, google-ads, seo-prompts, sentry)
 ├── admin/           # Admin-only API routes (credentials.ts)
 ├── auth/            # OAuth flows (meta/connect.ts, meta/callback.ts)
 ├── billing/         # Stripe billing API routes (checkout.ts, portal.ts, webhook.ts)
@@ -82,6 +82,8 @@ public/
 
 | File | Purpose |
 |------|---------|
+| `src/instrument.ts` | Frontend Sentry initialization — must be first import in `main.tsx` |
+| `api/_lib/sentry.ts` | Backend Sentry helper — `initSentry()`, `captureError()`, `flushSentry()` shared across all 12 API routes |
 | `src/services/metaApi.ts` | Meta Marketing API — all calls routed through backend proxy (`/api/meta/proxy`), token never reaches browser |
 | `src/services/openaiApi.ts` | AI analysis (GPT-5.2) + creative generation (Gemini/Veo). Model IDs defined as constants at top of file |
 | `src/services/imageCache.ts` | Client-side image caching with quality scoring |
@@ -275,6 +277,65 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 ```
+
+---
+
+## Sentry Error Monitoring
+
+### Overview
+
+Sentry captures errors from both frontend (React) and backend (Vercel serverless functions) into a single project. Errors are tagged with `organization_id` and `plan_tier` for filtering by tenant.
+
+### Frontend (`src/instrument.ts` + `src/main.tsx`)
+
+- `Sentry.init()` runs as the first import in `main.tsx` via `src/instrument.ts`
+- **Enabled in production only** (`enabled: import.meta.env.PROD`) — silent in local dev
+- Browser tracing at 10% sample rate, session replay on 100% of error sessions (0% normal sessions)
+- React 19 error handlers on `createRoot()`: `onUncaughtError`, `onCaughtError`, `onRecoverableError`
+- `ResizeObserver` errors filtered out via `beforeSend`
+- Fetch request bodies stripped from breadcrumbs
+
+### Backend (`api/_lib/sentry.ts`)
+
+All 12 API routes follow the same pattern:
+
+```typescript
+import { initSentry, captureError, flushSentry } from './_lib/sentry.js'; // or '../_lib/sentry.js' etc.
+initSentry(); // Module-level, runs once per cold start
+
+// In catch blocks:
+captureError(err, { route: 'meta/proxy', organizationId: auth?.organizationId });
+await flushSentry(); // CRITICAL: must flush before response returns in serverless
+```
+
+- `initSentry()` is idempotent — safe to call at module level
+- `captureError()` adds route/org/user tags via `Sentry.withScope()`
+- `flushSentry()` flushes the event queue before the function exits (events are lost otherwise in serverless)
+- Authorization and cookie headers scrubbed from error events
+
+### Import Paths
+
+| Directory | Import path |
+|-----------|-------------|
+| `api/*.ts` | `./_lib/sentry.js` |
+| `api/billing/*.ts` | `../_lib/sentry.js` |
+| `api/funnel/*.ts` | `../_lib/sentry.js` |
+| `api/admin/*.ts` | `../_lib/sentry.js` |
+| `api/auth/meta/*.ts` | `../../_lib/sentry.js` |
+
+### Source Maps
+
+The `@sentry/vite-plugin` in `vite.config.ts` uploads hidden source maps during production builds. Source maps are deleted from the deploy after upload (`filesToDeleteAfterUpload`). The plugin auto-disables when `SENTRY_AUTH_TOKEN` is not set (local dev, CI without secrets).
+
+### Environment Variables
+
+| Variable | Used By | Notes |
+|----------|---------|-------|
+| `VITE_SENTRY_DSN` | Frontend | Public DSN, exposed to browser |
+| `SENTRY_DSN` | Backend serverless | Same DSN value (single project) |
+| `SENTRY_AUTH_TOKEN` | Vite plugin (build time) | Source map upload auth |
+| `SENTRY_ORG` | Vite plugin (build time) | Organization slug |
+| `SENTRY_PROJECT` | Vite plugin (build time) | Project slug |
 
 ---
 
@@ -963,6 +1024,7 @@ VITE_STRIPE_PUBLISHABLE_KEY= # Stripe publishable key (pk_live_* or pk_test_*)
 VITE_SUPABASE_URL=          # Supabase project URL (MUST include https://)
 VITE_SUPABASE_ANON_KEY=     # Supabase anonymous key for frontend auth
 VITE_APP_URL=               # App URL for redirects (https://www.convertraiq.com)
+VITE_SENTRY_DSN=            # Sentry DSN for frontend error tracking (public)
 ```
 
 **Important**: URL environment variables (VITE_SUPABASE_URL, VITE_APP_URL) must include the full protocol (`https://`). Missing the protocol will cause the app to crash at runtime.
@@ -989,6 +1051,10 @@ GOOGLE_ADS_DEVELOPER_TOKEN= # From Google Ads → Tools → API Center
 GOOGLE_ADS_CUSTOMER_ID=     # Google Ads account ID (no dashes, e.g. 1234567890)
 GOOGLE_ADS_REFRESH_TOKEN=   # OAuth refresh token with adwords scope
 ENCRYPTION_KEY=             # 32-byte hex key for encrypting Google OAuth tokens at rest
+SENTRY_DSN=                 # Sentry DSN for backend error tracking (same as VITE_SENTRY_DSN)
+SENTRY_AUTH_TOKEN=          # Sentry auth token for source map uploads (build-time only)
+SENTRY_ORG=                 # Sentry organization slug (build-time only)
+SENTRY_PROJECT=             # Sentry project slug (build-time only)
 ```
 
 **Important**: `SUPABASE_URL` (backend) and `VITE_SUPABASE_URL` (frontend) must both be set in Vercel. The `VITE_` prefix makes variables available to the browser bundle only. Serverless functions in `api/` use `process.env.SUPABASE_URL` (no prefix). Missing `SUPABASE_URL` will cause funnel metrics and other backend Supabase queries to silently return empty data.

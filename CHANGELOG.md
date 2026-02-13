@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-02-13 — Add Sentry error monitoring for frontend and backend
+
+### Added
+- **Frontend Sentry SDK** (`@sentry/react` v10.38): Browser tracing, session replay on error sessions (100% capture rate), React 19 error handlers (`onUncaughtError`, `onCaughtError`, `onRecoverableError`), ResizeObserver noise filtering
+- **Backend Sentry SDK** (`@sentry/node` v10.38): Shared helper `api/_lib/sentry.ts` with `initSentry()`, `captureError()`, `flushSentry()` instrumented across all 12 serverless functions
+- **Source map uploads** (`@sentry/vite-plugin` v4.9): Hidden source maps uploaded during production builds for readable stack traces in Sentry; auto-disabled without `SENTRY_AUTH_TOKEN`
+- **User/org context tagging**: Sentry errors tagged with `organization_id` and `plan_tier` via `OrganizationContext.tsx`
+- **Frontend init** (`src/instrument.ts`): Imported as first module in `main.tsx` for earliest possible initialization
+- **Security**: Authorization and cookie headers scrubbed from backend error events; fetch request bodies stripped from breadcrumbs
+
+### Environment Variables (Vercel)
+| Variable | Purpose |
+|----------|---------|
+| `VITE_SENTRY_DSN` | Frontend DSN (public, exposed to browser) |
+| `SENTRY_DSN` | Backend DSN (same value, for serverless functions) |
+| `SENTRY_AUTH_TOKEN` | Source map upload auth token |
+| `SENTRY_ORG` | Sentry organization slug |
+| `SENTRY_PROJECT` | Sentry project slug |
+
+### Files Changed
+- `src/instrument.ts` — New frontend Sentry initialization
+- `src/main.tsx` — Import instrument first, React 19 error handlers on `createRoot()`
+- `src/contexts/OrganizationContext.tsx` — Sentry user/org context tagging
+- `vite.config.ts` — Added `sentryVitePlugin`, `sourcemap: 'hidden'`
+- `api/_lib/sentry.ts` — New shared backend Sentry helper
+- `api/meta.ts`, `api/seoiq.ts` — Sentry capture in catch blocks
+- `api/billing/checkout.ts`, `api/billing/portal.ts`, `api/billing/webhook.ts`, `api/billing/subscription.ts` — Sentry capture in catch blocks
+- `api/funnel/metrics.ts`, `api/funnel/active-sessions.ts` — Sentry capture in catch blocks
+- `api/admin/credentials.ts`, `api/auth/meta/callback.ts`, `api/auth/meta/connect.ts`, `api/google-auth.ts` — Sentry capture in catch blocks
+- `.gitignore` — Added `.env.sentry-build-plugin`
+- `package.json` — Added `@sentry/react`, `@sentry/node`, `@sentry/vite-plugin`
+
+---
+
 ## 2026-02-13 — Add standalone demo video and "See It In Action" landing page section
 
 ### Added

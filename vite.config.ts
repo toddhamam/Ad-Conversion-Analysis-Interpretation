@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { sentryVitePlugin } from '@sentry/vite-plugin'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -15,8 +16,21 @@ export default defineConfig(({ mode }) => {
   console.log('🔍 Server port:', port)
 
   return {
-    plugins: [react()],
+    plugins: [
+      react(),
+      // Sentry source map upload — must be after all other plugins
+      sentryVitePlugin({
+        org: process.env.SENTRY_ORG,
+        project: process.env.SENTRY_PROJECT,
+        authToken: process.env.SENTRY_AUTH_TOKEN,
+        sourcemaps: {
+          filesToDeleteAfterUpload: ['./dist/**/*.map'],
+        },
+        disable: !process.env.SENTRY_AUTH_TOKEN,
+      }),
+    ],
     build: {
+      sourcemap: 'hidden',
       // Exclude serverless functions from client build
       rollupOptions: {
         external: [/^\/api\//],

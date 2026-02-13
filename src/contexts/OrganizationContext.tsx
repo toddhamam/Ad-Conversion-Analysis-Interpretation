@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import * as Sentry from '@sentry/react';
 import { supabase } from '../lib/supabase';
 import { getTenantSlug } from '../lib/tenant';
 import { useAuth } from './AuthContext';
@@ -195,6 +196,17 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       loadOrgMetaCredentials();
     }
   }, [organization]);
+
+  // Tag Sentry errors with user and organization context
+  useEffect(() => {
+    if (user && organization) {
+      Sentry.setUser({ id: user.id, email: user.email });
+      Sentry.setTag('organization_id', organization.id);
+      Sentry.setTag('plan_tier', organization.plan_tier);
+    } else {
+      Sentry.setUser(null);
+    }
+  }, [user, organization]);
 
   // Compute trial/subscription status
   const isTrialing = organization?.subscription_status === 'trialing';
