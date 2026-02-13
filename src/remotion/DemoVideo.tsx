@@ -12,9 +12,6 @@ import {
 } from 'remotion';
 import { COLORS, GRADIENTS, FONTS, DEMO_CONFIG, DEMO_SCENES, DEMO_VIDEO_CONFIG } from './brand';
 
-// Music file duration in frames (~133 seconds at 30fps)
-const MUSIC_DURATION_FRAMES = 3990;
-
 // Volume envelope for demo video — dips during video playback
 function musicVolume(globalFrame: number): number {
   return interpolate(
