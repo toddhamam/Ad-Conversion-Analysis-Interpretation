@@ -1,0 +1,35 @@
+name: 'Backup Supabase Database'
+
+on:
+  schedule:
+    - cron: '0 6 * * *' # Daily at 6:00 AM UTC
+  workflow_dispatch: # Manual trigger from GitHub UI
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      supabase_db_url: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Create backup directory
+        run: mkdir -p backup
+
+      - name: Backup roles
+        run: supabase db dump --db-url "$supabase_db_url" -f backup/roles.sql --role-only
+
+      - name: Backup schema
+        run: supabase db dump --db-url "$supabase_db_url" -f backup/schema.sql
+
+      - name: Backup data
+        run: supabase db dump --db-url "$supabase_db_url" -f backup/data.sql --data-only --use-copy
+
+      - name: Upload backup as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-backup-${{ github.run_id }}
+          path: backup/
+          retention-days: 30
