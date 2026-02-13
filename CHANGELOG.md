@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-02-13 — Add standalone demo video and "See It In Action" landing page section
+
+### Added
+- **Standalone DemoVideo Remotion composition** (`src/remotion/DemoVideo.tsx`): Extracts the 3-scene product demo sequence (countdown intro, live demo playback at 2x, completion reveal) into its own ~86-second video, separate from the full 3+ minute VSL
+- **"See It In Action" section** on sales landing page: Replaces the mid-page full VSL replay with the focused demo video, positioned after the mechanism reveal (How It Works)
+- **DemoPoster component**: Branded dark poster with "See ConversionIQ™ In Action" headline and pulsing play button, shown before user clicks play
+- **`DEMO_VIDEO_CONFIG` and `DEMO_SCENES`** in `brand.ts`: Standalone video config (2570 frames @ 30fps) and scene timing constants
+- **Nav link**: "See It In Action" added to desktop and mobile navigation, replacing "About", linking to `#demo` anchor
+- **Brush underline**: "Under 3 Minutes" in the section headline uses the lime-to-violet brush underline effect
+
+### Files Changed
+- `src/remotion/DemoVideo.tsx` — New standalone demo video composition (3 scenes + background music)
+- `src/remotion/brand.ts` — Added `DEMO_VIDEO_CONFIG` and `DEMO_SCENES` constants
+- `src/remotion/Root.tsx` — Registered `DemoVideo` composition alongside existing VSL
+- `src/pages/SalesLanding.tsx` — New `DemoPoster` component, replaced mid-page VSL with demo video, updated nav links
+- `src/pages/SalesLanding.css` — New styles for `.see-it-in-action-section`, `.demo-poster-*` with responsive breakpoints
+
+---
+
 ## 2026-02-12 — Fix browser crashes during ad generation from memory exhaustion
 
 ### Fixed

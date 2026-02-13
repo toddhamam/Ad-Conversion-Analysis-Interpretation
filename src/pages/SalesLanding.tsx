@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { Player } from '@remotion/player';
 import SEO, { organizationSchema, softwareApplicationSchema, faqSchema } from '../components/SEO';
 import { ConvertraVSL } from '../remotion/ConvertraVSL';
-import { VIDEO_CONFIG } from '../remotion/brand';
+import { DemoVideo } from '../remotion/DemoVideo';
+import { VIDEO_CONFIG, DEMO_VIDEO_CONFIG } from '../remotion/brand';
 import './SalesLanding.css';
 
 // VSL Thumbnail / Poster
@@ -31,6 +32,31 @@ const VSLPoster: React.FC<{ width: number; height: number }> = () => {
           </svg>
         </div>
         <p className="vsl-poster-play-label">Watch the Full Demo</p>
+      </div>
+    </div>
+  );
+};
+
+// Demo Video Poster — shown before user clicks play
+const DemoPoster: React.FC<{ width: number; height: number }> = () => {
+  return (
+    <div className="demo-poster">
+      <div className="demo-poster-bg" />
+      <div className="demo-poster-content">
+        <p className="demo-poster-eyebrow">Live Product Demo</p>
+        <h2 className="demo-poster-headline">
+          See <span className="demo-poster-highlight">ConversionIQ™</span> In Action
+        </h2>
+        <p className="demo-poster-sub">
+          From zero to published high-converting ads — in under 3 minutes
+        </p>
+        <div className="demo-poster-play">
+          <div className="demo-poster-play-ring" />
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </div>
+        <p className="demo-poster-play-label">Watch the Demo</p>
       </div>
     </div>
   );
@@ -115,9 +141,9 @@ function SalesLanding() {
           {/* Desktop Navigation */}
           <div className="nav-links desktop-nav">
             <a href="#mechanism">How It Works</a>
+            <a href="#demo">See It In Action</a>
             <a href="#offer">What You Get</a>
             <a href="#pricing">Pricing</a>
-            <a href="#credibility">About</a>
           </div>
 
           <div className="nav-actions">
@@ -141,9 +167,9 @@ function SalesLanding() {
         {/* Mobile Navigation */}
         <div className={`mobile-nav ${isMobileMenuOpen ? 'open' : ''}`}>
           <a href="#mechanism">How It Works</a>
+          <a href="#demo">See It In Action</a>
           <a href="#offer">What You Get</a>
           <a href="#pricing">Pricing</a>
-          <a href="#credibility">About</a>
           <Link to="/login" className="mobile-login">Log in</Link>
           <a href={calendarUrl} className="mobile-cta">Schedule Demo</a>
         </div>
@@ -548,26 +574,26 @@ function SalesLanding() {
         </div>
       </section>
 
-      {/* Mid-Page VSL Replay — after mechanism, before bespoke */}
-      <section className="section vsl-midpage-section">
+      {/* See It In Action — standalone product demo video */}
+      <section id="demo" className="section see-it-in-action-section">
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">
-            Don't Take Our Word for It.<br />
-            <span className="header-emphasis">Watch It Happen in Under 3 Minutes.</span>
+            See It In Action.<br />
+            <span className="header-emphasis">Zero to High-Converting Ads Published in <span className="brush-underline">Under 3 Minutes</span>.</span>
           </h2>
-          <p className="vsl-midpage-sub animate-on-scroll delay-1">
-            From login to published high-converting ads — powered by <span className="highlight">ConversionIQ™</span>.
+          <p className="see-it-sub animate-on-scroll delay-1">
+            No slides. No mockups. Watch <span className="highlight">ConversionIQ™</span> generate and publish real ads — live.
           </p>
-          <div className="vsl-midpage-player animate-on-scroll delay-2">
+          <div className="see-it-player animate-on-scroll delay-2">
             <div className="demo-container">
               <div className="vsl-player-wrapper">
                 <div className="demo-gradient-border"></div>
                 <Player
-                  component={ConvertraVSL}
-                  durationInFrames={VIDEO_CONFIG.durationInFrames}
-                  fps={VIDEO_CONFIG.fps}
-                  compositionWidth={VIDEO_CONFIG.width}
-                  compositionHeight={VIDEO_CONFIG.height}
+                  component={DemoVideo}
+                  durationInFrames={DEMO_VIDEO_CONFIG.durationInFrames}
+                  fps={DEMO_VIDEO_CONFIG.fps}
+                  compositionWidth={DEMO_VIDEO_CONFIG.width}
+                  compositionHeight={DEMO_VIDEO_CONFIG.height}
                   style={{
                     width: '100%',
                     aspectRatio: '16 / 9',
@@ -576,7 +602,7 @@ function SalesLanding() {
                   }}
                   controls
                   renderPoster={({ width, height }: { width: number; height: number }) => (
-                    <VSLPoster width={width} height={height} />
+                    <DemoPoster width={width} height={height} />
                   )}
                   posterFillMode="player-size"
                   showPosterWhenUnplayed

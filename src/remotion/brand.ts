@@ -60,6 +60,21 @@ export const DEMO_CONFIG = {
   // Computed: playback frames = 142 * 30 / 2 = 2130
 } as const;
 
+// Demo-only video configuration (standalone demo reel)
+export const DEMO_VIDEO_CONFIG = {
+  fps: 30,
+  width: 1920,
+  height: 1080,
+  durationInFrames: 2570, // 240 + 2130 + 200 = ~85.7 seconds
+} as const;
+
+// Scene timing for standalone demo video (frames start at 0)
+export const DEMO_SCENES = {
+  intro: { from: 0, duration: 240 },        // 0-8s (countdown 3-2-1)
+  playback: { from: 240, duration: 2130 },   // 8-79s (full video at 2x)
+  complete: { from: 2370, duration: 200 },    // 79-86s (victory reveal)
+} as const;
+
 // Scene timing (in frames at 30fps)
 export const SCENES = {
   hook: { from: 0, duration: 180 },             // 0-6s
