@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-02-14 — Filter Supabase Auth AbortError from Sentry
+
+### Fixed
+- **Sentry noise reduction**: Filter out `AbortError: signal is aborted without reason` from Supabase Auth's `navigator.locks` mechanism in `beforeSend`. This harmless error fires when the browser's Web Locks API is interrupted by page navigation, tab switching, or component unmount — not a real user-facing issue.
+
+### Files Changed
+- `src/instrument.ts` — Added AbortError filter alongside existing ResizeObserver filter
+
+---
+
 ## 2026-02-13 — Add Sentry error monitoring for frontend and backend
 
 ### Added

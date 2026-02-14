@@ -30,9 +30,20 @@ Sentry.init({
 
   // Filter out known non-actionable browser errors
   beforeSend(event) {
-    if (event.exception?.values?.[0]?.value?.includes('ResizeObserver')) {
+    const errorValue = event.exception?.values?.[0]?.value || '';
+    const errorType = event.exception?.values?.[0]?.type || '';
+
+    // ResizeObserver loop errors — benign browser timing issue
+    if (errorValue.includes('ResizeObserver')) {
       return null;
     }
+
+    // Supabase Auth lock AbortError — fires when navigator.locks is interrupted
+    // by page navigation, tab switching, or component unmount. Harmless.
+    if (errorType === 'AbortError' && errorValue.includes('signal is aborted without reason')) {
+      return null;
+    }
+
     return event;
   },
 });
