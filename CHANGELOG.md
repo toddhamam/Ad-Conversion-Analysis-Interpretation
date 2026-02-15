@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-02-15 — Add Integrations page and Meta disconnect flow
+
+### Added
+- **Integrations page** (`/integrations`): Self-service page for managing connected advertising platforms. Shows Meta Ads connection status (connected/expired/not connected), account details (ad account ID, page ID, token expiry), and connect/disconnect actions. Includes ad account, Facebook page, and Meta pixel selection dropdowns when connected. Google Ads and TikTok Ads shown as "Coming Soon" placeholders.
+- **Meta disconnect API** (`api/meta.ts` → `disconnect` route): JWT-authenticated endpoint that deletes Meta credentials from `organization_credentials`. Added to existing catch-all handler (no new serverless function).
+- **`disconnectMeta()` frontend service** (`src/services/metaApi.ts`): Calls the disconnect endpoint with JWT auth and clears the local credential cache.
+- **Sidebar nav item**: "Integrations" link added below SEO IQ with link icon.
+- **Profile dropdown menu item**: "Integrations" option added between Account Settings and Billing Details.
+- **`pages_show_list` OAuth scope**: Added to `api/auth/meta/connect.ts` — required for `GET /me/accounts` to list Facebook Pages during OAuth connection.
+- **Meta App Review resubmission guide** (`.context/meta-app-review-resubmission-guide.md`): Comprehensive guide with per-permission screen recording scripts, submission descriptions, and reviewer instructions for all 5 permissions.
+
+### Changed
+- **SubscriptionGate**: Added `/integrations` to `ALWAYS_ALLOWED_PATHS` so users can manage integrations regardless of subscription status.
+- **`OrgMetaIds` type** now exported from `metaApi.ts` for use by the Integrations page.
+
+### Files Created
+- `src/pages/Integrations.tsx` — Integrations management page
+- `src/pages/Integrations.css` — Integrations page styles
+- `.context/meta-app-review-resubmission-guide.md` — Meta App Review resubmission guide
+
+### Files Changed
+- `api/auth/meta/connect.ts` — Added `pages_show_list` to OAuth scopes
+- `api/meta.ts` — Added `disconnect` route handler
+- `src/services/metaApi.ts` — Added `disconnectMeta()`, exported `OrgMetaIds` type
+- `src/App.tsx` — Added `/integrations` route
+- `src/components/Sidebar.tsx` — Added Integrations nav item
+- `src/components/SubscriptionGate.tsx` — Added `/integrations` to always-allowed paths
+- `src/components/UserProfileDropdown.tsx` — Added Integrations menu item
+- `CLAUDE.md` — Updated OAuth scopes documentation to include `pages_show_list`
+
+---
+
 ## 2026-02-14 — Filter Supabase Auth AbortError from Sentry
 
 ### Fixed

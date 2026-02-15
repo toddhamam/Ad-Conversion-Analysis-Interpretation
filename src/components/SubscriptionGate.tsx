@@ -10,7 +10,7 @@ interface SubscriptionGateProps {
 }
 
 /** Routes that are always accessible regardless of subscription status */
-const ALWAYS_ALLOWED_PATHS = ['/billing', '/account', '/choose-plan'];
+const ALWAYS_ALLOWED_PATHS = ['/billing', '/account', '/choose-plan', '/integrations'];
 
 /** Routes that require a subscription (action features) */
 const ACTION_PATHS = ['/insights', '/creatives', '/publish', '/seo-iq'];

@@ -105,6 +105,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleFetchPixels(req, res);
       case 'save-credentials':
         return handleSaveCredentials(req, res);
+      case 'disconnect':
+        return handleDisconnect(req, res);
       default:
         return res.status(400).json({ error: `Unknown route: ${route}` });
     }
@@ -734,4 +736,33 @@ async function handleFetchPixels(req: VercelRequest, res: VercelResponse) {
   }
 
   return res.status(200).json({ pixels: pixelsData.data || [] });
+}
+
+// ─── Route: disconnect ──────────────────────────────────────────────────────
+// Remove Meta credentials for the authenticated user's organization.
+
+async function handleDisconnect(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { error: dbError } = await supabase
+    .from('organization_credentials')
+    .delete()
+    .eq('organization_id', auth.organizationId)
+    .eq('provider', 'meta');
+
+  if (dbError) {
+    console.error('Failed to disconnect Meta:', dbError);
+    captureError(dbError, { route: 'meta/disconnect', organizationId: auth.organizationId });
+    await flushSentry();
+    return res.status(500).json({ error: 'Failed to disconnect Meta account' });
+  }
+
+  return res.status(200).json({ success: true });
 }
