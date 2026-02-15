@@ -129,13 +129,12 @@ function Integrations() {
   const statusLabel = isConnected ? 'Connected' : isExpired ? 'Token Expired' : 'Not Connected';
   const statusClass = isConnected ? 'connected' : isExpired ? 'expired' : 'disconnected';
 
-  const formatExpiry = (dateStr: string | null) => {
-    if (!dateStr) return 'Unknown';
-    const date = new Date(dateStr);
-    const now = new Date();
-    const daysLeft = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    return `${date.toLocaleDateString()} (${daysLeft > 0 ? `${daysLeft} days left` : 'Expired'})`;
-  };
+  // Track whether config has unsaved changes
+  const hasUnsavedChanges = isConnected && (
+    selectedAccountId !== (metaStatus?.adAccountId || '') ||
+    selectedPageId !== (metaStatus?.pageId || '') ||
+    selectedPixelId !== (metaStatus?.pixelId || '')
+  );
 
   if (loading) {
     return <Loading size="large" message="ConversionIQ™ syncing channels..." />;
@@ -189,40 +188,11 @@ function Integrations() {
             </div>
           </div>
 
-          {/* Connection Details */}
-          {(isConnected || isExpired) && (
-            <div className="integration-details">
-              <div className="detail-item">
-                <span className="detail-label">Account</span>
-                <span className="detail-value">
-                  {metaStatus?.accountName || <span className="muted">Not selected</span>}
-                </span>
-              </div>
-              <div className="detail-item">
-                <span className="detail-label">Ad Account ID</span>
-                <span className="detail-value">
-                  {metaStatus?.adAccountId || <span className="muted">Not selected</span>}
-                </span>
-              </div>
-              <div className="detail-item">
-                <span className="detail-label">Page ID</span>
-                <span className="detail-value">
-                  {metaStatus?.pageId || <span className="muted">Not selected</span>}
-                </span>
-              </div>
-              <div className="detail-item">
-                <span className="detail-label">Token Expires</span>
-                <span className="detail-value">{formatExpiry(metaStatus?.tokenExpiresAt || null)}</span>
-              </div>
-            </div>
-          )}
-
           {/* Configuration Dropdowns */}
-          {isConnected && (metaStatus?.needsConfiguration || metaStatus?.availableAccounts?.length > 0) && (
+          {isConnected && (
             <div className="integration-config">
-              <h4>Account Configuration</h4>
-              <div className="config-form">
-                {metaStatus?.availableAccounts?.length > 0 && (
+              {metaStatus?.availableAccounts && metaStatus.availableAccounts.length > 0 && (
+                <div className="config-form">
                   <div className="config-group">
                     <label>Ad Account</label>
                     <select
@@ -237,53 +207,55 @@ function Integrations() {
                       ))}
                     </select>
                   </div>
-                )}
 
-                {metaStatus?.availablePages?.length > 0 && (
-                  <div className="config-group">
-                    <label>Facebook Page</label>
-                    <select
-                      value={selectedPageId}
-                      onChange={(e) => setSelectedPageId(e.target.value)}
-                    >
-                      <option value="">-- Select page --</option>
-                      {metaStatus.availablePages.map((page) => (
-                        <option key={page.id} value={page.id}>
-                          {page.name} ({page.id})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                  {metaStatus?.availablePages && metaStatus.availablePages.length > 0 && (
+                    <div className="config-group">
+                      <label>Facebook Page</label>
+                      <select
+                        value={selectedPageId}
+                        onChange={(e) => setSelectedPageId(e.target.value)}
+                      >
+                        <option value="">-- Select page --</option>
+                        {metaStatus.availablePages.map((page) => (
+                          <option key={page.id} value={page.id}>
+                            {page.name} ({page.id})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
-                {availablePixels.length > 0 && (
-                  <div className="config-group">
-                    <label>Meta Pixel</label>
-                    <select
-                      value={selectedPixelId}
-                      onChange={(e) => setSelectedPixelId(e.target.value)}
-                    >
-                      <option value="">-- Select pixel (optional) --</option>
-                      {availablePixels.map((pixel) => (
-                        <option key={pixel.id} value={pixel.id}>
-                          {pixel.name} ({pixel.id})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                  {availablePixels.length > 0 && (
+                    <div className="config-group">
+                      <label>Meta Pixel</label>
+                      <select
+                        value={selectedPixelId}
+                        onChange={(e) => setSelectedPixelId(e.target.value)}
+                      >
+                        <option value="">-- Select pixel (optional) --</option>
+                        {availablePixels.map((pixel) => (
+                          <option key={pixel.id} value={pixel.id}>
+                            {pixel.name} ({pixel.id})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
-                <div className="integration-actions">
-                  <button
-                    className="save-config-button"
-                    onClick={handleSaveConfig}
-                    disabled={!selectedAccountId || savingConfig}
-                  >
-                    {savingConfig && <span className="btn-spinner" />}
-                    {savingConfig ? 'Saving...' : 'Save Configuration'}
-                  </button>
+                  {hasUnsavedChanges && (
+                    <div className="integration-actions">
+                      <button
+                        className="save-config-button"
+                        onClick={handleSaveConfig}
+                        disabled={!selectedAccountId || savingConfig}
+                      >
+                        {savingConfig && <span className="btn-spinner" />}
+                        {savingConfig ? 'Saving...' : 'Save Configuration'}
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
           )}
 
