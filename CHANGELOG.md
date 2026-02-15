@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-02-15 — Clean up connected integration display
+
+### Changed
+- **Integrations page**: Simplified the connected Meta Ads card by removing the read-only "Connection Details" grid (Account, Ad Account ID, Page ID, Token Expires). Connected state now shows only the configuration dropdowns and a Disconnect button.
+- **Save Configuration button**: Now only appears when the user changes a dropdown to a different value than what's saved. Once configuration is saved, the button disappears — only Disconnect remains.
+- **Configuration dropdowns**: Always visible when connected (no longer gated by `needsConfiguration` flag).
+
+### Removed
+- Connection Details section CSS (`.integration-details`, `.detail-item`, `.detail-label`, `.detail-value`)
+- `formatExpiry()` helper function (no longer needed)
+- "Account Configuration" heading from config section
+
+---
+
 ## 2026-02-15 — Add Integrations page and Meta disconnect flow
 
 ### Added
