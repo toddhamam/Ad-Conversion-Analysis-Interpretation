@@ -98,6 +98,11 @@ const UserProfileDropdown = () => {
     navigate('/account');
   };
 
+  const handleIntegrations = () => {
+    setIsOpen(false);
+    navigate('/integrations');
+  };
+
   const handleBillingDetails = () => {
     setIsOpen(false);
     navigate('/billing');
@@ -169,6 +174,14 @@ const UserProfileDropdown = () => {
               <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
             </svg>
             <span>Account Settings</span>
+          </button>
+
+          <button className="menu-item" onClick={handleIntegrations}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+            <span>Integrations</span>
           </button>
 
           <button className="menu-item" onClick={handleBillingDetails}>

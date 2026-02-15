@@ -33,7 +33,7 @@ interface AvailablePage {
   name: string;
 }
 
-interface OrgMetaIds {
+export interface OrgMetaIds {
   adAccountId: string;
   pageId: string;
   pixelId: string;
@@ -112,6 +112,30 @@ export function getOrgMetaIds(): OrgMetaIds | null {
  */
 export function clearOrgMetaCache(): void {
   _orgMeta = null;
+}
+
+/**
+ * Disconnect Meta credentials for the current org.
+ * Removes credentials server-side and clears the local cache.
+ */
+export async function disconnectMeta(): Promise<void> {
+  const token = await getAuthToken();
+  if (!token) throw new Error('Not authenticated');
+
+  const res = await fetch('/api/meta/disconnect', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to disconnect Meta account');
+  }
+
+  clearOrgMetaCache();
 }
 
 /**
