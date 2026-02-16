@@ -67,6 +67,27 @@ function SalesLanding() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // ROI Calculator state
+  const [monthlyAdSpend, setMonthlyAdSpend] = useState(100000);
+  const [teamSize, setTeamSize] = useState(3);
+  const [costPerMember, setCostPerMember] = useState(10000);
+  const [creativesPerWeek, setCreativesPerWeek] = useState(3);
+  const [daysToLaunch, setDaysToLaunch] = useState(5);
+
+  // ROI calculations
+  const annualTeamSavings = teamSize * costPerMember * 12 * 0.70;
+  const annualAdSpendRecovered = monthlyAdSpend * 12 * 0.60 * 0.47;
+  const totalAnnualSavings = annualTeamSavings + annualAdSpendRecovered;
+  const velocityMultiple = Math.round(250 / creativesPerWeek);
+  const annualHoursSaved = creativesPerWeek * (daysToLaunch * 4) * 52;
+
+  const formatCurrency = (value: number): string => {
+    if (value >= 1000000) {
+      return `$${(value / 1000000).toFixed(1)}M`;
+    }
+    return `$${Math.round(value).toLocaleString()}`;
+  };
+
   useEffect(() => {
     // Smooth scroll behavior for anchor links
     const handleAnchorClick = (e: MouseEvent) => {
@@ -1153,6 +1174,15 @@ function SalesLanding() {
               <p className="cost-total-label">Total hidden cost of the status quo</p>
               <p className="cost-total-amount">$230–275K <span className="cost-total-period">per year</span></p>
               <p className="cost-total-note">And that's before counting the revenue you're leaving on the table from underperforming creatives.</p>
+              <div className="cost-total-cta">
+                <p className="cost-total-cta-text">But what are <em>your</em> actual numbers?</p>
+                <a href="#roi-calculator" className="cost-total-cta-btn">
+                  Calculate Your Savings
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+                    <path d="M12 5v14M5 12l7 7 7-7"/>
+                  </svg>
+                </a>
+              </div>
             </div>
           </div>
 
@@ -1173,6 +1203,151 @@ function SalesLanding() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ROI Calculator Section */}
+      <section id="roi-calculator" className="section roi-section">
+        <div className="section-container">
+          <h2 className="section-header animate-on-scroll">
+            What Could ConversionIQ™ Save <span className="header-emphasis">Your Business</span>?
+          </h2>
+          <p className="roi-subtitle animate-on-scroll delay-1">
+            Enter your numbers below. See what autonomous creative velocity is worth to your bottom line.
+          </p>
+
+          <div className="roi-calculator animate-on-scroll delay-2">
+            <div className="roi-inputs">
+              <div className="roi-input-row">
+                <div className="roi-input-header">
+                  <label className="roi-input-label" htmlFor="roi-ad-spend">Monthly Ad Spend</label>
+                  <span className="roi-input-value" aria-live="polite">${monthlyAdSpend.toLocaleString()}</span>
+                </div>
+                <input
+                  type="range"
+                  id="roi-ad-spend"
+                  className="roi-slider"
+                  min={10000}
+                  max={1000000}
+                  step={5000}
+                  value={monthlyAdSpend}
+                  onChange={(e) => setMonthlyAdSpend(Number(e.target.value))}
+                  aria-label="Monthly ad spend"
+                />
+              </div>
+
+              <div className="roi-input-row">
+                <div className="roi-input-header">
+                  <label className="roi-input-label" htmlFor="roi-team-size">Creative Team Size</label>
+                  <span className="roi-input-value" aria-live="polite">{teamSize} {teamSize === 1 ? 'person' : 'people'}</span>
+                </div>
+                <input
+                  type="range"
+                  id="roi-team-size"
+                  className="roi-slider"
+                  min={1}
+                  max={15}
+                  step={1}
+                  value={teamSize}
+                  onChange={(e) => setTeamSize(Number(e.target.value))}
+                  aria-label="Creative team size"
+                />
+              </div>
+
+              <div className="roi-input-row">
+                <div className="roi-input-header">
+                  <label className="roi-input-label" htmlFor="roi-cost-member">Avg. Cost per Team Member</label>
+                  <span className="roi-input-value" aria-live="polite">${costPerMember.toLocaleString()}/mo</span>
+                </div>
+                <input
+                  type="range"
+                  id="roi-cost-member"
+                  className="roi-slider"
+                  min={3000}
+                  max={25000}
+                  step={500}
+                  value={costPerMember}
+                  onChange={(e) => setCostPerMember(Number(e.target.value))}
+                  aria-label="Average monthly cost per team member"
+                />
+              </div>
+
+              <div className="roi-input-row">
+                <div className="roi-input-header">
+                  <label className="roi-input-label" htmlFor="roi-creatives-week">Creatives Produced per Week</label>
+                  <span className="roi-input-value" aria-live="polite">{creativesPerWeek} {creativesPerWeek === 1 ? 'creative' : 'creatives'}</span>
+                </div>
+                <input
+                  type="range"
+                  id="roi-creatives-week"
+                  className="roi-slider"
+                  min={1}
+                  max={20}
+                  step={1}
+                  value={creativesPerWeek}
+                  onChange={(e) => setCreativesPerWeek(Number(e.target.value))}
+                  aria-label="Creatives produced per week"
+                />
+              </div>
+
+              <div className="roi-input-row">
+                <div className="roi-input-header">
+                  <label className="roi-input-label" htmlFor="roi-days-launch">Days from Brief to Launch</label>
+                  <span className="roi-input-value" aria-live="polite">{daysToLaunch} {daysToLaunch === 1 ? 'day' : 'days'}</span>
+                </div>
+                <input
+                  type="range"
+                  id="roi-days-launch"
+                  className="roi-slider"
+                  min={1}
+                  max={14}
+                  step={1}
+                  value={daysToLaunch}
+                  onChange={(e) => setDaysToLaunch(Number(e.target.value))}
+                  aria-label="Days from creative brief to ad launch"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="roi-results animate-on-scroll delay-3">
+            <div className="roi-results-primary">
+              <div className="roi-result-card">
+                <div className="roi-result-value">{formatCurrency(annualTeamSavings)}</div>
+                <div className="roi-result-label">Annual Team Cost Savings</div>
+                <div className="roi-result-detail">Replaces 70% of manual creative production</div>
+              </div>
+              <div className="roi-result-card">
+                <div className="roi-result-value">{formatCurrency(annualAdSpendRecovered)}</div>
+                <div className="roi-result-label">Wasted Ad Spend Recovered</div>
+                <div className="roi-result-detail">47% less spend on non-converting creatives</div>
+              </div>
+              <div className="roi-result-card roi-result-card-primary">
+                <div className="roi-result-value roi-result-total">{formatCurrency(totalAnnualSavings)}</div>
+                <div className="roi-result-label">Total Annual Savings</div>
+              </div>
+            </div>
+
+            <div className="roi-results-secondary">
+              <div className="roi-result-secondary">
+                <span className="roi-secondary-value">{velocityMultiple}x</span>
+                <span className="roi-secondary-label">Creative Velocity Increase</span>
+              </div>
+              <div className="roi-result-secondary">
+                <span className="roi-secondary-value">{annualHoursSaved.toLocaleString()}</span>
+                <span className="roi-secondary-label">Team Hours Freed Per Year</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="roi-cta-row animate-on-scroll delay-4">
+            <p className="roi-disclaimer">
+              Estimates based on industry benchmarks. Schedule a custom assessment for your business.
+            </p>
+            <a href={calendarUrl} className="cta-primary">
+              Get Your Custom Assessment
+            </a>
           </div>
         </div>
       </section>
@@ -1225,6 +1400,7 @@ function SalesLanding() {
             <a href="#mechanism">How It Works</a>
             <a href="#offer">What You Get</a>
             <a href="#pricing">Pricing</a>
+            <a href="#roi-calculator">ROI Calculator</a>
             <a href={calendarUrl}>Contact</a>
           </div>
           <div className="footer-legal">

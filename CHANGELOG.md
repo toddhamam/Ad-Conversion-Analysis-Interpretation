@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-02-16 — Add interactive ROI calculator to sales landing page
+
+### Added
+- **ROI Calculator section** on the sales landing page (`/`): Interactive calculator that lets enterprise prospects input their own numbers (monthly ad spend, creative team size, cost per team member, creatives produced per week, days from brief to launch) and see personalized annual savings in real-time.
+- **5 range slider inputs** with live-updating values, lime-themed thumb styling, and accessible labels.
+- **5 calculated output metrics**: Annual Team Cost Savings, Wasted Ad Spend Recovered, Total Annual Savings (featured with lime-to-violet gradient text), Creative Velocity Increase (Xx faster), and Team Hours Freed Per Year.
+- **"Calculate Your Savings" teaser** inside the Cost of Waiting total card — contextual CTA with down-arrow that smooth-scrolls to the calculator section.
+- **Footer nav link** for ROI Calculator.
+- **Full responsive design**: 3-column result cards on desktop, single-column on tablet/mobile, larger touch targets on small screens.
+- **Calculation formulas**: Team savings (70% of manual creative labor replaced), ad spend recovery (47% reduction on the 60% wasted on non-converting creatives), velocity multiple (250 creatives/week vs manual rate), hours freed (manual hours per creative × 52 weeks).
+
+### Default outputs (with default inputs)
+- $252,000 annual team savings + $338,400 ad spend recovered = **$590,400 total annual savings**
+- 83x creative velocity increase, 3,120 team hours freed per year
+
+---
+
 ## 2026-02-15 — Clean up connected integration display
 
 ### Changed
