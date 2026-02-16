@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-02-16 — Condense sales landing page sections and add calculator card styling
+
+### Changed
+- **ROI Calculator**: Wrapped sliders and results inside a white card container with rounded corners, subtle shadow, and a horizontal divider — the calculator now stands out as a distinct widget rather than blending into the page background. Result cards use `var(--bg-secondary)` to contrast against the white card.
+- **"How It Works" mechanism steps** (Extract, Interpret, Generate, Repeat): Converted from four large stacked full-width cards with multiple paragraphs and decorative animations into a compact **2x2 grid** with step pill, title, and single condensed paragraph each.
+- **"Automated Partnership" bespoke features** (Bespoke Implementation, White Glove Management, Dedicated Partnership): Converted from three tall stacked cards with multi-paragraph copy and animated visuals into a compact **3-column grid** with icon, title, and single paragraph each.
+
+### Removed
+- Decorative CSS animations from mechanism steps: platform dots, insight bubbles, mini ad cards, growth chart bars and their associated `@keyframes` (`platformFloat`, `bubblePop`, `cardFan`, `barGrow`).
+- Decorative CSS animations from bespoke features: config pulse dots, team avatar circles, handshake icon and their associated `@keyframes` (`configPulse`).
+- Verbose multi-paragraph copy from both sections — replaced with concise single-paragraph summaries.
+- ~360 lines of unused CSS removed.
+
+---
+
 ## 2026-02-16 — Add interactive ROI calculator to sales landing page
 
 ### Added

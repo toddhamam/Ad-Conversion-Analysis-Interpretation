@@ -479,117 +479,37 @@ function SalesLanding() {
             </div>
           </div>
 
-          <p className="mechanism-lead animate-on-scroll delay-3">Here's how it works:</p>
-
-          <div className="mechanism-steps">
-            <div className="mechanism-step animate-on-scroll delay-1">
+          <div className="mechanism-steps animate-on-scroll delay-3">
+            <div className="mechanism-step">
               <div className="step-number">01</div>
-              <div className="step-content">
-                <h3 className="step-title">Extract</h3>
-                <p className="step-description">
-                  ConversionIQ™ continuously ingests every data point across your ad channels—Meta, Google,
-                  TikTok, programmatic—building a real-time intelligence layer that powers autonomous creative decisions at scale.
-                </p>
-                <p className="step-benefit">No more waiting for reports. The system is always learning.</p>
-              </div>
-              {/* Step Visual Placeholder */}
-              <div className="step-visual">
-                <div className="visual-placeholder-small">
-                  <div className="platform-icons">
-                    <span className="platform-dot"></span>
-                    <span className="platform-dot"></span>
-                    <span className="platform-dot"></span>
-                    <span className="platform-dot"></span>
-                  </div>
-                  <div className="unify-arrow"></div>
-                  <div className="unified-icon"></div>
-                </div>
-              </div>
+              <h3 className="step-title">Extract</h3>
+              <p className="step-description">
+                Continuously ingests data across all your ad channels—building a real-time intelligence layer that's always learning.
+              </p>
             </div>
 
-            <div className="mechanism-step animate-on-scroll delay-2">
+            <div className="mechanism-step">
               <div className="step-number">02</div>
-              <div className="step-content">
-                <h3 className="step-title">Interpret</h3>
-                <p className="step-lead">This is where the intelligence lives.</p>
-                <p className="step-description">
-                  ConversionIQ™ performs deep pattern analysis on every conversion — identifying the exact
-                  creative elements, copy structures, and audience signals that drive action.
-                </p>
-                <p className="step-description">
-                  It maps the conversion DNA across your entire ad ecosystem —
-                  what triggers purchases, what accelerates decisions, what compounds performance.
-                </p>
-                <p className="step-benefit">
-                  Insights no human team could extract at this speed.<br />
-                  Connections that power autonomous creative decisions.
-                </p>
-              </div>
-              {/* Step Visual Placeholder */}
-              <div className="step-visual">
-                <div className="visual-placeholder-small">
-                  <div className="insight-bubbles">
-                    <span className="bubble"></span>
-                    <span className="bubble"></span>
-                    <span className="bubble"></span>
-                  </div>
-                </div>
-              </div>
+              <h3 className="step-title">Interpret</h3>
+              <p className="step-description">
+                Deep pattern analysis on every conversion—identifying the exact creative elements, copy structures, and audience signals that drive action.
+              </p>
             </div>
 
-            <div className="mechanism-step animate-on-scroll delay-3">
+            <div className="mechanism-step">
               <div className="step-number">03</div>
-              <div className="step-content">
-                <h3 className="step-title">Generate</h3>
-                <p className="step-lead">Here's where velocity becomes real.</p>
-                <p className="step-description">
-                  ConversionIQ™ autonomously engineers new ad creatives—copy, visuals, and targeting—from
-                  proven conversion patterns. Not templates. Not best guesses. Real intelligence, at scale.
-                </p>
-                <ul className="step-list">
-                  <li>Dozens of creatives generated autonomously.</li>
-                  <li>Every variation built from your proven conversion patterns.</li>
-                  <li><strong>Launched, tested, and scaled — without waiting on a single human.</strong></li>
-                </ul>
-              </div>
-              {/* Step Visual Placeholder */}
-              <div className="step-visual">
-                <div className="visual-placeholder-small">
-                  <div className="ad-cards-preview">
-                    <div className="mini-ad-card"></div>
-                    <div className="mini-ad-card"></div>
-                    <div className="mini-ad-card"></div>
-                  </div>
-                </div>
-              </div>
+              <h3 className="step-title">Generate</h3>
+              <p className="step-description">
+                Autonomously engineers new ad creatives—copy, visuals, and targeting—from proven conversion patterns. Not templates. Real intelligence, at scale.
+              </p>
             </div>
 
-            <div className="mechanism-step animate-on-scroll delay-4">
+            <div className="mechanism-step">
               <div className="step-number">04</div>
-              <div className="step-content">
-                <h3 className="step-title">Repeat</h3>
-                <p className="step-lead">The system compounds.</p>
-                <p className="step-description">
-                  Every creative tested makes the next one smarter. Every conversion accelerates the flywheel.
-                </p>
-                <p className="step-description">
-                  It's not a one-time optimization. <strong>It's a compounding velocity advantage.</strong>
-                </p>
-                <p className="step-benefit">
-                  Your creative velocity accelerates — while your competitors stay stuck in the bottleneck.
-                </p>
-              </div>
-              {/* Step Visual Placeholder */}
-              <div className="step-visual">
-                <div className="visual-placeholder-small">
-                  <div className="growth-chart">
-                    <div className="chart-bar" style={{ height: '30%' }}></div>
-                    <div className="chart-bar" style={{ height: '50%' }}></div>
-                    <div className="chart-bar" style={{ height: '70%' }}></div>
-                    <div className="chart-bar" style={{ height: '90%' }}></div>
-                  </div>
-                </div>
-              </div>
+              <h3 className="step-title">Repeat</h3>
+              <p className="step-description">
+                Every creative tested makes the next one smarter. It's not a one-time optimization—it's a compounding velocity advantage.
+              </p>
             </div>
           </div>
         </div>
@@ -656,76 +576,44 @@ function SalesLanding() {
 
           <p className="bespoke-lead animate-on-scroll delay-2">Here's what that means:</p>
 
-          <div className="bespoke-features">
-            <div className="bespoke-feature gradient-border-card animate-on-scroll delay-1">
-              <div className="card-gradient-border"></div>
-              <div className="card-inner">
-                <h3>Bespoke Implementation</h3>
-                <p>
-                  Before we generate a single ad, our team studies your business. Your channels.
-                  Your customers. Your conversion history.
-                </p>
-                <p>
-                  We configure ConversionIQ™ to <em>your</em> patterns—not industry benchmarks.
-                  Not generic templates.
-                </p>
-                <p className="feature-emphasis">
-                  No two implementations are the same.<br />Because no two businesses are.
-                </p>
-                {/* Feature Visual */}
-                <div className="feature-visual">
-                  <div className="config-animation">
-                    <div className="config-dot"></div>
-                    <div className="config-dot"></div>
-                    <div className="config-dot"></div>
-                  </div>
-                </div>
+          <div className="bespoke-features animate-on-scroll delay-2">
+            <div className="bespoke-feature">
+              <div className="bespoke-feature-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                </svg>
               </div>
+              <h3>Bespoke Implementation</h3>
+              <p>
+                We study your business, channels, and conversion history—then configure ConversionIQ™ to <em>your</em> patterns. No generic templates.
+              </p>
             </div>
 
-            <div className="bespoke-feature gradient-border-card animate-on-scroll delay-2">
-              <div className="card-gradient-border"></div>
-              <div className="card-inner">
-                <h3>White Glove Management</h3>
-                <p>You don't manage the system. We do.</p>
-                <p>
-                  Our team monitors performance. Interprets the data. Optimizes the output.
-                  Evolves the model as your market changes.
-                </p>
-                <p className="feature-emphasis">You get the results without the overhead.</p>
-                {/* Feature Visual */}
-                <div className="feature-visual">
-                  <div className="team-avatars">
-                    <div className="avatar"></div>
-                    <div className="avatar"></div>
-                    <div className="avatar"></div>
-                  </div>
-                </div>
+            <div className="bespoke-feature">
+              <div className="bespoke-feature-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
               </div>
+              <h3>White Glove Management</h3>
+              <p>
+                Our team monitors performance, interprets data, optimizes output, and evolves the model as your market changes. You get results without the overhead.
+              </p>
             </div>
 
-            <div className="bespoke-feature gradient-border-card animate-on-scroll delay-3">
-              <div className="card-gradient-border"></div>
-              <div className="card-inner">
-                <h3>Dedicated Partnership</h3>
-                <p>This isn't a vendor relationship. It's a partnership.</p>
-                <p>
-                  You'll have a dedicated team who knows your business, understands your goals,
-                  and is accountable to your outcomes.
-                </p>
-                <p className="feature-emphasis">
-                  Not a chatbot. Not a help desk.<br />
-                  Real people who are invested in your success.
-                </p>
-                {/* Feature Visual */}
-                <div className="feature-visual">
-                  <div className="handshake-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                    </svg>
-                  </div>
-                </div>
+            <div className="bespoke-feature">
+              <div className="bespoke-feature-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
               </div>
+              <h3>Dedicated Partnership</h3>
+              <p>
+                A dedicated team who knows your business, understands your goals, and is accountable to your outcomes. Not a chatbot—real people.
+              </p>
             </div>
           </div>
         </div>
@@ -1217,126 +1105,130 @@ function SalesLanding() {
             Enter your numbers below. See what autonomous creative velocity is worth to your bottom line.
           </p>
 
-          <div className="roi-calculator animate-on-scroll delay-2">
-            <div className="roi-inputs">
-              <div className="roi-input-row">
-                <div className="roi-input-header">
-                  <label className="roi-input-label" htmlFor="roi-ad-spend">Monthly Ad Spend</label>
-                  <span className="roi-input-value" aria-live="polite">${monthlyAdSpend.toLocaleString()}</span>
+          <div className="roi-card animate-on-scroll delay-2">
+            <div className="roi-calculator">
+              <div className="roi-inputs">
+                <div className="roi-input-row">
+                  <div className="roi-input-header">
+                    <label className="roi-input-label" htmlFor="roi-ad-spend">Monthly Ad Spend</label>
+                    <span className="roi-input-value" aria-live="polite">${monthlyAdSpend.toLocaleString()}</span>
+                  </div>
+                  <input
+                    type="range"
+                    id="roi-ad-spend"
+                    className="roi-slider"
+                    min={10000}
+                    max={1000000}
+                    step={5000}
+                    value={monthlyAdSpend}
+                    onChange={(e) => setMonthlyAdSpend(Number(e.target.value))}
+                    aria-label="Monthly ad spend"
+                  />
                 </div>
-                <input
-                  type="range"
-                  id="roi-ad-spend"
-                  className="roi-slider"
-                  min={10000}
-                  max={1000000}
-                  step={5000}
-                  value={monthlyAdSpend}
-                  onChange={(e) => setMonthlyAdSpend(Number(e.target.value))}
-                  aria-label="Monthly ad spend"
-                />
-              </div>
 
-              <div className="roi-input-row">
-                <div className="roi-input-header">
-                  <label className="roi-input-label" htmlFor="roi-team-size">Creative Team Size</label>
-                  <span className="roi-input-value" aria-live="polite">{teamSize} {teamSize === 1 ? 'person' : 'people'}</span>
+                <div className="roi-input-row">
+                  <div className="roi-input-header">
+                    <label className="roi-input-label" htmlFor="roi-team-size">Creative Team Size</label>
+                    <span className="roi-input-value" aria-live="polite">{teamSize} {teamSize === 1 ? 'person' : 'people'}</span>
+                  </div>
+                  <input
+                    type="range"
+                    id="roi-team-size"
+                    className="roi-slider"
+                    min={1}
+                    max={15}
+                    step={1}
+                    value={teamSize}
+                    onChange={(e) => setTeamSize(Number(e.target.value))}
+                    aria-label="Creative team size"
+                  />
                 </div>
-                <input
-                  type="range"
-                  id="roi-team-size"
-                  className="roi-slider"
-                  min={1}
-                  max={15}
-                  step={1}
-                  value={teamSize}
-                  onChange={(e) => setTeamSize(Number(e.target.value))}
-                  aria-label="Creative team size"
-                />
-              </div>
 
-              <div className="roi-input-row">
-                <div className="roi-input-header">
-                  <label className="roi-input-label" htmlFor="roi-cost-member">Avg. Cost per Team Member</label>
-                  <span className="roi-input-value" aria-live="polite">${costPerMember.toLocaleString()}/mo</span>
+                <div className="roi-input-row">
+                  <div className="roi-input-header">
+                    <label className="roi-input-label" htmlFor="roi-cost-member">Avg. Cost per Team Member</label>
+                    <span className="roi-input-value" aria-live="polite">${costPerMember.toLocaleString()}/mo</span>
+                  </div>
+                  <input
+                    type="range"
+                    id="roi-cost-member"
+                    className="roi-slider"
+                    min={3000}
+                    max={25000}
+                    step={500}
+                    value={costPerMember}
+                    onChange={(e) => setCostPerMember(Number(e.target.value))}
+                    aria-label="Average monthly cost per team member"
+                  />
                 </div>
-                <input
-                  type="range"
-                  id="roi-cost-member"
-                  className="roi-slider"
-                  min={3000}
-                  max={25000}
-                  step={500}
-                  value={costPerMember}
-                  onChange={(e) => setCostPerMember(Number(e.target.value))}
-                  aria-label="Average monthly cost per team member"
-                />
-              </div>
 
-              <div className="roi-input-row">
-                <div className="roi-input-header">
-                  <label className="roi-input-label" htmlFor="roi-creatives-week">Creatives Produced per Week</label>
-                  <span className="roi-input-value" aria-live="polite">{creativesPerWeek} {creativesPerWeek === 1 ? 'creative' : 'creatives'}</span>
+                <div className="roi-input-row">
+                  <div className="roi-input-header">
+                    <label className="roi-input-label" htmlFor="roi-creatives-week">Creatives Produced per Week</label>
+                    <span className="roi-input-value" aria-live="polite">{creativesPerWeek} {creativesPerWeek === 1 ? 'creative' : 'creatives'}</span>
+                  </div>
+                  <input
+                    type="range"
+                    id="roi-creatives-week"
+                    className="roi-slider"
+                    min={1}
+                    max={20}
+                    step={1}
+                    value={creativesPerWeek}
+                    onChange={(e) => setCreativesPerWeek(Number(e.target.value))}
+                    aria-label="Creatives produced per week"
+                  />
                 </div>
-                <input
-                  type="range"
-                  id="roi-creatives-week"
-                  className="roi-slider"
-                  min={1}
-                  max={20}
-                  step={1}
-                  value={creativesPerWeek}
-                  onChange={(e) => setCreativesPerWeek(Number(e.target.value))}
-                  aria-label="Creatives produced per week"
-                />
-              </div>
 
-              <div className="roi-input-row">
-                <div className="roi-input-header">
-                  <label className="roi-input-label" htmlFor="roi-days-launch">Days from Brief to Launch</label>
-                  <span className="roi-input-value" aria-live="polite">{daysToLaunch} {daysToLaunch === 1 ? 'day' : 'days'}</span>
+                <div className="roi-input-row">
+                  <div className="roi-input-header">
+                    <label className="roi-input-label" htmlFor="roi-days-launch">Days from Brief to Launch</label>
+                    <span className="roi-input-value" aria-live="polite">{daysToLaunch} {daysToLaunch === 1 ? 'day' : 'days'}</span>
+                  </div>
+                  <input
+                    type="range"
+                    id="roi-days-launch"
+                    className="roi-slider"
+                    min={1}
+                    max={14}
+                    step={1}
+                    value={daysToLaunch}
+                    onChange={(e) => setDaysToLaunch(Number(e.target.value))}
+                    aria-label="Days from creative brief to ad launch"
+                  />
                 </div>
-                <input
-                  type="range"
-                  id="roi-days-launch"
-                  className="roi-slider"
-                  min={1}
-                  max={14}
-                  step={1}
-                  value={daysToLaunch}
-                  onChange={(e) => setDaysToLaunch(Number(e.target.value))}
-                  aria-label="Days from creative brief to ad launch"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="roi-results animate-on-scroll delay-3">
-            <div className="roi-results-primary">
-              <div className="roi-result-card">
-                <div className="roi-result-value">{formatCurrency(annualTeamSavings)}</div>
-                <div className="roi-result-label">Annual Team Cost Savings</div>
-                <div className="roi-result-detail">Replaces 70% of manual creative production</div>
-              </div>
-              <div className="roi-result-card">
-                <div className="roi-result-value">{formatCurrency(annualAdSpendRecovered)}</div>
-                <div className="roi-result-label">Wasted Ad Spend Recovered</div>
-                <div className="roi-result-detail">47% less spend on non-converting creatives</div>
-              </div>
-              <div className="roi-result-card roi-result-card-primary">
-                <div className="roi-result-value roi-result-total">{formatCurrency(totalAnnualSavings)}</div>
-                <div className="roi-result-label">Total Annual Savings</div>
               </div>
             </div>
 
-            <div className="roi-results-secondary">
-              <div className="roi-result-secondary">
-                <span className="roi-secondary-value">{velocityMultiple}x</span>
-                <span className="roi-secondary-label">Creative Velocity Increase</span>
+            <div className="roi-divider"></div>
+
+            <div className="roi-results">
+              <div className="roi-results-primary">
+                <div className="roi-result-card">
+                  <div className="roi-result-value">{formatCurrency(annualTeamSavings)}</div>
+                  <div className="roi-result-label">Annual Team Cost Savings</div>
+                  <div className="roi-result-detail">Replaces 70% of manual creative production</div>
+                </div>
+                <div className="roi-result-card">
+                  <div className="roi-result-value">{formatCurrency(annualAdSpendRecovered)}</div>
+                  <div className="roi-result-label">Wasted Ad Spend Recovered</div>
+                  <div className="roi-result-detail">47% less spend on non-converting creatives</div>
+                </div>
+                <div className="roi-result-card roi-result-card-primary">
+                  <div className="roi-result-value roi-result-total">{formatCurrency(totalAnnualSavings)}</div>
+                  <div className="roi-result-label">Total Annual Savings</div>
+                </div>
               </div>
-              <div className="roi-result-secondary">
-                <span className="roi-secondary-value">{annualHoursSaved.toLocaleString()}</span>
-                <span className="roi-secondary-label">Team Hours Freed Per Year</span>
+
+              <div className="roi-results-secondary">
+                <div className="roi-result-secondary">
+                  <span className="roi-secondary-value">{velocityMultiple}x</span>
+                  <span className="roi-secondary-label">Creative Velocity Increase</span>
+                </div>
+                <div className="roi-result-secondary">
+                  <span className="roi-secondary-value">{annualHoursSaved.toLocaleString()}</span>
+                  <span className="roi-secondary-label">Team Hours Freed Per Year</span>
+                </div>
               </div>
             </div>
           </div>
