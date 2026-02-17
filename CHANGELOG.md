@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-02-17 — Add Meta Ad Library integration for CreativeIQ inspiration
+
+### Added
+- **Meta Ad Library search** (`api/meta.ts` → `ad-library` route): JWT-authenticated endpoint that searches the Meta Ad Library (`ads_archive` API) for competitor and cross-industry ads. Supports search terms, country filtering, active/inactive status, platform filtering, date ranges, and cursor-based pagination. Added to existing catch-all handler (no new serverless function).
+- **`searchAdLibrary()` frontend service** (`src/services/metaApi.ts`): Types (`AdLibrarySearchParams`, `AdLibraryResult`, `AdLibraryResponse`) and API function calling `/api/meta/ad-library` with JWT auth.
+- **`AdLibraryInspiration` type** (`src/types/index.ts`): Interface for saved inspiration ads with page name, ad copy, headlines, duration, active status, and save timestamp.
+- **`AdLibraryBrowser` component** (`src/components/AdLibraryBrowser.tsx` + `.css`): Collapsible panel in CreativeIQ Step 1 for searching the Meta Ad Library. Features debounced search (500ms), country selector, Active/All/Ended status tabs, collapsible advanced filters (platform, running since, min duration, sort by) in a 2-column grid, result cards with duration badges (green "Long Runner" 6+ months, amber "Established" 3-6 months), ad copy preview with show more/less, platform badges, spend ranges, save/unsave buttons, and cursor-based pagination.
+- **`InspirationSelector` component** (`src/components/InspirationSelector.tsx`): Compact checklist below the browser showing saved inspirations with checkboxes to activate/deactivate each for the current generation. Max 5 active at once to keep prompt token usage reasonable.
+- **Ad Library section label with info panel**: "Ad Library Inspiration *(optional)*" label with click-to-toggle info panel explaining the feature — avoids users thinking it's required.
+- **Inspiration status indicator**: Shows "X Ad Library inspirations active for generation" badge when inspirations are selected.
+- **AI prompt integration** (`src/services/openaiApi.ts`):
+  - **Copy generation** (`generateCopyOptions`): Active inspirations injected as a `=== COMPETITOR/INDUSTRY INSPIRATION ===` section in the user prompt with page name, duration signal, headlines, body copy (truncated to 400 chars), and instructions to extract strategies without copying text verbatim.
+  - **Image generation** (`generateAdImageWithGemini`): Top 3 active inspirations injected as thematic direction context (text only, no images from Ad Library).
+  - **Package generation** (`generateAdPackage`): Passes inspirations through to individual image generation calls.
+
+### Architecture
+- **Third reference layer**: Ad Library Inspiration joins Channel Analysis (account-wide patterns) and Product Context (per-product identity) as a third independent input to AI generation. All three layers are additive and can be used in any combination.
+- **Duration as quality proxy**: Long-running ads are surfaced first and highlighted with color-coded badges since the Ad Library API doesn't expose performance metrics.
+- **Global localStorage storage**: Inspirations stored globally in `ci_ad_library_inspirations` (max 20 saved, max 5 active) — not per-product, since inspiration can cross product lines.
+- **No new serverless functions**: Routes through existing `api/meta.ts` catch-all (stays within 12/12 Vercel limit).
+
+### Files Created
+- `src/components/AdLibraryBrowser.tsx` — Ad Library search browser component
+- `src/components/AdLibraryBrowser.css` — Browser, filters, result cards, inspiration selector styles
+- `src/components/InspirationSelector.tsx` — Saved inspiration activation checklist
+
+### Files Changed
+- `api/meta.ts` — Added `ad-library` route with `handleAdLibrary()` function
+- `src/services/metaApi.ts` — Added `searchAdLibrary()`, types for Ad Library API
+- `src/services/openaiApi.ts` — Added inspiration context to copy generation, image generation, and package generation
+- `src/pages/AdGenerator.tsx` — State management, localStorage persistence, UI integration, inspiration pass-through to generation functions
+- `src/types/index.ts` — Added `AdLibraryInspiration` interface
+
+---
+
 ## 2026-02-16 — Condense sales landing page sections and add calculator card styling
 
 ### Changed

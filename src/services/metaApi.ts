@@ -946,6 +946,77 @@ export interface PublishResult {
   details?: string;
 }
 
+// ─── Ad Library Search ───────────────────────────────────────────────────────
+
+export interface AdLibrarySearchParams {
+  searchTerms?: string;
+  searchPageIds?: string[];
+  countries?: string[];
+  activeStatus?: 'ALL' | 'ACTIVE' | 'INACTIVE';
+  dateMin?: string;  // YYYY-MM-DD
+  dateMax?: string;
+  platforms?: ('facebook' | 'instagram' | 'audience_network' | 'messenger')[];
+  limit?: number;
+  after?: string;  // pagination cursor
+}
+
+export interface AdLibraryResult {
+  ad_creative_bodies?: string[];
+  ad_creative_link_titles?: string[];
+  ad_creative_link_captions?: string[];
+  ad_creative_link_descriptions?: string[];
+  ad_snapshot_url?: string;
+  ad_delivery_start_time?: string;
+  ad_delivery_stop_time?: string;
+  page_name?: string;
+  page_id?: string;
+  publisher_platforms?: string[];
+  spend?: { lower_bound: string; upper_bound: string };
+  impressions?: { lower_bound: string; upper_bound: string };
+}
+
+export interface AdLibraryResponse {
+  data: AdLibraryResult[];
+  paging?: {
+    cursors?: { after?: string; before?: string };
+    next?: string;
+  };
+}
+
+export async function searchAdLibrary(params: AdLibrarySearchParams): Promise<AdLibraryResponse> {
+  const token = await getAuthToken();
+
+  if (!token) {
+    throw new Error('Meta API not configured. Connect your Meta account to search the Ad Library.');
+  }
+
+  const res = await fetch('/api/meta/ad-library', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      search_terms: params.searchTerms,
+      search_page_ids: params.searchPageIds,
+      ad_reached_countries: params.countries || ['US'],
+      ad_active_status: params.activeStatus || 'ALL',
+      ad_delivery_date_min: params.dateMin,
+      ad_delivery_date_max: params.dateMax,
+      publisher_platforms: params.platforms,
+      limit: params.limit || 25,
+      after: params.after,
+    }),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.message || `Ad Library search failed (${res.status})`);
+  }
+
+  return res.json();
+}
+
 // ─── Page validation ─────────────────────────────────────────────────────────
 
 /**

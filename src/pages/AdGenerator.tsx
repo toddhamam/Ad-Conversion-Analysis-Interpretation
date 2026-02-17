@@ -27,12 +27,18 @@ import { fetchAdCreatives, type DatePreset } from '../services/metaApi';
 import GeneratedAdCard from '../components/GeneratedAdCard';
 import CopySelectionPanel from '../components/CopySelectionPanel';
 import IQSelector from '../components/IQSelector';
+import AdLibraryBrowser from '../components/AdLibraryBrowser';
+import InspirationSelector from '../components/InspirationSelector';
 import SEO from '../components/SEO';
+import type { AdLibraryInspiration } from '../types';
 import './AdGenerator.css';
 
 const CACHE_KEY = 'channel_analysis_cache';
 const GENERATED_ADS_STORAGE_KEY = 'conversion_intelligence_generated_ads';
 const PRODUCTS_STORAGE_KEY = 'convertra_products';
+const INSPIRATIONS_STORAGE_KEY = 'ci_ad_library_inspirations';
+const MAX_SAVED_INSPIRATIONS = 20;
+const MAX_ACTIVE_INSPIRATIONS = 5;
 
 // Pagination settings - reduced to prevent Chrome crashes with large base64 images
 const ADS_PER_PAGE = 3;
@@ -234,6 +240,10 @@ const AdGenerator = () => {
   // Creative variation control (0 = identical to references, 100 = completely different)
   const [similarityValue, setSimilarityValue] = useState(30); // Default: 30% variation (70% similar)
 
+  // Ad Library inspiration
+  const [savedInspirations, setSavedInspirations] = useState<AdLibraryInspiration[]>([]);
+  const [activeInspirationIds, setActiveInspirationIds] = useState<string[]>([]);
+
   // Handle brand image upload
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -277,6 +287,46 @@ const AdGenerator = () => {
     } catch {
       console.warn('Failed to load products from localStorage');
     }
+  }, []);
+
+  // Load saved Ad Library inspirations from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(INSPIRATIONS_STORAGE_KEY);
+      if (stored) {
+        const parsed: AdLibraryInspiration[] = JSON.parse(stored);
+        setSavedInspirations(parsed.slice(0, MAX_SAVED_INSPIRATIONS));
+      }
+    } catch {
+      console.warn('Failed to load ad library inspirations');
+    }
+  }, []);
+
+  // Ad Library inspiration handlers
+  const handleSaveInspiration = useCallback((inspiration: AdLibraryInspiration) => {
+    setSavedInspirations(prev => {
+      if (prev.some(i => i.id === inspiration.id)) return prev;
+      const updated = [inspiration, ...prev].slice(0, MAX_SAVED_INSPIRATIONS);
+      localStorage.setItem(INSPIRATIONS_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const handleRemoveInspiration = useCallback((id: string) => {
+    setSavedInspirations(prev => {
+      const updated = prev.filter(i => i.id !== id);
+      localStorage.setItem(INSPIRATIONS_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+    setActiveInspirationIds(prev => prev.filter(aid => aid !== id));
+  }, []);
+
+  const handleToggleActiveInspiration = useCallback((id: string) => {
+    setActiveInspirationIds(prev => {
+      if (prev.includes(id)) return prev.filter(aid => aid !== id);
+      if (prev.length >= MAX_ACTIVE_INSPIRATIONS) return prev;
+      return [...prev, id];
+    });
   }, []);
 
   // Load cached analysis and check image cache on mount
@@ -505,6 +555,7 @@ const AdGenerator = () => {
     setGenerationProgress('ConversionIQ™ generating headline and body copy options...');
 
     try {
+      const activeInspirations = savedInspirations.filter(i => activeInspirationIds.includes(i.id));
       const result = await generateCopyOptions({
         audienceType,
         conceptType,
@@ -512,6 +563,7 @@ const AdGenerator = () => {
         reasoningEffort: iqLevel,
         copyLength,
         productContext: selectedProduct || undefined,
+        adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
       });
 
       setCopyOptions(result);
@@ -561,6 +613,7 @@ const AdGenerator = () => {
     setGenerationProgress(adType === 'image' ? 'ConversionIQ™ generating images and finalizing copy...' : 'ConversionIQ™ creating video storyboard...');
 
     try {
+      const activeInspirationsForCreative = savedInspirations.filter(i => activeInspirationIds.includes(i.id));
       const result = await generateAdPackage({
         adType,
         audienceType,
@@ -576,6 +629,7 @@ const AdGenerator = () => {
         reasoningEffort: iqLevel,
         imageSize, // Selected image dimensions/aspect ratio
         productContext: selectedProduct || undefined,
+        adLibraryInspirations: activeInspirationsForCreative.length > 0 ? activeInspirationsForCreative : undefined,
       });
 
       setGeneratedAds(prev => [result, ...prev]);
@@ -855,6 +909,16 @@ const AdGenerator = () => {
         style={{ display: 'none' }}
       />
 
+      {/* Ad Library Inspiration Status */}
+      {activeInspirationIds.length > 0 && (
+        <div className="analysis-status has-data" style={{ marginTop: '-16px' }}>
+          <span className="status-icon">✓</span>
+          <span className="status-text">
+            {activeInspirationIds.length} Ad Library inspiration{activeInspirationIds.length !== 1 ? 's' : ''} active for generation
+          </span>
+        </div>
+      )}
+
       {/* Step Indicator */}
       <div className="step-indicator">
         <div className={`step ${currentStep === 'config' ? 'active' : 'completed'}`}>
@@ -937,6 +1001,47 @@ const AdGenerator = () => {
                   </button>
                 ))}
               </div>
+            )}
+          </div>
+
+          {/* Ad Library Inspiration (optional) */}
+          <div className="config-section">
+            <label className="config-label">
+              Ad Library Inspiration <span className="manual-entry-optional">(optional)</span>
+              <button
+                type="button"
+                className="ad-library-info-btn"
+                onClick={e => {
+                  e.preventDefault();
+                  const panel = (e.currentTarget.parentElement as HTMLElement)?.nextElementSibling;
+                  if (panel?.classList.contains('ad-library-info-panel')) {
+                    panel.classList.toggle('visible');
+                  }
+                }}
+                aria-label="What is Ad Library Inspiration?"
+              >
+                &#9432;
+              </button>
+            </label>
+            <div className="ad-library-info-panel">
+              Browse ads currently running on Meta from other brands and competitors.
+              Save the ones you like as inspiration — CreativeIQ will study their copy
+              patterns, hooks, and angles to inform your own original ad generation.
+              Long-running ads are highlighted as a quality signal.
+            </div>
+            <AdLibraryBrowser
+              savedInspirations={savedInspirations}
+              onSaveInspiration={handleSaveInspiration}
+              onRemoveInspiration={handleRemoveInspiration}
+            />
+            {savedInspirations.length > 0 && (
+              <InspirationSelector
+                inspirations={savedInspirations}
+                activeIds={activeInspirationIds}
+                onToggle={handleToggleActiveInspiration}
+                onRemove={handleRemoveInspiration}
+                maxActive={MAX_ACTIVE_INSPIRATIONS}
+              />
             )}
           </div>
 

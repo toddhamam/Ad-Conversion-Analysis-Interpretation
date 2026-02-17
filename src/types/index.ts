@@ -61,3 +61,19 @@ export interface Insight {
   linkedCreatives: string[];
 }
 
+// Ad Library Inspiration — saved competitor/industry ads for CreativeIQ reference
+export interface AdLibraryInspiration {
+  id: string;
+  pageName: string;
+  pageId: string;
+  adCreativeBodies: string[];
+  adCreativeLinkTitles: string[];
+  adCreativeLinkDescriptions: string[];
+  adSnapshotUrl: string;
+  deliveryStartTime: string;
+  deliveryStopTime?: string;
+  durationDays: number;
+  isActive: boolean;
+  savedAt: string;
+}
+
