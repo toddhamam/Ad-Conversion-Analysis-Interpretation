@@ -107,6 +107,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleSaveCredentials(req, res);
       case 'disconnect':
         return handleDisconnect(req, res);
+      case 'ad-library':
+        return handleAdLibrary(req, res);
       default:
         return res.status(400).json({ error: `Unknown route: ${route}` });
     }
@@ -765,4 +767,103 @@ async function handleDisconnect(req: VercelRequest, res: VercelResponse) {
   }
 
   return res.status(200).json({ success: true });
+}
+
+// ─── Route: ad-library ──────────────────────────────────────────────────────
+// Search the Meta Ad Library for competitor/industry ad inspiration.
+
+async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed — use POST' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const creds = await loadCredentials(auth.organizationId);
+  if (!creds) {
+    return res.status(404).json({
+      error: 'Meta credentials not found',
+      message: 'Connect your Meta Ads account to search the Ad Library.',
+    });
+  }
+
+  const {
+    search_terms,
+    search_page_ids,
+    ad_reached_countries = ['US'],
+    ad_active_status = 'ALL',
+    ad_delivery_date_min,
+    ad_delivery_date_max,
+    publisher_platforms,
+    limit = 25,
+    after,
+  } = req.body || {};
+
+  if (!search_terms && !search_page_ids) {
+    return res.status(400).json({ error: 'search_terms or search_page_ids is required' });
+  }
+
+  const params = new URLSearchParams();
+  params.set('access_token', creds.accessToken);
+  params.set('ad_reached_countries', JSON.stringify(
+    Array.isArray(ad_reached_countries) ? ad_reached_countries : [ad_reached_countries]
+  ));
+  params.set('ad_active_status', ad_active_status);
+  params.set('fields', [
+    'ad_creative_bodies',
+    'ad_creative_link_titles',
+    'ad_creative_link_captions',
+    'ad_creative_link_descriptions',
+    'ad_snapshot_url',
+    'ad_delivery_start_time',
+    'ad_delivery_stop_time',
+    'page_name',
+    'page_id',
+    'publisher_platforms',
+    'spend',
+    'impressions',
+  ].join(','));
+  params.set('limit', String(Math.min(Number(limit) || 25, 50)));
+
+  if (search_terms) params.set('search_terms', search_terms);
+  if (search_page_ids) params.set('search_page_ids', JSON.stringify(search_page_ids));
+  if (ad_delivery_date_min) params.set('ad_delivery_date_min', ad_delivery_date_min);
+  if (ad_delivery_date_max) params.set('ad_delivery_date_max', ad_delivery_date_max);
+  if (publisher_platforms) params.set('publisher_platforms', JSON.stringify(publisher_platforms));
+  if (after) params.set('after', after);
+
+  const apiUrl = `${GRAPH_API_BASE}/ads_archive?${params.toString()}`;
+
+  try {
+    const response = await fetch(apiUrl);
+    const data = await response.json();
+
+    if (!response.ok || data.error) {
+      const metaError = data.error || {};
+      console.error('Ad Library API error:', metaError.message || 'Unknown');
+      captureError(new Error(metaError.message || 'Ad Library API error'), {
+        route: 'meta/ad-library',
+        organizationId: auth.organizationId,
+      });
+      await flushSentry();
+      return res.status(response.status || 500).json({
+        error: 'Ad Library API error',
+        message: metaError.message || 'Unknown error from Meta API',
+        code: metaError.code,
+      });
+    }
+
+    return res.status(200).json(data);
+  } catch (fetchErr: unknown) {
+    console.error('Ad Library fetch error:', fetchErr);
+    captureError(fetchErr, { route: 'meta/ad-library', organizationId: auth.organizationId });
+    await flushSentry();
+    return res.status(500).json({
+      error: 'Failed to fetch from Ad Library',
+      message: fetchErr instanceof Error ? fetchErr.message : 'Network error',
+    });
+  }
 }

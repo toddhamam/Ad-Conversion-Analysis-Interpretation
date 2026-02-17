@@ -1350,6 +1350,7 @@ export async function generateCopyOptions(config: {
   reasoningEffort?: ReasoningEffort;
   copyLength?: CopyLength;
   productContext?: ProductContext;
+  adLibraryInspirations?: import('../types').AdLibraryInspiration[];
 }): Promise<CopyOptionsResult> {
   if (!isOpenAIConfigured()) {
     throw new Error('OpenAI API key not configured');
@@ -1443,6 +1444,44 @@ Creative direction: ${analysis.recommendations.creativeDirection?.join('; ') || 
     }
   }
 
+  // Build Ad Library inspiration context (competitor/cross-industry references)
+  let inspirationContext = '';
+  if (config.adLibraryInspirations && config.adLibraryInspirations.length > 0) {
+    console.log(`💡 Ad Library inspirations: ${config.adLibraryInspirations.length} active`);
+    inspirationContext += `\n=== COMPETITOR/INDUSTRY INSPIRATION (Ad Library) ===
+The user has curated these successful ads from the Meta Ad Library as creative inspiration.
+Long-running ads indicate sustained profitability. Study their copy patterns, angles, and hooks.
+Create ORIGINAL copy inspired by these approaches — DO NOT copy text verbatim.\n`;
+
+    config.adLibraryInspirations.forEach((insp, i) => {
+      const durationLabel = insp.isActive
+        ? `Running for ${insp.durationDays} days (still active)`
+        : `Ran for ${insp.durationDays} days`;
+
+      inspirationContext += `
+INSPIRATION #${i + 1} — ${insp.pageName} (${durationLabel}):`;
+      if (insp.adCreativeLinkTitles.length > 0) {
+        inspirationContext += `\n- Headlines: ${insp.adCreativeLinkTitles.join(' | ')}`;
+      }
+      if (insp.adCreativeBodies.length > 0) {
+        const bodyPreview = insp.adCreativeBodies[0].substring(0, 400);
+        inspirationContext += `\n- Body Copy: ${bodyPreview}${insp.adCreativeBodies[0].length > 400 ? '...' : ''}`;
+      }
+      if (insp.adCreativeLinkDescriptions.length > 0) {
+        inspirationContext += `\n- Link Description: ${insp.adCreativeLinkDescriptions[0]}`;
+      }
+      inspirationContext += '\n';
+    });
+
+    inspirationContext += `
+IMPORTANT: These are EXTERNAL inspiration sources. Your job is to:
+1. Identify what makes these ads compelling (hooks, emotional angles, structure)
+2. Apply those strategies to the user's product/brand
+3. Combine with the user's own performance data (if available) for the best results
+4. NEVER use competitor brand names or product names — always reference the user's product
+`;
+  }
+
   // Build the system prompt
   let systemPrompt: string;
   let conceptSection: string;
@@ -1491,6 +1530,11 @@ NOTE: No analysis data is available. Run Channel Analysis first for data-driven 
 - Key phrases/hints: ${conceptAngle.promptHints.join(', ')}`;
   }
 
+  // Enhance system prompt when Ad Library inspirations are present
+  if (config.adLibraryInspirations?.length) {
+    systemPrompt += `\n\nYou also have COMPETITOR/INDUSTRY ADS from the Meta Ad Library that the user curated as creative inspiration. Long-running ads indicate profitability. Study their patterns but create ORIGINAL copy for the user's brand — never copy competitor text verbatim.`;
+  }
+
   // Build product context section
   let productSection = '';
   if (config.productContext) {
@@ -1515,6 +1559,7 @@ AUDIENCE CONTEXT:
 
 ${conceptSection}
 ${analysisContext}
+${inspirationContext}
 
 === YOUR TASK ===
 
@@ -1559,6 +1604,9 @@ Return JSON only:
 
   // Log the context we're sending (for debugging)
   console.log(`📊 Analysis context size: ${analysisContext.length} characters`);
+  if (inspirationContext.length > 0) {
+    console.log(`💡 Inspiration context size: ${inspirationContext.length} characters`);
+  }
   console.log(`📝 Total prompt size: ${systemPrompt.length + userPrompt.length} characters`);
   if (hasAnalysis) {
     console.log('✅ Copy generation will be DATA-DRIVEN using real analysis');
@@ -1736,6 +1784,8 @@ export async function generateAdImage(config: {
     referenceImages: Array<{ data: string; mimeType: string }>;
     refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
   };
+  // Ad Library inspirations for thematic direction
+  adLibraryInspirations?: import('../types').AdLibraryInspiration[];
 }): Promise<GeneratedImageResult> {
   // Check if we should use Gemini or fall back to DALL-E
   if (USE_GEMINI_FOR_IMAGES && isGeminiConfigured()) {
@@ -1764,6 +1814,8 @@ async function generateAdImageWithGemini(config: {
     referenceImages: Array<{ data: string; mimeType: string }>;
     refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
   };
+  // Ad Library inspirations for thematic direction
+  adLibraryInspirations?: import('../types').AdLibraryInspiration[];
 }): Promise<GeneratedImageResult> {
   const similarity = config.similarityLevel ?? 30; // Default to 30% variation
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
@@ -1958,6 +2010,18 @@ Explore fresh visual directions while maintaining professional quality.`,
       if (ad.imageAnalysis) {
         promptParts.push(`${i + 1}. ${ad.imageAnalysis}`);
       }
+    });
+    promptParts.push('');
+  }
+
+  // Ad Library inspiration context for thematic direction (text only, no images)
+  if (config.adLibraryInspirations?.length) {
+    promptParts.push('COMPETITOR/INDUSTRY INSPIRATION (thematic direction):');
+    promptParts.push('The following successful ad copy patterns were curated from the Ad Library.');
+    promptParts.push('Use their thematic direction to inform the visual narrative:');
+    config.adLibraryInspirations.slice(0, 3).forEach((insp, i) => {
+      const bodyPreview = insp.adCreativeBodies[0]?.substring(0, 200) || 'N/A';
+      promptParts.push(`  ${i + 1}. ${insp.pageName} (ran ${insp.durationDays} days): ${bodyPreview}`);
     });
     promptParts.push('');
   }
@@ -2514,6 +2578,8 @@ export async function generateAdPackage(config: {
   imageSize?: ImageSize;
   // Product context for accurate product references
   productContext?: ProductContext;
+  // Ad Library inspirations for competitor/cross-industry reference
+  adLibraryInspirations?: import('../types').AdLibraryInspiration[];
 }): Promise<GeneratedAdPackage> {
   const conceptName = config.conceptType ? CONCEPT_ANGLES[config.conceptType].name : 'general';
   const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
@@ -2595,6 +2661,7 @@ export async function generateAdPackage(config: {
           imageSize: config.imageSize,
           productContext: config.productContext,
           precomputedRefs,
+          adLibraryInspirations: config.adLibraryInspirations,
         })
       );
       const batchResults = await Promise.allSettled(batchPromises);
