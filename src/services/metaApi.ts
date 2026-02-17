@@ -972,7 +972,6 @@ export interface AdLibraryResult {
   page_id?: string;
   publisher_platforms?: string[];
   spend?: { lower_bound: string; upper_bound: string };
-  impressions?: { lower_bound: string; upper_bound: string };
 }
 
 export interface AdLibraryResponse {

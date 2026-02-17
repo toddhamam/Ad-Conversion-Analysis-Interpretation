@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-02-17 — Fix Ad Library search returning "An unknown error has occurred"
+
+### Fixed
+- **Ad Library search failing with Meta API error**: Searching the Ad Library (e.g., "Shadow work") returned "An unknown error has occurred" from Meta's `ads_archive` endpoint. Added required `ad_type=ALL` and `search_type=KEYWORD_UNORDERED` parameters matching the [official Facebook Ad Library API](https://facebookresearch.github.io/Radlibrary/reference/adlib_build_query.html) defaults. Removed `impressions` field (not displayed in UI, may not be available for non-political/non-EU ads).
+- **Opaque Meta API error messages**: Error responses from the Ad Library now include the Meta error code and subcode (e.g., "An unknown error has occurred (code 1)") for easier debugging. Full error details (code, subcode, type, fbtrace_id) logged to server console and Sentry.
+
+### Files Changed
+- `api/meta.ts` — Added `ad_type`, `search_type` params; removed `impressions` field; improved error response with code/subcode
+- `src/services/metaApi.ts` — Removed unused `impressions` field from `AdLibraryResult` interface
+
+---
+
 ## 2026-02-17 — Add Meta Ad Library integration for CreativeIQ inspiration
 
 ### Added

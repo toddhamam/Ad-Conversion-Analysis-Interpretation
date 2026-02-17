@@ -812,6 +812,8 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
     Array.isArray(ad_reached_countries) ? ad_reached_countries : [ad_reached_countries]
   ));
   params.set('ad_active_status', ad_active_status);
+  params.set('ad_type', 'ALL');
+  params.set('search_type', 'KEYWORD_UNORDERED');
   params.set('fields', [
     'ad_creative_bodies',
     'ad_creative_link_titles',
@@ -824,7 +826,6 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
     'page_id',
     'publisher_platforms',
     'spend',
-    'impressions',
   ].join(','));
   params.set('limit', String(Math.min(Number(limit) || 25, 50)));
 
@@ -843,16 +844,29 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
 
     if (!response.ok || data.error) {
       const metaError = data.error || {};
-      console.error('Ad Library API error:', metaError.message || 'Unknown');
+      console.error('Ad Library API error:', {
+        message: metaError.message,
+        code: metaError.code,
+        error_subcode: metaError.error_subcode,
+        type: metaError.type,
+        fbtrace_id: metaError.fbtrace_id,
+      });
       captureError(new Error(metaError.message || 'Ad Library API error'), {
         route: 'meta/ad-library',
         organizationId: auth.organizationId,
       });
       await flushSentry();
+
+      // Build a descriptive error message including the error code for debugging
+      const errorParts = [metaError.message || 'Unknown error from Meta API'];
+      if (metaError.code) errorParts.push(`(code ${metaError.code})`);
+      if (metaError.error_subcode) errorParts.push(`(subcode ${metaError.error_subcode})`);
+
       return res.status(response.status || 500).json({
         error: 'Ad Library API error',
-        message: metaError.message || 'Unknown error from Meta API',
+        message: errorParts.join(' '),
         code: metaError.code,
+        error_subcode: metaError.error_subcode,
       });
     }
 
