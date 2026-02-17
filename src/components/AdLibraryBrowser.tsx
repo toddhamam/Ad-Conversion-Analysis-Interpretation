@@ -505,11 +505,6 @@ export default function AdLibraryBrowser({
                           Since {new Date(result.ad_delivery_start_time).toLocaleDateString()}
                         </span>
                       )}
-                      {result.spend && (
-                        <span className="ad-library-card-spend">
-                          Spend: ${Number(result.spend.lower_bound).toLocaleString()}–${Number(result.spend.upper_bound).toLocaleString()}
-                        </span>
-                      )}
                     </div>
 
                     <div className="ad-library-card-actions">

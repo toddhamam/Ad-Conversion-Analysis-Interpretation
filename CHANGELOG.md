@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-02-17 — Fix Ad Library search error code 1 by removing unavailable fields
+
+### Fixed
+- **Ad Library search still returning "An unknown error has occurred (code 1)"**: The previous fix (PR #194) added `ad_type` and `search_type` params but the error persisted. Root cause: the `spend` field is only available for political/issue ads and EU transparency reports — requesting it for regular commercial ads causes Meta to return error code 1. Also removed `ad_creative_link_captions` (not used in the UI) and `search_type` parameter (KEYWORD_UNORDERED is already the default) to reduce the request surface.
+
+### Files Changed
+- `api/meta.ts` — Removed `spend` and `ad_creative_link_captions` from requested fields; removed `search_type` parameter
+- `src/services/metaApi.ts` — Removed `spend` and `ad_creative_link_captions` from `AdLibraryResult` interface
+- `src/components/AdLibraryBrowser.tsx` — Removed spend display (field no longer available)
+- `src/components/AdLibraryBrowser.css` — Removed `.ad-library-card-spend` styles
+
+---
+
 ## 2026-02-17 — Fix Ad Library search returning "An unknown error has occurred"
 
 ### Fixed

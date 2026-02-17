@@ -813,11 +813,9 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
   ));
   params.set('ad_active_status', ad_active_status);
   params.set('ad_type', 'ALL');
-  params.set('search_type', 'KEYWORD_UNORDERED');
   params.set('fields', [
     'ad_creative_bodies',
     'ad_creative_link_titles',
-    'ad_creative_link_captions',
     'ad_creative_link_descriptions',
     'ad_snapshot_url',
     'ad_delivery_start_time',
@@ -825,7 +823,6 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
     'page_name',
     'page_id',
     'publisher_platforms',
-    'spend',
   ].join(','));
   params.set('limit', String(Math.min(Number(limit) || 25, 50)));
 
