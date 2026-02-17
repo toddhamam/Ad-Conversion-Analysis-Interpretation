@@ -446,10 +446,6 @@
   font-style: italic;
 }
 
-.ad-library-card-spend {
-  font-size: 11px;
-  color: var(--text-muted);
-}
 
 .ad-library-card-actions {
   display: flex;

@@ -963,7 +963,6 @@ export interface AdLibrarySearchParams {
 export interface AdLibraryResult {
   ad_creative_bodies?: string[];
   ad_creative_link_titles?: string[];
-  ad_creative_link_captions?: string[];
   ad_creative_link_descriptions?: string[];
   ad_snapshot_url?: string;
   ad_delivery_start_time?: string;
@@ -971,7 +970,6 @@ export interface AdLibraryResult {
   page_name?: string;
   page_id?: string;
   publisher_platforms?: string[];
-  spend?: { lower_bound: string; upper_bound: string };
 }
 
 export interface AdLibraryResponse {
