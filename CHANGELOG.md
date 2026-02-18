@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-02-18 — Meta App Review resubmission (round 2)
+
+### Context
+All 5 permission requests (`ads_management`, `ads_read`, `business_management`, `pages_read_engagement`, `pages_show_list`) were rejected on 2026-02-17 with the same reason: "Screencast Not Aligned with Use Case Details." Meta confirmed the use case is allowed for all permissions — the issue was purely the screen recordings.
+
+**Root cause**: The screen recordings showed a "Reconnect" flow instead of a first-time "Connect" flow. Because the Facebook account had previously authorized the app, the OAuth dialog skipped the permissions consent screen entirely. Meta reviewers need to see the full first-time authorization including the permissions grant step.
+
+**Fix**: Revoked the app's OAuth authorization from Facebook Settings → Business Integrations → Remove, then recorded a fresh first-time consent flow and spliced it as the intro for all 5 permission-specific videos.
+
+### Changed
+- **CLAUDE.md**: Added "Screencast Not Aligned with Use Case Details" troubleshooting entry with revocation steps, screen recording requirements, and efficient recording strategy. Added Submission History table tracking review rounds.
+
+### Resubmitted
+- All 5 permissions resubmitted with updated screen recordings showing the complete first-time OAuth consent flow
+
+---
+
 ## 2026-02-18 — Enable Ad Library API access with EU/UK defaults and geographic guidance
 
 ### Changed

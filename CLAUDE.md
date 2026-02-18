@@ -1934,3 +1934,29 @@ These are completed during the "Data handling" step of the submission:
 **Cause**: App publish status and individual permission access levels are independent. The app can be "Published" while permissions remain at "Ready for testing."
 
 **Fix**: Verify each permission in Use Cases → Customize → Permissions and features shows Advanced Access (not "Ready for testing" or "Ready to publish").
+
+#### "Screencast Not Aligned with Use Case Details" rejection
+
+**Cause**: The screen recording didn't show the complete end-to-end flow. Most common reason: the Facebook account had previously authorized the app, so the OAuth dialog showed "Reconnect" instead of the full first-time consent screen — skipping the permissions grant step entirely.
+
+**Fix**: Before recording, revoke the app's authorization so Facebook treats it as a first-time connection:
+1. Go to **facebook.com/settings?tab=applications** (Business Integrations page)
+2. Find the app → click **Remove** (this only revokes the OAuth grant — does NOT affect your admin/developer role on the app)
+3. Disconnect from the app's Integrations page (clears stored credentials)
+4. Use an incognito window for recording to avoid cached sessions
+
+**Screen recording requirements** (per Meta's rejection feedback):
+- The complete Meta login flow (Facebook login screen)
+- The user granting app access (full permissions consent screen — must show "Connect", not "Reconnect")
+- The end-to-end experience of the use case for the specific permission
+- English UI with captions explaining what each step/button does
+- If using system user tokens, explicitly state this in the submission notes
+
+**Efficient recording strategy**: Since all 5 permissions share the same OAuth consent screen, record the login + consent flow once and splice it as the intro for each permission-specific video.
+
+### Submission History
+
+| Date | Action | Result |
+|------|--------|--------|
+| 2026-02-12 | Initial submission of all 5 permissions | Rejected — screencast showed "Reconnect" flow, missing first-time consent screen |
+| 2026-02-18 | Resubmission with fresh first-time OAuth flow intro spliced into all 5 videos | Pending review |
