@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-02-18 — Enable Ad Library API access with EU/UK defaults and geographic guidance
+
+### Changed
+- **Default country changed from US to GB (United Kingdom)**: The Ad Library API only returns commercial ads for EU/UK countries. US and other non-EU countries only return political/issue ads via the API. Default changed across frontend (`AdLibraryBrowser.tsx`), frontend service (`metaApi.ts`), and backend handler (`api/meta.ts`)
+- **Country dropdown reorganized with `<optgroup>` sections**: "EU/UK (all ads available)" lists 13 EU/UK countries; "Other (political/issue ads only)" lists US, CA, AU, BR, IN, IL — makes the geographic limitation immediately visible
+- **Geographic availability notice**: Amber info banner appears when a non-EU/UK country is selected, explaining that only political/issue ads are available and suggesting switching to an EU/UK country
+
+### Improved
+- **Identity verification error handling**: Backend detects error code 10 / subcode 2332002 (identity verification required) and OAuthException code 1, returning descriptive messages that mention both possible causes: (1) identity verification at facebook.com/ID, and (2) geographic limitations
+- **Clickable verification link**: When errors mention permissions, a help link to facebook.com/ID is rendered inline with the error message
+- **Simplified frontend error handling**: Frontend now uses the backend's descriptive error messages directly instead of duplicating error detection logic
+
+### Documented
+- **CLAUDE.md**: Added "Ad Library API" subsection documenting identity verification requirement, geographic limitations (EU/UK for commercial, global for political only), token requirements, and known error codes
+
+### Files Changed
+- `src/components/AdLibraryBrowser.tsx` — Default to GB, optgroup country dropdown, geo notice banner, verification link in error display
+- `src/components/AdLibraryBrowser.css` — Styles for `.ad-library-geo-notice`, `.ad-library-error-help` with link styling
+- `src/services/metaApi.ts` — Default countries to GB, simplified error handling (uses backend messages)
+- `api/meta.ts` — Default countries to GB, detect identity verification errors (code 10/2332002), enhanced OAuthException message with both causes, return `requires_verification` flag
+- `CLAUDE.md` — Added Ad Library API documentation section
+
+---
+
 ## 2026-02-18 — Fix Ad Library search error code 1 with retry logic, uppercase platforms, and diagnostics
 
 ### Fixed

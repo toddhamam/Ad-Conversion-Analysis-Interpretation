@@ -996,7 +996,7 @@ export async function searchAdLibrary(params: AdLibrarySearchParams): Promise<Ad
     body: JSON.stringify({
       search_terms: params.searchTerms,
       search_page_ids: params.searchPageIds,
-      ad_reached_countries: params.countries || ['US'],
+      ad_reached_countries: params.countries || ['GB'],
       ad_active_status: params.activeStatus || 'ALL',
       ad_delivery_date_min: params.dateMin,
       ad_delivery_date_max: params.dateMax,
@@ -1008,11 +1008,8 @@ export async function searchAdLibrary(params: AdLibrarySearchParams): Promise<Ad
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
-    // Include error type for diagnostics — OAuthException suggests token/permission issue
-    let errMsg = errData.message || `Ad Library search failed (${res.status})`;
-    if (errData.type === 'OAuthException' && errData.code === 1) {
-      errMsg = 'Ad Library access error — your Meta token may not have Ad Library API permissions. Please reconnect your Meta account or verify app configuration.';
-    }
+    // Use the backend's descriptive error message (includes verification hints, geo guidance)
+    const errMsg = errData.message || `Ad Library search failed (${res.status})`;
     throw new Error(errMsg);
   }
 
