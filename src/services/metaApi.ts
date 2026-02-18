@@ -955,7 +955,7 @@ export interface AdLibrarySearchParams {
   activeStatus?: 'ALL' | 'ACTIVE' | 'INACTIVE';
   dateMin?: string;  // YYYY-MM-DD
   dateMax?: string;
-  platforms?: ('facebook' | 'instagram' | 'audience_network' | 'messenger')[];
+  platforms?: ('FACEBOOK' | 'INSTAGRAM' | 'AUDIENCE_NETWORK' | 'MESSENGER')[];
   limit?: number;
   after?: string;  // pagination cursor
 }
@@ -1008,7 +1008,12 @@ export async function searchAdLibrary(params: AdLibrarySearchParams): Promise<Ad
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.message || `Ad Library search failed (${res.status})`);
+    // Include error type for diagnostics — OAuthException suggests token/permission issue
+    let errMsg = errData.message || `Ad Library search failed (${res.status})`;
+    if (errData.type === 'OAuthException' && errData.code === 1) {
+      errMsg = 'Ad Library access error — your Meta token may not have Ad Library API permissions. Please reconnect your Meta account or verify app configuration.';
+    }
+    throw new Error(errMsg);
   }
 
   return res.json();
