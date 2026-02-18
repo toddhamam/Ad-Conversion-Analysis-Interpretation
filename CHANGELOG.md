@@ -17,6 +17,61 @@ All 5 permission requests (`ads_management`, `ads_read`, `business_management`, 
 
 ---
 
+## 2026-02-18 — Enable Ad Library API access with EU/UK defaults and geographic guidance
+
+### Changed
+- **Default country changed from US to GB (United Kingdom)**: The Ad Library API only returns commercial ads for EU/UK countries. US and other non-EU countries only return political/issue ads via the API. Default changed across frontend (`AdLibraryBrowser.tsx`), frontend service (`metaApi.ts`), and backend handler (`api/meta.ts`)
+- **Country dropdown reorganized with `<optgroup>` sections**: "EU/UK (all ads available)" lists 13 EU/UK countries; "Other (political/issue ads only)" lists US, CA, AU, BR, IN, IL — makes the geographic limitation immediately visible
+- **Geographic availability notice**: Amber info banner appears when a non-EU/UK country is selected, explaining that only political/issue ads are available and suggesting switching to an EU/UK country
+
+### Improved
+- **Identity verification error handling**: Backend detects error code 10 / subcode 2332002 (identity verification required) and OAuthException code 1, returning descriptive messages that mention both possible causes: (1) identity verification at facebook.com/ID, and (2) geographic limitations
+- **Clickable verification link**: When errors mention permissions, a help link to facebook.com/ID is rendered inline with the error message
+- **Simplified frontend error handling**: Frontend now uses the backend's descriptive error messages directly instead of duplicating error detection logic
+
+### Documented
+- **CLAUDE.md**: Added "Ad Library API" subsection documenting identity verification requirement, geographic limitations (EU/UK for commercial, global for political only), token requirements, and known error codes
+
+### Files Changed
+- `src/components/AdLibraryBrowser.tsx` — Default to GB, optgroup country dropdown, geo notice banner, verification link in error display
+- `src/components/AdLibraryBrowser.css` — Styles for `.ad-library-geo-notice`, `.ad-library-error-help` with link styling
+- `src/services/metaApi.ts` — Default countries to GB, simplified error handling (uses backend messages)
+- `api/meta.ts` — Default countries to GB, detect identity verification errors (code 10/2332002), enhanced OAuthException message with both causes, return `requires_verification` flag
+- `CLAUDE.md` — Added Ad Library API documentation section
+
+---
+
+## 2026-02-18 — Fix Ad Library search error code 1 with retry logic, uppercase platforms, and diagnostics
+
+### Fixed
+- **Ad Library search returning "An unknown error has occurred (code 1)"**: Multiple fixes to address the persistent error from Meta's `ads_archive` endpoint:
+  - **Removed `ad_type: 'ALL'` parameter** — Meta defaults to `ALL`, and the explicit param may conflict with v24.0 API changes
+  - **Fixed `publisher_platforms` to uppercase** — Meta requires `FACEBOOK`, `INSTAGRAM`, `MESSENGER`, `AUDIENCE_NETWORK` (not lowercase). Updated both frontend dropdown values and backend serialization with `.toUpperCase()` normalization
+  - **Added retry logic for error code 1** — Up to 2 retries with exponential backoff (1.5s, 3s), matching the existing error code 2 retry pattern. Error code 1 is often transient on the `ads_archive` endpoint
+  - **Added diagnostic request logging** — Logs exact request parameters (minus access token) to Vercel function logs for troubleshooting
+  - **Forwarded error `type` in API response** — Frontend can now detect `OAuthException` vs other error types
+  - **Actionable error message for OAuthException** — When Meta returns `OAuthException` with code 1, displays a message about token permissions instead of the generic "unknown error" text
+
+### Files Changed
+- `api/meta.ts` — Removed `ad_type: 'ALL'`; added retry loop with backoff; uppercase platform normalization; diagnostic logging; forward error `type` in response
+- `src/components/AdLibraryBrowser.tsx` — Changed platform filter values to uppercase (`FACEBOOK`, `INSTAGRAM`, etc.)
+- `src/services/metaApi.ts` — Updated `AdLibrarySearchParams` platform types to uppercase; added OAuthException detection with actionable error message
+
+---
+
+## 2026-02-17 — Fix Ad Library search error code 1 by removing unavailable fields
+
+### Fixed
+- **Ad Library search still returning "An unknown error has occurred (code 1)"**: The previous fix (PR #194) added `ad_type` and `search_type` params but the error persisted. Root cause: the `spend` field is only available for political/issue ads and EU transparency reports — requesting it for regular commercial ads causes Meta to return error code 1. Also removed `ad_creative_link_captions` (not used in the UI) and `search_type` parameter (KEYWORD_UNORDERED is already the default) to reduce the request surface.
+
+### Files Changed
+- `api/meta.ts` — Removed `spend` and `ad_creative_link_captions` from requested fields; removed `search_type` parameter
+- `src/services/metaApi.ts` — Removed `spend` and `ad_creative_link_captions` from `AdLibraryResult` interface
+- `src/components/AdLibraryBrowser.tsx` — Removed spend display (field no longer available)
+- `src/components/AdLibraryBrowser.css` — Removed `.ad-library-card-spend` styles
+
+---
+
 ## 2026-02-17 — Fix Ad Library search returning "An unknown error has occurred"
 
 ### Fixed

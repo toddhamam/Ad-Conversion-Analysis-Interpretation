@@ -955,7 +955,7 @@ export interface AdLibrarySearchParams {
   activeStatus?: 'ALL' | 'ACTIVE' | 'INACTIVE';
   dateMin?: string;  // YYYY-MM-DD
   dateMax?: string;
-  platforms?: ('facebook' | 'instagram' | 'audience_network' | 'messenger')[];
+  platforms?: ('FACEBOOK' | 'INSTAGRAM' | 'AUDIENCE_NETWORK' | 'MESSENGER')[];
   limit?: number;
   after?: string;  // pagination cursor
 }
@@ -963,7 +963,6 @@ export interface AdLibrarySearchParams {
 export interface AdLibraryResult {
   ad_creative_bodies?: string[];
   ad_creative_link_titles?: string[];
-  ad_creative_link_captions?: string[];
   ad_creative_link_descriptions?: string[];
   ad_snapshot_url?: string;
   ad_delivery_start_time?: string;
@@ -971,7 +970,6 @@ export interface AdLibraryResult {
   page_name?: string;
   page_id?: string;
   publisher_platforms?: string[];
-  spend?: { lower_bound: string; upper_bound: string };
 }
 
 export interface AdLibraryResponse {
@@ -998,7 +996,7 @@ export async function searchAdLibrary(params: AdLibrarySearchParams): Promise<Ad
     body: JSON.stringify({
       search_terms: params.searchTerms,
       search_page_ids: params.searchPageIds,
-      ad_reached_countries: params.countries || ['US'],
+      ad_reached_countries: params.countries || ['GB'],
       ad_active_status: params.activeStatus || 'ALL',
       ad_delivery_date_min: params.dateMin,
       ad_delivery_date_max: params.dateMax,
@@ -1010,7 +1008,9 @@ export async function searchAdLibrary(params: AdLibrarySearchParams): Promise<Ad
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.message || `Ad Library search failed (${res.status})`);
+    // Use the backend's descriptive error message (includes verification hints, geo guidance)
+    const errMsg = errData.message || `Ad Library search failed (${res.status})`;
+    throw new Error(errMsg);
   }
 
   return res.json();

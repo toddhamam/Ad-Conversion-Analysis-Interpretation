@@ -793,7 +793,7 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
   const {
     search_terms,
     search_page_ids,
-    ad_reached_countries = ['US'],
+    ad_reached_countries = ['GB'],
     ad_active_status = 'ALL',
     ad_delivery_date_min,
     ad_delivery_date_max,
@@ -806,18 +806,12 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'search_terms or search_page_ids is required' });
   }
 
-  const params = new URLSearchParams();
-  params.set('access_token', creds.accessToken);
-  params.set('ad_reached_countries', JSON.stringify(
-    Array.isArray(ad_reached_countries) ? ad_reached_countries : [ad_reached_countries]
-  ));
-  params.set('ad_active_status', ad_active_status);
-  params.set('ad_type', 'ALL');
-  params.set('search_type', 'KEYWORD_UNORDERED');
-  params.set('fields', [
+  // Build request params — fields kept minimal to avoid error code 1 on
+  // commercial ads (spend, impressions, link_captions are restricted to
+  // political/issue ads and EU transparency reports)
+  const fields = [
     'ad_creative_bodies',
     'ad_creative_link_titles',
-    'ad_creative_link_captions',
     'ad_creative_link_descriptions',
     'ad_snapshot_url',
     'ad_delivery_start_time',
@@ -825,59 +819,116 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
     'page_name',
     'page_id',
     'publisher_platforms',
-    'spend',
-  ].join(','));
+  ];
+
+  const params = new URLSearchParams();
+  params.set('access_token', creds.accessToken);
+  params.set('ad_reached_countries', JSON.stringify(
+    Array.isArray(ad_reached_countries) ? ad_reached_countries : [ad_reached_countries]
+  ));
+  params.set('ad_active_status', ad_active_status);
+  params.set('fields', fields.join(','));
   params.set('limit', String(Math.min(Number(limit) || 25, 50)));
 
   if (search_terms) params.set('search_terms', search_terms);
   if (search_page_ids) params.set('search_page_ids', JSON.stringify(search_page_ids));
   if (ad_delivery_date_min) params.set('ad_delivery_date_min', ad_delivery_date_min);
   if (ad_delivery_date_max) params.set('ad_delivery_date_max', ad_delivery_date_max);
-  if (publisher_platforms) params.set('publisher_platforms', JSON.stringify(publisher_platforms));
+  // Meta requires uppercase platform values: FACEBOOK, INSTAGRAM, MESSENGER, AUDIENCE_NETWORK
+  if (publisher_platforms) {
+    const platforms = (Array.isArray(publisher_platforms) ? publisher_platforms : [publisher_platforms])
+      .map((p: string) => p.toUpperCase());
+    params.set('publisher_platforms', JSON.stringify(platforms));
+  }
   if (after) params.set('after', after);
+
+  // Log request params (excluding access token) for diagnostics
+  const debugParams = new URLSearchParams(params);
+  debugParams.delete('access_token');
+  console.log('Ad Library request:', debugParams.toString());
 
   const apiUrl = `${GRAPH_API_BASE}/ads_archive?${params.toString()}`;
 
-  try {
-    const response = await fetch(apiUrl);
-    const data = await response.json();
+  // Retry transient errors (code 1) up to 2 times with exponential backoff
+  const MAX_RETRIES = 2;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(apiUrl);
+      const data = await response.json();
 
-    if (!response.ok || data.error) {
-      const metaError = data.error || {};
-      console.error('Ad Library API error:', {
-        message: metaError.message,
-        code: metaError.code,
-        error_subcode: metaError.error_subcode,
-        type: metaError.type,
-        fbtrace_id: metaError.fbtrace_id,
-      });
-      captureError(new Error(metaError.message || 'Ad Library API error'), {
-        route: 'meta/ad-library',
-        organizationId: auth.organizationId,
-      });
+      if (!response.ok || data.error) {
+        const metaError = data.error || {};
+        console.error('Ad Library API error:', {
+          message: metaError.message,
+          code: metaError.code,
+          error_subcode: metaError.error_subcode,
+          type: metaError.type,
+          fbtrace_id: metaError.fbtrace_id,
+          attempt,
+        });
+
+        // Retry on transient error code 1 (generic unknown error)
+        if (metaError.code === 1 && attempt < MAX_RETRIES) {
+          const delay = Math.pow(2, attempt) * 1500; // 1.5s, 3s
+          console.warn(`⚠️ Ad Library transient error (code 1), retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        captureError(new Error(metaError.message || 'Ad Library API error'), {
+          route: 'meta/ad-library',
+          organizationId: auth.organizationId,
+        });
+        await flushSentry();
+
+        // Detect identity verification errors
+        const requiresVerification =
+          (metaError.code === 10 && metaError.error_subcode === 2332002) ||
+          (metaError.type === 'OAuthException' && metaError.code === 1);
+
+        // Build a descriptive error message including the error code for debugging
+        let errorMessage: string;
+        if (metaError.code === 10 && metaError.error_subcode === 2332002) {
+          errorMessage = 'Ad Library API requires identity verification. Complete verification at facebook.com/ID to enable Ad Library access.';
+        } else if (metaError.type === 'OAuthException' && metaError.code === 1) {
+          errorMessage = 'Ad Library access error — your Meta token may lack Ad Library API permissions. This usually means: (1) the Facebook account needs identity verification at facebook.com/ID, or (2) the selected country only supports political/issue ads via the API (try an EU/UK country for commercial ads).';
+        } else {
+          const errorParts = [metaError.message || 'Unknown error from Meta API'];
+          if (metaError.code) errorParts.push(`(code ${metaError.code})`);
+          if (metaError.error_subcode) errorParts.push(`(subcode ${metaError.error_subcode})`);
+          errorMessage = errorParts.join(' ');
+        }
+
+        return res.status(response.status || 500).json({
+          error: 'Ad Library API error',
+          message: errorMessage,
+          code: metaError.code,
+          error_subcode: metaError.error_subcode,
+          type: metaError.type,
+          requires_verification: requiresVerification,
+        });
+      }
+
+      return res.status(200).json(data);
+    } catch (fetchErr: unknown) {
+      // Network errors — retry on first attempts
+      if (attempt < MAX_RETRIES) {
+        const delay = Math.pow(2, attempt) * 1500;
+        console.warn(`⚠️ Ad Library fetch error, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      console.error('Ad Library fetch error (all retries exhausted):', fetchErr);
+      captureError(fetchErr, { route: 'meta/ad-library', organizationId: auth.organizationId });
       await flushSentry();
-
-      // Build a descriptive error message including the error code for debugging
-      const errorParts = [metaError.message || 'Unknown error from Meta API'];
-      if (metaError.code) errorParts.push(`(code ${metaError.code})`);
-      if (metaError.error_subcode) errorParts.push(`(subcode ${metaError.error_subcode})`);
-
-      return res.status(response.status || 500).json({
-        error: 'Ad Library API error',
-        message: errorParts.join(' '),
-        code: metaError.code,
-        error_subcode: metaError.error_subcode,
+      return res.status(500).json({
+        error: 'Failed to fetch from Ad Library',
+        message: fetchErr instanceof Error ? fetchErr.message : 'Network error',
       });
     }
-
-    return res.status(200).json(data);
-  } catch (fetchErr: unknown) {
-    console.error('Ad Library fetch error:', fetchErr);
-    captureError(fetchErr, { route: 'meta/ad-library', organizationId: auth.organizationId });
-    await flushSentry();
-    return res.status(500).json({
-      error: 'Failed to fetch from Ad Library',
-      message: fetchErr instanceof Error ? fetchErr.message : 'Network error',
-    });
   }
+
+  // Should not reach here, but TypeScript safety
+  return res.status(500).json({ error: 'Unexpected error in Ad Library handler' });
 }

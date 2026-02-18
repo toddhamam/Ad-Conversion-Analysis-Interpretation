@@ -3,25 +3,41 @@ import { searchAdLibrary, type AdLibraryResult } from '../services/metaApi';
 import type { AdLibraryInspiration } from '../types';
 import './AdLibraryBrowser.css';
 
-const COUNTRIES = [
-  { code: 'US', label: 'United States' },
+// EU/UK countries where commercial ads are available via the Ad Library API.
+// Non-EU countries only return political/issue ads through the API.
+const EU_UK_COUNTRIES = [
   { code: 'GB', label: 'United Kingdom' },
-  { code: 'CA', label: 'Canada' },
-  { code: 'AU', label: 'Australia' },
   { code: 'DE', label: 'Germany' },
   { code: 'FR', label: 'France' },
   { code: 'NL', label: 'Netherlands' },
-  { code: 'IN', label: 'India' },
+  { code: 'IT', label: 'Italy' },
+  { code: 'ES', label: 'Spain' },
+  { code: 'SE', label: 'Sweden' },
+  { code: 'PL', label: 'Poland' },
+  { code: 'IE', label: 'Ireland' },
+  { code: 'AT', label: 'Austria' },
+  { code: 'BE', label: 'Belgium' },
+  { code: 'DK', label: 'Denmark' },
+  { code: 'PT', label: 'Portugal' },
+];
+
+const OTHER_COUNTRIES = [
+  { code: 'US', label: 'United States' },
+  { code: 'CA', label: 'Canada' },
+  { code: 'AU', label: 'Australia' },
   { code: 'BR', label: 'Brazil' },
+  { code: 'IN', label: 'India' },
   { code: 'IL', label: 'Israel' },
 ];
 
+const EU_UK_CODES = new Set(EU_UK_COUNTRIES.map(c => c.code));
+
 const PLATFORMS = [
   { value: '', label: 'All Platforms' },
-  { value: 'facebook', label: 'Facebook' },
-  { value: 'instagram', label: 'Instagram' },
-  { value: 'messenger', label: 'Messenger' },
-  { value: 'audience_network', label: 'Audience Network' },
+  { value: 'FACEBOOK', label: 'Facebook' },
+  { value: 'INSTAGRAM', label: 'Instagram' },
+  { value: 'MESSENGER', label: 'Messenger' },
+  { value: 'AUDIENCE_NETWORK', label: 'Audience Network' },
 ];
 
 const MIN_DURATION_OPTIONS = [
@@ -130,7 +146,7 @@ export default function AdLibraryBrowser({
   const [error, setError] = useState<string | null>(null);
 
   // API filters (sent to backend)
-  const [country, setCountry] = useState('US');
+  const [country, setCountry] = useState('GB');
   const [activeStatus, setActiveStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [platform, setPlatform] = useState('');
   const [runningSince, setRunningSince] = useState('');
@@ -204,7 +220,7 @@ export default function AdLibraryBrowser({
         searchTerms: query.trim(),
         countries: [country],
         activeStatus,
-        platforms: platform ? [platform as 'facebook' | 'instagram' | 'audience_network' | 'messenger'] : undefined,
+        platforms: platform ? [platform as 'FACEBOOK' | 'INSTAGRAM' | 'AUDIENCE_NETWORK' | 'MESSENGER'] : undefined,
         dateMin,
         limit: 50,
         after: cursor || undefined,
@@ -313,9 +329,16 @@ export default function AdLibraryBrowser({
                 setTimeout(triggerSearch, 0);
               }}
             >
-              {COUNTRIES.map(c => (
-                <option key={c.code} value={c.code}>{c.label}</option>
-              ))}
+              <optgroup label="EU/UK (all ads available)">
+                {EU_UK_COUNTRIES.map(c => (
+                  <option key={c.code} value={c.code}>{c.label}</option>
+                ))}
+              </optgroup>
+              <optgroup label="Other (political/issue ads only)">
+                {OTHER_COUNTRIES.map(c => (
+                  <option key={c.code} value={c.code}>{c.label}</option>
+                ))}
+              </optgroup>
             </select>
 
             <div className="ad-library-status-tabs">
@@ -407,8 +430,28 @@ export default function AdLibraryBrowser({
             </div>
           )}
 
+          {/* Geographic availability notice for non-EU/UK countries */}
+          {!EU_UK_CODES.has(country) && (
+            <div className="ad-library-geo-notice">
+              The Ad Library API only returns commercial ads for EU/UK countries. For {
+                [...OTHER_COUNTRIES, ...EU_UK_COUNTRIES].find(c => c.code === country)?.label || country
+              }, only political/issue ads are available. Switch to an EU/UK country for commercial ad results.
+            </div>
+          )}
+
           {error && (
-            <div className="ad-library-error">{error}</div>
+            <div className="ad-library-error">
+              {error}
+              {error.toLowerCase().includes('permission') && (
+                <span className="ad-library-error-help">
+                  {' '}Your Facebook account may need{' '}
+                  <a href="https://www.facebook.com/ID" target="_blank" rel="noopener noreferrer">
+                    identity verification
+                  </a>{' '}
+                  to use the Ad Library API.
+                </span>
+              )}
+            </div>
           )}
 
           {isSearching && results.length === 0 && (
@@ -503,11 +546,6 @@ export default function AdLibraryBrowser({
                       {result.ad_delivery_start_time && (
                         <span className="ad-library-card-date">
                           Since {new Date(result.ad_delivery_start_time).toLocaleDateString()}
-                        </span>
-                      )}
-                      {result.spend && (
-                        <span className="ad-library-card-spend">
-                          Spend: ${Number(result.spend.lower_bound).toLocaleString()}–${Number(result.spend.upper_bound).toLocaleString()}
                         </span>
                       )}
                     </div>
