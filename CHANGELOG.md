@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-02-18 — Add OpenClaw Ops Bot skills for cold email outreach
+
+### Added
+- **8 custom OpenClaw skills** for the Convertra Ops Bot (`@convertra_ops_bot` on Telegram):
+  - `gmail-send` — Send emails via Gmail SMTP with Python smtplib
+  - `gmail-read` — Read/search Gmail inbox via IMAP with Python imaplib
+  - `cold-outreach` — End-to-end cold email campaign orchestration with templates and timing rules
+  - `prospect-research` — Find and qualify targets using web search, Ad Library, and public profiles
+  - `pipeline-tracker` — JSON-based CRM for tracking prospect stages and interactions
+  - `email-warmup` — 4-week Gmail sender reputation warmup schedule
+  - `follow-up-sequences` — Automated drip campaign management with sequence timing
+  - `lead-enrichment` — Email discovery, verification, and company intelligence gathering
+- **OPS-RUNBOOK.md** — Comprehensive operations runbook documenting VPS infrastructure, how OpenClaw skills work (three-layer loading, eligibility filtering, session snapshot caching), step-by-step procedures for adding/updating skills, and troubleshooting guide
+
+### Key Technical Discoveries
+- Custom skills must be placed in the **workspace** directory (`~/.openclaw/workspace/skills/`), not the bundled location (`/app/skills/`), to bypass the internal `allowBundled` allowlist
+- SKILL.md metadata must NOT include `requires` gates — these filter skills out at load time. Environment variables are injected via `skills.entries` in `openclaw.json` instead
+- OpenClaw caches a `skillsSnapshot` per session — after adding new skills, session files must be deleted and the container restarted for skills to appear
+
+### Files Added
+- `ops/openclaw-skills/OPS-RUNBOOK.md` — Operations runbook
+- `ops/openclaw-skills/gmail-send/SKILL.md`
+- `ops/openclaw-skills/gmail-read/SKILL.md`
+- `ops/openclaw-skills/cold-outreach/SKILL.md`
+- `ops/openclaw-skills/prospect-research/SKILL.md`
+- `ops/openclaw-skills/pipeline-tracker/SKILL.md`
+- `ops/openclaw-skills/email-warmup/SKILL.md`
+- `ops/openclaw-skills/follow-up-sequences/SKILL.md`
+- `ops/openclaw-skills/lead-enrichment/SKILL.md`
+
+---
+
 ## 2026-02-18 — Meta App Review resubmission (round 2)
 
 ### Context
