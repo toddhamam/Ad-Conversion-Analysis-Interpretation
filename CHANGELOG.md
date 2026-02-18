@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-02-18 — Fix Ad Library search error code 1 with retry logic, uppercase platforms, and diagnostics
+
+### Fixed
+- **Ad Library search returning "An unknown error has occurred (code 1)"**: Multiple fixes to address the persistent error from Meta's `ads_archive` endpoint:
+  - **Removed `ad_type: 'ALL'` parameter** — Meta defaults to `ALL`, and the explicit param may conflict with v24.0 API changes
+  - **Fixed `publisher_platforms` to uppercase** — Meta requires `FACEBOOK`, `INSTAGRAM`, `MESSENGER`, `AUDIENCE_NETWORK` (not lowercase). Updated both frontend dropdown values and backend serialization with `.toUpperCase()` normalization
+  - **Added retry logic for error code 1** — Up to 2 retries with exponential backoff (1.5s, 3s), matching the existing error code 2 retry pattern. Error code 1 is often transient on the `ads_archive` endpoint
+  - **Added diagnostic request logging** — Logs exact request parameters (minus access token) to Vercel function logs for troubleshooting
+  - **Forwarded error `type` in API response** — Frontend can now detect `OAuthException` vs other error types
+  - **Actionable error message for OAuthException** — When Meta returns `OAuthException` with code 1, displays a message about token permissions instead of the generic "unknown error" text
+
+### Files Changed
+- `api/meta.ts` — Removed `ad_type: 'ALL'`; added retry loop with backoff; uppercase platform normalization; diagnostic logging; forward error `type` in response
+- `src/components/AdLibraryBrowser.tsx` — Changed platform filter values to uppercase (`FACEBOOK`, `INSTAGRAM`, etc.)
+- `src/services/metaApi.ts` — Updated `AdLibrarySearchParams` platform types to uppercase; added OAuthException detection with actionable error message
+
+---
+
 ## 2026-02-17 — Fix Ad Library search error code 1 by removing unavailable fields
 
 ### Fixed

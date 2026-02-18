@@ -18,10 +18,10 @@ const COUNTRIES = [
 
 const PLATFORMS = [
   { value: '', label: 'All Platforms' },
-  { value: 'facebook', label: 'Facebook' },
-  { value: 'instagram', label: 'Instagram' },
-  { value: 'messenger', label: 'Messenger' },
-  { value: 'audience_network', label: 'Audience Network' },
+  { value: 'FACEBOOK', label: 'Facebook' },
+  { value: 'INSTAGRAM', label: 'Instagram' },
+  { value: 'MESSENGER', label: 'Messenger' },
+  { value: 'AUDIENCE_NETWORK', label: 'Audience Network' },
 ];
 
 const MIN_DURATION_OPTIONS = [
@@ -204,7 +204,7 @@ export default function AdLibraryBrowser({
         searchTerms: query.trim(),
         countries: [country],
         activeStatus,
-        platforms: platform ? [platform as 'facebook' | 'instagram' | 'audience_network' | 'messenger'] : undefined,
+        platforms: platform ? [platform as 'FACEBOOK' | 'INSTAGRAM' | 'AUDIENCE_NETWORK' | 'MESSENGER'] : undefined,
         dateMin,
         limit: 50,
         after: cursor || undefined,
