@@ -1166,6 +1166,31 @@ Always run `npm run dev` to start the development server before testing URLs. Th
 - **Progressive validation**: Implement validation in stages. If a direct check fails with a permission-specific error (not an outright access denial), attempt a secondary validation using alternative permissions or endpoints before failing entirely. Log warnings (`console.warn`) for non-critical check failures instead of blocking the operation.
 - **Transient errors (code 2)**: Meta Graph API returns error code 2 ("An unexpected error has occurred. Please retry your request later.") for transient server issues. `metaFetch` automatically retries these up to 3 times with exponential backoff (1s, 2s, 4s). Do not remove this retry logic — it prevents publish failures from intermittent Meta server hiccups.
 
+### Ad Library API (`ads_archive` endpoint)
+
+The Ad Library browser (CreativeIQ Step 1) searches Meta's public `ads_archive` endpoint for competitor ad inspiration.
+
+**Identity verification required**: The Facebook account behind the access token must complete government ID verification at [facebook.com/ID](https://www.facebook.com/ID). Without this, the `ads_archive` endpoint returns OAuthException error code 1. Verification may take several days. This is confirmed by Meta's official Ad Library API Script Repository.
+
+**Geographic limitations**:
+- **EU/UK countries** (GB, DE, FR, NL, IT, ES, SE, PL, IE, AT, BE, DK, PT): All commercial ads available (1-year archive)
+- **All other countries** (US, CA, AU, BR, IN, IL, etc.): Only political/issue ads available (7-year archive)
+- The web interface at `facebook.com/ads/library` shows all ads globally, but the **API** has narrower coverage
+- Default country is `GB` (United Kingdom) to maximize commercial ad results
+
+**Token requirements**:
+- User access tokens from OAuth work if the user is identity-verified
+- System User tokens may not work for the Ad Library API
+- No App Review or special permissions required — Ad Library data is public
+- The `ads_read` permission is NOT required for Ad Library search
+
+**Known error codes**:
+- `OAuthException` code 1: Generic — usually means identity verification incomplete or geographic limitation hit
+- Code 10, subcode 2332002: Specifically indicates identity verification not completed
+- Code 1 can also be transient — the handler retries up to 2 times with exponential backoff
+
+**Files**: `api/meta.ts` (`handleAdLibrary`), `src/services/metaApi.ts` (`searchAdLibrary`), `src/components/AdLibraryBrowser.tsx`
+
 ### Meta API Token Management
 - **Short-lived tokens** (Graph API Explorer): Expire in 1-2 hours. Only for quick testing.
 - **Long-lived tokens**: Exchange short-lived tokens for ~60-day tokens via the token exchange endpoint.

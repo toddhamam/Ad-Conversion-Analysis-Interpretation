@@ -793,7 +793,7 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
   const {
     search_terms,
     search_page_ids,
-    ad_reached_countries = ['US'],
+    ad_reached_countries = ['GB'],
     ad_active_status = 'ALL',
     ad_delivery_date_min,
     ad_delivery_date_max,
@@ -881,17 +881,31 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
         });
         await flushSentry();
 
+        // Detect identity verification errors
+        const requiresVerification =
+          (metaError.code === 10 && metaError.error_subcode === 2332002) ||
+          (metaError.type === 'OAuthException' && metaError.code === 1);
+
         // Build a descriptive error message including the error code for debugging
-        const errorParts = [metaError.message || 'Unknown error from Meta API'];
-        if (metaError.code) errorParts.push(`(code ${metaError.code})`);
-        if (metaError.error_subcode) errorParts.push(`(subcode ${metaError.error_subcode})`);
+        let errorMessage: string;
+        if (metaError.code === 10 && metaError.error_subcode === 2332002) {
+          errorMessage = 'Ad Library API requires identity verification. Complete verification at facebook.com/ID to enable Ad Library access.';
+        } else if (metaError.type === 'OAuthException' && metaError.code === 1) {
+          errorMessage = 'Ad Library access error — your Meta token may lack Ad Library API permissions. This usually means: (1) the Facebook account needs identity verification at facebook.com/ID, or (2) the selected country only supports political/issue ads via the API (try an EU/UK country for commercial ads).';
+        } else {
+          const errorParts = [metaError.message || 'Unknown error from Meta API'];
+          if (metaError.code) errorParts.push(`(code ${metaError.code})`);
+          if (metaError.error_subcode) errorParts.push(`(subcode ${metaError.error_subcode})`);
+          errorMessage = errorParts.join(' ');
+        }
 
         return res.status(response.status || 500).json({
           error: 'Ad Library API error',
-          message: errorParts.join(' '),
+          message: errorMessage,
           code: metaError.code,
           error_subcode: metaError.error_subcode,
           type: metaError.type,
+          requires_verification: requiresVerification,
         });
       }
 
