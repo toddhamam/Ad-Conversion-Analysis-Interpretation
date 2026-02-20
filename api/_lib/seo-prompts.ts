@@ -448,3 +448,49 @@ export function scoreContentGap(
 
   return Math.min(score, 100);
 }
+
+/**
+ * Score keyword relevance to the site's niche (0–100).
+ * Uses simple token overlap — no AI calls, sub-millisecond per keyword.
+ *
+ * Returns:
+ *  100 — keyword contains a full niche phrase (e.g., niche "shadow work" matches "shadow work journal")
+ *   80 — keyword shares 2+ individual words with niche terms
+ *   50 — keyword shares 1 word with niche terms
+ *    0 — no overlap at all
+ *  100 — when no niche is configured (preserves current behavior)
+ */
+export function scoreRelevance(
+  keyword: string,
+  nicheTxt: string | null,
+): number {
+  if (!nicheTxt) return 100;
+
+  const kw = keyword.toLowerCase();
+  const nicheTerms = nicheTxt
+    .toLowerCase()
+    .split(/[,;]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length > 2);
+
+  if (nicheTerms.length === 0) return 100;
+
+  // Check for exact niche phrase match (multi-word)
+  for (const term of nicheTerms) {
+    if (kw.includes(term)) return 100;
+  }
+
+  // Check for individual word overlap
+  const nicheWords = new Set(
+    nicheTerms.flatMap((t) => t.split(/\s+/)).filter((w) => w.length > 2)
+  );
+  const kwWords = kw.split(/\s+/);
+  let matchCount = 0;
+  for (const word of kwWords) {
+    if (nicheWords.has(word)) matchCount++;
+  }
+
+  if (matchCount >= 2) return 80;
+  if (matchCount === 1) return 50;
+  return 0;
+}

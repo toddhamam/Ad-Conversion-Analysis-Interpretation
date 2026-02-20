@@ -23,6 +23,32 @@
 
 ---
 
+## 2026-02-20 — Add keyword relevance filtering to Smart Discover
+
+### Added
+- **Site niche and negative keywords**: New `niche` (free-form text) and `negative_keywords` (array) columns on `seo_sites` table for keyword relevance context
+- **`scoreRelevance()` function** (`api/_lib/seo-prompts.ts`): Fast token-overlap scoring (sub-millisecond per keyword) that scores keyword relevance to the site's niche (0–100). Full niche phrase match = 100, 2+ word overlap = 80, 1 word = 50, no overlap = 0. Returns 100 when no niche is configured (preserves current behavior)
+- **Hard filtering**: Keywords containing any negative term are completely removed before scoring
+- **Soft filtering**: Relevance score applied as a multiplier to content gap scores (`gapScore * max(relevance/100, 0.1)`), pushing irrelevant keywords to the bottom without deleting them
+- **Niche-qualified seeds**: Smart Discover Step 2 now appends the first niche term to product seeds (e.g., "The Resistance Protocol" → also "The Resistance Protocol personal development") to guide Google Keyword Planner toward relevant results
+- **Site creation form**: Niche and exclude keywords inputs added between Domain and Supabase fields
+- **Keywords tab "Site Context" panel**: Collapsible inline editor for niche and negative keywords on existing sites, with save button and status indicators
+
+### Context
+After getting Google Ads Keyword Planner working, Smart Discover pulled ~1000 keywords but many were irrelevant. "The Resistance Protocol" (a personal development product) generated fitness/running keywords like "run map" because Google interprets "resistance" broadly. This change adds 3 layers of relevance control: niche-qualified seeds, hard exclusion of negative terms, and soft relevance scoring.
+
+### Files Changed
+- `supabase/migrations/006_keyword_relevance.sql` — **New** — ALTER TABLE add niche, negative_keywords
+- `api/_lib/seo-prompts.ts` — Added `scoreRelevance()` function
+- `api/seoiq.ts` — Site CRUD fields, negative keyword hard filter, relevance scoring multiplier in `handleResearchKeywords`
+- `src/types/seoiq.ts` — Added niche, negative_keywords to SeoSite/CreateSeoSiteRequest/UpdateSeoSiteRequest; keywords_filtered to ResearchKeywordsResponse
+- `src/pages/SeoIQ.tsx` — Site context UI (creation form + Keywords tab editor), niche-qualified seeds in Smart Discover
+
+### Migration Required
+Run `006_keyword_relevance.sql` on Supabase to add the `niche` and `negative_keywords` columns to `seo_sites`.
+
+---
+
 ## 2026-02-20 — Surface Google OAuth errors in Keyword Planner diagnostics
 
 ### Fixed
