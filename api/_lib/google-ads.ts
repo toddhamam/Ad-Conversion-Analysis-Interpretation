@@ -84,7 +84,7 @@ export function isGoogleAdsConfigured(): boolean {
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
-async function getGoogleAdsAccessToken(): Promise<{ token: string; scopes?: string } | null> {
+async function getGoogleAdsAccessToken(): Promise<{ token: string; scopes?: string; error?: string } | null> {
   // Return cached token if still valid (with 60s buffer)
   if (cachedToken && cachedToken.expiresAt > Date.now() + 60000) {
     return { token: cachedToken.token };
@@ -114,7 +114,17 @@ async function getGoogleAdsAccessToken(): Promise<{ token: string; scopes?: stri
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Google Ads token refresh failed:', response.status, errorText);
-      return null;
+      // Parse Google's error for a user-friendly message
+      let detail = `HTTP ${response.status}`;
+      try {
+        const parsed = JSON.parse(errorText);
+        if (parsed.error_description) {
+          detail = parsed.error_description;
+        } else if (parsed.error) {
+          detail = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error);
+        }
+      } catch { /* use default detail */ }
+      return { token: '', error: detail };
     }
 
     const data: TokenResponse = await response.json();
@@ -225,6 +235,12 @@ export async function diagnoseGoogleAdsConfig(): Promise<Record<string, unknown>
     report.message = 'Failed to refresh OAuth access token. Check GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_ADS_REFRESH_TOKEN.';
     return report;
   }
+  if (tokenResult.error) {
+    report.status = 'TOKEN_REFRESH_FAILED';
+    report.tokenRefreshError = tokenResult.error;
+    report.message = `OAuth token refresh failed: ${tokenResult.error}`;
+    return report;
+  }
 
   report.tokenRefresh = 'OK';
   if (tokenResult.scopes) {
@@ -333,6 +349,9 @@ export async function fetchKeywordIdeas(
   const tokenResult = await getGoogleAdsAccessToken();
   if (!tokenResult) {
     return { keywords: [], error: 'Failed to get Google Ads access token — check GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_ADS_REFRESH_TOKEN' };
+  }
+  if (tokenResult.error) {
+    return { keywords: [], error: `Google OAuth token refresh failed: ${tokenResult.error}` };
   }
 
   const customerId = process.env.GOOGLE_ADS_CUSTOMER_ID!.replace(/-/g, '');
