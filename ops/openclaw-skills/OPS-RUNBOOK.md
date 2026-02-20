@@ -56,7 +56,7 @@ sudo docker compose up -d
 
 **Warning:** This clears conversation history. The bot starts fresh.
 
-## Current Custom Skills (8)
+## Current Custom Skills (9)
 
 All stored at `/home/ubuntu/.openclaw/workspace/skills/`:
 
@@ -70,6 +70,7 @@ All stored at `/home/ubuntu/.openclaw/workspace/skills/`:
 | `email-warmup` | `/email_warmup` | Gmail sender reputation building |
 | `follow-up-sequences` | `/follow_up_sequences` | Automated drip campaigns |
 | `lead-enrichment` | `/lead_enrichment` | Email discovery & company intel |
+| `ad-library-scraper` | `/ad_library_scraper` | Mine Meta Ad Library for active ad spenders as sales leads |
 
 ## SKILL.md Metadata Format
 

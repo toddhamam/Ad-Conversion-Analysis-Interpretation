@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-02-20 — Add Ad Library lead scraper skill for automated prospect discovery
+
+### Added
+- **`ad-library-scraper` OpenClaw skill** — Automates lead discovery by mining the Meta Ad Library for active ad spenders who match Convertra's ICP. The bot scrapes advertiser data, qualifies prospects by ad volume and creative sophistication, scores them on a 17-point rubric, and feeds qualified leads into the outreach pipeline.
+  - **Autonomous mode**: Sweeps 6 niches (Supplements, Skincare, Fitness, Courses, Ecommerce, SaaS) without prompting, stops at 15-20 hot leads
+  - **3 prospect buckets**: `convertra_saas` (DTC/ecommerce), `enterprise_partner` (agencies/large brands), `media_buying` (stale creative, high spend)
+  - **17-point scoring rubric**: Ad count, platform diversity, creative fatigue, hiring signals, funding, revenue signals
+  - **Full pipeline integration**: Hands off to `lead-enrichment`, `pipeline-tracker`, and `cold-outreach` skills
+
+### Changed
+- **OPS-RUNBOOK.md** — Updated skill count from 8 to 9, added `ad-library-scraper` to the custom skills table
+
+### Deployment Notes
+- Skill deployed to VPS at `/home/ubuntu/.openclaw/workspace/skills/ad-library-scraper/SKILL.md`
+- Instructions also embedded in `AGENTS.md` system prompt for reliable loading (OpenClaw's Sonnet 4 model doesn't always read skill files on demand)
+- Added `"ad-library-scraper": {"enabled": true}` to `openclaw.json` skills entries
+
+### Files Changed
+- `ops/openclaw-skills/ad-library-scraper/SKILL.md` (new) — Complete scraping instructions with scoring, filtering, and pipeline integration
+- `ops/openclaw-skills/OPS-RUNBOOK.md` — Updated skill count and table
+
+---
+
 ## 2026-02-20 — Add keyword relevance filtering to Smart Discover
 
 ### Added
