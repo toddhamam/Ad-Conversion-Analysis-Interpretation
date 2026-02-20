@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-02-20 — Surface Google OAuth errors in Keyword Planner diagnostics
+
+### Fixed
+- **Generic "check your env vars" error hid actual Google OAuth failure**: When the Google Ads refresh token failed to exchange for an access token, the Keyword Planner returned a generic message ("check GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_ADS_REFRESH_TOKEN") that swallowed the actual error from Google's token endpoint. Now parses and surfaces Google's `error_description` (e.g., "Token has been expired or revoked", "unauthorized_client", "invalid_grant") in both `fetchKeywordIdeas()` and `diagnoseGoogleAdsConfig()`.
+
+### Context
+Google Ads API Basic Access was approved, and all 6 env vars (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_CUSTOMER_ID`, `GOOGLE_ADS_REFRESH_TOKEN`, `GOOGLE_ADS_LOGIN_CUSTOMER_ID`) are deployed in Vercel. The token refresh is failing — this change surfaces the actual rejection reason so the root cause can be identified and fixed.
+
+### Files Changed
+- `api/_lib/google-ads.ts` — Parse Google's error response in `getGoogleAdsAccessToken()`, propagate error through `fetchKeywordIdeas()` and `diagnoseGoogleAdsConfig()`
+
+---
+
 ## 2026-02-18 — Add OpenClaw Ops Bot skills for cold email outreach
 
 ### Added
