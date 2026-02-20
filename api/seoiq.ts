@@ -6,6 +6,7 @@ import {
   scoreQuickWin,
   scoreCTROptimization,
   scoreContentGap,
+  scoreRelevance,
   buildArticleSystemPrompt,
   buildArticleUserPrompt,
 } from './_lib/seo-prompts.js';
@@ -196,7 +197,7 @@ async function handleSitesGet(req: VercelRequest, res: VercelResponse, auth: Aut
   if (siteId && typeof siteId === 'string') {
     const { data, error } = await supabase
       .from('seo_sites')
-      .select('id, organization_id, name, domain, google_status, google_scopes, target_table_name, gsc_property, slug_prefix, voice_guide, target_supabase_url_encrypted, target_supabase_key_encrypted, created_at, updated_at')
+      .select('id, organization_id, name, domain, google_status, google_scopes, target_table_name, gsc_property, slug_prefix, voice_guide, niche, negative_keywords, target_supabase_url_encrypted, target_supabase_key_encrypted, created_at, updated_at')
       .eq('id', siteId)
       .eq('organization_id', organizationId)
       .single();
@@ -217,7 +218,7 @@ async function handleSitesGet(req: VercelRequest, res: VercelResponse, auth: Aut
   // List all sites for org
   const { data, error } = await supabase
     .from('seo_sites')
-    .select('id, organization_id, name, domain, google_status, google_scopes, target_table_name, gsc_property, slug_prefix, voice_guide, target_supabase_url_encrypted, target_supabase_key_encrypted, created_at, updated_at')
+    .select('id, organization_id, name, domain, google_status, google_scopes, target_table_name, gsc_property, slug_prefix, voice_guide, niche, negative_keywords, target_supabase_url_encrypted, target_supabase_key_encrypted, created_at, updated_at')
     .eq('organization_id', organizationId)
     .order('created_at', { ascending: false });
 
@@ -236,7 +237,7 @@ async function handleSitesGet(req: VercelRequest, res: VercelResponse, auth: Aut
 }
 
 async function handleSitesPost(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
-  const { name, domain, gsc_property, slug_prefix, voice_guide, target_supabase_url, target_supabase_key, target_table_name } = req.body;
+  const { name, domain, gsc_property, slug_prefix, voice_guide, niche, negative_keywords, target_supabase_url, target_supabase_key, target_table_name } = req.body;
   const organizationId = auth.organizationId;
 
   if (!name || !domain) {
@@ -250,6 +251,8 @@ async function handleSitesPost(req: VercelRequest, res: VercelResponse, auth: Au
     gsc_property: gsc_property || null,
     slug_prefix: slug_prefix || '',
     voice_guide: voice_guide || null,
+    niche: niche || null,
+    negative_keywords: Array.isArray(negative_keywords) && negative_keywords.length > 0 ? negative_keywords : null,
     target_table_name: target_table_name || 'articles',
   };
 
@@ -290,7 +293,7 @@ async function handleSitesPost(req: VercelRequest, res: VercelResponse, auth: Au
 }
 
 async function handleSitesPut(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
-  const { siteId, name, gsc_property, slug_prefix, voice_guide, target_supabase_url, target_supabase_key, target_table_name } = req.body;
+  const { siteId, name, gsc_property, slug_prefix, voice_guide, niche, negative_keywords, target_supabase_url, target_supabase_key, target_table_name } = req.body;
   const organizationId = auth.organizationId;
 
   if (!siteId) {
@@ -305,6 +308,8 @@ async function handleSitesPut(req: VercelRequest, res: VercelResponse, auth: Aut
   if (gsc_property !== undefined) updateData.gsc_property = gsc_property;
   if (slug_prefix !== undefined) updateData.slug_prefix = slug_prefix;
   if (voice_guide !== undefined) updateData.voice_guide = voice_guide;
+  if (niche !== undefined) updateData.niche = niche || null;
+  if (negative_keywords !== undefined) updateData.negative_keywords = Array.isArray(negative_keywords) && negative_keywords.length > 0 ? negative_keywords : null;
   if (target_table_name !== undefined) updateData.target_table_name = target_table_name;
 
   if (target_supabase_url) {
@@ -790,8 +795,28 @@ async function handleResearchKeywords(req: VercelRequest, res: VercelResponse, a
     }
 
     if (keywordIdeas.length === 0) {
-      return res.status(200).json({ keywords_fetched: 0, keywords_upserted: 0, content_gaps_found: 0 });
+      return res.status(200).json({ keywords_fetched: 0, keywords_filtered: 0, keywords_upserted: 0, content_gaps_found: 0 });
     }
+
+    // Load site's niche and negative keywords for relevance filtering
+    const { data: siteConfig } = await supabase
+      .from('seo_sites')
+      .select('niche, negative_keywords')
+      .eq('id', site_id)
+      .single();
+
+    const negativeTerms = (siteConfig?.negative_keywords || []).map((t: string) => t.toLowerCase());
+    const siteNiche: string | null = siteConfig?.niche || null;
+
+    // Hard filter: remove keywords containing any negative term
+    const filteredIdeas = negativeTerms.length > 0
+      ? keywordIdeas.filter((idea) => {
+          const kw = idea.keyword.toLowerCase();
+          return !negativeTerms.some((neg: string) => kw.includes(neg));
+        })
+      : keywordIdeas;
+
+    const keywordsFiltered = keywordIdeas.length - filteredIdeas.length;
 
     // Fetch existing keywords for this site (to check overlap and preserve GSC data)
     const { data: existingKeywords } = await supabase
@@ -818,7 +843,7 @@ async function handleResearchKeywords(req: VercelRequest, res: VercelResponse, a
     let upsertCount = 0;
     let contentGapsFound = 0;
 
-    for (const idea of keywordIdeas) {
+    for (const idea of filteredIdeas) {
       const existing = existingMap.get(idea.keyword.toLowerCase());
 
       // Skip if already ranking well (position <= 10) — not a content gap
@@ -840,13 +865,16 @@ async function handleResearchKeywords(req: VercelRequest, res: VercelResponse, a
         continue;
       }
 
-      // Score as content gap
-      const gapScore = scoreContentGap(
+      // Score as content gap, then apply niche relevance multiplier
+      const rawGapScore = scoreContentGap(
         idea.avgMonthlySearches,
         idea.competition,
         idea.competitionIndex,
         idea.keyword
       );
+      const relevance = scoreRelevance(idea.keyword, siteNiche);
+      const relevanceMultiplier = Math.max(relevance / 100, 0.1);
+      const gapScore = Math.round(rawGapScore * relevanceMultiplier);
 
       // Only override score if new score > existing score
       const finalScore = Math.max(gapScore, existing?.opportunity_score || 0);
@@ -886,6 +914,7 @@ async function handleResearchKeywords(req: VercelRequest, res: VercelResponse, a
 
     return res.status(200).json({
       keywords_fetched: keywordIdeas.length,
+      keywords_filtered: keywordsFiltered,
       keywords_upserted: upsertCount,
       content_gaps_found: contentGapsFound,
     });

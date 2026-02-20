@@ -30,6 +30,10 @@ export interface SeoSite {
   slug_prefix: string;
   voice_guide: string | null;
 
+  // Keyword relevance
+  niche: string | null;
+  negative_keywords: string[] | null;
+
   // Autopilot
   autopilot_enabled: boolean;
   autopilot_cadence: 'daily' | 'every_3_days' | 'weekly';
@@ -115,6 +119,8 @@ export interface CreateSeoSiteRequest {
   gsc_property?: string;
   slug_prefix?: string;
   voice_guide?: string;
+  niche?: string;
+  negative_keywords?: string[];
   target_supabase_url?: string;
   target_supabase_key?: string;
   target_table_name?: string;
@@ -125,6 +131,8 @@ export interface UpdateSeoSiteRequest {
   gsc_property?: string;
   slug_prefix?: string;
   voice_guide?: string;
+  niche?: string;
+  negative_keywords?: string[];
   target_supabase_url?: string;
   target_supabase_key?: string;
   target_table_name?: string;
@@ -149,6 +157,7 @@ export interface ResearchKeywordsRequest {
 
 export interface ResearchKeywordsResponse {
   keywords_fetched: number;
+  keywords_filtered: number;
   keywords_upserted: number;
   content_gaps_found: number;
 }

@@ -6,6 +6,7 @@ import SEO from '../components/SEO';
 import {
   fetchSites,
   createSite,
+  updateSite,
   getGoogleConnectUrl,
   fetchKeywords,
   refreshKeywords,
@@ -51,6 +52,8 @@ export default function SeoIQ() {
   const [newSiteDomain, setNewSiteDomain] = useState('');
   const [newSiteSupabaseUrl, setNewSiteSupabaseUrl] = useState('');
   const [newSiteSupabaseKey, setNewSiteSupabaseKey] = useState('');
+  const [newSiteNiche, setNewSiteNiche] = useState('');
+  const [newSiteNegativeKeywords, setNewSiteNegativeKeywords] = useState('');
   const [addingSite, setAddingSite] = useState(false);
 
   // Keywords
@@ -58,6 +61,12 @@ export default function SeoIQ() {
   const [refreshingKeywords, setRefreshingKeywords] = useState(false);
   const [keywordFilter, setKeywordFilter] = useState<string>('all');
   const [keywordSort, setKeywordSort] = useState<'score' | 'volume' | 'position'>('score');
+
+  // Site context (niche/negative keywords) inline editing
+  const [showSiteContext, setShowSiteContext] = useState(false);
+  const [editNiche, setEditNiche] = useState('');
+  const [editNegativeKeywords, setEditNegativeKeywords] = useState('');
+  const [savingSiteContext, setSavingSiteContext] = useState(false);
 
   // Research keywords (Keyword Planner)
   const [researchSeeds, setResearchSeeds] = useState('');
@@ -106,6 +115,14 @@ export default function SeoIQ() {
   const [savingSchedule, setSavingSchedule] = useState(false);
 
   const selectedSite = sites.find((s) => s.id === selectedSiteId) || null;
+
+  // Sync site context edit fields when selected site changes
+  useEffect(() => {
+    if (selectedSite) {
+      setEditNiche(selectedSite.niche || '');
+      setEditNegativeKeywords((selectedSite.negative_keywords || []).join(', '));
+    }
+  }, [selectedSite?.id, selectedSite?.niche, selectedSite?.negative_keywords]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load sites
   const loadSites = useCallback(async () => {
@@ -196,15 +213,22 @@ export default function SeoIQ() {
     setAddingSite(true);
     setError(null);
     try {
+      const parsedNegKw = newSiteNegativeKeywords
+        ? newSiteNegativeKeywords.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+        : undefined;
       await createSite(organization.id, {
         name: newSiteName,
         domain: newSiteDomain,
+        niche: newSiteNiche || undefined,
+        negative_keywords: parsedNegKw && parsedNegKw.length > 0 ? parsedNegKw : undefined,
         target_supabase_url: newSiteSupabaseUrl || undefined,
         target_supabase_key: newSiteSupabaseKey || undefined,
       });
       setShowAddSite(false);
       setNewSiteName('');
       setNewSiteDomain('');
+      setNewSiteNiche('');
+      setNewSiteNegativeKeywords('');
       setNewSiteSupabaseUrl('');
       setNewSiteSupabaseKey('');
       await loadSites();
@@ -214,6 +238,27 @@ export default function SeoIQ() {
       setError(err instanceof Error ? err.message : 'Failed to add site');
     } finally {
       setAddingSite(false);
+    }
+  };
+
+  const handleSaveSiteContext = async () => {
+    if (!organization?.id || !selectedSiteId) return;
+    setSavingSiteContext(true);
+    try {
+      const parsedNegKw = editNegativeKeywords
+        ? editNegativeKeywords.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+        : [];
+      await updateSite(organization.id, selectedSiteId, {
+        niche: editNiche || undefined,
+        negative_keywords: parsedNegKw.length > 0 ? parsedNegKw : [],
+      });
+      await loadSites();
+      setSuccess('Site context saved');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save site context');
+    } finally {
+      setSavingSiteContext(false);
     }
   };
 
@@ -326,8 +371,19 @@ export default function SeoIQ() {
 
       if (productSeeds.length > 0) {
         setSmartDiscoverStep('Researching product-related keywords...');
+        // Qualify product seeds with niche context to reduce irrelevant results
+        const nicheTerms = selectedSite.niche
+          ? selectedSite.niche.split(/[,;]+/).map((t) => t.trim()).filter((t) => t.length > 2)
+          : [];
+        const qualifiedSeeds: string[] = [];
+        for (const seed of productSeeds) {
+          qualifiedSeeds.push(seed);
+          if (nicheTerms.length > 0) {
+            qualifiedSeeds.push(`${seed} ${nicheTerms[0]}`);
+          }
+        }
         // Keyword Planner accepts max 10 seeds per call
-        const seedBatch = productSeeds.slice(0, 10);
+        const seedBatch = [...new Set(qualifiedSeeds)].slice(0, 10);
         try {
           const productResult = await researchKeywords(selectedSiteId, seedBatch);
           totalFetched += productResult.keywords_fetched;
@@ -930,6 +986,28 @@ export default function SeoIQ() {
             </div>
             <div className="seo-iq-form-row">
               <div className="seo-iq-form-group">
+                <label>Site Niche / Topic</label>
+                <input
+                  type="text"
+                  placeholder="e.g., personal development, shadow work, inner healing"
+                  value={newSiteNiche}
+                  onChange={(e) => setNewSiteNiche(e.target.value)}
+                />
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Keywords unrelated to this niche will be filtered during discovery</span>
+              </div>
+              <div className="seo-iq-form-group">
+                <label>Exclude Keywords (optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g., running, fitness, gym"
+                  value={newSiteNegativeKeywords}
+                  onChange={(e) => setNewSiteNegativeKeywords(e.target.value)}
+                />
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Comma-separated terms to hard-exclude from keyword results</span>
+              </div>
+            </div>
+            <div className="seo-iq-form-row">
+              <div className="seo-iq-form-group">
                 <label>Target Supabase URL</label>
                 <input
                   type="text"
@@ -1109,6 +1187,55 @@ export default function SeoIQ() {
 
         {smartDiscovering && (
           <Loading size="medium" message={`ConversionIQ™ ${smartDiscoverStep || 'discovering keyword opportunities...'}`} />
+        )}
+
+        {/* Site Context — niche & negative keywords */}
+        <div
+          className="seo-iq-site-context-toggle"
+          onClick={() => setShowSiteContext(!showSiteContext)}
+          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-muted)', margin: '12px 0 8px', userSelect: 'none' }}
+        >
+          <span style={{ transform: showSiteContext ? 'rotate(90deg)' : 'rotate(0)', transition: 'transform 0.2s', display: 'inline-block' }}>&#9654;</span>
+          <span>Site Context</span>
+          {selectedSite?.niche && <span style={{ fontSize: 11, color: 'var(--accent-violet)', marginLeft: 4 }}>({selectedSite.niche})</span>}
+          {!selectedSite?.niche && <span style={{ fontSize: 11, color: '#e67e22', marginLeft: 4 }}>Not set — keywords may be less relevant</span>}
+        </div>
+        {showSiteContext && (
+          <div style={{ background: 'var(--bg-secondary)', borderRadius: 10, padding: '14px 16px', marginBottom: 12, border: '1px solid var(--border-primary)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, display: 'block' }}>Site Niche / Topic</label>
+                <input
+                  type="text"
+                  placeholder="e.g., personal development, shadow work, inner healing"
+                  value={editNiche}
+                  onChange={(e) => setEditNiche(e.target.value)}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-primary)', fontSize: 13 }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, display: 'block' }}>Exclude Keywords</label>
+                <input
+                  type="text"
+                  placeholder="e.g., running, fitness, gym"
+                  value={editNegativeKeywords}
+                  onChange={(e) => setEditNegativeKeywords(e.target.value)}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-primary)', fontSize: 13 }}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                className="seo-iq-btn seo-iq-btn-primary"
+                onClick={handleSaveSiteContext}
+                disabled={savingSiteContext}
+                style={{ padding: '6px 16px', fontSize: 12 }}
+              >
+                {savingSiteContext ? 'Saving...' : 'Save'}
+              </button>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Niche terms boost relevant keywords. Exclude terms are hard-filtered.</span>
+            </div>
+          </div>
         )}
 
         {/* Manual Keyword Discovery section */}
