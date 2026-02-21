@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-02-21 — Add automatic Meta token refresh to prevent 60-day expiry
+
+### Added
+- **`api/_lib/meta-token.ts`** (new) — Shared helper for Meta token refresh with three exports:
+  - `refreshMetaToken()` — Exchanges a still-valid long-lived token for a fresh ~60 day token via Meta's `fb_exchange_token` endpoint, encrypts and stores the new token
+  - `isWithinRefreshWindow()` — Returns true if token expires within 7 days but hasn't expired yet
+  - `isTokenExpired()` — Returns true if token is already expired
+- **Inline refresh in `loadCredentials()`** (`api/meta.ts`) — When any Meta API call is made and the token is within 7 days of expiry, silently refreshes before returning. If refresh fails, the current still-valid token is used (non-blocking). A 5-minute dedup window via `last_refreshed_at` prevents concurrent requests from double-refreshing.
+- **`refresh-tokens` cron route** (`api/meta.ts`) — Daily batch refresh of all org tokens nearing expiry. Handles inactive users who haven't logged in. Skips tokens refreshed within the last 12 hours. Uses the same `CRON_SECRET` auth pattern as the SEO IQ autopilot cron.
+- **Vercel cron schedule** (`vercel.json`) — `/api/meta/refresh-tokens` runs daily at 3:00 AM UTC
+
+### Context
+Meta OAuth long-lived tokens expire after ~60 days. Previously, expired tokens blocked users and required manual re-authentication via OAuth. Now tokens are refreshed automatically both when users are active (inline on API calls) and when they're inactive (daily cron), so users never need to re-authenticate due to token expiry. This was a prerequisite for going live after Meta App Review approval of all 5 permissions.
+
+### Files Changed
+- `api/_lib/meta-token.ts` (new) — Shared refresh helper with `refreshMetaToken()`, `isWithinRefreshWindow()`, `isTokenExpired()`
+- `api/meta.ts` — Updated `loadCredentials()` with inline refresh, added `refresh-tokens` cron route to switch block
+- `vercel.json` — Added cron entry for daily token refresh at 3:00 AM UTC
+
+---
+
 ## 2026-02-20 — Add Ad Library lead scraper skill for automated prospect discovery
 
 ### Added
