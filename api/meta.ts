@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { decrypt, encrypt, isEncryptionConfigured } from './_lib/encryption.js';
 import { initSentry, captureError, flushSentry } from './_lib/sentry.js';
+import { refreshMetaToken, isWithinRefreshWindow, isTokenExpired } from './_lib/meta-token.js';
 
 initSentry();
 
@@ -50,7 +51,7 @@ interface MetaCredentials {
 async function loadCredentials(organizationId: string): Promise<MetaCredentials | null> {
   const { data: cred, error: credError } = await supabase
     .from('organization_credentials')
-    .select('access_token_encrypted, ad_account_id, page_id, pixel_id, status, token_expires_at')
+    .select('access_token_encrypted, ad_account_id, page_id, pixel_id, status, token_expires_at, last_refreshed_at')
     .eq('organization_id', organizationId)
     .eq('provider', 'meta')
     .single();
@@ -59,13 +60,49 @@ async function loadCredentials(organizationId: string): Promise<MetaCredentials 
 
   if (cred.status !== 'active') return null;
 
-  if (cred.token_expires_at && new Date(cred.token_expires_at) < new Date()) {
+  // Token already expired — mark and reject
+  if (isTokenExpired(cred.token_expires_at)) {
     await supabase
       .from('organization_credentials')
       .update({ status: 'expired' })
       .eq('organization_id', organizationId)
       .eq('provider', 'meta');
     return null;
+  }
+
+  // Token nearing expiry — attempt inline refresh (non-blocking)
+  if (isWithinRefreshWindow(cred.token_expires_at)) {
+    // Skip if already refreshed within the last 5 minutes (dedup concurrent requests)
+    const lastRefreshed = cred.last_refreshed_at ? new Date(cred.last_refreshed_at).getTime() : 0;
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+
+    if (lastRefreshed < fiveMinutesAgo) {
+      try {
+        const result = await refreshMetaToken(organizationId, cred.access_token_encrypted, supabase);
+        if (result.success) {
+          // Re-read the refreshed token from DB
+          const { data: refreshedCred } = await supabase
+            .from('organization_credentials')
+            .select('access_token_encrypted, ad_account_id, page_id, pixel_id')
+            .eq('organization_id', organizationId)
+            .eq('provider', 'meta')
+            .single();
+
+          if (refreshedCred) {
+            return {
+              accessToken: decrypt(refreshedCred.access_token_encrypted),
+              adAccountId: refreshedCred.ad_account_id,
+              pageId: refreshedCred.page_id,
+              pixelId: refreshedCred.pixel_id,
+            };
+          }
+        }
+        // Refresh failed — fall through to use the current (still valid) token
+        console.warn(`Meta token refresh failed for org ${organizationId}: ${result.error}`);
+      } catch (err: unknown) {
+        console.warn('Inline token refresh error:', err instanceof Error ? err.message : err);
+      }
+    }
   }
 
   const accessToken = decrypt(cred.access_token_encrypted);
@@ -109,6 +146,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleDisconnect(req, res);
       case 'ad-library':
         return handleAdLibrary(req, res);
+      case 'refresh-tokens':
+        return handleRefreshTokens(req, res);
       default:
         return res.status(400).json({ error: `Unknown route: ${route}` });
     }
@@ -931,4 +970,94 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
 
   // Should not reach here, but TypeScript safety
   return res.status(500).json({ error: 'Unexpected error in Ad Library handler' });
+}
+
+// ─── Route: refresh-tokens ─────────────────────────────────────────────────
+// Cron-triggered batch refresh for Meta tokens nearing expiry.
+// Runs daily to keep inactive users' tokens alive.
+
+async function handleRefreshTokens(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Verify cron secret (Vercel sends Authorization: Bearer <CRON_SECRET>)
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) {
+    const authHeader = req.headers.authorization;
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+  }
+
+  try {
+    // Find all active Meta credentials expiring within 7 days
+    const refreshThreshold = new Date();
+    refreshThreshold.setDate(refreshThreshold.getDate() + 7);
+
+    const { data: credentials, error: queryError } = await supabase
+      .from('organization_credentials')
+      .select('organization_id, access_token_encrypted, token_expires_at, last_refreshed_at')
+      .eq('provider', 'meta')
+      .eq('status', 'active')
+      .lt('token_expires_at', refreshThreshold.toISOString())
+      .gt('token_expires_at', new Date().toISOString());
+
+    if (queryError) {
+      captureError(queryError, { route: 'meta/refresh-tokens' });
+      await flushSentry();
+      return res.status(500).json({ error: 'Failed to query credentials' });
+    }
+
+    if (!credentials || credentials.length === 0) {
+      return res.status(200).json({ message: 'No tokens need refreshing', refreshed: 0, failed: 0 });
+    }
+
+    const results: Array<{ organizationId: string; success: boolean; error?: string }> = [];
+
+    for (const cred of credentials) {
+      // Skip if already refreshed within the last 12 hours
+      if (cred.last_refreshed_at) {
+        const lastRefreshed = new Date(cred.last_refreshed_at).getTime();
+        const twelveHoursAgo = Date.now() - 12 * 60 * 60 * 1000;
+        if (lastRefreshed > twelveHoursAgo) {
+          results.push({ organizationId: cred.organization_id, success: true, error: 'Skipped — refreshed recently' });
+          continue;
+        }
+      }
+
+      const result = await refreshMetaToken(cred.organization_id, cred.access_token_encrypted, supabase);
+      results.push({
+        organizationId: cred.organization_id,
+        success: result.success,
+        error: result.error,
+      });
+
+      if (!result.success) {
+        captureError(
+          new Error(`Cron token refresh failed: ${result.error}`),
+          { route: 'meta/refresh-tokens', organizationId: cred.organization_id }
+        );
+      }
+    }
+
+    await flushSentry();
+
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+
+    return res.status(200).json({
+      message: `Refreshed ${successCount} tokens, ${failCount} failed`,
+      refreshed: successCount,
+      failed: failCount,
+    });
+  } catch (err: unknown) {
+    console.error('Token refresh cron error:', err);
+    captureError(err, { route: 'meta/refresh-tokens' });
+    await flushSentry();
+    return res.status(500).json({
+      error: 'Cron handler failed',
+      message: err instanceof Error ? err.message : 'Unknown error',
+    });
+  }
 }
