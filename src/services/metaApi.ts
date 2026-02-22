@@ -1036,6 +1036,34 @@ export async function searchAdLibrary(params: AdLibrarySearchParams): Promise<Ad
   return res.json();
 }
 
+/**
+ * Batch-extract og:image preview URLs from Ad Library snapshot pages.
+ * Returns a map of snapshot_url → image_url (or null if extraction failed).
+ */
+export async function fetchSnapshotImages(snapshotUrls: string[]): Promise<Record<string, string | null>> {
+  if (snapshotUrls.length === 0) return {};
+
+  const token = await getAuthToken();
+  if (!token) return {};
+
+  try {
+    const res = await fetch('/api/meta/snapshot-images', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ urls: snapshotUrls }),
+    });
+
+    if (!res.ok) return {};
+    const data = await res.json();
+    return data.images || {};
+  } catch {
+    return {};
+  }
+}
+
 // ─── Page validation ─────────────────────────────────────────────────────────
 
 /**

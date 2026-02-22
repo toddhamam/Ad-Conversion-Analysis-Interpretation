@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
-import { searchAdLibrary, type AdLibraryResult } from '../services/metaApi';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { searchAdLibrary, fetchSnapshotImages, type AdLibraryResult } from '../services/metaApi';
 import type { AdLibraryInspiration } from '../types';
 import './AdLibraryBrowser.css';
 
@@ -160,9 +160,44 @@ export default function AdLibraryBrowser({
   const [showFilters, setShowFilters] = useState(false);
   const [totalFetched, setTotalFetched] = useState(0);
 
+  // Preview image URLs extracted from snapshot pages (snapshot_url → image_url)
+  const [previewImages, setPreviewImages] = useState<Record<string, string | null>>({});
+
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const savedIds = new Set(savedInspirations.map(i => i.id));
+
+  // Fetch preview images when results change
+  useEffect(() => {
+    if (results.length === 0) return;
+
+    // Collect snapshot URLs we haven't fetched yet
+    const newUrls = results
+      .map(r => r.ad_snapshot_url)
+      .filter((url): url is string => !!url && !(url in previewImages));
+
+    if (newUrls.length === 0) return;
+
+    // Mark as loading (undefined = loading, null = failed, string = loaded)
+    setPreviewImages(prev => {
+      const next = { ...prev };
+      for (const url of newUrls) {
+        if (!(url in next)) next[url] = undefined as unknown as null;
+      }
+      return next;
+    });
+
+    fetchSnapshotImages(newUrls).then(images => {
+      setPreviewImages(prev => {
+        const next = { ...prev };
+        for (const url of newUrls) {
+          // If the API returned a string URL, use it; otherwise mark as failed (null)
+          next[url] = (images[url] && typeof images[url] === 'string') ? images[url] : null;
+        }
+        return next;
+      });
+    });
+  }, [results]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply client-side filters and sorting
   const filteredResults = useMemo(() => {
@@ -509,11 +544,43 @@ export default function AdLibraryBrowser({
 
                 const pageName = result.page_name || 'Unknown';
                 const pageInitial = pageName.charAt(0).toUpperCase();
+                const snapshotUrl = result.ad_snapshot_url;
+                const previewImg = snapshotUrl ? previewImages[snapshotUrl] : null;
+                // undefined = still loading, null = failed/not available, string = image URL
+                const isImageLoading = snapshotUrl ? previewImages[snapshotUrl] === undefined : false;
 
                 return (
                   <div key={`${result.page_id}-${idx}`} className={`ad-library-card ${isSaved ? 'saved' : ''}`}>
-                    {/* Hero area — headline preview with page identity */}
-                    <div className="ad-library-card-hero">
+                    {/* Creative image preview */}
+                    {snapshotUrl && (
+                      <a
+                        href={snapshotUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ad-library-card-image-link"
+                      >
+                        {previewImg ? (
+                          <img
+                            src={previewImg}
+                            alt={`Ad by ${pageName}`}
+                            className="ad-library-card-image"
+                            loading="lazy"
+                          />
+                        ) : isImageLoading ? (
+                          <div className="ad-library-card-image-placeholder">
+                            <div className="ad-library-card-image-shimmer" />
+                          </div>
+                        ) : (
+                          <div className="ad-library-card-image-placeholder ad-library-card-image-fallback">
+                            <span className="ad-library-card-image-fallback-icon">🖼</span>
+                            <span className="ad-library-card-image-fallback-text">View Ad Creative</span>
+                          </div>
+                        )}
+                      </a>
+                    )}
+
+                    {/* Card content */}
+                    <div className="ad-library-card-content">
                       <div className="ad-library-card-hero-top">
                         <div className="ad-library-card-avatar">{pageInitial}</div>
                         <div className="ad-library-card-hero-info">
@@ -524,26 +591,11 @@ export default function AdLibraryBrowser({
                           </span>
                         </div>
                       </div>
+
                       {headline && (
                         <div className="ad-library-card-hero-headline">{headline}</div>
                       )}
-                      {result.ad_snapshot_url && (
-                        <a
-                          href={result.ad_snapshot_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="ad-library-view-creative-btn"
-                        >
-                          View Ad Creative
-                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                            <path d="M4.5 2.5H2.5V9.5H9.5V7.5M7 2.5H9.5V5M9.5 2.5L5 7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                        </a>
-                      )}
-                    </div>
 
-                    {/* Card content — body copy and metadata */}
-                    <div className="ad-library-card-content">
                       {bodyText && (
                         <>
                           <div className={`ad-library-card-body ${isTextExpanded ? 'expanded-text' : ''}`}>

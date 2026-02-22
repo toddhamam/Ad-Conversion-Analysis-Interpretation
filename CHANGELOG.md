@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-02-22 — Add Ad Library creative image previews via server-side extraction
+
+### Added
+- **Server-side snapshot image extraction** (`api/meta.ts` → `snapshot-images` route): New backend endpoint that batch-fetches Meta's `ad_snapshot_url` HTML pages and extracts `og:image` meta tags (with fallback to `scontent`/`external` CDN `<img>` tags) to resolve actual ad creative image URLs. Limited to 25 URLs per batch with 6 concurrent fetches. Only allows `facebook.com/ads/archive/render_ad/` URLs for security.
+- **`fetchSnapshotImages()` frontend service** (`src/services/metaApi.ts`): Calls `/api/meta/snapshot-images` with JWT auth to batch-resolve preview images after search results arrive.
+- **Image-first card layout**: Ad Library cards now show the creative image at the top (4:3 aspect ratio) with page identity, headline, body copy, and actions below. Three visual states: loaded image, shimmer loading placeholder, and graceful "View Ad Creative" fallback when extraction fails.
+
+### Fixed
+- **Broken JSX structure**: Removed duplicate nested `<div className="ad-library-card-content">` that caused unbalanced tag structure and potential rendering issues.
+- **Replaced hero card layout**: Previous iteration showed styled text cards with a "View Ad Creative" button but no actual images. Now shows real ad creative images extracted server-side.
+
+### Files Changed
+- `api/meta.ts` — Added `snapshot-images` route with `handleSnapshotImages()` for batch og:image extraction
+- `src/services/metaApi.ts` — Added `fetchSnapshotImages()` export
+- `src/components/AdLibraryBrowser.tsx` — Image-first card layout with `previewImages` state, lazy loading via useEffect, shimmer/fallback states
+- `src/components/AdLibraryBrowser.css` — Image preview styles, shimmer animation, fallback placeholder, updated card layout from hero to image-first
+
+---
+
 ## 2026-02-22 — Fix Ad Library API errors and redesign creative browser
 
 ### Fixed
