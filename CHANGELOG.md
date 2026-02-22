@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-02-22 — Preserve Meta account selections during OAuth re-authorization
+
+### Fixed
+- **Dashboard shows no data after Meta re-authorization**: When a user re-authorized their Meta account (e.g., after token expiry), the OAuth callback unconditionally set `ad_account_id`, `page_id`, and `pixel_id` to `null` — wiping existing account selections. The status endpoint then returned `needsConfiguration: true` with no ad account to query, so the dashboard showed "connected" but no data appeared. Now the callback reads existing selections before upserting and preserves them if they're still valid in the new token's scope (i.e., the account/page still appears in the available accounts list from Meta). First-time connections still start with `null` selections as before.
+
+### Files Changed
+- `api/auth/meta/callback.ts` — Read existing credentials before upsert, validate selections against new token's available accounts/pages, preserve valid selections
+
+---
+
 ## 2026-02-22 — Restrict SEO IQ to super admin only
 
 ### Changed

@@ -151,7 +151,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new Error(`Encryption failed: ${encErr instanceof Error ? encErr.message : String(encErr)}`);
     }
 
-    // Upsert credentials — store token and available options, user selects later
+    // Check if credentials already exist — preserve selections during re-authorization
+    const { data: existingCred } = await supabase
+      .from('organization_credentials')
+      .select('ad_account_id, page_id, pixel_id')
+      .eq('organization_id', stateData.organizationId)
+      .eq('provider', 'meta')
+      .single();
+
+    const newAccounts = adAccountsData.data || [];
+    const newPages = availablePages;
+
+    // Preserve existing selections if they're still valid in the new token's scope
+    let preservedAdAccountId: string | null = null;
+    let preservedPageId: string | null = null;
+    let preservedPixelId: string | null = null;
+
+    if (existingCred) {
+      if (existingCred.ad_account_id && newAccounts.some(
+        (a: { id: string }) => a.id === existingCred.ad_account_id
+      )) {
+        preservedAdAccountId = existingCred.ad_account_id;
+        // Pixel is tied to ad account — preserve if account is preserved
+        preservedPixelId = existingCred.pixel_id;
+      }
+      if (existingCred.page_id && newPages.some(
+        (p: { id: string }) => p.id === existingCred.page_id
+      )) {
+        preservedPageId = existingCred.page_id;
+      }
+    }
+
+    // Upsert credentials — preserve selections on re-auth, null on first connect
     const { error: dbError } = await supabase
       .from('organization_credentials')
       .upsert(
@@ -159,14 +190,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           organization_id: stateData.organizationId,
           provider: 'meta',
           access_token_encrypted: encryptedToken,
-          ad_account_id: null,
-          page_id: null,
-          pixel_id: null,
+          ad_account_id: preservedAdAccountId,
+          page_id: preservedPageId,
+          pixel_id: preservedPixelId,
           token_expires_at: tokenExpiresAt.toISOString(),
           status: 'active',
           metadata: {
-            available_accounts: adAccountsData.data || [],
-            available_pages: availablePages,
+            available_accounts: newAccounts,
+            available_pages: newPages,
             connected_at: new Date().toISOString(),
           },
         },
