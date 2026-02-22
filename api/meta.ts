@@ -591,6 +591,8 @@ async function handleUpdateSelection(req: VercelRequest, res: VercelResponse) {
       ad_account_id: adAccountId,
       page_id: pageId || null,
       pixel_id: pixelId || null,
+      status: 'active',
+      last_error: null,
       metadata: {
         ...cred.metadata,
         selected_account_name: selectedAccount?.name || null,

@@ -514,8 +514,12 @@ function detectCampaignType(campaignName: string): CampaignType {
  * Fetch ad-level insights with creative details for conversion intelligence
  */
 export async function fetchAdInsights(dateOptions?: DateRangeOptions): Promise<MetaAdInsight[]> {
-  const adAccountId = getAdAccountId();
-  if (!adAccountId) throw new Error('No ad account configured');
+  let adAccountId = getAdAccountId();
+  if (!adAccountId) {
+    await loadOrgMetaCredentials();
+    adAccountId = getAdAccountId();
+    if (!adAccountId) throw new Error('No ad account configured. Go to Integrations to select your ad account.');
+  }
 
   try {
     const data = await metaFetch(`${adAccountId}/insights`, {
@@ -685,9 +689,14 @@ export async function fetchTrafficTypes(dateOptions?: DateRangeOptions): Promise
  * Fetch campaign summaries with purchase conversion value for dashboard
  */
 export async function fetchCampaignSummaries(dateOptions?: DateRangeOptions): Promise<CampaignSummary[]> {
-  const adAccountId = getAdAccountId();
+  let adAccountId = getAdAccountId();
   if (!adAccountId) {
-    throw new Error('No ad account configured. Go to Integrations to select your ad account.');
+    // Cache might be stale — force refresh from backend
+    await loadOrgMetaCredentials();
+    adAccountId = getAdAccountId();
+    if (!adAccountId) {
+      throw new Error('No ad account configured. Go to Integrations to select your ad account.');
+    }
   }
 
   try {
