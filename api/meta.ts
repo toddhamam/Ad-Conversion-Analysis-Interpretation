@@ -1004,7 +1004,10 @@ async function handleRefreshTokens(req: VercelRequest, res: VercelResponse) {
       .gt('token_expires_at', new Date().toISOString());
 
     if (queryError) {
-      captureError(queryError, { route: 'meta/refresh-tokens' });
+      captureError(
+        new Error(`Failed to query credentials for token refresh: ${queryError.message}`),
+        { route: 'meta/refresh-tokens', extra: { code: queryError.code, details: queryError.details } }
+      );
       await flushSentry();
       return res.status(500).json({ error: 'Failed to query credentials' });
     }
