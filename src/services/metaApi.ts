@@ -278,7 +278,8 @@ async function metaFetch(
           continue;
         }
 
-        const msg = data.message || data.error || `Meta API error (${res.status})`;
+        const diagSuffix = data.diagnostics ? ` [${data.diagnostics}]` : '';
+        const msg = (data.message || data.error || `Meta API error (${res.status})`) + diagSuffix;
         const err = new Error(msg);
         (err as any).metaCode = data.code;
         (err as any).metaSubcode = data.subcode;
