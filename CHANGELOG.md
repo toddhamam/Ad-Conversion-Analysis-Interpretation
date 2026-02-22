@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-02-22 — Restrict SEO IQ to super admin only
+
+### Changed
+- **SEO IQ route gated by `SuperAdminRoute`**: The `/seo-iq` route is now wrapped with `<SuperAdminRoute>`, redirecting non-super-admin users to the dashboard. Same pattern used for Funnels.
+- **SEO IQ sidebar link hidden for regular users**: The "SEO IQ" nav item only renders when `isSuperAdmin` is true.
+- **Removed SEO IQ subscription gating**: Removed `/seo-iq` from `ACTION_PATHS` and `PAID_ONLY_PATHS` in `SubscriptionGate.tsx`, and removed the `PaidOnlyGate` component — no longer needed since the route is fully gated at the routing level.
+
+### Context
+SEO IQ adds too much complexity for users at this stage. The focus is on iterating and improving the Meta Ads creative builder and related features. Super admin retains full access for continued development and testing.
+
+### Files Changed
+- `src/App.tsx` — Wrapped `/seo-iq` route with `<SuperAdminRoute>`
+- `src/components/Sidebar.tsx` — Conditional render of SEO IQ nav link based on `isSuperAdmin`
+- `src/components/SubscriptionGate.tsx` — Removed `/seo-iq` from action/paid-only paths, removed `PaidOnlyGate` component
+
+---
+
 ## 2026-02-21 — Add automatic Meta token refresh to prevent 60-day expiry
 
 ### Added
