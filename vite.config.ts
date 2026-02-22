@@ -9,7 +9,6 @@ export default defineConfig(({ mode }) => {
 
   console.log('🔍 Vite loading with mode:', mode)
   console.log('🔍 VITE_META_ACCESS_TOKEN from .env:', env.VITE_META_ACCESS_TOKEN ? 'LOADED ✅' : 'MISSING ❌')
-  console.log('🔍 VITE_OPENAI_API_KEY from .env:', env.VITE_OPENAI_API_KEY ? 'LOADED ✅' : 'MISSING ❌')
 
   // Use PORT env var (set by Conductor) or fall back to 5175
   const port = parseInt(process.env.PORT || '5175', 10)

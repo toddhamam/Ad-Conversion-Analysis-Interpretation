@@ -546,7 +546,7 @@ const AdGenerator = () => {
   const handleGenerateCopyOptions = async () => {
     const hasTextApi = isOpenAIConfigured();
     if (!hasTextApi) {
-      setError('OpenAI API key required for copy generation. Please add VITE_OPENAI_API_KEY to your .env file.');
+      setError('OpenAI API is not configured. Please contact your administrator.');
       return;
     }
 
@@ -587,13 +587,13 @@ const AdGenerator = () => {
     const hasTextApi = isOpenAIConfigured();
 
     if (!hasImageApi && !hasTextApi) {
-      setError('No API keys configured. Please add VITE_GEMINI_API_KEY and/or VITE_OPENAI_API_KEY to your .env file.');
+      setError('No AI API keys configured. Please contact your administrator.');
       return;
     }
 
     // Only require OpenAI for AI-generated copy; import/manual copy doesn't need it
     if (!hasTextApi && copySource === 'generate') {
-      setError('OpenAI API key required for copy generation. Please add VITE_OPENAI_API_KEY to your .env file.');
+      setError('OpenAI API is not configured. Please contact your administrator.');
       return;
     }
 
