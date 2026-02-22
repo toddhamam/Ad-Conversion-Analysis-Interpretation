@@ -166,6 +166,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleDisconnect(req, res);
       case 'ad-library':
         return handleAdLibrary(req, res);
+      case 'snapshot-images':
+        return handleSnapshotImages(req, res);
       case 'refresh-tokens':
         return handleRefreshTokens(req, res);
       case 'ai-chat':
@@ -1030,6 +1032,76 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
 
   // Should not reach here, but TypeScript safety
   return res.status(500).json({ error: 'Unexpected error in Ad Library handler' });
+}
+
+// ─── Route: snapshot-images ────────────────────────────────────────────────
+// Batch-extract og:image URLs from Ad Library snapshot pages.
+// Called after ad-library search to resolve creative preview images.
+
+async function handleSnapshotImages(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed — use POST' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { urls } = req.body || {};
+  if (!Array.isArray(urls) || urls.length === 0) {
+    return res.status(400).json({ error: 'urls array is required' });
+  }
+
+  // Limit to 25 URLs per batch to prevent abuse
+  const batch = urls.slice(0, 25) as string[];
+
+  // Extract og:image from each snapshot URL in parallel (max 6 concurrent)
+  const MAX_CONCURRENT = 6;
+  const results: Record<string, string | null> = {};
+
+  for (let i = 0; i < batch.length; i += MAX_CONCURRENT) {
+    const chunk = batch.slice(i, i + MAX_CONCURRENT);
+    const promises = chunk.map(async (url: string) => {
+      // Only allow facebook.com snapshot URLs
+      if (!url.startsWith('https://www.facebook.com/ads/archive/render_ad/')) {
+        results[url] = null;
+        return;
+      }
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; Convertra/1.0)',
+            'Accept': 'text/html',
+          },
+          redirect: 'follow',
+        });
+        if (!response.ok) {
+          results[url] = null;
+          return;
+        }
+        const html = await response.text();
+
+        // Extract og:image meta tag
+        const ogMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i)
+          || html.match(/<meta\s+content=["']([^"']+)["']\s+property=["']og:image["']/i);
+        if (ogMatch) {
+          results[url] = ogMatch[1];
+          return;
+        }
+
+        // Fallback: look for image in _raw_ad_text div or any large image src
+        const imgMatch = html.match(/<img[^>]+src=["'](https:\/\/scontent[^"']+)["']/i)
+          || html.match(/<img[^>]+src=["'](https:\/\/external[^"']+)["']/i);
+        results[url] = imgMatch ? imgMatch[1] : null;
+      } catch {
+        results[url] = null;
+      }
+    });
+    await Promise.all(promises);
+  }
+
+  return res.status(200).json({ images: results });
 }
 
 // ─── Route: refresh-tokens ─────────────────────────────────────────────────

@@ -343,16 +343,73 @@
   box-shadow: 0 0 0 1px var(--accent-violet);
 }
 
-/* Hero area — page identity + headline + view creative CTA */
-.ad-library-card-hero {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 16px 16px 14px;
+/* Creative image preview */
+.ad-library-card-image-link {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-primary);
+  text-decoration: none;
+  position: relative;
 }
 
+.ad-library-card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ad-library-card-image-placeholder {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.ad-library-card-image-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    var(--bg-secondary) 0%,
+    var(--bg-card-hover) 40%,
+    var(--bg-secondary) 80%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Fallback when image extraction fails */
+.ad-library-card-image-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--bg-secondary);
+}
+
+.ad-library-card-image-fallback-icon {
+  font-size: 28px;
+  opacity: 0.5;
+}
+
+.ad-library-card-image-fallback-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* Page identity row */
 .ad-library-card-hero-top {
   display: flex;
   align-items: center;
@@ -360,13 +417,13 @@
 }
 
 .ad-library-card-avatar {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   color: #fff;
   background: var(--gradient-dual-glow);
@@ -376,50 +433,28 @@
 .ad-library-card-hero-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
   flex: 1;
 }
 
 .ad-library-card-hero-headline {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-primary);
   line-height: 1.35;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.ad-library-view-creative-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent-violet);
-  background: rgba(168, 85, 247, 0.08);
-  border: 1px solid rgba(168, 85, 247, 0.2);
-  text-decoration: none;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
-  align-self: flex-start;
-}
-
-.ad-library-view-creative-btn:hover {
-  background: rgba(168, 85, 247, 0.14);
-  border-color: var(--accent-violet);
-}
-
-/* Card content below hero */
+/* Card content */
 .ad-library-card-content {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px 16px 14px;
+  gap: 8px;
+  padding: 12px 14px 14px;
 }
 
 .ad-library-card-page {
