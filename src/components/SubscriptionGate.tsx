@@ -13,10 +13,7 @@ interface SubscriptionGateProps {
 const ALWAYS_ALLOWED_PATHS = ['/billing', '/account', '/choose-plan', '/integrations'];
 
 /** Routes that require a subscription (action features) */
-const ACTION_PATHS = ['/insights', '/creatives', '/publish', '/seo-iq'];
-
-/** Routes that require a paid subscription (not available during trial) */
-const PAID_ONLY_PATHS = ['/seo-iq'];
+const ACTION_PATHS = ['/insights', '/creatives', '/publish'];
 
 export default function SubscriptionGate({ children }: SubscriptionGateProps) {
   const { organization, isTrialing, isSubscriptionValid, isSuperAdmin } = useOrganization();
@@ -31,11 +28,6 @@ export default function SubscriptionGate({ children }: SubscriptionGateProps) {
   // Super admins always have full access regardless of subscription status
   if (isSuperAdmin) {
     return <>{children}</>;
-  }
-
-  // Block paid-only routes for trial users
-  if (PAID_ONLY_PATHS.some(p => location.pathname.startsWith(p)) && isTrialing) {
-    return <PaidOnlyGate onUpgrade={handleUpgrade} upgrading={upgrading} />;
   }
 
   // Free-plan users can explore data pages but are gated on action features
@@ -121,30 +113,3 @@ function FreePlanGate() {
   );
 }
 
-function PaidOnlyGate({ onUpgrade, upgrading }: { onUpgrade: () => void; upgrading: boolean }) {
-  return (
-    <div className="subscription-gate">
-      <div className="subscription-gate-card">
-        <div className="subscription-gate-icon">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-violet)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-          </svg>
-        </div>
-        <h2 className="subscription-gate-title">SEO IQ is a paid feature</h2>
-        <p className="subscription-gate-desc">
-          Upgrade to a paid plan to access SEO IQ and unlock keyword research, content generation, and autopilot publishing.
-        </p>
-        <button
-          onClick={onUpgrade}
-          disabled={upgrading}
-          className="subscription-gate-cta"
-        >
-          {upgrading ? 'Redirecting...' : 'Upgrade to Pro — $89/month'}
-        </button>
-        <Link to="/billing" className="subscription-gate-link">
-          View all plans
-        </Link>
-      </div>
-    </div>
-  );
-}
