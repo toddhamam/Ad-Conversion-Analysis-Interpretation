@@ -857,6 +857,30 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
     });
   }
 
+  // Check token type — Ad Library API only works with User access tokens,
+  // not System User tokens. Detect early to give a clear error message.
+  let tokenType: string | null = null;
+  try {
+    const debugUrl = new URL(`${GRAPH_API_BASE}/debug_token`);
+    debugUrl.searchParams.set('input_token', creds.accessToken);
+    debugUrl.searchParams.set('access_token', creds.accessToken);
+    const debugRes = await fetch(debugUrl.toString());
+    const debugData = await debugRes.json();
+    tokenType = debugData.data?.type || null;
+
+    if (tokenType === 'SYSTEM_USER') {
+      return res.status(400).json({
+        error: 'Ad Library not supported with System User tokens',
+        message: 'The Ad Library API requires a User access token (from OAuth login), not a System User token. Re-connect your Meta account via the OAuth flow in Settings to enable Ad Library search.',
+        token_type: 'SYSTEM_USER',
+      });
+    }
+  } catch {
+    // Non-fatal — continue with the request and let the ads_archive call fail
+    // with its own error if the token is invalid
+    console.warn('Ad Library: debug_token check failed, proceeding with request');
+  }
+
   const {
     search_terms,
     search_page_ids,
@@ -958,7 +982,13 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
         if (metaError.code === 10 && metaError.error_subcode === 2332002) {
           errorMessage = 'Ad Library API requires identity verification. Complete verification at facebook.com/ID to enable Ad Library access.';
         } else if (metaError.type === 'OAuthException' && metaError.code === 1) {
-          errorMessage = 'Ad Library access error — your Meta token may lack Ad Library API permissions. This usually means: (1) the Facebook account needs identity verification at facebook.com/ID, or (2) the selected country only supports political/issue ads via the API (try an EU/UK country for commercial ads).';
+          // We already checked for system user tokens above, so if we get here
+          // with a user token the issue is almost certainly identity verification
+          if (tokenType === 'USER') {
+            errorMessage = 'Ad Library API requires identity verification. The Facebook account linked to this token must complete government ID verification at facebook.com/ID before the Ad Library API can be used. Verification may take several days.';
+          } else {
+            errorMessage = 'Ad Library access error — your Meta token may lack Ad Library API permissions. This usually means: (1) the Facebook account needs identity verification at facebook.com/ID, or (2) the selected country only supports political/issue ads via the API (try an EU/UK country for commercial ads).';
+          }
         } else {
           const errorParts = [metaError.message || 'Unknown error from Meta API'];
           if (metaError.code) errorParts.push(`(code ${metaError.code})`);
@@ -973,6 +1003,8 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
           error_subcode: metaError.error_subcode,
           type: metaError.type,
           requires_verification: requiresVerification,
+          token_type: tokenType,
+          meta_message: metaError.message || null,
         });
       }
 

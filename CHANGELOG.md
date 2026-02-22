@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-02-22 — Fix Ad Library API errors and redesign creative browser
+
+### Fixed
+- **System User token detection**: Ad Library API calls now introspect the token type via `debug_token` before calling `ads_archive`. System User tokens (from manual credential entry) are immediately blocked with a clear error message explaining that Ad Library requires a User access token from OAuth — previously these returned a generic "Ad Library access error" after 3 failed retries.
+- **Precise error messaging**: When a verified User token still gets OAuthException code 1, the error now specifically says identity verification is needed instead of listing multiple possible causes. Token type and raw Meta error message are included in the error response for diagnostics.
+
+### Improved
+- **Visual Ad Library browser**: Redesigned from a text-only vertical list to a 2-column grid with embedded ad creative previews via iframe (`ad_snapshot_url`). Each card shows the actual ad creative at the top, with page name, headline, body copy, duration badge, platform tags, and save button below.
+- **Hover-to-preview overlay**: Cards show an "Open full preview" pill on hover that opens the Meta ad snapshot in a new tab.
+- **Responsive grid**: 2 columns on desktop, 1 column on tablet/mobile with adjusted preview heights.
+- **Expanded viewport**: Results area increased from 400px to 700px max-height to accommodate visual content.
+
+### Files Changed
+- `api/meta.ts` — Token type introspection in `handleAdLibrary`, improved error messages, `token_type` and `meta_message` in error response
+- `src/components/AdLibraryBrowser.tsx` — Grid layout with iframe creative previews, hover overlay, updated error display for system user tokens
+- `src/components/AdLibraryBrowser.css` — Visual-first card design, 2-column grid, creative preview area, responsive breakpoints
+- `src/services/metaApi.ts` — Dev-mode diagnostic logging for Ad Library errors
+
+---
+
 ## 2026-02-22 — Fix missing `last_refreshed_at` column breaking Meta connection
 
 ### Fixed
