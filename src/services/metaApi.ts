@@ -1020,6 +1020,14 @@ export async function searchAdLibrary(params: AdLibrarySearchParams): Promise<Ad
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
+    if (import.meta.env.DEV) {
+      console.warn('Ad Library API error details:', {
+        code: errData.code,
+        type: errData.type,
+        token_type: errData.token_type,
+        meta_message: errData.meta_message,
+      });
+    }
     // Use the backend's descriptive error message (includes verification hints, geo guidance)
     const errMsg = errData.message || `Ad Library search failed (${res.status})`;
     throw new Error(errMsg);
