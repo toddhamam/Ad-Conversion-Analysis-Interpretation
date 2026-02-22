@@ -168,6 +168,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleAdLibrary(req, res);
       case 'refresh-tokens':
         return handleRefreshTokens(req, res);
+      case 'ai-chat':
+        return handleAIChat(req, res);
+      case 'ai-images':
+        return handleAIImages(req, res);
       default:
         return res.status(400).json({ error: `Unknown route: ${route}` });
     }
@@ -1087,4 +1091,86 @@ async function handleRefreshTokens(req: VercelRequest, res: VercelResponse) {
       message: err instanceof Error ? err.message : 'Unknown error',
     });
   }
+}
+
+// ─── Route: ai-chat ─────────────────────────────────────────────────────────
+// Proxy for OpenAI chat completions. API key stays server-side.
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+async function handleAIChat(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed — use POST' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (!OPENAI_API_KEY) {
+    return res.status(500).json({ error: 'OpenAI API key not configured on server' });
+  }
+
+  const body = req.body;
+  if (!body || !body.messages) {
+    return res.status(400).json({ error: 'Request body with messages is required' });
+  }
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    return res.status(response.status).json(data);
+  }
+
+  return res.status(200).json(data);
+}
+
+// ─── Route: ai-images ───────────────────────────────────────────────────────
+// Proxy for OpenAI image generation. API key stays server-side.
+
+async function handleAIImages(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed — use POST' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (!OPENAI_API_KEY) {
+    return res.status(500).json({ error: 'OpenAI API key not configured on server' });
+  }
+
+  const body = req.body;
+  if (!body || !body.prompt) {
+    return res.status(400).json({ error: 'Request body with prompt is required' });
+  }
+
+  const response = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    return res.status(response.status).json(data);
+  }
+
+  return res.status(200).json(data);
 }

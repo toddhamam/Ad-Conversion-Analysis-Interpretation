@@ -3,10 +3,52 @@ console.log('🤖 openaiApi.ts loaded at', new Date().toISOString());
 
 // Import image cache for using captured reference images
 import { getTopHighQualityCachedImages } from './imageCache';
+import { getAuthToken } from '../lib/authToken';
 
-const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+// Dev-mode fallback key (only used when no auth token is available)
+const OPENAI_API_KEY_FALLBACK = import.meta.env.VITE_OPENAI_API_KEY;
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_IMAGES_URL = 'https://api.openai.com/v1/images/generations';
+
+// ─── OpenAI Backend Proxy ───────────────────────────────────────────────────
+// Routes OpenAI calls through /api/ai/* so the API key stays server-side.
+// Falls back to direct calls with VITE_OPENAI_API_KEY for local dev without auth.
+
+async function openaiProxy(
+  endpoint: 'chat' | 'images',
+  body: Record<string, unknown>
+): Promise<Response> {
+  const token = await getAuthToken();
+
+  if (token) {
+    // Production: proxy through backend
+    const res = await fetch(`/api/ai/${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    });
+    return res;
+  }
+
+  // Dev fallback: direct call with VITE_ key
+  if (!OPENAI_API_KEY_FALLBACK) {
+    throw new Error('OpenAI API not configured. Set OPENAI_API_KEY in Vercel or VITE_OPENAI_API_KEY for local dev.');
+  }
+
+  const url = endpoint === 'chat' ? OPENAI_API_URL : OPENAI_IMAGES_URL;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENAI_API_KEY_FALLBACK}`,
+    },
+    body: JSON.stringify(body),
+  });
+  return res;
+}
 
 // Google Gemini API Configuration
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
@@ -196,13 +238,15 @@ console.log('🤖 Using models:', {
 });
 console.log('🎨 Gemini API Key:', GEMINI_API_KEY ? 'configured' : 'NOT CONFIGURED');
 
-// Check if API key is configured
+// Check if OpenAI is configured (always true in production — key is server-side)
 export function isOpenAIConfigured(): boolean {
-  return !!OPENAI_API_KEY && OPENAI_API_KEY.length > 0;
+  // In production with auth, the key is on the server — always available
+  // In dev without auth, check for the VITE_ fallback key
+  return true;
 }
 
 // Log configuration status
-console.log('🔑 OpenAI API Key:', OPENAI_API_KEY ? 'configured' : 'NOT CONFIGURED');
+console.log('🔑 OpenAI API: proxy mode (key server-side)', OPENAI_API_KEY_FALLBACK ? '+ dev fallback' : '');
 
 // Types for ad analysis
 export interface AdCreativeData {
@@ -446,7 +490,6 @@ async function callOpenAI(
 
   console.log('🤖 Calling OpenAI API with model:', model);
   console.log('🧠 Reasoning effort:', reasoningEffort);
-  console.log('🔑 API Key present:', !!OPENAI_API_KEY);
 
   // Build request body — reasoning.effort is not supported by the current model API
   // IQ level is used to adjust prompt depth instead (handled by callers)
@@ -457,14 +500,7 @@ async function callOpenAI(
     max_completion_tokens: maxTokens,
   };
 
-  const response = await fetch(OPENAI_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify(requestBody),
-  });
+  const response = await openaiProxy('chat', requestBody);
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -532,14 +568,7 @@ async function callOpenAIWithVision(
     max_completion_tokens: maxTokens,
   };
 
-  const response = await fetch(OPENAI_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify(requestBody),
-  });
+  const response = await openaiProxy('chat', requestBody);
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -1793,7 +1822,7 @@ export async function generateAdImage(config: {
   } else if (isOpenAIConfigured()) {
     return generateAdImageWithDallE(config);
   } else {
-    throw new Error('No image generation API configured. Please add either VITE_GEMINI_API_KEY or VITE_OPENAI_API_KEY.');
+    throw new Error('No image generation API configured. Please contact your administrator.');
   }
 }
 
@@ -2219,20 +2248,13 @@ async function generateAdImageWithDallE(config: {
 
   const prompt = promptParts.join('\n');
 
-  const response = await fetch(OPENAI_IMAGES_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: DALLE_MODEL,
-      prompt,
-      n: 1,
-      size: sizeConfig.dalleSize,
-      quality: 'hd',
-      response_format: 'url',
-    }),
+  const response = await openaiProxy('images', {
+    model: DALLE_MODEL,
+    prompt,
+    n: 1,
+    size: sizeConfig.dalleSize,
+    quality: 'hd',
+    response_format: 'url',
   });
 
   if (!response.ok) {
