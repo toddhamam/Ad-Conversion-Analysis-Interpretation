@@ -685,7 +685,9 @@ export async function fetchTrafficTypes(dateOptions?: DateRangeOptions): Promise
  */
 export async function fetchCampaignSummaries(dateOptions?: DateRangeOptions): Promise<CampaignSummary[]> {
   const adAccountId = getAdAccountId();
-  if (!adAccountId) return [];
+  if (!adAccountId) {
+    throw new Error('No ad account configured. Go to Integrations to select your ad account.');
+  }
 
   try {
     const data = await metaFetch(`${adAccountId}/insights`, {
