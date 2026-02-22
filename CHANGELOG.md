@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-02-22 — Fix missing `last_refreshed_at` column breaking Meta connection
+
+### Fixed
+- **Meta connection fails with DB error**: All Supabase queries in `loadCredentials()` and `handleRefreshTokens()` selected `last_refreshed_at` from `organization_credentials`, but this column was never added to the production database. This caused a DB error on every Meta API call, blocking the entire integration with: "column organization_credentials.last_refreshed_at does not exist."
+- **Replaced with `updated_at`**: The refresh dedup logic (skip refresh if already refreshed within 5 minutes / 12 hours) now uses `updated_at`, which already exists and is written on every credential update.
+- **Removed phantom write**: `refreshMetaToken()` no longer writes `last_refreshed_at` on token refresh — `updated_at` serves the same purpose.
+
+### Files Changed
+- `api/meta.ts` — Replaced `last_refreshed_at` with `updated_at` in all `.select()` queries and dedup logic
+- `api/_lib/meta-token.ts` — Removed `last_refreshed_at` from token refresh DB update
+- `src/types/organization.ts` — Removed `last_refreshed_at` from `OrganizationCredential` interface
+
+---
+
 ## 2026-02-22 — Fix Meta credentials stuck in expired status after re-authorization
 
 ### Fixed

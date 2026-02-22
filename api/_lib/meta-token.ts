@@ -77,7 +77,6 @@ export async function refreshMetaToken(
       .update({
         access_token_encrypted: newEncryptedToken,
         token_expires_at: newExpiresAt.toISOString(),
-        last_refreshed_at: new Date().toISOString(),
         last_error: null,
         updated_at: new Date().toISOString(),
       })

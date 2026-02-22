@@ -64,7 +64,7 @@ function getLastCredentialDiagnostics(): CredentialDiagnostics | null {
 async function loadCredentials(organizationId: string): Promise<MetaCredentials | null> {
   const { data: cred, error: credError } = await supabase
     .from('organization_credentials')
-    .select('access_token_encrypted, ad_account_id, page_id, pixel_id, status, token_expires_at, last_refreshed_at')
+    .select('access_token_encrypted, ad_account_id, page_id, pixel_id, status, token_expires_at, updated_at')
     .eq('organization_id', organizationId)
     .eq('provider', 'meta')
     .single();
@@ -93,7 +93,7 @@ async function loadCredentials(organizationId: string): Promise<MetaCredentials 
   // Token nearing expiry — attempt inline refresh (non-blocking)
   if (isWithinRefreshWindow(cred.token_expires_at)) {
     // Skip if already refreshed within the last 5 minutes (dedup concurrent requests)
-    const lastRefreshed = cred.last_refreshed_at ? new Date(cred.last_refreshed_at).getTime() : 0;
+    const lastRefreshed = cred.updated_at ? new Date(cred.updated_at).getTime() : 0;
     const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
 
     if (lastRefreshed < fiveMinutesAgo) {
@@ -1021,7 +1021,7 @@ async function handleRefreshTokens(req: VercelRequest, res: VercelResponse) {
 
     const { data: credentials, error: queryError } = await supabase
       .from('organization_credentials')
-      .select('organization_id, access_token_encrypted, token_expires_at, last_refreshed_at')
+      .select('organization_id, access_token_encrypted, token_expires_at, updated_at')
       .eq('provider', 'meta')
       .eq('status', 'active')
       .lt('token_expires_at', refreshThreshold.toISOString())
@@ -1044,8 +1044,8 @@ async function handleRefreshTokens(req: VercelRequest, res: VercelResponse) {
 
     for (const cred of credentials) {
       // Skip if already refreshed within the last 12 hours
-      if (cred.last_refreshed_at) {
-        const lastRefreshed = new Date(cred.last_refreshed_at).getTime();
+      if (cred.updated_at) {
+        const lastRefreshed = new Date(cred.updated_at).getTime();
         const twelveHoursAgo = Date.now() - 12 * 60 * 60 * 1000;
         if (lastRefreshed > twelveHoursAgo) {
           results.push({ organizationId: cred.organization_id, success: true, error: 'Skipped — refreshed recently' });
