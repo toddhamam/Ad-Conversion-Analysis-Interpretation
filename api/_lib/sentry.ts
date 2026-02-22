@@ -71,6 +71,10 @@ export function captureError(
 
     if (error instanceof Error) {
       Sentry.captureException(error);
+    } else if (typeof error === 'object' && error !== null && 'message' in error) {
+      // Handle Supabase PostgrestError and similar objects with a message property
+      const msg = (error as { message: string }).message;
+      Sentry.captureException(new Error(msg));
     } else {
       Sentry.captureException(new Error(String(error)));
     }
