@@ -16,7 +16,7 @@ const ALWAYS_ALLOWED_PATHS = ['/billing', '/account', '/choose-plan', '/integrat
 const ACTION_PATHS = ['/insights', '/creatives', '/publish'];
 
 export default function SubscriptionGate({ children }: SubscriptionGateProps) {
-  const { organization, isTrialing, isSubscriptionValid, isSuperAdmin } = useOrganization();
+  const { organization, isSubscriptionValid, isSuperAdmin } = useOrganization();
   const location = useLocation();
   const [upgrading, setUpgrading] = useState(false);
 
