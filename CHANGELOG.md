@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-02-22 — Fix Meta credentials stuck in expired status after re-authorization
+
+### Fixed
+- **Saving Integrations selection now resets credential status to `active`**: The `update-selection` endpoint in `api/meta.ts` only updated `ad_account_id`, `page_id`, and `pixel_id` but never touched the `status` field. If a previous API call with an expired token had set `status: 'expired'` (via Meta error code 190), reconnecting via OAuth and saving selections on the Integrations page would not reset it — leaving `loadCredentials()` to reject the row and return "Please connect your Meta Ads account first." Now the endpoint also sets `status: 'active'` and clears `last_error`.
+- **Stale credential cache auto-refresh**: `fetchAdInsights()` and `fetchCampaignSummaries()` now force-refresh the `_orgMeta` cache from the backend if the ad account ID is empty, preventing stale singleton state from blocking data loads after reconnection.
+- **Credential diagnostics in proxy errors**: When `loadCredentials()` returns null, the proxy now includes the specific reason (no DB row, status not active, token expired) in the error response. Frontend surfaces this diagnostic info in error messages for faster debugging.
+
+### Files Changed
+- `api/meta.ts` — `handleUpdateSelection` sets `status: 'active'` and `last_error: null`; `loadCredentials` tracks diagnostic reason; `handleProxy` includes diagnostics in 404 response
+- `src/services/metaApi.ts` — `fetchAdInsights` and `fetchCampaignSummaries` auto-refresh `_orgMeta` cache on empty ad account; `metaFetch` appends diagnostic suffix to error messages
+
+---
+
 ## 2026-02-22 — Preserve Meta account selections during OAuth re-authorization
 
 ### Fixed

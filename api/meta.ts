@@ -48,6 +48,19 @@ interface MetaCredentials {
   pixelId: string | null;
 }
 
+interface CredentialDiagnostics {
+  reason: string;
+  status?: string;
+  tokenExpiresAt?: string | null;
+  hasRow: boolean;
+}
+
+let _lastCredDiag: CredentialDiagnostics | null = null;
+
+function getLastCredentialDiagnostics(): CredentialDiagnostics | null {
+  return _lastCredDiag;
+}
+
 async function loadCredentials(organizationId: string): Promise<MetaCredentials | null> {
   const { data: cred, error: credError } = await supabase
     .from('organization_credentials')
@@ -56,12 +69,19 @@ async function loadCredentials(organizationId: string): Promise<MetaCredentials 
     .eq('provider', 'meta')
     .single();
 
-  if (credError || !cred) return null;
+  if (credError || !cred) {
+    _lastCredDiag = { reason: credError ? `DB error: ${credError.message}` : 'No credential row found', hasRow: false };
+    return null;
+  }
 
-  if (cred.status !== 'active') return null;
+  if (cred.status !== 'active') {
+    _lastCredDiag = { reason: `Status is '${cred.status}' (not 'active')`, status: cred.status, tokenExpiresAt: cred.token_expires_at, hasRow: true };
+    return null;
+  }
 
   // Token already expired — mark and reject
   if (isTokenExpired(cred.token_expires_at)) {
+    _lastCredDiag = { reason: `Token expired at ${cred.token_expires_at}`, status: cred.status, tokenExpiresAt: cred.token_expires_at, hasRow: true };
     await supabase
       .from('organization_credentials')
       .update({ status: 'expired' })
@@ -177,9 +197,11 @@ async function handleProxy(req: VercelRequest, res: VercelResponse) {
 
   const creds = await loadCredentials(auth.organizationId);
   if (!creds) {
+    const diag = getLastCredentialDiagnostics();
     return res.status(404).json({
       error: 'Meta credentials not found',
-      message: 'Please connect your Meta Ads account first',
+      message: `Please connect your Meta Ads account first`,
+      diagnostics: diag ? `${diag.reason} (orgId: ${auth.organizationId.slice(0, 8)}...)` : 'Unknown',
     });
   }
 
@@ -569,6 +591,8 @@ async function handleUpdateSelection(req: VercelRequest, res: VercelResponse) {
       ad_account_id: adAccountId,
       page_id: pageId || null,
       pixel_id: pixelId || null,
+      status: 'active',
+      last_error: null,
       metadata: {
         ...cred.metadata,
         selected_account_name: selectedAccount?.name || null,
