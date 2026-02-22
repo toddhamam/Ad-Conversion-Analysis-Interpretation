@@ -507,49 +507,43 @@ export default function AdLibraryBrowser({
 
                 if (!bodyText && !headline) return null;
 
+                const pageName = result.page_name || 'Unknown';
+                const pageInitial = pageName.charAt(0).toUpperCase();
+
                 return (
                   <div key={`${result.page_id}-${idx}`} className={`ad-library-card ${isSaved ? 'saved' : ''}`}>
-                    {/* Ad creative preview */}
-                    {result.ad_snapshot_url ? (
-                      <div className="ad-library-card-preview">
-                        <iframe
-                          src={result.ad_snapshot_url}
-                          className="ad-library-card-iframe"
-                          title={`Ad by ${result.page_name || 'Unknown'}`}
-                          sandbox="allow-scripts allow-same-origin allow-popups"
-                          loading="lazy"
-                          scrolling="no"
-                        />
+                    {/* Hero area — headline preview with page identity */}
+                    <div className="ad-library-card-hero">
+                      <div className="ad-library-card-hero-top">
+                        <div className="ad-library-card-avatar">{pageInitial}</div>
+                        <div className="ad-library-card-hero-info">
+                          <span className="ad-library-card-page">{pageName}</span>
+                          <span className={`ad-library-duration-badge ${duration.tier}`}>
+                            {duration.tier === 'long' ? '🔥 ' : ''}{duration.label}
+                            {!result.ad_delivery_stop_time ? ' (active)' : ''}
+                          </span>
+                        </div>
+                      </div>
+                      {headline && (
+                        <div className="ad-library-card-hero-headline">{headline}</div>
+                      )}
+                      {result.ad_snapshot_url && (
                         <a
                           href={result.ad_snapshot_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="ad-library-card-preview-overlay"
-                          aria-label="Open full ad preview"
+                          className="ad-library-view-creative-btn"
                         >
-                          <span className="ad-library-card-preview-expand">Open full preview</span>
+                          View Ad Creative
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                            <path d="M4.5 2.5H2.5V9.5H9.5V7.5M7 2.5H9.5V5M9.5 2.5L5 7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
                         </a>
-                      </div>
-                    ) : (
-                      <div className="ad-library-card-preview-placeholder">
-                        <span>No creative preview available</span>
-                      </div>
-                    )}
-
-                    {/* Card content */}
-                    <div className="ad-library-card-content">
-                      <div className="ad-library-card-header">
-                        <span className="ad-library-card-page">{result.page_name || 'Unknown'}</span>
-                        <span className={`ad-library-duration-badge ${duration.tier}`}>
-                          {duration.tier === 'long' ? '🔥 ' : ''}{duration.label}
-                          {!result.ad_delivery_stop_time ? ' (active)' : ''}
-                        </span>
-                      </div>
-
-                      {headline && (
-                        <div className="ad-library-card-headline">{headline}</div>
                       )}
+                    </div>
 
+                    {/* Card content — body copy and metadata */}
+                    <div className="ad-library-card-content">
                       {bodyText && (
                         <>
                           <div className={`ad-library-card-body ${isTextExpanded ? 'expanded-text' : ''}`}>
