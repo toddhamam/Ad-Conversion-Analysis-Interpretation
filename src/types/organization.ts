@@ -81,7 +81,6 @@ export interface OrganizationCredential {
 
   // Token management
   token_expires_at: string | null;
-  last_refreshed_at: string | null;
   scopes: string[] | null;
 
   // Status
