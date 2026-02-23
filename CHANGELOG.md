@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-02-23 — Add "Headline in Image" option to CreativeIQ ad generation
+
+### Added
+- **Headline in Image selector**: New three-option control in Step 3 (Generate Creatives) between Image Size and Variation Count. Users can choose: **None** (image only, default), **From Copy** (use headlines selected in Step 2), or **Custom** (type a manual headline up to 80 characters)
+- **From Copy preview**: When "From Copy" is selected, shows which headline(s) will be used. Multiple selected headlines rotate across variations (e.g., 3 headlines across 5 variations = H1, H2, H3, H1, H2)
+- **Gemini prompt modification**: When a headline is provided, the "NO TEXT IN IMAGE" instruction is replaced with detailed headline rendering instructions — exact text rendering, bold legible typography, high contrast, upper-third/center positioning, composition-integrated design, and typography style matching from reference image analysis
+- **DALL-E fallback support**: Same headline rendering logic applied to the DALL-E image generation path
+- **Regeneration consistency**: Headlines are stored on `GeneratedAdPackage` so single-image regeneration preserves the correct headline for each variation
+- **`imageHeadlines` on GeneratedAdPackage interface**: Persists headline data through localStorage for regeneration
+
+### Files Changed
+- `src/pages/AdGenerator.tsx` — New state (`headlineInImageMode`, `customImageHeadline`), Step 3 UI section, headline resolution in `handleGenerateCreatives`, headline passthrough in `handleRegenerateImage`
+- `src/pages/AdGenerator.css` — Styles for `.headline-image-options`, `.headline-image-btn`, `.headline-preview`, `.headline-custom-input` with mobile responsive breakpoint
+- `src/services/openaiApi.ts` — `headlineText` param on `generateAdImage`/`generateAdImageWithGemini`/`generateAdImageWithDallE`, `imageHeadlines` on `generateAdPackage` config and `GeneratedAdPackage` interface, conditional prompt logic, headline rotation in batch loop
+
+---
+
 ## 2026-02-23 — Redesign Funnels dashboard to match reference layout
 
 ### Changed
