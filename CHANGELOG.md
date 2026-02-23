@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-02-23 — Fix funnel data sync and port multi-funnel dashboard
+
+### Fixed
+- **Broken funnel metrics API**: The metrics endpoint hardcoded only 6 step names (`landing`, `checkout`, `upsell-1`, `downsell-1`, `upsell-2`, `thank-you`) — events from the `free` funnel type (7 steps with `free-` prefix) were silently dropped. Removed hardcoded steps; steps are now dynamically discovered from event data and sorted using funnel config.
+- **Mixed funnel data**: The API didn't select or filter by `funnel_id`, mixing data from different funnel versions (e.g., `main-v1`, `main-v2`, `free-v1`) into a single aggregate. Added `funnelId` (exact match) and `funnel` (type prefix match) query param filters.
+- **Missing order bump revenue**: `order_bump_purchase` events were not recognized, causing revenue from order bumps to be uncounted. Now tracked separately with take rate calculation.
+
+### Added
+- **Funnel version discovery** (`api/funnel/metrics.ts` → `?discover=true`): New query-param route returns `FunnelVersionSummary[]` — lists all funnel versions with session counts, purchase counts, revenue, and conversion rates. Added within existing serverless function to stay within Vercel's 12-function limit.
+- **Three-mode Funnels dashboard** (`src/pages/Funnels.tsx`):
+  - **Overview**: Table of all discovered funnel versions with type badges, metrics, and last event timestamps. Click a row to drill into it; select two rows to compare.
+  - **Single Funnel**: Deep-dive view with hero metric cards (Revenue, Ad Spend/ROAS, CAC/Customers), dynamic step breakdown table, order bump sub-row under checkout, and A/B test variant comparison.
+  - **Compare**: Side-by-side funnel comparison with delta chips (green/red percentage badges), winner indicators, and step-by-step metric deltas.
+- **Order bump metrics**: New `OrderBumpMetrics` type tracking purchases, take rate (vs checkout sessions), and revenue. Displayed as an indented sub-row under the checkout step in Single view.
+- **Dynamic funnel configs**: `FunnelConfig` type with per-type step definitions, step display names, entry/checkout step identifiers, and `noMetricsSteps` for steps excluded from conversion calculations.
+- **New TypeScript types**: `FunnelVersionSummary`, `FunnelConfig`, `OrderBumpMetrics` added to `src/types/funnel.ts`. `FunnelStep` changed from narrow union to `string` to support dynamic step names.
+
+### Backward Compatible
+- **Dashboard unchanged**: `src/pages/Dashboard.tsx` fetches `/api/funnel/metrics` without `funnelId` — returns combined metrics across all funnels (existing behavior preserved).
+- **Super-admin only**: The Funnels page remains gated behind `SuperAdminRoute`; no changes to access control.
+
+### Files Changed
+- `src/types/funnel.ts` — Added `order_bump_purchase` event type, `FunnelConfig`, `FunnelVersionSummary`, `OrderBumpMetrics`; changed `FunnelStep` to `string`; added `funnel_id` to `FunnelEvent`, `orderBump` to `DashboardMetrics`
+- `api/funnel/metrics.ts` — Complete rewrite: funnel configs, dynamic step discovery, `funnelId`/`funnel`/`discover` query params, order bump metrics, `funnel_id` in Supabase select
+- `src/pages/Funnels.tsx` — Complete rebuild: three view modes (Overview/Single/Compare), funnel selector, delta chips, compare cards, order bump row
+- `src/pages/Funnels.css` — Complete rewrite: view tabs, overview table, funnel type badges, compare grid, delta chips, order bump row, responsive breakpoints
+
+---
+
 ## 2026-02-22 — Add Ad Library creative image previews via server-side extraction
 
 ### Added
