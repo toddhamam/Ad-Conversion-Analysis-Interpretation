@@ -7,139 +7,76 @@ metadata: {"openclaw":{"emoji":"🔥","requires":{"env":["GMAIL_ADDRESS","GMAIL_
 
 # Email Warmup — Build Sender Reputation
 
-New Gmail accounts (or accounts that haven't sent much email) need to be warmed up before cold outreach. Sending too many emails too fast from a cold account triggers spam filters and can get the account suspended.
+Monitor warmup progress and enforce daily send limits using the Convertra Leads CLI. The CLI tracks warmup week and enforces limits automatically.
 
-## Why Warmup Matters
+## Commands
 
-Gmail uses sender reputation scoring. A new account has zero reputation. If you start blasting 50 cold emails from day one, Gmail will:
-- Flag your emails as spam for recipients
-- Throttle your sending ability
-- Potentially suspend the account
+### Check Warmup Status
 
-Warmup builds reputation gradually so when you start cold outreach, emails land in the primary inbox.
+```bash
+exec python3 /home/ubuntu/convertra-leads/cli.py mail daily-status
+```
+
+Returns: `sent_today`, `limit`, `remaining`, `warmup_week`, `start_date`.
+
+### View Campaign Metrics
+
+```bash
+exec python3 /home/ubuntu/convertra-leads/cli.py report daily
+```
+
+Returns send counts, bounce rate, reply rate — key deliverability indicators.
 
 ## Warmup Schedule
 
-### Week 1: Foundation (Days 1-7)
+The CLI enforces these limits automatically. You cannot exceed them.
 
-**Daily actions:**
-- Send 3-5 emails to known contacts (friends, team members, other accounts you own)
-- These should be REAL conversations — not just "test" emails
-- Ask recipients to reply to your emails (replies boost reputation)
-- Ask recipients to mark your emails as "Not Spam" if they land in spam
-- Subscribe to 2-3 newsletters/mailing lists (incoming email builds reputation too)
+| Week | Daily Limit | Activities |
+|------|-------------|------------|
+| 1 (Days 1-7) | 5/day | Send to known contacts, get replies, subscribe to newsletters |
+| 2 (Days 8-14) | 10/day | Mix of warm emails + a few new conversations |
+| 3 (Days 15-21) | 20/day | Start light outreach to people you've met |
+| 4 (Days 22-28) | 20/day | 10 warm + 10 cold outreach emails |
+| 5+ | 40/day | Steady state — mix of warm and cold |
 
-**What to send:**
-- Genuine emails to colleagues about work topics
-- Replies to newsletters
-- Emails between your own accounts (Gmail to Gmail, Gmail to Outlook)
-- Calendar invites to real events
-
-### Week 2: Ramp Up (Days 8-14)
-
-**Daily actions:**
-- Send 8-10 emails
-- Mix of:
-  - 3-4 emails to known contacts
-  - 3-4 replies to threads
-  - 2-3 new conversations
-- Continue engaging with incoming email (reply to everything)
-- Start sending a few emails to non-Gmail addresses (Outlook, Yahoo) to build cross-platform reputation
-
-### Week 3: Pre-Outreach (Days 15-21)
-
-**Daily actions:**
-- Send 15-20 emails
-- Mix of:
-  - 5 emails to known contacts
-  - 5-10 light outreach (reaching out to people you've met, former colleagues)
-  - 5 replies to threads
-- Monitor deliverability — ask a few recipients if emails are landing in primary inbox
-- Check for any bounce-backs or delivery warnings
-
-### Week 4: Begin Outreach (Days 22-28)
-
-**Daily actions:**
-- 20 total emails:
-  - 10 warm/genuine emails
-  - 10 cold outreach emails
-- Monitor closely:
-  - Are cold emails getting replies? (good sign)
-  - Any bounce-backs? (check email validity)
-  - Any spam complaints? (revise copy immediately)
-
-### Week 5+: Steady State
-
-**Daily maximums:**
-- 40-50 total emails (mix of warm and cold)
-- Never more than 30 cold emails in a single day
-- Always maintain some warm/genuine email activity
+Maximum: 50 emails/day regardless of warmup stage.
 
 ## Technical Setup Checklist
 
-Before starting warmup, ensure these are configured:
+Before starting warmup, ensure:
 
-### 1. SPF Record
-The Gmail account should have SPF configured. For `@gmail.com` addresses, Google handles this automatically. For custom domains, add to DNS:
-```
-TXT record: v=spf1 include:_spf.google.com ~all
-```
-
-### 2. DKIM
-For `@gmail.com` addresses, DKIM is automatic. For Google Workspace custom domains, enable in Admin Console > Apps > Google Workspace > Gmail > Authenticate Email.
-
-### 3. DMARC (custom domains only)
-Add DNS record:
-```
-_dmarc.yourdomain.com TXT "v=DMARC1; p=none; rua=mailto:admin@yourdomain.com"
-```
-
-### 4. Email Signature
-Set up a professional signature in Gmail:
-- Full name
-- Title
-- Company name
-- One link (website or LinkedIn — not both)
-- Keep it simple, no images
-
-### 5. Profile Picture
-Upload a real photo to the Google account — emails from accounts with profile pictures get better engagement.
-
-### 6. Enable 2-Step Verification
-Required for App Password generation.
+1. **SPF Record**: For custom domains, add DNS TXT: `v=spf1 include:_spf.google.com ~all`
+2. **DKIM**: Enable in Google Workspace Admin Console (automatic for @gmail.com)
+3. **DMARC**: For custom domains, add DNS: `_dmarc.yourdomain.com TXT "v=DMARC1; p=none"`
+4. **2-Step Verification**: Required for App Password generation
+5. **IMAP Enabled**: Gmail Settings > Forwarding and POP/IMAP > Enable IMAP
+6. **Profile Picture**: Upload a real photo to the Google account
+7. **Email Signature**: Set up in Gmail — name, title, company, one link
 
 ## Deliverability Monitoring
 
-During warmup, regularly check:
+Check these regularly:
 
-**Check 1: Send a test email to a fresh Gmail account**
-- Did it land in Primary, Promotions, or Spam?
-- Primary = good, Promotions = okay, Spam = stop and troubleshoot
+```bash
+# Daily send status + warmup week
+exec python3 /home/ubuntu/convertra-leads/cli.py mail daily-status
 
-**Check 2: Send a test to Outlook/Hotmail**
-- These providers are stricter — if it lands in inbox, your reputation is building well
+# Campaign metrics including bounce and reply rates
+exec python3 /home/ubuntu/convertra-leads/cli.py report daily
+```
 
-**Check 3: Monitor bounce rate**
-- Above 3% = pause and clean your list
-- Above 5% = serious issue, stop all outreach
-
-**Check 4: Monitor reply rate**
-- Below 1% after 50+ sends = your emails may be landing in spam
-- Revise subject lines and opening lines
-
-## Red Flags — Stop Immediately If:
-
-- Gmail shows a "Your account has been temporarily suspended" warning
+**Red flags — stop immediately if:**
 - Bounce rate exceeds 5%
-- Multiple recipients report your email as spam
-- You receive a Google warning about unusual activity
-- Reply rate drops below 1% suddenly (emails likely going to spam)
+- Reply rate drops below 1% after 50+ sends
+- Gmail shows account suspension warning
+- Multiple spam complaints
 
-## Recovery If Flagged
+**Recovery if flagged:**
+1. Stop ALL cold outreach
+2. Send only to known contacts for 2 weeks
+3. Ensure all recipients engage (open + reply)
+4. Gradually reintroduce cold outreach
 
-If the account gets flagged:
-1. Stop ALL cold outreach immediately
-2. Go back to Week 1 warmup activities only
-3. Send only to known contacts for 2 weeks
-4. Ensure all recipients are engaging (opening + replying)
-5. Gradually reintroduce cold outreach after reputation recovers
+## When to Use AI
+
+Never. Warmup monitoring is purely mechanical — check limits and metrics via the CLI.

@@ -27,6 +27,65 @@
 
 ---
 
+## 2026-02-23 — Add Convertra Leads CLI for token-efficient outreach automation
+
+### Added
+- **Convertra Leads CLI** (`ops/convertra-leads/`): Full Python CLI that handles all mechanical outreach operations — lead discovery, company research, email finding, lead scoring, email sending, inbox monitoring, follow-up scheduling, and campaign reporting. Designed to run on the Oracle VPS alongside the OpenClaw Telegram bot, replacing AI-driven operations with deterministic Python scripts.
+  - `cli.py` — Main argparse dispatcher with 10 top-level commands (pipeline, score, mail, inbox, followup, discover, scrape, research, email, report)
+  - `config.py` — Loads `.env` secrets and `data/config.json` runtime settings
+  - `modules/pipeline.py` — JSON-based CRM with file locking (fcntl.flock), 15+ prospect stages, auto-ID generation
+  - `modules/scorer.py` — 17-point lead scoring rubric with bucket classification and tier assignment
+  - `modules/mailer.py` — Gmail SMTP sender with warmup enforcement (5/10/20/20/40 daily limits by week)
+  - `modules/inbox.py` — Gmail IMAP reader with pipeline cross-referencing, bounce and opt-out detection
+  - `modules/followup.py` — Follow-up sequence scheduling (Day 3/7/14), weekend skipping, pause/resume
+  - `modules/reporter.py` — Campaign metrics aggregation (reply rate, bounce rate, pipeline by stage/tier/bucket)
+  - `modules/discovery.py` — Autonomous prospect discovery via DuckDuckGo search across 6 niches
+  - `modules/scraper.py` — Meta Ad Library API client with retry logic and pagination
+  - `modules/research.py` — Company website scraper (tech stack, team size, funding, hiring signals, dead site detection)
+  - `modules/email_finder.py` — Email pattern generation + DNS MX verification + DuckDuckGo web search
+  - `data/pipeline.json` — Lead pipeline storage
+  - `data/config.json` — Runtime config (warmup stage, daily limits, email settings, sequence timing)
+  - `data/templates.json` — Email templates for 3 prospect buckets + 3 follow-up stages
+  - `requirements.txt` — requests, beautifulsoup4, dnspython, ddgs
+
+### Changed
+- **All 9 OpenClaw SKILL.md files rewritten as thin CLI wrappers**: Each skill now calls `exec python3 /home/ubuntu/convertra-leads/cli.py <command>` instead of doing work with AI tokens. Only `cold-outreach` retains AI usage (for drafting personalized emails). Skills updated: ad-library-scraper, cold-outreach, email-warmup, follow-up-sequences, gmail-read, gmail-send, lead-enrichment, pipeline-tracker, prospect-research.
+
+### Context
+The OpenClaw Telegram bot was burning through Claude Max tokens too quickly because it used AI for deterministic tasks (web scraping, lead scoring, email pattern matching, pipeline CRUD, SMTP sends). This CLI handles all mechanical work — the bot calls it via `exec`, gets structured JSON back, and only uses Claude for the one task that genuinely needs AI: drafting personalized email copy. Estimated token reduction: 80-90%.
+
+### Files Created
+- `ops/convertra-leads/cli.py`
+- `ops/convertra-leads/config.py`
+- `ops/convertra-leads/requirements.txt`
+- `ops/convertra-leads/modules/__init__.py`
+- `ops/convertra-leads/modules/pipeline.py`
+- `ops/convertra-leads/modules/scorer.py`
+- `ops/convertra-leads/modules/mailer.py`
+- `ops/convertra-leads/modules/inbox.py`
+- `ops/convertra-leads/modules/followup.py`
+- `ops/convertra-leads/modules/reporter.py`
+- `ops/convertra-leads/modules/discovery.py`
+- `ops/convertra-leads/modules/scraper.py`
+- `ops/convertra-leads/modules/research.py`
+- `ops/convertra-leads/modules/email_finder.py`
+- `ops/convertra-leads/data/pipeline.json`
+- `ops/convertra-leads/data/config.json`
+- `ops/convertra-leads/data/templates.json`
+
+### Files Changed
+- `ops/openclaw-skills/ad-library-scraper/SKILL.md` — Rewritten as CLI wrapper
+- `ops/openclaw-skills/cold-outreach/SKILL.md` — Rewritten as CLI wrapper (retains AI for email drafting)
+- `ops/openclaw-skills/email-warmup/SKILL.md` — Rewritten as CLI wrapper
+- `ops/openclaw-skills/follow-up-sequences/SKILL.md` — Rewritten as CLI wrapper
+- `ops/openclaw-skills/gmail-read/SKILL.md` — Rewritten as CLI wrapper
+- `ops/openclaw-skills/gmail-send/SKILL.md` — Rewritten as CLI wrapper
+- `ops/openclaw-skills/lead-enrichment/SKILL.md` — Rewritten as CLI wrapper
+- `ops/openclaw-skills/pipeline-tracker/SKILL.md` — Rewritten as CLI wrapper
+- `ops/openclaw-skills/prospect-research/SKILL.md` — Rewritten as CLI wrapper
+
+---
+
 ## 2026-02-23 — Fix funnel data sync and port multi-funnel dashboard
 
 ### Fixed

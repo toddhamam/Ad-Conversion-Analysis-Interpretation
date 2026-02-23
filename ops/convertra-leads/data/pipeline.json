@@ -1,0 +1,59 @@
+{
+  "metadata": {
+    "created": "2026-02-23",
+    "last_updated": "2026-02-23",
+    "total_prospects": 1,
+    "campaigns": [
+      "test-feb-2026"
+    ]
+  },
+  "prospects": [
+    {
+      "id": "p_001",
+      "name": "Jane Smith",
+      "email": "",
+      "company": "Acme DTC",
+      "role": "CMO",
+      "company_url": "https://acmedtc.com",
+      "linkedin_url": "",
+      "company_type": "dtc_brand",
+      "fit_score": 12,
+      "campaign": "test-feb-2026",
+      "stage": "researched",
+      "source": "",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "strong",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "active_ad_count": 47,
+        "hiring_signals": [
+          "Senior Media Buyer"
+        ],
+        "funding": "Series B \u2014 $15M raised",
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "content_marketing": true,
+        "estimated_employees": "50-100"
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "draft_email",
+        "date": "2026-02-23",
+        "notes": ""
+      },
+      "tags": [
+        "hot"
+      ],
+      "notes": "",
+      "created": "2026-02-23",
+      "updated": "2026-02-23"
+    }
+  ]
+}
