@@ -30,6 +30,7 @@ import IQSelector from '../components/IQSelector';
 import AdLibraryBrowser from '../components/AdLibraryBrowser';
 import InspirationSelector from '../components/InspirationSelector';
 import SEO from '../components/SEO';
+import { setPublishData } from '../services/publishStore';
 import type { AdLibraryInspiration } from '../types';
 import './AdGenerator.css';
 
@@ -482,9 +483,16 @@ const AdGenerator = () => {
     return () => clearTimeout(saveTimerId);
   }, [generatedAds, isLoadingAds]);
 
-  // Synchronous flush of ads to localStorage (used before navigation)
+  // Synchronous flush of ads to localStorage + in-memory store (used before navigation)
+  // The in-memory store (publishStore) is the PRIMARY handoff mechanism — no size limits.
+  // localStorage is a BACKUP for page refreshes.
   const flushAdsToStorage = useCallback(() => {
     if (generatedAds.length === 0) return;
+
+    // PRIMARY: Set in-memory store (always works, no size limits)
+    setPublishData(generatedAds);
+
+    // BACKUP: Also write to localStorage for persistence across page refreshes
     try {
       const limited = generatedAds.slice(0, MAX_STORED_ADS);
       const toSave = limited.map((ad, index) => {
@@ -506,9 +514,24 @@ const AdGenerator = () => {
           clearImageCache();
           localStorage.setItem(GENERATED_ADS_STORAGE_KEY, json);
         }
+      } else {
+        // Data too large for localStorage — strip ALL images and save metadata-only
+        // so the publisher can at least see the ad list on page refresh
+        console.warn(`[AdGenerator] Data too large for localStorage (${sizeInMB.toFixed(1)}MB), saving metadata only`);
+        const metadataOnly = limited.map(ad => ({
+          ...ad,
+          images: ad.images?.map(img => ({ ...img, imageUrl: '' })),
+        }));
+        try {
+          localStorage.setItem(GENERATED_ADS_STORAGE_KEY, JSON.stringify(metadataOnly));
+        } catch {
+          clearImageCache();
+          try { localStorage.setItem(GENERATED_ADS_STORAGE_KEY, JSON.stringify(metadataOnly)); } catch { /* exhausted */ }
+        }
       }
     } catch (e: unknown) {
-      console.error('[AdGenerator] Failed to flush ads to storage:', e);
+      console.error('[AdGenerator] Failed to flush ads to localStorage:', e);
+      // In-memory store was already set above, so navigation will still work
     }
   }, [generatedAds]);
 

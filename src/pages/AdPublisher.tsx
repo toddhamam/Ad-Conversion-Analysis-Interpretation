@@ -26,6 +26,7 @@ import {
   type FullTargetingSpec,
   type PublishPreset,
 } from '../services/metaApi';
+import { getPublishData } from '../services/publishStore';
 import './AdPublisher.css';
 
 // Debug flag - set to true to enable verbose logging
@@ -182,28 +183,51 @@ function formatAudienceSize(size?: number): string {
   return size.toString();
 }
 
-// Extract metadata from localStorage - synchronous since data is small (metadata only)
-function extractMetadata(): AdMetadata[] {
+// Module-level cache for packages loaded from publishStore or localStorage.
+// Set once on mount, used by both extractMetadata and loadImageDataForPublish
+// so we don't re-parse or re-read between the two calls.
+let _cachedPackages: any[] | null = null;
+
+/**
+ * Load packages from the in-memory publish store (primary) or localStorage (fallback).
+ * The publish store is set by AdGenerator right before navigation — it has no size
+ * limits and avoids the silent 5MB localStorage failure that causes "No ads found."
+ */
+function loadPackages(): any[] {
+  // PRIMARY: Check in-memory publish store (set by AdGenerator before navigate)
+  const memoryData = getPublishData();
+  if (memoryData && memoryData.length > 0) {
+    console.log(`[AdPublisher] Loaded ${memoryData.length} packages from in-memory publish store`);
+    return memoryData;
+  }
+
+  // FALLBACK: Read from localStorage (handles page refresh)
   try {
     const stored = localStorage.getItem(GENERATED_ADS_STORAGE_KEY);
     if (!stored) {
+      console.log('[AdPublisher] No data in localStorage');
       return [];
     }
 
     const sizeInMB = (stored.length / (1024 * 1024)).toFixed(2);
-    console.log(`[AdPublisher] localStorage data size: ${sizeInMB}MB`);
+    console.log(`[AdPublisher] Loading from localStorage (${sizeInMB}MB)`);
 
-    let packages: any[];
-    try {
-      packages = JSON.parse(stored);
-    } catch (parseErr) {
-      console.error('[AdPublisher] JSON parse error:', parseErr);
-      return [];
-    }
+    const packages = JSON.parse(stored);
+    if (!Array.isArray(packages)) return [];
+    return packages;
+  } catch (err) {
+    console.error('[AdPublisher] Failed to load from localStorage:', err);
+    return [];
+  }
+}
 
-    if (!Array.isArray(packages)) {
-      return [];
-    }
+// Extract metadata from packages
+function extractMetadata(): AdMetadata[] {
+  try {
+    const packages = loadPackages();
+    _cachedPackages = packages;
+
+    if (packages.length === 0) return [];
 
     const items: AdMetadata[] = [];
 
@@ -244,21 +268,10 @@ function extractMetadata(): AdMetadata[] {
 async function loadImageDataForPublish(metadata: AdMetadata[]): Promise<{ imageUrl: string; headline: string; bodyText: string; cta: string }[]> {
   return new Promise((resolve) => {
     try {
-      const stored = localStorage.getItem(GENERATED_ADS_STORAGE_KEY);
-      if (!stored) {
-        resolve([]);
-        return;
-      }
+      // Use cached packages from extractMetadata, or reload
+      const packages = _cachedPackages ?? loadPackages();
 
-      let packages: any[];
-      try {
-        packages = JSON.parse(stored);
-      } catch {
-        resolve([]);
-        return;
-      }
-
-      if (!Array.isArray(packages)) {
+      if (!Array.isArray(packages) || packages.length === 0) {
         resolve([]);
         return;
       }
