@@ -1,0 +1,29 @@
+# Convertra Leads Pipeline — Cron Schedule
+# ─────────────────────────────────────────
+#
+# Install: crontab -e  (then paste these lines)
+# Timezone: Set VPS to AEST or adjust times accordingly
+# Logs: mkdir -p /home/ubuntu/convertra-leads/logs
+#
+# Before enabling cron, verify manually:
+#   python3 orchestrator.py daily
+#   python3 orchestrator.py weekly
+#   python3 orchestrator.py campaign --niches "supplements"
+
+# Daily routine: 9am AEST every weekday (Mon-Fri)
+# Checks inbox, sends follow-ups, sends ready emails, reports via Telegram
+0 9 * * 1-5 cd /home/ubuntu/convertra-leads && python3 orchestrator.py daily >> /home/ubuntu/convertra-leads/logs/daily.log 2>&1
+
+# Weekly review: 10am AEST every Monday
+# Pipeline health check, red flag detection, auto-pause if bounce rate critical
+0 10 * * 1 cd /home/ubuntu/convertra-leads && python3 orchestrator.py weekly >> /home/ubuntu/convertra-leads/logs/weekly.log 2>&1
+
+# Pipeline backup: midnight every Sunday
+0 0 * * 0 cd /home/ubuntu/convertra-leads && python3 cli.py pipeline backup >> /home/ubuntu/convertra-leads/logs/backup.log 2>&1
+
+# ─────────────────────────────────────────
+# OPTIONAL: Scheduled campaigns (uncomment and customize)
+# ─────────────────────────────────────────
+
+# Monthly discovery run: 8am AEST on the 1st of each month
+# 0 8 1 * * cd /home/ubuntu/convertra-leads && python3 orchestrator.py campaign --niches "supplements,skincare,fitness,courses,ecommerce,saas" --include-jobs --campaign "auto-$(date +\%Y-\%m)" >> /home/ubuntu/convertra-leads/logs/campaign.log 2>&1
