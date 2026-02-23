@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-02-23 — Redesign Funnels dashboard to match reference layout
+
+### Changed
+- **Tab order**: Changed from Overview/Single/Compare to Single | Compare | Overview, matching the reference dashboard layout
+- **Controls bar**: Moved visitor count, view tabs, funnel selector, and date range picker into a single inline header row
+- **Single view**: Funnel selector moved from body to header controls; cleaner step breakdown table
+- **Compare view**: Replaced small delta-only cards with large summary cards showing Revenue, Conv %, Sessions, and AOV with inline delta badges. Added A Rev / B Rev columns to the step comparison table. Deltas now use "pp" (percentage points) suffix for conversion rates
+- **Compare selectors**: Simplified to plain dropdowns with "vs" separator, no labels
+- **Overview**: Removed row checkboxes, "Version" column header, and funnel type badges. Plain type text with DD/MM/YYYY date format
+- **Date format**: Changed to DD/MM/YYYY across all views
+
+### Files Changed
+- `src/pages/Funnels.tsx` — Tab reorder, CompareSummaryCard component, inline controls bar, removed unused calcDelta/funnels/onSelectFunnel
+- `src/pages/Funnels.css` — Controls bar layout, compare summary cards, simplified selectors, responsive updates
+
+---
+
+## 2026-02-23 — Remove organization_id filter from funnel queries
+
+### Fixed
+- **"Failed to discover funnels" 500 error**: The `funnel_events` table has no `organization_id` column — all Supabase queries with `.eq('organization_id', ...)` silently failed. Replaced org-based filtering with JWT authentication gate only. Since the Funnels page is already gated behind `SuperAdminRoute`, tenant isolation is enforced at the routing level.
+
+### Files Changed
+- `api/funnel/metrics.ts` — Replaced `getOrganizationId()` with `isAuthenticated()`, removed all `.eq('organization_id', ...)` filters
+
+---
+
 ## 2026-02-23 — Add Convertra Leads CLI for token-efficient outreach automation
 
 ### Added

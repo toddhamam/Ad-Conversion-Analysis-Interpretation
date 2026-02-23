@@ -82,14 +82,10 @@ function formatPercent(value: number): string {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 }
 
-/** Calculate delta between two values as percentage change */
-function calcDelta(a: number, b: number): number | null {
-  if (b === 0) return a > 0 ? 100 : null;
-  return ((a - b) / b) * 100;
-}
 
 export default function Funnels() {
   const [viewMode, setViewMode] = useState<ViewMode>('overview');
@@ -280,11 +276,57 @@ export default function Funnels() {
   return (
     <div className="page funnels-page">
       <div className="page-header">
-        <div className="page-header-left">
-          <h1 className="page-title">Funnels</h1>
-          <p className="page-subtitle">Real-time funnel performance analytics</p>
+        <h1 className="page-title">Funnel Analytics</h1>
+      </div>
+
+      {/* Controls Bar: visitors, tabs, funnel selector, date range */}
+      <div className="controls-bar">
+        <div className={`live-sessions-card ${activeSessions > 0 ? 'active' : ''}`}>
+          <span className="live-dot-wrapper">
+            <span className="live-dot-ping"></span>
+            <span className="live-dot"></span>
+          </span>
+          <span className="live-sessions-text">
+            <span className="live-sessions-count">{activeSessions}</span>
+            <span className="live-sessions-label">{activeSessions === 1 ? 'visitor' : 'visitors'} online</span>
+          </span>
         </div>
-        <div className="page-header-right">
+
+        <div className="controls-right">
+          <div className="view-tabs">
+            <button
+              className={`view-tab ${viewMode === 'single' ? 'active' : ''}`}
+              onClick={() => setViewMode('single')}
+            >
+              Single
+            </button>
+            <button
+              className={`view-tab ${viewMode === 'compare' ? 'active' : ''}`}
+              onClick={() => setViewMode('compare')}
+              disabled={funnels.length < 2}
+            >
+              Compare
+            </button>
+            <button
+              className={`view-tab ${viewMode === 'overview' ? 'active' : ''}`}
+              onClick={() => setViewMode('overview')}
+            >
+              Overview
+            </button>
+          </div>
+
+          {viewMode === 'single' && funnels.length > 0 && (
+            <select
+              value={selectedFunnelId || ''}
+              onChange={(e) => viewFunnel(e.target.value)}
+              className="funnel-selector"
+            >
+              {funnels.map((f) => (
+                <option key={f.funnelId} value={f.funnelId}>{f.funnelId}</option>
+              ))}
+            </select>
+          )}
+
           <select
             value={selectedRange}
             onChange={(e) => setSelectedRange(Number(e.target.value))}
@@ -297,43 +339,6 @@ export default function Funnels() {
             ))}
           </select>
         </div>
-      </div>
-
-      {/* Live Sessions Indicator */}
-      <div className="live-sessions-bar">
-        <div className={`live-sessions-card ${activeSessions > 0 ? 'active' : ''}`}>
-          <span className="live-dot-wrapper">
-            <span className="live-dot-ping"></span>
-            <span className="live-dot"></span>
-          </span>
-          <span className="live-sessions-text">
-            <span className="live-sessions-count">{activeSessions}</span>
-            <span className="live-sessions-label">{activeSessions === 1 ? 'visitor' : 'visitors'} online</span>
-          </span>
-        </div>
-      </div>
-
-      {/* View Mode Tabs */}
-      <div className="view-tabs">
-        <button
-          className={`view-tab ${viewMode === 'overview' ? 'active' : ''}`}
-          onClick={() => setViewMode('overview')}
-        >
-          Overview
-        </button>
-        <button
-          className={`view-tab ${viewMode === 'single' ? 'active' : ''}`}
-          onClick={() => setViewMode('single')}
-        >
-          Single Funnel
-        </button>
-        <button
-          className={`view-tab ${viewMode === 'compare' ? 'active' : ''}`}
-          onClick={() => setViewMode('compare')}
-          disabled={funnels.length < 2}
-        >
-          Compare
-        </button>
       </div>
 
       {/* Error State */}
@@ -356,9 +361,7 @@ export default function Funnels() {
       {/* Single Funnel Mode */}
       {viewMode === 'single' && !error && (
         <SingleView
-          funnels={funnels}
           selectedFunnelId={selectedFunnelId}
-          onSelectFunnel={viewFunnel}
           metrics={metrics}
           isLoading={isMetricsLoading}
           config={selectedConfig}
@@ -394,26 +397,11 @@ export default function Funnels() {
 function OverviewView({
   funnels,
   onViewFunnel,
-  onCompare,
 }: {
   funnels: FunnelVersionSummary[];
   onViewFunnel: (id: string) => void;
   onCompare: (a: string, b: string) => void;
 }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-
-  const toggleSelect = (funnelId: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(funnelId)) {
-        next.delete(funnelId);
-      } else if (next.size < 2) {
-        next.add(funnelId);
-      }
-      return next;
-    });
-  };
-
   if (funnels.length === 0) {
     return (
       <div className="funnels-empty">
@@ -428,90 +416,56 @@ function OverviewView({
     );
   }
 
-  const selectedArr = Array.from(selected);
-
   return (
-    <>
-      {selected.size === 2 && (
-        <div className="compare-prompt">
-          <span>2 funnels selected</span>
-          <button
-            className="compare-prompt-btn"
-            onClick={() => onCompare(selectedArr[0], selectedArr[1])}
-          >
-            Compare
-          </button>
-        </div>
-      )}
-
-      <div className="funnel-table-card">
-        <div className="funnel-table-header">
-          <h2 className="funnel-table-title">All Funnel Versions</h2>
-          {funnels.length >= 2 && selected.size < 2 && (
-            <span className="funnel-table-hint">Select 2 to compare</span>
-          )}
-        </div>
-
-        <div className="funnel-table-wrapper">
-          <table className="funnel-table">
-            <thead>
-              <tr>
-                {funnels.length >= 2 && <th className="th-center th-narrow"></th>}
-                <th className="th-left">Funnel</th>
-                <th className="th-left">Type</th>
-                <th className="th-right">Sessions</th>
-                <th className="th-right">Purchases</th>
-                <th className="th-right">Conv %</th>
-                <th className="th-right">Revenue</th>
-                <th className="th-right">Last Event</th>
-              </tr>
-            </thead>
-            <tbody>
-              {funnels.map((f) => (
-                <tr
-                  key={f.funnelId}
-                  className={`row-clickable ${selected.has(f.funnelId) ? 'row-selected' : ''}`}
-                  onClick={() => onViewFunnel(f.funnelId)}
-                >
-                  {funnels.length >= 2 && (
-                    <td className="td-center td-narrow" onClick={(e) => { e.stopPropagation(); toggleSelect(f.funnelId); }}>
-                      <input
-                        type="checkbox"
-                        checked={selected.has(f.funnelId)}
-                        onChange={() => {}}
-                        className="funnel-checkbox"
-                      />
-                    </td>
-                  )}
-                  <td className="td-step">{f.funnelId}</td>
-                  <td>
-                    <span className={`funnel-type-badge badge-${f.funnelType}`}>
-                      {FUNNEL_CONFIGS[f.funnelType]?.label || f.funnelType}
-                    </span>
-                  </td>
-                  <td className="td-number">{f.totalSessions.toLocaleString()}</td>
-                  <td className="td-number">{f.totalPurchases.toLocaleString()}</td>
-                  <td className="td-number">
-                    <span className={f.conversionRate >= 5 ? 'text-success' : ''}>{formatPercent(f.conversionRate)}</span>
-                  </td>
-                  <td className="td-number td-revenue">{formatCurrency(f.totalRevenue)}</td>
-                  <td className="td-number td-muted">{formatDate(f.lastEventAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+    <div className="funnel-table-card">
+      <div className="funnel-table-header">
+        <h2 className="funnel-table-title">All Funnel Versions</h2>
       </div>
-    </>
+
+      <div className="funnel-table-wrapper">
+        <table className="funnel-table">
+          <thead>
+            <tr>
+              <th className="th-left">Version</th>
+              <th className="th-left">Type</th>
+              <th className="th-right">Sessions</th>
+              <th className="th-right">Purchases</th>
+              <th className="th-right">Conv %</th>
+              <th className="th-right">Revenue</th>
+              <th className="th-right">Last Event</th>
+            </tr>
+          </thead>
+          <tbody>
+            {funnels.map((f) => (
+              <tr
+                key={f.funnelId}
+                className="row-clickable"
+                onClick={() => onViewFunnel(f.funnelId)}
+              >
+                <td className="td-step">{f.funnelId}</td>
+                <td className="td-type-label">
+                  {f.funnelType.charAt(0).toUpperCase() + f.funnelType.slice(1)}
+                </td>
+                <td className="td-number">{f.totalSessions.toLocaleString()}</td>
+                <td className="td-number">{f.totalPurchases.toLocaleString()}</td>
+                <td className="td-number">
+                  <span className={f.conversionRate >= 5 ? 'text-success' : ''}>{formatPercent(f.conversionRate)}</span>
+                </td>
+                <td className="td-number td-revenue">{formatCurrency(f.totalRevenue)}</td>
+                <td className="td-number td-muted">{formatDate(f.lastEventAt)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
 // ─── Single Funnel View ──────────────────────────────────────────
 
 function SingleView({
-  funnels,
   selectedFunnelId,
-  onSelectFunnel,
   metrics,
   isLoading,
   config,
@@ -523,9 +477,7 @@ function SingleView({
   onSelectStep,
   stepABTests,
 }: {
-  funnels: FunnelVersionSummary[];
   selectedFunnelId: string | null;
-  onSelectFunnel: (id: string) => void;
   metrics: DashboardMetrics | null;
   isLoading: boolean;
   config: FunnelConfig;
@@ -561,21 +513,6 @@ function SingleView({
 
   return (
     <>
-      {/* Funnel Selector */}
-      <div className="funnel-selector-bar">
-        <select
-          value={selectedFunnelId}
-          onChange={(e) => onSelectFunnel(e.target.value)}
-          className="funnel-selector"
-        >
-          {funnels.map((f) => (
-            <option key={f.funnelId} value={f.funnelId}>
-              {f.funnelId} — {formatCurrency(f.totalRevenue)} ({f.totalSessions} sessions)
-            </option>
-          ))}
-        </select>
-      </div>
-
       {/* Hero Metrics Grid */}
       <div className="metrics-grid">
         {/* Revenue Card */}
@@ -842,81 +779,48 @@ function CompareView({
     <>
       {/* Funnel Selectors */}
       <div className="compare-selectors">
-        <div className="compare-selector-group">
-          <label className="compare-selector-label">Funnel A</label>
-          <select
-            value={compareFunnelA || ''}
-            onChange={(e) => onSelectA(e.target.value)}
-            className="funnel-selector"
-          >
-            {funnels.map((f) => (
-              <option key={f.funnelId} value={f.funnelId}>{f.funnelId}</option>
-            ))}
-          </select>
-        </div>
+        <select
+          value={compareFunnelA || ''}
+          onChange={(e) => onSelectA(e.target.value)}
+          className="funnel-selector"
+        >
+          {funnels.map((f) => (
+            <option key={f.funnelId} value={f.funnelId}>{f.funnelId}</option>
+          ))}
+        </select>
         <div className="compare-vs">vs</div>
-        <div className="compare-selector-group">
-          <label className="compare-selector-label">Funnel B</label>
-          <select
-            value={compareFunnelB || ''}
-            onChange={(e) => onSelectB(e.target.value)}
-            className="funnel-selector"
-          >
-            {funnels.map((f) => (
-              <option key={f.funnelId} value={f.funnelId}>{f.funnelId}</option>
-            ))}
-          </select>
-        </div>
+        <select
+          value={compareFunnelB || ''}
+          onChange={(e) => onSelectB(e.target.value)}
+          className="funnel-selector"
+        >
+          {funnels.map((f) => (
+            <option key={f.funnelId} value={f.funnelId}>{f.funnelId}</option>
+          ))}
+        </select>
       </div>
 
       {isLoading && <Loading size="medium" message="ConversionIQ™ comparing..." />}
 
       {!isLoading && metricsA && metricsB && (
         <>
-          {/* Summary Comparison */}
+          {/* Summary Comparison — Two Large Cards */}
           <div className="compare-summary-grid">
-            <CompareCard
-              label="Revenue"
-              valueA={formatCurrency(metricsA.summary.totalRevenue)}
-              valueB={formatCurrency(metricsB.summary.totalRevenue)}
-              delta={calcDelta(metricsA.summary.totalRevenue, metricsB.summary.totalRevenue)}
-              higherIsBetter
+            <CompareSummaryCard
+              funnelId={compareFunnelA!}
+              metrics={metricsA}
             />
-            <CompareCard
-              label="Conversion Rate"
-              valueA={formatPercent(metricsA.summary.conversionRate)}
-              valueB={formatPercent(metricsB.summary.conversionRate)}
-              delta={calcDelta(metricsA.summary.conversionRate, metricsB.summary.conversionRate)}
-              higherIsBetter
-            />
-            <CompareCard
-              label="Purchases"
-              valueA={metricsA.summary.purchases.toLocaleString()}
-              valueB={metricsB.summary.purchases.toLocaleString()}
-              delta={calcDelta(metricsA.summary.purchases, metricsB.summary.purchases)}
-              higherIsBetter
-            />
-            <CompareCard
-              label="AOV"
-              valueA={formatCurrency(metricsA.summary.aovPerCustomer)}
-              valueB={formatCurrency(metricsB.summary.aovPerCustomer)}
-              delta={calcDelta(metricsA.summary.aovPerCustomer, metricsB.summary.aovPerCustomer)}
-              higherIsBetter
+            <CompareSummaryCard
+              funnelId={compareFunnelB!}
+              metrics={metricsB}
+              baseMetrics={metricsA}
             />
           </div>
-
-          {/* Winner Indicator */}
-          <CompareWinner
-            funnelA={compareFunnelA!}
-            funnelB={compareFunnelB!}
-            metricsA={metricsA}
-            metricsB={metricsB}
-          />
 
           {/* Step-by-Step Comparison Table */}
           <div className="funnel-table-card">
             <div className="funnel-table-header">
-              <h2 className="funnel-table-title">Step Comparison</h2>
+              <h2 className="funnel-table-title">Step-by-Step Comparison</h2>
             </div>
             <div className="funnel-table-wrapper">
               <table className="funnel-table compare-table">
@@ -928,6 +832,8 @@ function CompareView({
                     <th className="th-right">A Conv %</th>
                     <th className="th-right">B Conv %</th>
                     <th className="th-right">Delta</th>
+                    <th className="th-right">A Rev</th>
+                    <th className="th-right">B Rev</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -944,8 +850,14 @@ function CompareView({
                       </td>
                       <td className="td-number">
                         {row.isNoMetrics ? <span className="text-muted">—</span> : (
-                          <DeltaChip delta={row.delta} />
+                          <DeltaChip delta={row.delta} suffix="pp" />
                         )}
+                      </td>
+                      <td className="td-number td-revenue">
+                        {row.isNoMetrics ? <span className="text-muted">—</span> : formatCurrency(row.revenueA)}
+                      </td>
+                      <td className="td-number td-revenue">
+                        {row.isNoMetrics ? <span className="text-muted">—</span> : formatCurrency(row.revenueB)}
                       </td>
                     </tr>
                   ))}
@@ -961,105 +873,80 @@ function CompareView({
 
 // ─── Shared Components ───────────────────────────────────────────
 
-function CompareCard({
-  label,
-  valueA,
-  valueB,
-  delta,
-  higherIsBetter,
+/** Summary card for one side of the comparison — matches reference 2x2 grid layout */
+function CompareSummaryCard({
+  funnelId,
+  metrics,
+  baseMetrics,
 }: {
-  label: string;
-  valueA: string;
-  valueB: string;
-  delta: number | null;
-  higherIsBetter: boolean;
+  funnelId: string;
+  metrics: DashboardMetrics;
+  baseMetrics?: DashboardMetrics;
 }) {
+  const s = metrics.summary;
+  const b = baseMetrics?.summary;
+
+  const revDelta = b ? s.totalRevenue - b.totalRevenue : null;
+  const convDelta = b ? s.conversionRate - b.conversionRate : null;
+  const aovDelta = b ? s.aovPerCustomer - b.aovPerCustomer : null;
+
   return (
-    <div className="compare-card">
-      <p className="compare-card-label">{label}</p>
-      <div className="compare-card-values">
-        <div className="compare-card-col">
-          <span className="compare-card-tag">A</span>
-          <span className="compare-card-value">{valueA}</span>
+    <div className="compare-summary-card">
+      <h3 className="compare-summary-name">{funnelId.toUpperCase()}</h3>
+      <div className="compare-summary-metrics">
+        <div className="compare-metric">
+          <span className="compare-metric-label">Revenue</span>
+          <span className="compare-metric-value">
+            {formatCurrency(s.totalRevenue)}
+            {revDelta !== null && revDelta !== 0 && (
+              <span className={`compare-inline-delta ${revDelta > 0 ? 'delta-positive' : 'delta-negative'}`}>
+                {revDelta > 0 ? '+' : ''}{formatCurrency(revDelta)}
+              </span>
+            )}
+          </span>
         </div>
-        <div className="compare-card-col">
-          <span className="compare-card-tag">B</span>
-          <span className="compare-card-value">{valueB}</span>
+        <div className="compare-metric">
+          <span className="compare-metric-label">Conv %</span>
+          <span className="compare-metric-value">
+            {formatPercent(s.conversionRate)}
+            {convDelta !== null && convDelta !== 0 && (
+              <span className={`compare-inline-delta ${convDelta > 0 ? 'delta-positive' : 'delta-negative'}`}>
+                {convDelta > 0 ? '+' : ''}{convDelta.toFixed(1)}pp
+              </span>
+            )}
+          </span>
+        </div>
+        <div className="compare-metric">
+          <span className="compare-metric-label">Sessions</span>
+          <span className="compare-metric-value">{s.sessions.toLocaleString()}</span>
+        </div>
+        <div className="compare-metric">
+          <span className="compare-metric-label">AOV</span>
+          <span className="compare-metric-value">
+            {formatCurrency(s.aovPerCustomer)}
+            {aovDelta !== null && aovDelta !== 0 && (
+              <span className={`compare-inline-delta ${aovDelta > 0 ? 'delta-positive' : 'delta-negative'}`}>
+                {aovDelta > 0 ? '+' : ''}{formatCurrency(aovDelta)}
+              </span>
+            )}
+          </span>
         </div>
       </div>
-      {delta !== null && (
-        <div className="compare-card-delta">
-          <DeltaChip delta={delta} invert={!higherIsBetter} />
-        </div>
-      )}
     </div>
   );
 }
 
-function DeltaChip({ delta, invert }: { delta: number | null; invert?: boolean }) {
+function DeltaChip({ delta, invert, suffix }: { delta: number | null; invert?: boolean; suffix?: string }) {
   if (delta === null) return <span className="text-muted">—</span>;
 
   const isPositive = invert ? delta < 0 : delta > 0;
   const cls = delta === 0 ? 'delta-neutral' : isPositive ? 'delta-positive' : 'delta-negative';
+  const unit = suffix || '%';
 
   return (
     <span className={`delta-chip ${cls}`}>
-      {delta > 0 ? '+' : ''}{delta.toFixed(1)}%
+      {delta > 0 ? '+' : ''}{delta.toFixed(1)}{unit}
     </span>
-  );
-}
-
-function CompareWinner({
-  funnelA,
-  funnelB,
-  metricsA,
-  metricsB,
-}: {
-  funnelA: string;
-  funnelB: string;
-  metricsA: DashboardMetrics;
-  metricsB: DashboardMetrics;
-}) {
-  const crA = metricsA.summary.conversionRate;
-  const crB = metricsB.summary.conversionRate;
-  const totalSessions = metricsA.summary.sessions + metricsB.summary.sessions;
-
-  if (totalSessions < 100) {
-    return (
-      <div className="ab-winner-card ab-winner-warning">
-        <div className="ab-winner-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <p className="ab-winner-text">Need more sessions for reliable comparison ({totalSessions} total).</p>
-      </div>
-    );
-  }
-
-  const winner = crA >= crB ? funnelA : funnelB;
-  const loserCr = crA >= crB ? crB : crA;
-  const winnerCr = crA >= crB ? crA : crB;
-  const lift = loserCr > 0 ? ((winnerCr - loserCr) / loserCr) * 100 : 0;
-  const confidence = totalSessions > 500 ? 95 : totalSessions > 200 ? 85 : 70;
-
-  return (
-    <div className="ab-winner-card ab-winner-success">
-      <div className="ab-winner-left">
-        <div className="ab-winner-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <div className="ab-winner-info">
-          <span className="ab-winner-name">{winner} winning</span>
-          <p className="ab-winner-lift">+{lift.toFixed(1)}% lift in conversion rate</p>
-        </div>
-      </div>
-      <div className="ab-winner-right">
-        <span className="ab-confidence-badge">{confidence}% confidence</span>
-      </div>
-    </div>
   );
 }
 
@@ -1119,6 +1006,8 @@ interface CompareStepRow {
   sessionsB: number;
   convRateA: number;
   convRateB: number;
+  revenueA: number;
+  revenueB: number;
   delta: number | null;
   isNoMetrics: boolean;
 }
@@ -1150,6 +1039,9 @@ function buildCompareSteps(
     const b = mapB.get(step);
     const isNoMetrics = config.noMetricsSteps.includes(step);
 
+    // Delta is percentage points (A conv% - B conv%), not percentage change
+    const convDelta = isNoMetrics ? null : (a?.conversionRate || 0) - (b?.conversionRate || 0);
+
     return {
       step,
       displayName: getStepName(step, config),
@@ -1157,7 +1049,9 @@ function buildCompareSteps(
       sessionsB: b?.sessions || 0,
       convRateA: a?.conversionRate || 0,
       convRateB: b?.conversionRate || 0,
-      delta: isNoMetrics ? null : calcDelta(a?.conversionRate || 0, b?.conversionRate || 0),
+      revenueA: a?.revenue || 0,
+      revenueB: b?.revenue || 0,
+      delta: convDelta,
       isNoMetrics,
     };
   });
