@@ -9,23 +9,15 @@ const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_K
   ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
   : null;
 
-/** Derive organizationId from JWT Bearer token */
-async function getOrganizationId(req: VercelRequest): Promise<string | null> {
-  if (!supabase) return null;
+/** Verify JWT Bearer token is valid (auth gate — funnel_events has no org column) */
+async function isAuthenticated(req: VercelRequest): Promise<boolean> {
+  if (!supabase) return false;
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) return null;
+  if (!authHeader?.startsWith('Bearer ')) return false;
 
   const token = authHeader.slice(7);
   const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return null;
-
-  const { data: profile } = await supabase
-    .from('users')
-    .select('organization_id')
-    .eq('auth_id', user.id)
-    .single();
-
-  return profile?.organization_id || null;
+  return !error && !!user;
 }
 
 // Funnel step configs — defines step order and display for each funnel type
@@ -160,20 +152,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(buildEmptyMetrics('main'));
     }
 
-    // Derive organization from JWT — return empty if unauthenticated
-    const organizationId = await getOrganizationId(req);
-    if (!organizationId) {
+    // Require valid JWT — funnel_events table has no organization_id column,
+    // so we auth-gate instead. Funnels page is also behind SuperAdminRoute.
+    const authed = await isAuthenticated(req);
+    if (!authed) {
       if (discover) return res.status(200).json({ funnels: [] });
       return res.status(200).json(buildEmptyMetrics('main'));
     }
 
     // Route: discover funnel versions
     if (discover) {
-      return await handleDiscover(req, res, organizationId, startDate, endDate);
+      return await handleDiscover(req, res, startDate, endDate);
     }
 
     // Route: metrics (default)
-    return await handleMetrics(req, res, organizationId, startDate, endDate, funnelId, funnelType);
+    return await handleMetrics(req, res, startDate, endDate, funnelId, funnelType);
   } catch (error: unknown) {
     console.error('[Funnel Metrics API] Error:', error);
     captureError(error, { route: 'funnel/metrics' });
@@ -197,14 +190,12 @@ function buildEmptyMetrics(fType: string): DashboardMetrics {
 async function handleDiscover(
   _req: VercelRequest,
   res: VercelResponse,
-  organizationId: string,
   startDate: string,
   endDate: string,
 ): Promise<VercelResponse> {
   const { data: events, error } = await supabase!
     .from('funnel_events')
     .select('funnel_id, funnel_session_id, event_type, revenue_cents, created_at')
-    .eq('organization_id', organizationId)
     .gte('created_at', startDate)
     .lte('created_at', endDate);
 
@@ -276,17 +267,15 @@ async function handleDiscover(
 async function handleMetrics(
   _req: VercelRequest,
   res: VercelResponse,
-  organizationId: string,
   startDate: string,
   endDate: string,
   funnelId?: string,
   funnelType?: string,
 ): Promise<VercelResponse> {
-  // Build query
+  // Build query — no organization_id filter (column doesn't exist on funnel_events)
   let query = supabase!
     .from('funnel_events')
     .select('funnel_step, event_type, revenue_cents, funnel_session_id, variant, funnel_id')
-    .eq('organization_id', organizationId)
     .gte('created_at', startDate)
     .lte('created_at', endDate);
 
