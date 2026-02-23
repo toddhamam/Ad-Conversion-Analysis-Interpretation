@@ -1,5 +1,42 @@
 # Changelog
 
+## 2026-02-23 — Replace OpenClaw bot with pure Python orchestrator
+
+### Problem
+OpenClaw (AI-powered Telegram bot on OpenCore) burned through too many tokens orchestrating the lead gen pipeline. Even after building deterministic Python CLI modules, OpenClaw still consumed ~80K-120K tokens/day just interpreting commands and routing decisions.
+
+### Solution
+Replaced OpenClaw entirely with a cron-driven Python orchestrator that calls existing CLI modules directly. Token usage drops from ~80K-120K/day to ~10K/day (only GPT-5.2 email drafting).
+
+### Added
+- **`orchestrator.py`**: Autonomous pipeline automation with three modes:
+  - `daily` — inbox check, follow-up sends (templates), ready email dispatch, Telegram summary
+  - `weekly` — pipeline health check, red flag detection (bounce >3% auto-pauses sequences), Telegram report
+  - `campaign` — full discover → research → score → email-find → AI-draft pipeline
+- **`modules/drafter.py`**: Direct GPT-5.2 email drafting via HTTP (`requests`), with `reasoning.effort: "low"` for cost efficiency. Falls back to `templates.json` if API fails
+- **`modules/job_scraper.py`**: New lead source — finds businesses actively hiring media buyers via DuckDuckGo job listing search. Extracts company names, deduplicates against pipeline
+- **`modules/notifier.py`**: Direct Telegram Bot API notifications (replaces OpenClaw's Telegram interface). Formats daily/weekly/campaign summaries
+- **`crontab.example`**: Ready-to-install cron schedule (daily 9am AEST weekdays, weekly Monday 10am, Sunday midnight backup)
+- **Deterministic reply classification**: Keyword-based classifier for inbox replies (interested/not interested/not now) — no AI tokens needed
+- **New CLI commands**: `orchestrate daily/weekly/campaign`, `draft email/batch`, `discover jobs`, `notify send`
+
+### New Environment Variables (VPS `.env`)
+- `OPENAI_API_KEY` — For GPT-5.2 email drafting
+- `TELEGRAM_BOT_TOKEN` — Direct Telegram Bot API
+- `TELEGRAM_CHAT_ID` — Target chat for notifications
+
+### Files Created
+- `ops/convertra-leads/orchestrator.py`
+- `ops/convertra-leads/modules/drafter.py`
+- `ops/convertra-leads/modules/job_scraper.py`
+- `ops/convertra-leads/modules/notifier.py`
+- `ops/convertra-leads/crontab.example`
+
+### Files Changed
+- `ops/convertra-leads/cli.py` — Added orchestrate, draft, discover jobs, and notify command groups
+
+---
+
 ## 2026-02-23 — Fix generated ads not appearing in Ad Publisher
 
 ### Fixed
