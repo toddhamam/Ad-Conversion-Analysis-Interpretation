@@ -449,6 +449,7 @@ export interface GeneratedAdPackage {
   whyItWorks: string;
   imageError?: string; // Error message if image generation failed
   videoError?: string; // Error message if video generation failed
+  imageHeadlines?: string[]; // Headlines rendered into images, indexed by variation
 }
 
 // Copy Options for multi-step generation
@@ -1815,6 +1816,8 @@ export async function generateAdImage(config: {
   };
   // Ad Library inspirations for thematic direction
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
+  // Headline to render directly into the generated image
+  headlineText?: string;
 }): Promise<GeneratedImageResult> {
   // Check if we should use Gemini or fall back to DALL-E
   if (USE_GEMINI_FOR_IMAGES && isGeminiConfigured()) {
@@ -1845,6 +1848,8 @@ async function generateAdImageWithGemini(config: {
   };
   // Ad Library inspirations for thematic direction
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
+  // Headline to render directly into the generated image
+  headlineText?: string;
 }): Promise<GeneratedImageResult> {
   const similarity = config.similarityLevel ?? 30; // Default to 30% variation
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
@@ -2055,19 +2060,45 @@ Explore fresh visual directions while maintaining professional quality.`,
     promptParts.push('');
   }
 
-  promptParts.push(
-    'CREATIVE REQUIREMENTS:',
-    '- Professional advertising photography quality',
-    '- Strong visual hierarchy with clear focal point',
-    '- Emotionally compelling imagery that resonates with the target audience',
-    '- Clean composition with space for text overlays',
-    '- Modern, premium aesthetic',
-    '- Photorealistic style unless references show otherwise',
-    '',
-    `This is variation ${config.variationIndex + 1} of ${config.totalVariations} - create a unique variation while maintaining brand consistency with the references.`,
-    '',
-    'IMPORTANT: Do NOT include any text, words, letters, or numbers in the image. The image should be purely visual.'
-  );
+  if (config.headlineText) {
+    // Headline in image mode — render the headline into the creative
+    promptParts.push(
+      'CREATIVE REQUIREMENTS:',
+      '- Professional advertising photography quality',
+      '- Strong visual hierarchy with clear focal point',
+      '- Emotionally compelling imagery that resonates with the target audience',
+      '- Modern, premium aesthetic',
+      '- Photorealistic style unless references show otherwise',
+      '',
+      `This is variation ${config.variationIndex + 1} of ${config.totalVariations} - create a unique variation while maintaining brand consistency with the references.`,
+      '',
+      'HEADLINE TEXT IN IMAGE — CRITICAL:',
+      `Render this EXACT headline into the image: "${config.headlineText}"`,
+      '',
+      '- Render the EXACT text above — do NOT paraphrase, abbreviate, or change any words',
+      '- Use large, bold typography that is legible at mobile scroll sizes',
+      '- High contrast between text and background for readability',
+      '- Position in the upper third or center of the image where it commands attention',
+      '- Integrate the text into the composition naturally — it should feel designed, not superimposed',
+      `- Typography style: ${refAnalysis.textOverlays || 'bold, clean sans-serif with strong contrast'}`,
+      '- Do NOT add any OTHER text, words, taglines, URLs, or numbers beyond this exact headline',
+    );
+  } else {
+    // No headline — image-only mode (default)
+    promptParts.push(
+      'CREATIVE REQUIREMENTS:',
+      '- Professional advertising photography quality',
+      '- Strong visual hierarchy with clear focal point',
+      '- Emotionally compelling imagery that resonates with the target audience',
+      '- Clean composition with space for text overlays',
+      '- Modern, premium aesthetic',
+      '- Photorealistic style unless references show otherwise',
+      '',
+      `This is variation ${config.variationIndex + 1} of ${config.totalVariations} - create a unique variation while maintaining brand consistency with the references.`,
+      '',
+      'IMPORTANT: Do NOT include any text, words, letters, or numbers in the image. The image should be purely visual.'
+    );
+  }
 
   const prompt = promptParts.join('\n');
   console.log('📝 Gemini prompt:', prompt.substring(0, 300) + '...');
@@ -2183,6 +2214,8 @@ async function generateAdImageWithDallE(config: {
   totalVariations: number;
   imageSize?: ImageSize; // Aspect ratio for generated images
   productContext?: ProductContext;
+  // Headline to render directly into the generated image
+  headlineText?: string;
 }): Promise<GeneratedImageResult> {
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
   const sizeConfig = IMAGE_SIZE_OPTIONS.find(s => s.id === imageSize) || IMAGE_SIZE_OPTIONS[0];
@@ -2243,7 +2276,9 @@ async function generateAdImageWithDallE(config: {
     '',
     `This is variation ${config.variationIndex + 1} of ${config.totalVariations} - make it distinct while maintaining brand consistency.`,
     '',
-    `Create a visually striking ${sizeConfig.dimensions} ad image. Do NOT include any text in the image.`
+    config.headlineText
+      ? `Render this EXACT headline into the image as a prominent typographic element: "${config.headlineText}". Use large, bold, legible typography with high contrast. Integrate it into the composition naturally. Do NOT add any other text beyond this exact headline. Create a visually striking ${sizeConfig.dimensions} ad image.`
+      : `Create a visually striking ${sizeConfig.dimensions} ad image. Do NOT include any text in the image.`
   );
 
   const prompt = promptParts.join('\n');
@@ -2602,6 +2637,8 @@ export async function generateAdPackage(config: {
   productContext?: ProductContext;
   // Ad Library inspirations for competitor/cross-industry reference
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
+  // Headlines to render directly into images, rotated across variations
+  imageHeadlines?: string[];
 }): Promise<GeneratedAdPackage> {
   const conceptName = config.conceptType ? CONCEPT_ANGLES[config.conceptType].name : 'general';
   const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
@@ -2673,19 +2710,24 @@ export async function generateAdPackage(config: {
 
     for (let batch = 0; batch < config.variationCount; batch += MAX_CONCURRENT) {
       const batchEnd = Math.min(batch + MAX_CONCURRENT, config.variationCount);
-      const batchPromises = Array.from({ length: batchEnd - batch }, (_, i) =>
-        generateAdImage({
+      const batchPromises = Array.from({ length: batchEnd - batch }, (_, i) => {
+        const variationIndex = batch + i;
+        const headlineText = config.imageHeadlines?.length
+          ? config.imageHeadlines[variationIndex % config.imageHeadlines.length]
+          : undefined;
+        return generateAdImage({
           audienceType: config.audienceType,
           analysisData: config.analysisData,
-          variationIndex: batch + i,
+          variationIndex,
           totalVariations: config.variationCount,
           similarityLevel: config.similarityLevel,
           imageSize: config.imageSize,
           productContext: config.productContext,
           precomputedRefs,
           adLibraryInspirations: config.adLibraryInspirations,
-        })
-      );
+          headlineText,
+        });
+      });
       const batchResults = await Promise.allSettled(batchPromises);
       allResults.push(...batchResults);
     }
@@ -2767,6 +2809,7 @@ export async function generateAdPackage(config: {
       whyItWorks,
       imageError,
       videoError,
+      imageHeadlines: config.imageHeadlines,
     };
   }
 
@@ -2783,5 +2826,6 @@ export async function generateAdPackage(config: {
     storyboard,
     whyItWorks,
     imageError,
+    imageHeadlines: config.imageHeadlines,
   };
 }

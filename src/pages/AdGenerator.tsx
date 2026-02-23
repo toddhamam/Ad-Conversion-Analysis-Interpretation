@@ -240,6 +240,11 @@ const AdGenerator = () => {
   // Creative variation control (0 = identical to references, 100 = completely different)
   const [similarityValue, setSimilarityValue] = useState(30); // Default: 30% variation (70% similar)
 
+  // Headline in image control
+  type HeadlineInImageMode = 'none' | 'from-copy' | 'custom';
+  const [headlineInImageMode, setHeadlineInImageMode] = useState<HeadlineInImageMode>('none');
+  const [customImageHeadline, setCustomImageHeadline] = useState('');
+
   // Ad Library inspiration
   const [savedInspirations, setSavedInspirations] = useState<AdLibraryInspiration[]>([]);
   const [activeInspirationIds, setActiveInspirationIds] = useState<string[]>([]);
@@ -608,6 +613,16 @@ const AdGenerator = () => {
       .filter(c => selectedCTAs.includes(c.id))
       .map(c => c.text) || [];
 
+    // Resolve image headlines based on mode
+    let imageHeadlines: string[] | undefined;
+    if (adType === 'image' && headlineInImageMode !== 'none') {
+      if (headlineInImageMode === 'custom' && customImageHeadline.trim()) {
+        imageHeadlines = [customImageHeadline.trim()];
+      } else if (headlineInImageMode === 'from-copy' && selectedHeadlineTexts.length > 0) {
+        imageHeadlines = selectedHeadlineTexts;
+      }
+    }
+
     setIsGeneratingCreatives(true);
     setError(null);
     setGenerationProgress(adType === 'image' ? 'ConversionIQ™ generating images and finalizing copy...' : 'ConversionIQ™ creating video storyboard...');
@@ -630,6 +645,7 @@ const AdGenerator = () => {
         imageSize, // Selected image dimensions/aspect ratio
         productContext: selectedProduct || undefined,
         adLibraryInspirations: activeInspirationsForCreative.length > 0 ? activeInspirationsForCreative : undefined,
+        imageHeadlines,
       });
 
       setGeneratedAds(prev => [result, ...prev]);
@@ -640,6 +656,8 @@ const AdGenerator = () => {
       setSelectedHeadlines([]);
       setSelectedBodyTexts([]);
       setSelectedCTAs([]);
+      setHeadlineInImageMode('none');
+      setCustomImageHeadline('');
     } catch (err: unknown) {
       console.error('Generation failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to generate ad. Please try again.');
@@ -777,6 +795,9 @@ const AdGenerator = () => {
 
     try {
       // Generate a new image with the same parameters
+      const headlineText = adToUpdate.imageHeadlines?.length
+        ? adToUpdate.imageHeadlines[imageIndex % adToUpdate.imageHeadlines.length]
+        : undefined;
       const newImage = await generateAdImage({
         audienceType: adToUpdate.audienceType,
         analysisData,
@@ -785,6 +806,7 @@ const AdGenerator = () => {
         similarityLevel: similarityValue,
         imageSize,
         productContext: selectedProduct || undefined,
+        headlineText,
       });
 
       // Update the ad with the new image
@@ -1472,6 +1494,73 @@ const AdGenerator = () => {
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Headline in Image - only shown for image ads */}
+          {adType === 'image' && (
+            <div className="config-section">
+              <label className="config-label">Headline in Image</label>
+              <p className="config-hint">Optionally render a headline directly into the generated image for scroll-stopping impact</p>
+              <div className="headline-image-options">
+                <button
+                  className={`headline-image-btn ${headlineInImageMode === 'none' ? 'active' : ''}`}
+                  onClick={() => setHeadlineInImageMode('none')}
+                >
+                  <span className="headline-image-name">None</span>
+                  <span className="headline-image-desc">Image only, no text</span>
+                </button>
+                <button
+                  className={`headline-image-btn ${headlineInImageMode === 'from-copy' ? 'active' : ''}`}
+                  onClick={() => setHeadlineInImageMode('from-copy')}
+                  disabled={selectedHeadlines.length === 0}
+                >
+                  <span className="headline-image-name">From Copy</span>
+                  <span className="headline-image-desc">Use selected headline{selectedHeadlines.length > 1 ? 's' : ''}</span>
+                </button>
+                <button
+                  className={`headline-image-btn ${headlineInImageMode === 'custom' ? 'active' : ''}`}
+                  onClick={() => setHeadlineInImageMode('custom')}
+                >
+                  <span className="headline-image-name">Custom</span>
+                  <span className="headline-image-desc">Type your own</span>
+                </button>
+              </div>
+
+              {/* From Copy: show which headline(s) will be used */}
+              {headlineInImageMode === 'from-copy' && selectedHeadlines.length > 0 && copyOptions?.headlines && (
+                <div className="headline-preview">
+                  {selectedHeadlines.length === 1 ? (
+                    <p className="headline-preview-text">
+                      &ldquo;{copyOptions.headlines.find(h => h.id === selectedHeadlines[0])?.text}&rdquo;
+                    </p>
+                  ) : (
+                    <>
+                      <p className="headline-preview-text">
+                        {selectedHeadlines.length} headlines will rotate across {variationCount} variation{variationCount > 1 ? 's' : ''}:
+                      </p>
+                      {copyOptions.headlines
+                        .filter(h => selectedHeadlines.includes(h.id))
+                        .map((h, i) => (
+                          <p key={h.id} className="headline-preview-item">{i + 1}. {h.text}</p>
+                        ))
+                      }
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Custom: text input */}
+              {headlineInImageMode === 'custom' && (
+                <input
+                  type="text"
+                  className="headline-custom-input"
+                  placeholder="Enter headline for the image..."
+                  value={customImageHeadline}
+                  onChange={(e) => setCustomImageHeadline(e.target.value)}
+                  maxLength={80}
+                />
+              )}
             </div>
           )}
 
