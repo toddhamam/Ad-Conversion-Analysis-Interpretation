@@ -31,3 +31,7 @@ coverage/
 # Cache
 .cache/
 .vercel
+
+# Python
+__pycache__/
+*.pyc

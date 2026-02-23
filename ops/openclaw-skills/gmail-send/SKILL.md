@@ -1,148 +1,68 @@
 ---
 name: gmail-send
-description: Send emails via Gmail SMTP. Supports plain text, HTML, attachments, and personalized merge fields for outreach campaigns.
+description: Send emails via Gmail SMTP with warmup enforcement and daily limits.
 user-invocable: true
 metadata: {"openclaw":{"emoji":"📤","requires":{"bins":["python3"],"env":["GMAIL_ADDRESS","GMAIL_APP_PASSWORD"]},"primaryEnv":"GMAIL_APP_PASSWORD"}}
 ---
 
 # Gmail Send — SMTP Email Sending
 
-You can send emails from the configured Gmail account using Python's built-in `smtplib` via the `exec` tool.
+Send emails using the Convertra Leads CLI. Handles SMTP connection, warmup limits, daily send tracking, and pipeline updates automatically.
 
-## Prerequisites
+## Commands
 
-Two environment variables must be configured in your OpenClaw agent settings:
-
-- `GMAIL_ADDRESS` — the full Gmail address (e.g. `convertra.ops@gmail.com`)
-- `GMAIL_APP_PASSWORD` — a Google App Password (NOT the account password)
-
-To generate an App Password:
-1. Go to https://myaccount.google.com/apppasswords
-2. The Google account must have 2-Step Verification enabled
-3. Create an App Password for "Mail" on "Other (Custom name)" — name it "OpenClaw"
-4. Copy the 16-character password (no spaces) into `GMAIL_APP_PASSWORD`
-
-## Sending a Plain Text Email
-
-Use the `exec` tool to run:
+### Send a Single Email
 
 ```bash
-python3 -c "
-import smtplib, os
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-
-sender = os.environ['GMAIL_ADDRESS']
-password = os.environ['GMAIL_APP_PASSWORD']
-
-msg = MIMEMultipart('alternative')
-msg['From'] = f'Your Name <{sender}>'
-msg['To'] = 'recipient@example.com'
-msg['Subject'] = 'Subject line here'
-
-# Plain text fallback
-text_part = MIMEText('Plain text body here', 'plain')
-msg.attach(text_part)
-
-with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-    server.login(sender, password)
-    server.sendmail(sender, ['recipient@example.com'], msg.as_string())
-    print('Email sent successfully')
-"
+exec python3 /home/ubuntu/convertra-leads/cli.py mail send --to "jane@acme.com" --subject "quick question about Acme" --body "Hey Jane, ..."
 ```
 
-## Sending an HTML Email
+The CLI automatically:
+- Checks daily send limits (warmup enforcement)
+- Appends the configured signature
+- Increments the daily send counter
+- Returns JSON with send status and timestamp
 
-For professional-looking outreach, use HTML with a plain text fallback:
+### Send Batch to Pipeline Prospects
 
 ```bash
-python3 -c "
-import smtplib, os
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-
-sender = os.environ['GMAIL_ADDRESS']
-password = os.environ['GMAIL_APP_PASSWORD']
-
-msg = MIMEMultipart('alternative')
-msg['From'] = f'Your Name <{sender}>'
-msg['To'] = 'recipient@example.com'
-msg['Subject'] = 'Subject here'
-msg['Reply-To'] = sender
-
-text_part = MIMEText('Plain text fallback', 'plain')
-html_part = MIMEText('<html><body><p>HTML body here</p></body></html>', 'html')
-msg.attach(text_part)
-msg.attach(html_part)
-
-with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-    server.login(sender, password)
-    server.sendmail(sender, ['recipient@example.com'], msg.as_string())
-    print('Email sent successfully')
-"
+exec python3 /home/ubuntu/convertra-leads/cli.py mail batch --pipeline-filter "stage=ready_to_send" --limit 20 --delay 45
 ```
 
-## Sending Personalized Bulk Emails
+Sends to all prospects in the specified stage. Automatically:
+- Enforces warmup limits (stops when daily limit hit)
+- Adds 45-second delay between sends
+- Updates each prospect's stage to `email_1_sent`
+- Logs interactions in pipeline.json
 
-When sending to multiple recipients from a prospect list, send each email individually (NOT as BCC) so personalization works and it looks like a 1-to-1 email:
+### Check Daily Send Status
 
 ```bash
-python3 << 'PYEOF'
-import smtplib, os, json, time
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-
-sender = os.environ['GMAIL_ADDRESS']
-password = os.environ['GMAIL_APP_PASSWORD']
-
-# Load prospects from pipeline file
-with open('pipeline.json', 'r') as f:
-    prospects = json.load(f)
-
-# Filter to those ready for outreach
-to_send = [p for p in prospects if p.get('stage') == 'ready_to_send']
-
-with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-    server.login(sender, password)
-    for p in to_send:
-        msg = MIMEMultipart('alternative')
-        msg['From'] = f'Your Name <{sender}>'
-        msg['To'] = p['email']
-        msg['Subject'] = p.get('subject', 'Quick question')
-        msg['Reply-To'] = sender
-
-        body = p.get('email_body', 'Default body')
-        msg.attach(MIMEText(body, 'plain'))
-
-        server.sendmail(sender, [p['email']], msg.as_string())
-        print(f"Sent to {p['email']}")
-
-        # Delay between sends to avoid spam flags
-        time.sleep(45)
-
-print(f"Batch complete: {len(to_send)} emails sent")
-PYEOF
+exec python3 /home/ubuntu/convertra-leads/cli.py mail daily-status
 ```
+
+Returns: `sent_today`, `limit`, `remaining`, `warmup_week`, `start_date`.
+
+## Warmup Schedule
+
+| Week | Daily Limit |
+|------|-------------|
+| 1 | 5 |
+| 2 | 10 |
+| 3 | 20 |
+| 4 | 20 |
+| 5+ | 40 |
+
+Maximum: 50 emails/day regardless of warmup stage.
 
 ## Important Rules
 
-1. **Never send more than 20 emails per day** from a new Gmail account (warmup period)
-2. **Always use a 30-60 second delay** between individual sends
-3. **Never send to more than 50 recipients per day** even after warmup
-4. **Always include an unsubscribe line** in outreach emails: "Reply STOP to opt out"
-5. **Always personalize** the first line — generic blasts get flagged as spam
-6. **Always use the recipient's actual name** in the greeting, never "Dear Sir/Madam"
-7. **Log every send** to the pipeline file so follow-ups can be tracked
-8. **Check the pipeline file first** before sending to avoid double-sending to the same person
+1. Always check `mail daily-status` before sending batches
+2. Never exceed daily warmup limits — the CLI enforces this automatically
+3. Always include "Reply STOP to opt out" in outreach emails
+4. Plain text only for cold outreach — no HTML
+5. Minimum 45-second delay between individual sends
 
-## Error Handling
+## When to Use AI
 
-If sending fails with "Authentication error":
-- Verify GMAIL_APP_PASSWORD is set and is a 16-character App Password (not account password)
-- Verify 2-Step Verification is enabled on the Google account
-- Verify the App Password hasn't been revoked
-
-If sending fails with "Daily limit exceeded":
-- Gmail has a 500 emails/day limit for regular accounts
-- Stop sending and resume the next day
-- Consider staggering sends across multiple days
+Never. Email sending is mechanical. The CLI handles SMTP, limits, and tracking. Use the `cold-outreach` skill for drafting email content (that's where AI is needed).
