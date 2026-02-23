@@ -4,19 +4,25 @@ import { initSentry, captureError, flushSentry } from '../_lib/sentry.js';
 
 initSentry();
 
-// Supabase client (module-level for connection reuse)
-const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+// Auth Supabase — Convertra's database (JWT verification, user profiles)
+const authSupabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
   ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
   : null;
 
+// Funnel Supabase — funnel site's database (authoritative funnel_events source)
+// Falls back to Convertra's Supabase if funnel-specific env vars aren't set
+const funnelSupabase = process.env.FUNNEL_SUPABASE_URL && process.env.FUNNEL_SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(process.env.FUNNEL_SUPABASE_URL, process.env.FUNNEL_SUPABASE_SERVICE_ROLE_KEY)
+  : authSupabase;
+
 /** Verify JWT Bearer token is valid (auth gate — funnel_events has no org column) */
 async function isAuthenticated(req: VercelRequest): Promise<boolean> {
-  if (!supabase) return false;
+  if (!authSupabase) return false;
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) return false;
 
   const token = authHeader.slice(7);
-  const { data: { user }, error } = await supabase.auth.getUser(token);
+  const { data: { user }, error } = await authSupabase.auth.getUser(token);
   return !error && !!user;
 }
 
@@ -147,7 +153,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const funnelType = req.query.funnel as string | undefined;
     const discover = req.query.discover === 'true';
 
-    if (!supabase) {
+    if (!funnelSupabase || !authSupabase) {
       if (discover) return res.status(200).json({ funnels: [] });
       return res.status(200).json(buildEmptyMetrics('main'));
     }
@@ -193,7 +199,7 @@ async function handleDiscover(
   startDate: string,
   endDate: string,
 ): Promise<VercelResponse> {
-  const { data: events, error } = await supabase!
+  const { data: events, error } = await funnelSupabase!
     .from('funnel_events')
     .select('funnel_id, funnel_session_id, funnel_step, event_type, revenue_cents, created_at')
     .gte('created_at', startDate)
@@ -281,8 +287,8 @@ async function handleMetrics(
   funnelId?: string,
   funnelType?: string,
 ): Promise<VercelResponse> {
-  // Build query — no organization_id filter (column doesn't exist on funnel_events)
-  let query = supabase!
+  // Build query against funnel site's Supabase (authoritative data source)
+  let query = funnelSupabase!
     .from('funnel_events')
     .select('funnel_step, event_type, revenue_cents, funnel_session_id, variant, funnel_id')
     .gte('created_at', startDate)

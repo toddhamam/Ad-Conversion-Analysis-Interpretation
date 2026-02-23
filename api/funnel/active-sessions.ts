@@ -4,28 +4,25 @@ import { initSentry, captureError, flushSentry } from '../_lib/sentry.js';
 
 initSentry();
 
-// Supabase client (module-level for connection reuse)
-const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+// Auth Supabase — Convertra's database (JWT verification)
+const authSupabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
   ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
   : null;
 
-/** Derive organizationId from JWT Bearer token */
-async function getOrganizationId(req: VercelRequest): Promise<string | null> {
-  if (!supabase) return null;
+// Funnel Supabase — funnel site's database (authoritative funnel_events source)
+const funnelSupabase = process.env.FUNNEL_SUPABASE_URL && process.env.FUNNEL_SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(process.env.FUNNEL_SUPABASE_URL, process.env.FUNNEL_SUPABASE_SERVICE_ROLE_KEY)
+  : authSupabase;
+
+/** Verify JWT Bearer token is valid (auth gate) */
+async function isAuthenticated(req: VercelRequest): Promise<boolean> {
+  if (!authSupabase) return false;
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) return null;
+  if (!authHeader?.startsWith('Bearer ')) return false;
 
   const token = authHeader.slice(7);
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return null;
-
-  const { data: profile } = await supabase
-    .from('users')
-    .select('organization_id')
-    .eq('auth_id', user.id)
-    .single();
-
-  return profile?.organization_id || null;
+  const { data: { user }, error } = await authSupabase.auth.getUser(token);
+  return !error && !!user;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -34,23 +31,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    if (!supabase) {
+    if (!funnelSupabase || !authSupabase) {
       return res.status(200).json({ count: 0 });
     }
 
-    // Derive organization from JWT — return zero if unauthenticated
-    const organizationId = await getOrganizationId(req);
-    if (!organizationId) {
+    // Verify JWT — return zero if unauthenticated
+    const authed = await isAuthenticated(req);
+    if (!authed) {
       return res.status(200).json({ count: 0 });
     }
 
-    // Get sessions active in the last 5 minutes, scoped to this organization
+    // Get sessions active in the last 5 minutes from funnel site's database
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
-    const { data, error } = await supabase
+    const { data, error } = await funnelSupabase
       .from('funnel_events')
       .select('funnel_session_id')
-      .eq('organization_id', organizationId)
       .gte('created_at', fiveMinutesAgo);
 
     if (error) {
