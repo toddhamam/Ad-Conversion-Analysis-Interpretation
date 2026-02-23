@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-02-23 — Fix generated ads not appearing in Ad Publisher
+
+### Fixed
+- **Silent localStorage failure**: `flushAdsToStorage()` silently did nothing when serialized ad data exceeded 5MB (common with multiple base64 images from Gemini). The publisher then showed "No Generated Ads Found" because no data was written.
+- **Recurring pattern**: This broke every time a new feature was added to the ad builder because each feature slightly increased payload size, pushing past the 5MB localStorage threshold.
+
+### Added
+- **In-memory publish store** (`src/services/publishStore.ts`): Module-level `setPublishData()` / `getPublishData()` functions that pass generated ads directly in memory — no size limits, instant, synchronous.
+- **Dual handoff mechanism**: AdGenerator now sets the in-memory store as the PRIMARY handoff, with localStorage as a BACKUP for page refreshes.
+- **Graceful >5MB fallback**: When data exceeds 5MB, `flushAdsToStorage()` now strips all images and saves metadata-only to localStorage instead of silently skipping the save entirely.
+
+### Files Created
+- `src/services/publishStore.ts` — Lightweight in-memory store for AdGenerator → AdPublisher data transfer
+
+### Files Changed
+- `src/pages/AdGenerator.tsx` — Import `setPublishData`, call it in `flushAdsToStorage()` before localStorage write, add >5MB metadata-only fallback
+- `src/pages/AdPublisher.tsx` — Import `getPublishData`, add `loadPackages()` that checks in-memory store first then localStorage, share `_cachedPackages` between `extractMetadata()` and `loadImageDataForPublish()`
+
+---
+
 ## 2026-02-23 — Point funnel API at funnel site's Supabase for authoritative data
 
 ### Fixed
