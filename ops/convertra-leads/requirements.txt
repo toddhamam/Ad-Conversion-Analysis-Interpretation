@@ -1,0 +1,4 @@
+requests==2.31.0
+beautifulsoup4==4.12.3
+dnspython==2.6.1
+ddgs>=8.0.0

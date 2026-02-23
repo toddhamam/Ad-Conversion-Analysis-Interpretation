@@ -7,241 +7,60 @@ metadata: {"openclaw":{"emoji":"📥","requires":{"bins":["python3"],"env":["GMA
 
 # Gmail Read — IMAP Inbox Management
 
-You can read and manage the Gmail inbox using Python's built-in `imaplib` via the `exec` tool.
+Read and search the Gmail inbox using the Convertra Leads CLI. Handles IMAP connection, reply detection, bounce monitoring, and opt-out detection automatically.
 
-## Prerequisites
+## Commands
 
-Same credentials as gmail-send:
-- `GMAIL_ADDRESS` — the full Gmail address
-- `GMAIL_APP_PASSWORD` — Google App Password
-
-IMAP must be enabled on the Gmail account:
-1. Go to Gmail Settings > Forwarding and POP/IMAP
-2. Enable IMAP Access
-3. Save changes
-
-## Check for Recent Replies
-
-Use this to monitor for responses to outreach emails:
+### Check Recent Inbox Messages
 
 ```bash
-python3 << 'PYEOF'
-import imaplib, email, os, json
-from email.header import decode_header
-from datetime import datetime, timedelta
-
-address = os.environ['GMAIL_ADDRESS']
-password = os.environ['GMAIL_APP_PASSWORD']
-
-mail = imaplib.IMAP4_SSL('imap.gmail.com')
-mail.login(address, password)
-mail.select('INBOX')
-
-# Search for emails from the last 3 days
-since_date = (datetime.now() - timedelta(days=3)).strftime('%d-%b-%Y')
-status, messages = mail.search(None, f'(SINCE {since_date} UNSEEN)')
-
-results = []
-if status == 'OK':
-    for msg_id in messages[0].split():
-        status, msg_data = mail.fetch(msg_id, '(RFC822)')
-        if status != 'OK':
-            continue
-        msg = email.message_from_bytes(msg_data[0][1])
-
-        subject = decode_header(msg['Subject'])[0][0]
-        if isinstance(subject, bytes):
-            subject = subject.decode()
-
-        from_addr = msg['From']
-        date = msg['Date']
-
-        body = ''
-        if msg.is_multipart():
-            for part in msg.walk():
-                if part.get_content_type() == 'text/plain':
-                    body = part.get_payload(decode=True).decode(errors='replace')
-                    break
-        else:
-            body = msg.get_payload(decode=True).decode(errors='replace')
-
-        results.append({
-            'from': from_addr,
-            'subject': subject,
-            'date': date,
-            'preview': body[:300]
-        })
-
-print(json.dumps(results, indent=2))
-mail.logout()
-PYEOF
+exec python3 /home/ubuntu/convertra-leads/cli.py inbox check [--days 3] [--unread-only]
 ```
 
-## Search for Emails from Specific Senders
+Returns recent messages with: from, subject, date, body_preview.
 
-Cross-reference with your pipeline to find replies from prospects:
+### Check Replies Cross-Referenced Against Pipeline
 
 ```bash
-python3 << 'PYEOF'
-import imaplib, email, os, json
-from email.header import decode_header
-
-address = os.environ['GMAIL_ADDRESS']
-password = os.environ['GMAIL_APP_PASSWORD']
-
-# The email address to search for
-target_sender = "prospect@example.com"
-
-mail = imaplib.IMAP4_SSL('imap.gmail.com')
-mail.login(address, password)
-mail.select('INBOX')
-
-status, messages = mail.search(None, f'(FROM "{target_sender}")')
-
-results = []
-if status == 'OK':
-    for msg_id in messages[0].split():
-        status, msg_data = mail.fetch(msg_id, '(RFC822)')
-        if status != 'OK':
-            continue
-        msg = email.message_from_bytes(msg_data[0][1])
-
-        subject = decode_header(msg['Subject'])[0][0]
-        if isinstance(subject, bytes):
-            subject = subject.decode()
-
-        body = ''
-        if msg.is_multipart():
-            for part in msg.walk():
-                if part.get_content_type() == 'text/plain':
-                    body = part.get_payload(decode=True).decode(errors='replace')
-                    break
-        else:
-            body = msg.get_payload(decode=True).decode(errors='replace')
-
-        results.append({
-            'from': msg['From'],
-            'subject': subject,
-            'date': msg['Date'],
-            'body': body[:500]
-        })
-
-print(json.dumps(results, indent=2))
-mail.logout()
-PYEOF
+exec python3 /home/ubuntu/convertra-leads/cli.py inbox replies --pipeline-cross-ref
 ```
 
-## Check for Bounce-backs and Delivery Failures
+This is the most important command. It automatically:
+- Reads the last 14 days of inbox messages
+- Cross-references sender addresses against pipeline prospect emails
+- Categorizes into: **replies** (from prospects), **bounces** (from mailer-daemon/postmaster), **opt-outs** (containing "stop"/"unsubscribe")
+- Returns structured JSON with prospect IDs matched to each message
 
-Monitor for failed deliveries to clean your prospect list:
-
-```bash
-python3 << 'PYEOF'
-import imaplib, email, os, json
-from email.header import decode_header
-
-address = os.environ['GMAIL_ADDRESS']
-password = os.environ['GMAIL_APP_PASSWORD']
-
-mail = imaplib.IMAP4_SSL('imap.gmail.com')
-mail.login(address, password)
-mail.select('INBOX')
-
-# Search for bounce-back indicators
-bounce_queries = [
-    '(FROM "mailer-daemon")',
-    '(FROM "postmaster")',
-    '(SUBJECT "Delivery Status Notification")',
-    '(SUBJECT "Undeliverable")',
-    '(SUBJECT "Mail delivery failed")',
-]
-
-bounced = []
-for query in bounce_queries:
-    status, messages = mail.search(None, query)
-    if status == 'OK':
-        for msg_id in messages[0].split():
-            status, msg_data = mail.fetch(msg_id, '(RFC822)')
-            if status != 'OK':
-                continue
-            msg = email.message_from_bytes(msg_data[0][1])
-
-            body = ''
-            if msg.is_multipart():
-                for part in msg.walk():
-                    if part.get_content_type() == 'text/plain':
-                        body = part.get_payload(decode=True).decode(errors='replace')
-                        break
-            else:
-                body = msg.get_payload(decode=True).decode(errors='replace')
-
-            bounced.append({
-                'subject': str(decode_header(msg['Subject'])[0][0]),
-                'date': msg['Date'],
-                'preview': body[:200]
-            })
-
-print(json.dumps(bounced, indent=2))
-mail.logout()
-PYEOF
-```
-
-## Check Sent Folder for Send History
-
-Verify what's already been sent to avoid duplicates:
+### Search for Emails from a Specific Sender
 
 ```bash
-python3 << 'PYEOF'
-import imaplib, email, os, json
-from email.header import decode_header
-from datetime import datetime, timedelta
-
-address = os.environ['GMAIL_ADDRESS']
-password = os.environ['GMAIL_APP_PASSWORD']
-
-mail = imaplib.IMAP4_SSL('imap.gmail.com')
-mail.login(address, password)
-mail.select('"[Gmail]/Sent Mail"')
-
-since_date = (datetime.now() - timedelta(days=7)).strftime('%d-%b-%Y')
-status, messages = mail.search(None, f'(SINCE {since_date})')
-
-sent = []
-if status == 'OK':
-    for msg_id in messages[0].split():
-        status, msg_data = mail.fetch(msg_id, '(RFC822)')
-        if status != 'OK':
-            continue
-        msg = email.message_from_bytes(msg_data[0][1])
-
-        subject = decode_header(msg['Subject'])[0][0]
-        if isinstance(subject, bytes):
-            subject = subject.decode()
-
-        sent.append({
-            'to': msg['To'],
-            'subject': subject,
-            'date': msg['Date']
-        })
-
-print(json.dumps(sent, indent=2))
-mail.logout()
-PYEOF
+exec python3 /home/ubuntu/convertra-leads/cli.py inbox search --from "jane@acme.com"
 ```
 
 ## Daily Inbox Check Routine
 
-Run this every morning to get a full status update:
+Run this every morning:
 
-1. Check for unread replies (potential leads responding)
-2. Check for bounce-backs (clean your list)
-3. Check for unsubscribe requests (honor them immediately)
-4. Cross-reference with pipeline.json to update prospect stages
+```bash
+# Step 1: Check for prospect replies, bounces, opt-outs
+exec python3 /home/ubuntu/convertra-leads/cli.py inbox replies --pipeline-cross-ref
+
+# Step 2: Update pipeline based on results
+# For each reply — update stage appropriately
+exec python3 /home/ubuntu/convertra-leads/cli.py pipeline update --id p_001 --stage replied_interested
+# For each bounce
+exec python3 /home/ubuntu/convertra-leads/cli.py pipeline update --id p_002 --stage invalid_email
+# For each opt-out
+exec python3 /home/ubuntu/convertra-leads/cli.py pipeline update --id p_003 --stage opted_out
+```
 
 ## Important Rules
 
-1. **Always check for replies before sending follow-ups** — never follow up on someone who already replied
-2. **Honor unsubscribe requests immediately** — mark them as "opted_out" in the pipeline
-3. **Log bounced emails** and mark those prospects as "invalid_email" in the pipeline
-4. **Check sent folder** before new sends to prevent accidental double-sends
-5. **Rate limit IMAP connections** — don't poll more than once every 15 minutes
+1. Always check for replies BEFORE sending follow-ups
+2. Honor unsubscribe requests immediately — mark as `opted_out`
+3. Log bounced emails — mark as `invalid_email`
+4. Don't poll more than once every 15 minutes
+
+## When to Use AI
+
+Only for interpreting ambiguous reply sentiment (is the reply positive, negative, or neutral?). The inbox reading and categorization itself is handled entirely by the CLI.

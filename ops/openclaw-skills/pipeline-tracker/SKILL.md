@@ -7,175 +7,94 @@ metadata: {"openclaw":{"emoji":"📊"}}
 
 # Pipeline Tracker — Outreach CRM
 
-Track all outreach prospects, their stages, interactions, and follow-up schedules using a JSON-based pipeline file.
+Track all outreach prospects using the Convertra Leads CLI. All operations are handled by the CLI — no AI needed.
 
-## Pipeline File Structure
+## Commands
 
-The pipeline lives at `pipeline.json` in the workspace. Structure:
+### List Prospects
 
-```json
-{
-  "metadata": {
-    "created": "2026-02-18",
-    "last_updated": "2026-02-18",
-    "total_prospects": 0,
-    "campaigns": ["campaign-name"]
-  },
-  "prospects": []
-}
+```bash
+exec python3 /home/ubuntu/convertra-leads/cli.py pipeline list [--stage researched] [--campaign feb-2026] [--tag hot] [--limit 20]
 ```
 
-### Prospect Schema
+### Get a Specific Prospect
 
-Each prospect in the `prospects` array:
-
-```json
-{
-  "id": "p_001",
-  "name": "Jane Smith",
-  "email": "jane@company.com",
-  "company": "Acme DTC",
-  "role": "CMO",
-  "company_url": "https://acmedtc.com",
-  "linkedin_url": "https://linkedin.com/in/janesmith",
-  "company_type": "dtc_brand",
-  "fit_score": 8,
-  "campaign": "feb-2026-dtc",
-  "stage": "researched",
-  "personalization_hooks": [
-    "Just launched new product line",
-    "Posted about creative fatigue on LinkedIn"
-  ],
-  "pain_signals": [
-    "Hiring for 2 creative designers",
-    "Running 80+ variants in Ad Library"
-  ],
-  "interactions": [
-    {
-      "type": "email_sent",
-      "date": "2026-02-18T09:30:00Z",
-      "subject": "quick question about Acme's ad creative",
-      "sequence_step": 1,
-      "notes": "Initial outreach — referenced their LinkedIn post"
-    }
-  ],
-  "next_action": {
-    "type": "followup_1",
-    "date": "2026-02-21",
-    "notes": "Follow up if no reply by this date"
-  },
-  "tags": ["high-priority", "agency-referral"],
-  "notes": "Warm intro possible through Mike at XYZ agency",
-  "created": "2026-02-18",
-  "updated": "2026-02-18"
-}
+```bash
+exec python3 /home/ubuntu/convertra-leads/cli.py pipeline get --id p_001
 ```
-
-### Prospect Stages
-
-| Stage | Meaning | Next Action |
-|---|---|---|
-| `researched` | Prospect identified and qualified | Draft email, get user approval |
-| `ready_to_send` | Email drafted and approved | Send initial email |
-| `email_1_sent` | Initial email sent | Wait 3 days, then follow up |
-| `followup_1_sent` | First follow-up sent | Wait 4 days, then follow up |
-| `followup_2_sent` | Second follow-up sent | Wait 7 days, then breakup email |
-| `breakup_sent` | Final email in sequence | Wait 7 days, then mark complete |
-| `sequence_complete` | All emails sent, no reply | Archive or revisit in 60 days |
-| `replied_interested` | Positive reply received | Schedule call, send calendar link |
-| `replied_not_now` | Timing not right | Set reminder date, follow up later |
-| `replied_not_interested` | Not interested | Close gracefully |
-| `meeting_scheduled` | Call/meeting booked | Prep and attend meeting |
-| `meeting_completed` | Had the conversation | Follow up with next steps |
-| `opportunity` | Active sales opportunity | Track deal progress |
-| `won` | Closed deal | Onboard |
-| `lost` | Lost opportunity | Log reason, revisit in 90 days |
-| `opted_out` | Requested to stop emails | Never contact again |
-| `invalid_email` | Email bounced | Find new email or discard |
-
-## Pipeline Operations
 
 ### Add a Prospect
 
-Read pipeline.json, append the new prospect to the `prospects` array, update metadata counts, and write back.
-
-### Update Stage
-
-When a prospect moves stages:
-1. Read pipeline.json
-2. Find prospect by id
-3. Update `stage` and `updated` fields
-4. Add an entry to `interactions` array
-5. Set `next_action` based on the new stage
-6. Write back
-
-### Log an Interaction
-
-After every email sent or received:
-1. Read pipeline.json
-2. Find prospect by id
-3. Append to `interactions`:
-```json
-{
-  "type": "email_sent | email_received | call | meeting | note",
-  "date": "ISO timestamp",
-  "subject": "Subject or summary",
-  "sequence_step": 1,
-  "notes": "Details"
-}
+```bash
+exec python3 /home/ubuntu/convertra-leads/cli.py pipeline add --json '{"name":"Jane Smith","company":"Acme DTC","role":"CMO","company_url":"https://acmedtc.com","company_type":"dtc_brand","campaign":"feb-2026","source":"ad_library_scrape"}'
 ```
-4. Update `next_action` with the next step
-5. Write back
 
-### Get Daily Actions
+Required fields: `name`, `company`. Optional: `email`, `role`, `company_url`, `linkedin_url`, `company_type`, `campaign`, `source`, `tags`, `notes`.
 
-Each day, check the pipeline for due actions:
+### Update a Prospect
 
+```bash
+exec python3 /home/ubuntu/convertra-leads/cli.py pipeline update --id p_001 --stage email_1_sent --interaction '{"type":"email_sent","subject":"quick question about Acme","sequence_step":1,"notes":"Initial outreach"}'
 ```
-1. Read pipeline.json
-2. Find all prospects where next_action.date <= today
-3. Group by action type:
-   - followup_1: Prospects needing first follow-up
-   - followup_2: Prospects needing second follow-up
-   - breakup: Prospects needing breakup email
-   - check_reply: Prospects to check for responses
-4. Present the action list to the user
+
+### Search Prospects
+
+```bash
+exec python3 /home/ubuntu/convertra-leads/cli.py pipeline search --query "acme"
+```
+
+### Get Due Actions
+
+```bash
+exec python3 /home/ubuntu/convertra-leads/cli.py pipeline due [--date 2026-02-23]
+```
+
+### Backup Pipeline
+
+```bash
+exec python3 /home/ubuntu/convertra-leads/cli.py pipeline backup
 ```
 
 ### Campaign Report
 
-Generate performance metrics for a campaign:
-
-```
-Total prospects: X
-Emails sent: X
-  - Initial: X
-  - Follow-up 1: X
-  - Follow-up 2: X
-  - Breakup: X
-Replies received: X (X% reply rate)
-  - Interested: X
-  - Not now: X
-  - Not interested: X
-  - Opted out: X
-Meetings scheduled: X
-Bounce rate: X%
-Pipeline value:
-  - Researched: X
-  - In sequence: X
-  - Replied (active): X
-  - Meetings: X
-  - Opportunities: X
-  - Won: X
-  - Lost: X
+```bash
+exec python3 /home/ubuntu/convertra-leads/cli.py report campaign [--campaign feb-2026]
 ```
 
-## Important Rules
+### Pipeline Summary
 
-1. **Always read the latest pipeline.json before any modification** — another skill may have updated it
-2. **Never modify a prospect's email or name without user confirmation**
-3. **Never remove an opted-out prospect** — keep them flagged so they're never contacted again
-4. **Always update timestamps** (`updated` field) when modifying a prospect
-5. **Back up pipeline.json** periodically by copying to `pipeline-backup-{date}.json`
-6. **Generate prospect IDs sequentially** — p_001, p_002, etc.
-7. **Log every interaction** — even manual notes from the user
+```bash
+exec python3 /home/ubuntu/convertra-leads/cli.py report pipeline-summary
+```
+
+### Daily Report
+
+```bash
+exec python3 /home/ubuntu/convertra-leads/cli.py report daily
+```
+
+## Prospect Stages
+
+| Stage | Meaning | Next Action |
+|---|---|---|
+| `researched` | Prospect identified and qualified | Draft email |
+| `ready_to_send` | Email drafted and approved | Send initial email |
+| `email_1_sent` | Initial email sent | Wait 3 days, then follow up |
+| `followup_1_sent` | First follow-up sent | Wait 4 days |
+| `followup_2_sent` | Second follow-up sent | Wait 7 days |
+| `breakup_sent` | Final email in sequence | Wait 7 days |
+| `sequence_complete` | All emails sent, no reply | Archive or revisit |
+| `replied_interested` | Positive reply | Schedule call |
+| `replied_not_now` | Timing not right | Set reminder |
+| `replied_not_interested` | Not interested | Close |
+| `meeting_scheduled` | Call booked | Attend meeting |
+| `meeting_completed` | Had conversation | Follow up |
+| `opportunity` | Active deal | Track progress |
+| `won` | Closed deal | Onboard |
+| `lost` | Lost | Log reason |
+| `opted_out` | Requested stop | Never contact again |
+| `invalid_email` | Bounced | Find new email |
+
+## When to Use AI
+
+Never. All pipeline operations are deterministic. Just run the CLI commands and format the JSON output for Telegram.

@@ -1,0 +1,23 @@
+{
+  "saas_founder": {
+    "subject": "quick question about {company}'s ad creative",
+    "body": "Hey {first_name},\n\nSaw {company} is scaling paid social — {personalization_hook}. Smart move.\n\nOne thing we're seeing with brands at your stage: the creative testing bottleneck becomes the ceiling on scale. Teams that automate the test-and-iterate cycle are shipping 10x more creatives without adding headcount.\n\nWould it make sense to show you how we're doing this? 15 min, no pitch — just the framework.\n\nEither way, appreciate what you're building.\n\n{sender_first_name}\n\nReply STOP to opt out."
+  },
+  "agency_owner": {
+    "subject": "your clients' creative pipeline",
+    "body": "Hey {first_name},\n\n{personalization_hook}.\n\nQuick question: how are you handling the creative testing volume as you scale accounts? We're working with a few agencies who are using AI to multiply their creative output without multiplying their team.\n\nCurious if that's a bottleneck you're feeling. If so, happy to share the approach in a quick call.\n\n{sender_first_name}\n\nReply STOP to opt out."
+  },
+  "warm_intro": {
+    "subject": "{mutual_connection} mentioned you",
+    "body": "Hey {first_name},\n\n{mutual_connection} and I were chatting about {topic} and your name came up — specifically around {relevant_context}.\n\nI work on {brief_description} and thought there might be some overlap worth exploring.\n\nWould you be open to a quick chat this week? No pressure either way.\n\n{sender_first_name}\n\nReply STOP to opt out."
+  },
+  "followup_1": {
+    "body": "Hey {first_name},\n\nJust floating this back up — I know how buried inboxes get.\n\n{different_angle}\n\nWorth a quick chat?\n\n{sender_first_name}"
+  },
+  "followup_2": {
+    "body": "Hey {first_name},\n\n{value_add_insight}\n\n{connection_to_problem}\n\nHappy to walk you through how we're approaching this if it's relevant.\n\n{sender_first_name}"
+  },
+  "breakup": {
+    "body": "Hey {first_name},\n\nI'll take the hint and stop clogging your inbox.\n\nIf creative testing velocity ever becomes a priority, feel free to reach back out — I'm not going anywhere.\n\nCheers,\n{sender_first_name}"
+  }
+}
