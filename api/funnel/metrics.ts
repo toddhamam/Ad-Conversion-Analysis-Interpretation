@@ -195,7 +195,7 @@ async function handleDiscover(
 ): Promise<VercelResponse> {
   const { data: events, error } = await supabase!
     .from('funnel_events')
-    .select('funnel_id, funnel_session_id, event_type, revenue_cents, created_at')
+    .select('funnel_id, funnel_session_id, funnel_step, event_type, revenue_cents, created_at')
     .gte('created_at', startDate)
     .lte('created_at', endDate);
 
@@ -215,6 +215,15 @@ async function handleDiscover(
 
   for (const event of events || []) {
     const fid = event.funnel_id || 'main-v1';
+    const fType = getFunnelType(fid);
+    const validSteps = FUNNEL_CONFIGS[fType]?.steps;
+
+    // Skip events whose step doesn't belong to this funnel type's config.
+    // This filters out free funnel events incorrectly tagged as main-v1.
+    if (validSteps && event.funnel_step && !validSteps.includes(event.funnel_step)) {
+      continue;
+    }
+
     let bucket = funnelMap.get(fid);
     if (!bucket) {
       bucket = {
@@ -326,6 +335,11 @@ async function handleMetrics(
   const purchaseSessions = new Set<string>();
   let totalRevenue = 0;
 
+  // When filtering by a specific funnel, only accept steps that belong to that funnel type.
+  // This prevents free funnel steps (e.g. free-optin) from leaking into main-v1 results
+  // when historical events were all tagged with DEFAULT 'main-v1'.
+  const validStepsSet = (funnelId || funnelType) ? new Set(configuredSteps) : null;
+
   // Initialize known steps
   for (const step of configuredSteps) {
     stepDataMap.set(step, { step, sessions: 0, purchases: 0, revenue: 0 });
@@ -346,7 +360,12 @@ async function handleMetrics(
   for (const event of events || []) {
     const step = event.funnel_step as string;
 
-    // Ensure step data exists (handles steps not in config)
+    // Skip events whose step doesn't belong to this funnel type's config
+    if (validStepsSet && !validStepsSet.has(step)) {
+      continue;
+    }
+
+    // Ensure step data exists (handles steps not in config — only reachable when no filter)
     if (!stepDataMap.has(step)) {
       stepDataMap.set(step, { step, sessions: 0, purchases: 0, revenue: 0 });
       stepSessions.set(step, new Set());
