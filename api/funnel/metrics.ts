@@ -154,17 +154,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const discover = req.query.discover === 'true';
     const debug = req.query.debug === 'true';
 
-    // Diagnostic endpoint — shows which Supabase is being used
+    // Diagnostic endpoint — shows which Supabase is being used + tests actual query
     if (debug) {
       const hasFunnelEnv = !!(process.env.FUNNEL_SUPABASE_URL && process.env.FUNNEL_SUPABASE_SERVICE_ROLE_KEY);
       const hasAuthEnv = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+      // Test actual query to check if RLS blocks the read
+      let queryTest: { count: number | null; error: string | null } = { count: null, error: null };
+      if (funnelSupabase) {
+        const { data, error: qErr } = await funnelSupabase
+          .from('funnel_events')
+          .select('id', { count: 'exact', head: true });
+        queryTest = {
+          count: data === null && !qErr ? 0 : (Array.isArray(data) ? data.length : null),
+          error: qErr ? qErr.message : null,
+        };
+        // If using count: 'exact' with head: true, count comes from headers
+        if (!qErr) {
+          const { count, error: countErr } = await funnelSupabase
+            .from('funnel_events')
+            .select('*', { count: 'exact', head: true });
+          queryTest.count = count;
+          if (countErr) queryTest.error = countErr.message;
+        }
+      }
+
+      // Check if key looks like service_role (decode JWT to check role claim)
+      let keyRole = 'unknown';
+      try {
+        const key = process.env.FUNNEL_SUPABASE_SERVICE_ROLE_KEY || '';
+        const payload = JSON.parse(Buffer.from(key.split('.')[1], 'base64').toString());
+        keyRole = payload.role || 'no_role_claim';
+      } catch { keyRole = 'decode_failed'; }
+
       return res.status(200).json({
         funnelSource: hasFunnelEnv ? 'separate_funnel_supabase' : 'convertra_fallback',
         funnelUrlSet: !!process.env.FUNNEL_SUPABASE_URL,
         funnelKeySet: !!process.env.FUNNEL_SUPABASE_SERVICE_ROLE_KEY,
+        funnelKeyRole: keyRole,
         authUrlSet: hasAuthEnv,
         funnelSupabaseReady: !!funnelSupabase,
         authSupabaseReady: !!authSupabase,
+        queryTest,
       });
     }
 
