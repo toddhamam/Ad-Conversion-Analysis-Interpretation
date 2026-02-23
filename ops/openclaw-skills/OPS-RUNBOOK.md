@@ -56,12 +56,46 @@ sudo docker compose up -d
 
 **Warning:** This clears conversation history. The bot starts fresh.
 
-## Current Custom Skills (9)
+## Convertra Leads CLI
+
+All 9 outreach skills are thin wrappers around the Python CLI at `/home/ubuntu/convertra-leads/`. The bot calls `exec python3 /home/ubuntu/convertra-leads/cli.py <command>` and gets structured JSON back. Only email drafting uses AI tokens — everything else is deterministic.
+
+### CLI Deployment
+
+```bash
+# Files live at:
+/home/ubuntu/convertra-leads/
+├── cli.py              # Main dispatcher
+├── config.py           # .env + config.json loader
+├── requirements.txt    # requests, beautifulsoup4, dnspython, ddgs
+├── .env                # META_ACCESS_TOKEN, GMAIL_ADDRESS, GMAIL_APP_PASSWORD
+├── modules/            # 10 Python modules
+└── data/               # pipeline.json, config.json, templates.json
+```
+
+### Install/Update CLI on VPS
+
+```bash
+ssh -i ~/.ssh/convertra-ops.key ubuntu@152.69.171.177
+
+# First time setup:
+sudo mkdir -p /home/ubuntu/convertra-leads
+sudo pip3 install requests beautifulsoup4 dnspython ddgs
+
+# Copy files from repo (ops/convertra-leads/) to VPS
+# Create .env with: META_ACCESS_TOKEN, GMAIL_ADDRESS, GMAIL_APP_PASSWORD
+
+# Test:
+python3 /home/ubuntu/convertra-leads/cli.py pipeline list
+```
+
+## Current Custom Skills (10)
 
 All stored at `/home/ubuntu/.openclaw/workspace/skills/`:
 
 | Skill | Slash Command | Purpose |
 |-------|--------------|---------|
+| `daily-ops` | `/daily_ops` | **Master orchestrator** — daily checks, campaign launch, weekly review |
 | `gmail-send` | `/gmail_send` | Send emails via Gmail SMTP |
 | `gmail-read` | `/gmail_read` | Read/search inbox via IMAP |
 | `cold-outreach` | `/cold_outreach` | End-to-end cold email campaigns |
