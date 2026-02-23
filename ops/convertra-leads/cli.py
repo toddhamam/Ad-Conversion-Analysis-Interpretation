@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convertra Leads CLI — Lead gen pipeline for OpenClaw bot.
+"""Convertra Leads CLI — Lead gen pipeline and autonomous orchestrator.
 
 All commands output JSON to stdout. Errors output JSON to stderr.
 Exit code 0 on success, 1 on error.
@@ -302,6 +302,65 @@ def cmd_report_summary(args):
     output(result)
 
 
+# ─── Orchestrate commands ────────────────────────────────────────────
+
+def cmd_orchestrate_daily(args):
+    from orchestrator import run_daily
+    result = run_daily()
+    output(result)
+
+
+def cmd_orchestrate_weekly(args):
+    from orchestrator import run_weekly
+    result = run_weekly()
+    output(result)
+
+
+def cmd_orchestrate_campaign(args):
+    from orchestrator import run_campaign
+    niches = [n.strip() for n in args.niches.split(",")]
+    result = run_campaign(niches, include_jobs=args.include_jobs, campaign_name=args.campaign_name)
+    output(result)
+
+
+# ─── Draft commands ──────────────────────────────────────────────────
+
+def cmd_draft_email(args):
+    from modules.drafter import draft_email
+    from modules.pipeline import get_prospect
+    prospect = get_prospect(args.id)
+    if not prospect:
+        error(f"Prospect {args.id} not found")
+    result = draft_email(prospect)
+    output(result)
+
+
+def cmd_draft_batch(args):
+    from modules.drafter import batch_draft
+    result = batch_draft(stage=args.stage, score_min=args.score_min)
+    output(result)
+
+
+# ─── Discover jobs command ───────────────────────────────────────────
+
+def cmd_discover_jobs(args):
+    from modules.job_scraper import search_job_listings, batch_add_job_prospects
+    keywords = None
+    if args.keywords:
+        keywords = [k.strip() for k in args.keywords.split(",")]
+    results = search_job_listings(keywords=keywords, limit=args.limit)
+    added = batch_add_job_prospects(results.get("results", []))
+    output({**results, "pipeline_additions": added})
+
+
+# ─── Notify commands ─────────────────────────────────────────────────
+
+def cmd_notify_send(args):
+    from modules.notifier import send_notification
+    result = send_notification(args.message)
+    output(result)
+
+
 # ─── Argument parser ─────────────────────────────────────────────────
 
 def build_parser():
@@ -443,6 +502,11 @@ def build_parser():
     d_linkedin.add_argument("--limit", type=int, default=20)
     d_linkedin.set_defaults(func=cmd_discover_linkedin)
 
+    d_jobs = discover_sub.add_parser("jobs", help="Search job listings for media buyer hires")
+    d_jobs.add_argument("--keywords", type=str, help="Comma-separated keywords")
+    d_jobs.add_argument("--limit", type=int, default=30)
+    d_jobs.set_defaults(func=cmd_discover_jobs)
+
     # ── scrape ──
     scrape_parser = subparsers.add_parser("scrape", help="Ad Library scraping")
     scrape_sub = scrape_parser.add_subparsers(dest="action")
@@ -507,6 +571,43 @@ def build_parser():
 
     rp_summary = report_sub.add_parser("pipeline-summary", help="Pipeline summary")
     rp_summary.set_defaults(func=cmd_report_summary)
+
+    # ── orchestrate ──
+    orch_parser = subparsers.add_parser("orchestrate", help="Run orchestrator routines")
+    orch_sub = orch_parser.add_subparsers(dest="action")
+
+    o_daily = orch_sub.add_parser("daily", help="Run daily routine")
+    o_daily.set_defaults(func=cmd_orchestrate_daily)
+
+    o_weekly = orch_sub.add_parser("weekly", help="Run weekly review")
+    o_weekly.set_defaults(func=cmd_orchestrate_weekly)
+
+    o_campaign = orch_sub.add_parser("campaign", help="Run full campaign pipeline")
+    o_campaign.add_argument("--niches", required=True, help="Comma-separated niches")
+    o_campaign.add_argument("--include-jobs", action="store_true", dest="include_jobs")
+    o_campaign.add_argument("--campaign", type=str, dest="campaign_name")
+    o_campaign.set_defaults(func=cmd_orchestrate_campaign)
+
+    # ── draft ──
+    draft_parser = subparsers.add_parser("draft", help="AI email drafting")
+    draft_sub = draft_parser.add_subparsers(dest="action")
+
+    dr_email = draft_sub.add_parser("email", help="Draft email for a single prospect")
+    dr_email.add_argument("--id", required=True)
+    dr_email.set_defaults(func=cmd_draft_email)
+
+    dr_batch = draft_sub.add_parser("batch", help="Batch draft emails")
+    dr_batch.add_argument("--stage", type=str, default="researched")
+    dr_batch.add_argument("--score-min", type=int, default=8, dest="score_min")
+    dr_batch.set_defaults(func=cmd_draft_batch)
+
+    # ── notify ──
+    notify_parser = subparsers.add_parser("notify", help="Telegram notifications")
+    notify_sub = notify_parser.add_subparsers(dest="action")
+
+    n_send = notify_sub.add_parser("send", help="Send a Telegram message")
+    n_send.add_argument("--message", required=True)
+    n_send.set_defaults(func=cmd_notify_send)
 
     return parser
 
