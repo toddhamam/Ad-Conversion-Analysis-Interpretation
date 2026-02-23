@@ -4,19 +4,25 @@ import { initSentry, captureError, flushSentry } from '../_lib/sentry.js';
 
 initSentry();
 
-// Supabase client (module-level for connection reuse)
-const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+// Auth Supabase — Convertra's database (JWT verification, user profiles)
+const authSupabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
   ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
   : null;
 
+// Funnel Supabase — funnel site's database (authoritative funnel_events source)
+// Falls back to Convertra's Supabase if funnel-specific env vars aren't set
+const funnelSupabase = process.env.FUNNEL_SUPABASE_URL && process.env.FUNNEL_SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(process.env.FUNNEL_SUPABASE_URL, process.env.FUNNEL_SUPABASE_SERVICE_ROLE_KEY)
+  : authSupabase;
+
 /** Verify JWT Bearer token is valid (auth gate — funnel_events has no org column) */
 async function isAuthenticated(req: VercelRequest): Promise<boolean> {
-  if (!supabase) return false;
+  if (!authSupabase) return false;
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) return false;
 
   const token = authHeader.slice(7);
-  const { data: { user }, error } = await supabase.auth.getUser(token);
+  const { data: { user }, error } = await authSupabase.auth.getUser(token);
   return !error && !!user;
 }
 
@@ -146,8 +152,54 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const funnelId = req.query.funnelId as string | undefined;
     const funnelType = req.query.funnel as string | undefined;
     const discover = req.query.discover === 'true';
+    const debug = req.query.debug === 'true';
 
-    if (!supabase) {
+    // Diagnostic endpoint — shows which Supabase is being used + tests actual query
+    if (debug) {
+      const hasFunnelEnv = !!(process.env.FUNNEL_SUPABASE_URL && process.env.FUNNEL_SUPABASE_SERVICE_ROLE_KEY);
+      const hasAuthEnv = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+      // Test actual query to check if RLS blocks the read
+      let queryTest: { count: number | null; error: string | null } = { count: null, error: null };
+      if (funnelSupabase) {
+        const { data, error: qErr } = await funnelSupabase
+          .from('funnel_events')
+          .select('id', { count: 'exact', head: true });
+        queryTest = {
+          count: data === null && !qErr ? 0 : (Array.isArray(data) ? data.length : null),
+          error: qErr ? qErr.message : null,
+        };
+        // If using count: 'exact' with head: true, count comes from headers
+        if (!qErr) {
+          const { count, error: countErr } = await funnelSupabase
+            .from('funnel_events')
+            .select('*', { count: 'exact', head: true });
+          queryTest.count = count;
+          if (countErr) queryTest.error = countErr.message;
+        }
+      }
+
+      // Check if key looks like service_role (decode JWT to check role claim)
+      let keyRole = 'unknown';
+      try {
+        const key = process.env.FUNNEL_SUPABASE_SERVICE_ROLE_KEY || '';
+        const payload = JSON.parse(Buffer.from(key.split('.')[1], 'base64').toString());
+        keyRole = payload.role || 'no_role_claim';
+      } catch { keyRole = 'decode_failed'; }
+
+      return res.status(200).json({
+        funnelSource: hasFunnelEnv ? 'separate_funnel_supabase' : 'convertra_fallback',
+        funnelUrlSet: !!process.env.FUNNEL_SUPABASE_URL,
+        funnelKeySet: !!process.env.FUNNEL_SUPABASE_SERVICE_ROLE_KEY,
+        funnelKeyRole: keyRole,
+        authUrlSet: hasAuthEnv,
+        funnelSupabaseReady: !!funnelSupabase,
+        authSupabaseReady: !!authSupabase,
+        queryTest,
+      });
+    }
+
+    if (!funnelSupabase || !authSupabase) {
       if (discover) return res.status(200).json({ funnels: [] });
       return res.status(200).json(buildEmptyMetrics('main'));
     }
@@ -193,9 +245,9 @@ async function handleDiscover(
   startDate: string,
   endDate: string,
 ): Promise<VercelResponse> {
-  const { data: events, error } = await supabase!
+  const { data: events, error } = await funnelSupabase!
     .from('funnel_events')
-    .select('funnel_id, funnel_session_id, event_type, revenue_cents, created_at')
+    .select('funnel_id, funnel_session_id, funnel_step, event_type, revenue_cents, created_at')
     .gte('created_at', startDate)
     .lte('created_at', endDate);
 
@@ -215,6 +267,15 @@ async function handleDiscover(
 
   for (const event of events || []) {
     const fid = event.funnel_id || 'main-v1';
+    const fType = getFunnelType(fid);
+    const validSteps = FUNNEL_CONFIGS[fType]?.steps;
+
+    // Skip events whose step doesn't belong to this funnel type's config.
+    // This filters out free funnel events incorrectly tagged as main-v1.
+    if (validSteps && event.funnel_step && !validSteps.includes(event.funnel_step)) {
+      continue;
+    }
+
     let bucket = funnelMap.get(fid);
     if (!bucket) {
       bucket = {
@@ -272,8 +333,8 @@ async function handleMetrics(
   funnelId?: string,
   funnelType?: string,
 ): Promise<VercelResponse> {
-  // Build query — no organization_id filter (column doesn't exist on funnel_events)
-  let query = supabase!
+  // Build query against funnel site's Supabase (authoritative data source)
+  let query = funnelSupabase!
     .from('funnel_events')
     .select('funnel_step, event_type, revenue_cents, funnel_session_id, variant, funnel_id')
     .gte('created_at', startDate)
@@ -326,6 +387,11 @@ async function handleMetrics(
   const purchaseSessions = new Set<string>();
   let totalRevenue = 0;
 
+  // When filtering by a specific funnel, only accept steps that belong to that funnel type.
+  // This prevents free funnel steps (e.g. free-optin) from leaking into main-v1 results
+  // when historical events were all tagged with DEFAULT 'main-v1'.
+  const validStepsSet = (funnelId || funnelType) ? new Set(configuredSteps) : null;
+
   // Initialize known steps
   for (const step of configuredSteps) {
     stepDataMap.set(step, { step, sessions: 0, purchases: 0, revenue: 0 });
@@ -346,7 +412,12 @@ async function handleMetrics(
   for (const event of events || []) {
     const step = event.funnel_step as string;
 
-    // Ensure step data exists (handles steps not in config)
+    // Skip events whose step doesn't belong to this funnel type's config
+    if (validStepsSet && !validStepsSet.has(step)) {
+      continue;
+    }
+
+    // Ensure step data exists (handles steps not in config — only reachable when no filter)
     if (!stepDataMap.has(step)) {
       stepDataMap.set(step, { step, sessions: 0, purchases: 0, revenue: 0 });
       stepSessions.set(step, new Set());

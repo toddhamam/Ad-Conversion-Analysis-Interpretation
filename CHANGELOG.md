@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-02-23 — Point funnel API at funnel site's Supabase for authoritative data
+
+### Fixed
+- **Dual Supabase architecture**: Funnel metrics and active sessions APIs now read from the funnel site's Supabase (authoritative `funnel_events` source) while using Convertra's Supabase for JWT authentication. Fixes data discrepancy where Convertra's DB had incomplete events from fire-and-forget syncs.
+- **Free funnel steps leaking into main-v1 view**: When `funnel_id` column was added with `DEFAULT 'main-v1'`, all historical events (including free funnel events like `free-optin`, `free-offer`) were tagged as `main-v1`. Added step validation filter that skips events whose `funnel_step` doesn't belong to the resolved funnel type's configured steps.
+- **Diagnostics endpoint**: Added `?debug=true` query param to `/api/funnel/metrics` that reports which Supabase is active, decodes the JWT key role (`service_role` vs `anon`), and runs a test count query to detect RLS blocking.
+
+### Environment Variables Added
+- `FUNNEL_SUPABASE_URL` — Funnel site's Supabase project URL
+- `FUNNEL_SUPABASE_SERVICE_ROLE_KEY` — Funnel site's service role key (bypasses RLS)
+
+### Files Changed
+- `api/funnel/metrics.ts` — Dual Supabase clients, step validation filter, debug endpoint with JWT decode and count query test
+- `api/funnel/active-sessions.ts` — Dual Supabase clients, JWT auth gate replaces org-based filtering
+
+---
+
 ## 2026-02-23 — Add "Headline in Image" option to CreativeIQ ad generation
 
 ### Added
