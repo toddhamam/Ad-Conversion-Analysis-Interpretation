@@ -152,6 +152,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const funnelId = req.query.funnelId as string | undefined;
     const funnelType = req.query.funnel as string | undefined;
     const discover = req.query.discover === 'true';
+    const debug = req.query.debug === 'true';
+
+    // Diagnostic endpoint — shows which Supabase is being used
+    if (debug) {
+      const hasFunnelEnv = !!(process.env.FUNNEL_SUPABASE_URL && process.env.FUNNEL_SUPABASE_SERVICE_ROLE_KEY);
+      const hasAuthEnv = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+      return res.status(200).json({
+        funnelSource: hasFunnelEnv ? 'separate_funnel_supabase' : 'convertra_fallback',
+        funnelUrlSet: !!process.env.FUNNEL_SUPABASE_URL,
+        funnelKeySet: !!process.env.FUNNEL_SUPABASE_SERVICE_ROLE_KEY,
+        authUrlSet: hasAuthEnv,
+        funnelSupabaseReady: !!funnelSupabase,
+        authSupabaseReady: !!authSupabase,
+      });
+    }
 
     if (!funnelSupabase || !authSupabase) {
       if (discover) return res.status(200).json({ funnels: [] });
