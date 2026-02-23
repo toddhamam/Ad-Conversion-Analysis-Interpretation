@@ -48,20 +48,40 @@ interface MetaCredentials {
   pixelId: string | null;
 }
 
+interface CredentialDiagnostics {
+  reason: string;
+  status?: string;
+  tokenExpiresAt?: string | null;
+  hasRow: boolean;
+}
+
+let _lastCredDiag: CredentialDiagnostics | null = null;
+
+function getLastCredentialDiagnostics(): CredentialDiagnostics | null {
+  return _lastCredDiag;
+}
+
 async function loadCredentials(organizationId: string): Promise<MetaCredentials | null> {
   const { data: cred, error: credError } = await supabase
     .from('organization_credentials')
-    .select('access_token_encrypted, ad_account_id, page_id, pixel_id, status, token_expires_at, last_refreshed_at')
+    .select('access_token_encrypted, ad_account_id, page_id, pixel_id, status, token_expires_at, updated_at')
     .eq('organization_id', organizationId)
     .eq('provider', 'meta')
     .single();
 
-  if (credError || !cred) return null;
+  if (credError || !cred) {
+    _lastCredDiag = { reason: credError ? `DB error: ${credError.message}` : 'No credential row found', hasRow: false };
+    return null;
+  }
 
-  if (cred.status !== 'active') return null;
+  if (cred.status !== 'active') {
+    _lastCredDiag = { reason: `Status is '${cred.status}' (not 'active')`, status: cred.status, tokenExpiresAt: cred.token_expires_at, hasRow: true };
+    return null;
+  }
 
   // Token already expired — mark and reject
   if (isTokenExpired(cred.token_expires_at)) {
+    _lastCredDiag = { reason: `Token expired at ${cred.token_expires_at}`, status: cred.status, tokenExpiresAt: cred.token_expires_at, hasRow: true };
     await supabase
       .from('organization_credentials')
       .update({ status: 'expired' })
@@ -73,7 +93,7 @@ async function loadCredentials(organizationId: string): Promise<MetaCredentials 
   // Token nearing expiry — attempt inline refresh (non-blocking)
   if (isWithinRefreshWindow(cred.token_expires_at)) {
     // Skip if already refreshed within the last 5 minutes (dedup concurrent requests)
-    const lastRefreshed = cred.last_refreshed_at ? new Date(cred.last_refreshed_at).getTime() : 0;
+    const lastRefreshed = cred.updated_at ? new Date(cred.updated_at).getTime() : 0;
     const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
 
     if (lastRefreshed < fiveMinutesAgo) {
@@ -146,8 +166,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleDisconnect(req, res);
       case 'ad-library':
         return handleAdLibrary(req, res);
+      case 'snapshot-images':
+        return handleSnapshotImages(req, res);
       case 'refresh-tokens':
         return handleRefreshTokens(req, res);
+      case 'ai-chat':
+        return handleAIChat(req, res);
+      case 'ai-images':
+        return handleAIImages(req, res);
       default:
         return res.status(400).json({ error: `Unknown route: ${route}` });
     }
@@ -177,9 +203,11 @@ async function handleProxy(req: VercelRequest, res: VercelResponse) {
 
   const creds = await loadCredentials(auth.organizationId);
   if (!creds) {
+    const diag = getLastCredentialDiagnostics();
     return res.status(404).json({
       error: 'Meta credentials not found',
-      message: 'Please connect your Meta Ads account first',
+      message: `Please connect your Meta Ads account first`,
+      diagnostics: diag ? `${diag.reason} (orgId: ${auth.organizationId.slice(0, 8)}...)` : 'Unknown',
     });
   }
 
@@ -569,6 +597,8 @@ async function handleUpdateSelection(req: VercelRequest, res: VercelResponse) {
       ad_account_id: adAccountId,
       page_id: pageId || null,
       pixel_id: pixelId || null,
+      status: 'active',
+      last_error: null,
       metadata: {
         ...cred.metadata,
         selected_account_name: selectedAccount?.name || null,
@@ -829,6 +859,30 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
     });
   }
 
+  // Check token type — Ad Library API only works with User access tokens,
+  // not System User tokens. Detect early to give a clear error message.
+  let tokenType: string | null = null;
+  try {
+    const debugUrl = new URL(`${GRAPH_API_BASE}/debug_token`);
+    debugUrl.searchParams.set('input_token', creds.accessToken);
+    debugUrl.searchParams.set('access_token', creds.accessToken);
+    const debugRes = await fetch(debugUrl.toString());
+    const debugData = await debugRes.json();
+    tokenType = debugData.data?.type || null;
+
+    if (tokenType === 'SYSTEM_USER') {
+      return res.status(400).json({
+        error: 'Ad Library not supported with System User tokens',
+        message: 'The Ad Library API requires a User access token (from OAuth login), not a System User token. Re-connect your Meta account via the OAuth flow in Settings to enable Ad Library search.',
+        token_type: 'SYSTEM_USER',
+      });
+    }
+  } catch {
+    // Non-fatal — continue with the request and let the ads_archive call fail
+    // with its own error if the token is invalid
+    console.warn('Ad Library: debug_token check failed, proceeding with request');
+  }
+
   const {
     search_terms,
     search_page_ids,
@@ -930,7 +984,13 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
         if (metaError.code === 10 && metaError.error_subcode === 2332002) {
           errorMessage = 'Ad Library API requires identity verification. Complete verification at facebook.com/ID to enable Ad Library access.';
         } else if (metaError.type === 'OAuthException' && metaError.code === 1) {
-          errorMessage = 'Ad Library access error — your Meta token may lack Ad Library API permissions. This usually means: (1) the Facebook account needs identity verification at facebook.com/ID, or (2) the selected country only supports political/issue ads via the API (try an EU/UK country for commercial ads).';
+          // We already checked for system user tokens above, so if we get here
+          // with a user token the issue is almost certainly identity verification
+          if (tokenType === 'USER') {
+            errorMessage = 'Ad Library API requires identity verification. The Facebook account linked to this token must complete government ID verification at facebook.com/ID before the Ad Library API can be used. Verification may take several days.';
+          } else {
+            errorMessage = 'Ad Library access error — your Meta token may lack Ad Library API permissions. This usually means: (1) the Facebook account needs identity verification at facebook.com/ID, or (2) the selected country only supports political/issue ads via the API (try an EU/UK country for commercial ads).';
+          }
         } else {
           const errorParts = [metaError.message || 'Unknown error from Meta API'];
           if (metaError.code) errorParts.push(`(code ${metaError.code})`);
@@ -945,6 +1005,8 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
           error_subcode: metaError.error_subcode,
           type: metaError.type,
           requires_verification: requiresVerification,
+          token_type: tokenType,
+          meta_message: metaError.message || null,
         });
       }
 
@@ -972,6 +1034,76 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
   return res.status(500).json({ error: 'Unexpected error in Ad Library handler' });
 }
 
+// ─── Route: snapshot-images ────────────────────────────────────────────────
+// Batch-extract og:image URLs from Ad Library snapshot pages.
+// Called after ad-library search to resolve creative preview images.
+
+async function handleSnapshotImages(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed — use POST' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { urls } = req.body || {};
+  if (!Array.isArray(urls) || urls.length === 0) {
+    return res.status(400).json({ error: 'urls array is required' });
+  }
+
+  // Limit to 25 URLs per batch to prevent abuse
+  const batch = urls.slice(0, 25) as string[];
+
+  // Extract og:image from each snapshot URL in parallel (max 6 concurrent)
+  const MAX_CONCURRENT = 6;
+  const results: Record<string, string | null> = {};
+
+  for (let i = 0; i < batch.length; i += MAX_CONCURRENT) {
+    const chunk = batch.slice(i, i + MAX_CONCURRENT);
+    const promises = chunk.map(async (url: string) => {
+      // Only allow facebook.com snapshot URLs
+      if (!url.startsWith('https://www.facebook.com/ads/archive/render_ad/')) {
+        results[url] = null;
+        return;
+      }
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; Convertra/1.0)',
+            'Accept': 'text/html',
+          },
+          redirect: 'follow',
+        });
+        if (!response.ok) {
+          results[url] = null;
+          return;
+        }
+        const html = await response.text();
+
+        // Extract og:image meta tag
+        const ogMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i)
+          || html.match(/<meta\s+content=["']([^"']+)["']\s+property=["']og:image["']/i);
+        if (ogMatch) {
+          results[url] = ogMatch[1];
+          return;
+        }
+
+        // Fallback: look for image in _raw_ad_text div or any large image src
+        const imgMatch = html.match(/<img[^>]+src=["'](https:\/\/scontent[^"']+)["']/i)
+          || html.match(/<img[^>]+src=["'](https:\/\/external[^"']+)["']/i);
+        results[url] = imgMatch ? imgMatch[1] : null;
+      } catch {
+        results[url] = null;
+      }
+    });
+    await Promise.all(promises);
+  }
+
+  return res.status(200).json({ images: results });
+}
+
 // ─── Route: refresh-tokens ─────────────────────────────────────────────────
 // Cron-triggered batch refresh for Meta tokens nearing expiry.
 // Runs daily to keep inactive users' tokens alive.
@@ -997,7 +1129,7 @@ async function handleRefreshTokens(req: VercelRequest, res: VercelResponse) {
 
     const { data: credentials, error: queryError } = await supabase
       .from('organization_credentials')
-      .select('organization_id, access_token_encrypted, token_expires_at, last_refreshed_at')
+      .select('organization_id, access_token_encrypted, token_expires_at, updated_at')
       .eq('provider', 'meta')
       .eq('status', 'active')
       .lt('token_expires_at', refreshThreshold.toISOString())
@@ -1020,8 +1152,8 @@ async function handleRefreshTokens(req: VercelRequest, res: VercelResponse) {
 
     for (const cred of credentials) {
       // Skip if already refreshed within the last 12 hours
-      if (cred.last_refreshed_at) {
-        const lastRefreshed = new Date(cred.last_refreshed_at).getTime();
+      if (cred.updated_at) {
+        const lastRefreshed = new Date(cred.updated_at).getTime();
         const twelveHoursAgo = Date.now() - 12 * 60 * 60 * 1000;
         if (lastRefreshed > twelveHoursAgo) {
           results.push({ organizationId: cred.organization_id, success: true, error: 'Skipped — refreshed recently' });
@@ -1063,4 +1195,86 @@ async function handleRefreshTokens(req: VercelRequest, res: VercelResponse) {
       message: err instanceof Error ? err.message : 'Unknown error',
     });
   }
+}
+
+// ─── Route: ai-chat ─────────────────────────────────────────────────────────
+// Proxy for OpenAI chat completions. API key stays server-side.
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+async function handleAIChat(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed — use POST' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (!OPENAI_API_KEY) {
+    return res.status(500).json({ error: 'OpenAI API key not configured on server' });
+  }
+
+  const body = req.body;
+  if (!body || !body.messages) {
+    return res.status(400).json({ error: 'Request body with messages is required' });
+  }
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    return res.status(response.status).json(data);
+  }
+
+  return res.status(200).json(data);
+}
+
+// ─── Route: ai-images ───────────────────────────────────────────────────────
+// Proxy for OpenAI image generation. API key stays server-side.
+
+async function handleAIImages(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed — use POST' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (!OPENAI_API_KEY) {
+    return res.status(500).json({ error: 'OpenAI API key not configured on server' });
+  }
+
+  const body = req.body;
+  if (!body || !body.prompt) {
+    return res.status(400).json({ error: 'Request body with prompt is required' });
+  }
+
+  const response = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    return res.status(response.status).json(data);
+  }
+
+  return res.status(200).json(data);
 }

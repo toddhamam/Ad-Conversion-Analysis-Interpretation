@@ -278,7 +278,8 @@ async function metaFetch(
           continue;
         }
 
-        const msg = data.message || data.error || `Meta API error (${res.status})`;
+        const diagSuffix = data.diagnostics ? ` [${data.diagnostics}]` : '';
+        const msg = (data.message || data.error || `Meta API error (${res.status})`) + diagSuffix;
         const err = new Error(msg);
         (err as any).metaCode = data.code;
         (err as any).metaSubcode = data.subcode;
@@ -513,8 +514,12 @@ function detectCampaignType(campaignName: string): CampaignType {
  * Fetch ad-level insights with creative details for conversion intelligence
  */
 export async function fetchAdInsights(dateOptions?: DateRangeOptions): Promise<MetaAdInsight[]> {
-  const adAccountId = getAdAccountId();
-  if (!adAccountId) throw new Error('No ad account configured');
+  let adAccountId = getAdAccountId();
+  if (!adAccountId) {
+    await loadOrgMetaCredentials();
+    adAccountId = getAdAccountId();
+    if (!adAccountId) throw new Error('No ad account configured. Go to Integrations to select your ad account.');
+  }
 
   try {
     const data = await metaFetch(`${adAccountId}/insights`, {
@@ -684,8 +689,15 @@ export async function fetchTrafficTypes(dateOptions?: DateRangeOptions): Promise
  * Fetch campaign summaries with purchase conversion value for dashboard
  */
 export async function fetchCampaignSummaries(dateOptions?: DateRangeOptions): Promise<CampaignSummary[]> {
-  const adAccountId = getAdAccountId();
-  if (!adAccountId) return [];
+  let adAccountId = getAdAccountId();
+  if (!adAccountId) {
+    // Cache might be stale — force refresh from backend
+    await loadOrgMetaCredentials();
+    adAccountId = getAdAccountId();
+    if (!adAccountId) {
+      throw new Error('No ad account configured. Go to Integrations to select your ad account.');
+    }
+  }
 
   try {
     const data = await metaFetch(`${adAccountId}/insights`, {
@@ -1008,12 +1020,48 @@ export async function searchAdLibrary(params: AdLibrarySearchParams): Promise<Ad
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
+    if (import.meta.env.DEV) {
+      console.warn('Ad Library API error details:', {
+        code: errData.code,
+        type: errData.type,
+        token_type: errData.token_type,
+        meta_message: errData.meta_message,
+      });
+    }
     // Use the backend's descriptive error message (includes verification hints, geo guidance)
     const errMsg = errData.message || `Ad Library search failed (${res.status})`;
     throw new Error(errMsg);
   }
 
   return res.json();
+}
+
+/**
+ * Batch-extract og:image preview URLs from Ad Library snapshot pages.
+ * Returns a map of snapshot_url → image_url (or null if extraction failed).
+ */
+export async function fetchSnapshotImages(snapshotUrls: string[]): Promise<Record<string, string | null>> {
+  if (snapshotUrls.length === 0) return {};
+
+  const token = await getAuthToken();
+  if (!token) return {};
+
+  try {
+    const res = await fetch('/api/meta/snapshot-images', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ urls: snapshotUrls }),
+    });
+
+    if (!res.ok) return {};
+    const data = await res.json();
+    return data.images || {};
+  } catch {
+    return {};
+  }
 }
 
 // ─── Page validation ─────────────────────────────────────────────────────────

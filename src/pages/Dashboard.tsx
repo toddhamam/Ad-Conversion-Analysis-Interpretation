@@ -287,6 +287,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [funnelWarning, setFunnelWarning] = useState<string | null>(null);
+  const [metaWarning, setMetaWarning] = useState<string | null>(null);
   const [metricsConfig, setMetricsConfig] = useState<MetricConfig[]>(loadMetricsConfig);
   const [searchParams, setSearchParams] = useSearchParams();
   const [metaNotification, setMetaNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -344,6 +345,7 @@ const Dashboard = () => {
       try {
         setLoading(true);
         setFunnelWarning(null);
+        setMetaWarning(null);
 
         // Build date parameters
         const startDateStr = dateRange.startDate.toISOString();
@@ -376,6 +378,8 @@ const Dashboard = () => {
         const metaPromise = fetchCampaignSummaries(metaDateOptions)
           .catch((err) => {
             console.error('Failed to fetch Meta data:', err);
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            setMetaWarning(`Meta Ads data unavailable — ${msg}`);
             return [] as CampaignSummary[];
           });
 
@@ -602,6 +606,13 @@ const Dashboard = () => {
         <div className="dashboard-error" style={{ background: 'rgba(245, 158, 11, 0.08)', borderColor: 'rgba(245, 158, 11, 0.3)', color: '#d97706' }}>
           <span className="error-icon">⚠</span>
           {funnelWarning}
+        </div>
+      )}
+
+      {metaWarning && !error && (
+        <div className="dashboard-error" style={{ background: 'rgba(245, 158, 11, 0.08)', borderColor: 'rgba(245, 158, 11, 0.3)', color: '#d97706' }}>
+          <span className="error-icon">⚠</span>
+          {metaWarning}
         </div>
       )}
 

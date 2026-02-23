@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
-import { searchAdLibrary, type AdLibraryResult } from '../services/metaApi';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { searchAdLibrary, fetchSnapshotImages, type AdLibraryResult } from '../services/metaApi';
 import type { AdLibraryInspiration } from '../types';
 import './AdLibraryBrowser.css';
 
@@ -160,9 +160,44 @@ export default function AdLibraryBrowser({
   const [showFilters, setShowFilters] = useState(false);
   const [totalFetched, setTotalFetched] = useState(0);
 
+  // Preview image URLs extracted from snapshot pages (snapshot_url → image_url)
+  const [previewImages, setPreviewImages] = useState<Record<string, string | null>>({});
+
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const savedIds = new Set(savedInspirations.map(i => i.id));
+
+  // Fetch preview images when results change
+  useEffect(() => {
+    if (results.length === 0) return;
+
+    // Collect snapshot URLs we haven't fetched yet
+    const newUrls = results
+      .map(r => r.ad_snapshot_url)
+      .filter((url): url is string => !!url && !(url in previewImages));
+
+    if (newUrls.length === 0) return;
+
+    // Mark as loading (undefined = loading, null = failed, string = loaded)
+    setPreviewImages(prev => {
+      const next = { ...prev };
+      for (const url of newUrls) {
+        if (!(url in next)) next[url] = undefined as unknown as null;
+      }
+      return next;
+    });
+
+    fetchSnapshotImages(newUrls).then(images => {
+      setPreviewImages(prev => {
+        const next = { ...prev };
+        for (const url of newUrls) {
+          // If the API returned a string URL, use it; otherwise mark as failed (null)
+          next[url] = (images[url] && typeof images[url] === 'string') ? images[url] : null;
+        }
+        return next;
+      });
+    });
+  }, [results]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply client-side filters and sorting
   const filteredResults = useMemo(() => {
@@ -442,7 +477,13 @@ export default function AdLibraryBrowser({
           {error && (
             <div className="ad-library-error">
               {error}
-              {error.toLowerCase().includes('permission') && (
+              {error.toLowerCase().includes('system user') ? (
+                <span className="ad-library-error-help">
+                  {' '}Re-connect your Meta account using the{' '}
+                  <strong>Connect via Facebook</strong> OAuth button in admin settings
+                  to get a User access token that supports Ad Library.
+                </span>
+              ) : (error.toLowerCase().includes('verification') || error.toLowerCase().includes('permission')) && (
                 <span className="ad-library-error-help">
                   {' '}Your Facebook account may need{' '}
                   <a href="https://www.facebook.com/ID" target="_blank" rel="noopener noreferrer">
@@ -501,72 +542,103 @@ export default function AdLibraryBrowser({
 
                 if (!bodyText && !headline) return null;
 
+                const pageName = result.page_name || 'Unknown';
+                const pageInitial = pageName.charAt(0).toUpperCase();
+                const snapshotUrl = result.ad_snapshot_url;
+                const previewImg = snapshotUrl ? previewImages[snapshotUrl] : null;
+                // undefined = still loading, null = failed/not available, string = image URL
+                const isImageLoading = snapshotUrl ? previewImages[snapshotUrl] === undefined : false;
+
                 return (
                   <div key={`${result.page_id}-${idx}`} className={`ad-library-card ${isSaved ? 'saved' : ''}`}>
-                    <div className="ad-library-card-header">
-                      <span className="ad-library-card-page">{result.page_name || 'Unknown'}</span>
-                      <span className={`ad-library-duration-badge ${duration.tier}`}>
-                        {duration.tier === 'long' ? '🔥 ' : ''}{duration.label}
-                        {!result.ad_delivery_stop_time ? ' (active)' : ''}
-                      </span>
-                    </div>
-
-                    {headline && (
-                      <div className="ad-library-card-headline">{headline}</div>
-                    )}
-
-                    {bodyText && (
-                      <>
-                        <div className={`ad-library-card-body ${isTextExpanded ? 'expanded-text' : ''}`}>
-                          {bodyText}
-                        </div>
-                        {bodyText.length > 150 && (
-                          <button
-                            className="ad-library-show-more"
-                            onClick={() => setExpandedCards(prev => {
-                              const next = new Set(prev);
-                              if (next.has(idx)) next.delete(idx); else next.add(idx);
-                              return next;
-                            })}
-                          >
-                            {isTextExpanded ? 'Show less' : 'Show more'}
-                          </button>
-                        )}
-                      </>
-                    )}
-
-                    {linkDesc && (
-                      <div className="ad-library-card-link-desc">{linkDesc}</div>
-                    )}
-
-                    <div className="ad-library-card-meta">
-                      {(result.publisher_platforms || []).map(p => (
-                        <span key={p} className="ad-library-platform-badge">{p}</span>
-                      ))}
-                      {result.ad_delivery_start_time && (
-                        <span className="ad-library-card-date">
-                          Since {new Date(result.ad_delivery_start_time).toLocaleDateString()}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="ad-library-card-actions">
-                      <button
-                        className={`ad-library-save-btn ${isSaved ? 'saved' : ''}`}
-                        onClick={() => handleSaveToggle(result)}
+                    {/* Creative image preview */}
+                    {snapshotUrl && (
+                      <a
+                        href={snapshotUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ad-library-card-image-link"
                       >
-                        {isSaved ? '✓ Saved as Inspiration' : '+ Save as Inspiration'}
-                      </button>
-                      {result.ad_snapshot_url && (
-                        <a
-                          href={result.ad_snapshot_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="ad-library-snapshot-link"
-                        >
-                          Preview →
-                        </a>
+                        {previewImg ? (
+                          <img
+                            src={previewImg}
+                            alt={`Ad by ${pageName}`}
+                            className="ad-library-card-image"
+                            loading="lazy"
+                          />
+                        ) : isImageLoading ? (
+                          <div className="ad-library-card-image-placeholder">
+                            <div className="ad-library-card-image-shimmer" />
+                          </div>
+                        ) : (
+                          <div className="ad-library-card-image-placeholder ad-library-card-image-fallback">
+                            <span className="ad-library-card-image-fallback-icon">🖼</span>
+                            <span className="ad-library-card-image-fallback-text">View Ad Creative</span>
+                          </div>
+                        )}
+                      </a>
+                    )}
+
+                    {/* Card content */}
+                    <div className="ad-library-card-content">
+                      <div className="ad-library-card-hero-top">
+                        <div className="ad-library-card-avatar">{pageInitial}</div>
+                        <div className="ad-library-card-hero-info">
+                          <span className="ad-library-card-page">{pageName}</span>
+                          <span className={`ad-library-duration-badge ${duration.tier}`}>
+                            {duration.tier === 'long' ? '🔥 ' : ''}{duration.label}
+                            {!result.ad_delivery_stop_time ? ' (active)' : ''}
+                          </span>
+                        </div>
+                      </div>
+
+                      {headline && (
+                        <div className="ad-library-card-hero-headline">{headline}</div>
                       )}
+
+                      {bodyText && (
+                        <>
+                          <div className={`ad-library-card-body ${isTextExpanded ? 'expanded-text' : ''}`}>
+                            {bodyText}
+                          </div>
+                          {bodyText.length > 150 && (
+                            <button
+                              className="ad-library-show-more"
+                              onClick={() => setExpandedCards(prev => {
+                                const next = new Set(prev);
+                                if (next.has(idx)) next.delete(idx); else next.add(idx);
+                                return next;
+                              })}
+                            >
+                              {isTextExpanded ? 'Show less' : 'Show more'}
+                            </button>
+                          )}
+                        </>
+                      )}
+
+                      {linkDesc && (
+                        <div className="ad-library-card-link-desc">{linkDesc}</div>
+                      )}
+
+                      <div className="ad-library-card-meta">
+                        {(result.publisher_platforms || []).map(p => (
+                          <span key={p} className="ad-library-platform-badge">{p}</span>
+                        ))}
+                        {result.ad_delivery_start_time && (
+                          <span className="ad-library-card-date">
+                            Since {new Date(result.ad_delivery_start_time).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="ad-library-card-actions">
+                        <button
+                          className={`ad-library-save-btn ${isSaved ? 'saved' : ''}`}
+                          onClick={() => handleSaveToggle(result)}
+                        >
+                          {isSaved ? '✓ Saved' : '+ Save as Inspiration'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

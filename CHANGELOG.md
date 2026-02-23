@@ -59,6 +59,111 @@ The OpenClaw Telegram bot was burning through Claude Max tokens too quickly beca
 
 ---
 
+## 2026-02-23 — Fix funnel data sync and port multi-funnel dashboard
+
+### Fixed
+- **Broken funnel metrics API**: The metrics endpoint hardcoded only 6 step names (`landing`, `checkout`, `upsell-1`, `downsell-1`, `upsell-2`, `thank-you`) — events from the `free` funnel type (7 steps with `free-` prefix) were silently dropped. Removed hardcoded steps; steps are now dynamically discovered from event data and sorted using funnel config.
+- **Mixed funnel data**: The API didn't select or filter by `funnel_id`, mixing data from different funnel versions (e.g., `main-v1`, `main-v2`, `free-v1`) into a single aggregate. Added `funnelId` (exact match) and `funnel` (type prefix match) query param filters.
+- **Missing order bump revenue**: `order_bump_purchase` events were not recognized, causing revenue from order bumps to be uncounted. Now tracked separately with take rate calculation.
+
+### Added
+- **Funnel version discovery** (`api/funnel/metrics.ts` → `?discover=true`): New query-param route returns `FunnelVersionSummary[]` — lists all funnel versions with session counts, purchase counts, revenue, and conversion rates. Added within existing serverless function to stay within Vercel's 12-function limit.
+- **Three-mode Funnels dashboard** (`src/pages/Funnels.tsx`):
+  - **Overview**: Table of all discovered funnel versions with type badges, metrics, and last event timestamps. Click a row to drill into it; select two rows to compare.
+  - **Single Funnel**: Deep-dive view with hero metric cards (Revenue, Ad Spend/ROAS, CAC/Customers), dynamic step breakdown table, order bump sub-row under checkout, and A/B test variant comparison.
+  - **Compare**: Side-by-side funnel comparison with delta chips (green/red percentage badges), winner indicators, and step-by-step metric deltas.
+- **Order bump metrics**: New `OrderBumpMetrics` type tracking purchases, take rate (vs checkout sessions), and revenue. Displayed as an indented sub-row under the checkout step in Single view.
+- **Dynamic funnel configs**: `FunnelConfig` type with per-type step definitions, step display names, entry/checkout step identifiers, and `noMetricsSteps` for steps excluded from conversion calculations.
+- **New TypeScript types**: `FunnelVersionSummary`, `FunnelConfig`, `OrderBumpMetrics` added to `src/types/funnel.ts`. `FunnelStep` changed from narrow union to `string` to support dynamic step names.
+
+### Backward Compatible
+- **Dashboard unchanged**: `src/pages/Dashboard.tsx` fetches `/api/funnel/metrics` without `funnelId` — returns combined metrics across all funnels (existing behavior preserved).
+- **Super-admin only**: The Funnels page remains gated behind `SuperAdminRoute`; no changes to access control.
+
+### Files Changed
+- `src/types/funnel.ts` — Added `order_bump_purchase` event type, `FunnelConfig`, `FunnelVersionSummary`, `OrderBumpMetrics`; changed `FunnelStep` to `string`; added `funnel_id` to `FunnelEvent`, `orderBump` to `DashboardMetrics`
+- `api/funnel/metrics.ts` — Complete rewrite: funnel configs, dynamic step discovery, `funnelId`/`funnel`/`discover` query params, order bump metrics, `funnel_id` in Supabase select
+- `src/pages/Funnels.tsx` — Complete rebuild: three view modes (Overview/Single/Compare), funnel selector, delta chips, compare cards, order bump row
+- `src/pages/Funnels.css` — Complete rewrite: view tabs, overview table, funnel type badges, compare grid, delta chips, order bump row, responsive breakpoints
+
+---
+
+## 2026-02-22 — Add Ad Library creative image previews via server-side extraction
+
+### Added
+- **Server-side snapshot image extraction** (`api/meta.ts` → `snapshot-images` route): New backend endpoint that batch-fetches Meta's `ad_snapshot_url` HTML pages and extracts `og:image` meta tags (with fallback to `scontent`/`external` CDN `<img>` tags) to resolve actual ad creative image URLs. Limited to 25 URLs per batch with 6 concurrent fetches. Only allows `facebook.com/ads/archive/render_ad/` URLs for security.
+- **`fetchSnapshotImages()` frontend service** (`src/services/metaApi.ts`): Calls `/api/meta/snapshot-images` with JWT auth to batch-resolve preview images after search results arrive.
+- **Image-first card layout**: Ad Library cards now show the creative image at the top (4:3 aspect ratio) with page identity, headline, body copy, and actions below. Three visual states: loaded image, shimmer loading placeholder, and graceful "View Ad Creative" fallback when extraction fails.
+
+### Fixed
+- **Broken JSX structure**: Removed duplicate nested `<div className="ad-library-card-content">` that caused unbalanced tag structure and potential rendering issues.
+- **Replaced hero card layout**: Previous iteration showed styled text cards with a "View Ad Creative" button but no actual images. Now shows real ad creative images extracted server-side.
+
+### Files Changed
+- `api/meta.ts` — Added `snapshot-images` route with `handleSnapshotImages()` for batch og:image extraction
+- `src/services/metaApi.ts` — Added `fetchSnapshotImages()` export
+- `src/components/AdLibraryBrowser.tsx` — Image-first card layout with `previewImages` state, lazy loading via useEffect, shimmer/fallback states
+- `src/components/AdLibraryBrowser.css` — Image preview styles, shimmer animation, fallback placeholder, updated card layout from hero to image-first
+
+---
+
+## 2026-02-22 — Fix Ad Library API errors and redesign creative browser
+
+### Fixed
+- **System User token detection**: Ad Library API calls now introspect the token type via `debug_token` before calling `ads_archive`. System User tokens (from manual credential entry) are immediately blocked with a clear error message explaining that Ad Library requires a User access token from OAuth — previously these returned a generic "Ad Library access error" after 3 failed retries.
+- **Precise error messaging**: When a verified User token still gets OAuthException code 1, the error now specifically says identity verification is needed instead of listing multiple possible causes. Token type and raw Meta error message are included in the error response for diagnostics.
+
+### Improved
+- **Visual Ad Library browser**: Redesigned from a text-only vertical list to a 2-column grid with embedded ad creative previews via iframe (`ad_snapshot_url`). Each card shows the actual ad creative at the top, with page name, headline, body copy, duration badge, platform tags, and save button below.
+- **Hover-to-preview overlay**: Cards show an "Open full preview" pill on hover that opens the Meta ad snapshot in a new tab.
+- **Responsive grid**: 2 columns on desktop, 1 column on tablet/mobile with adjusted preview heights.
+- **Expanded viewport**: Results area increased from 400px to 700px max-height to accommodate visual content.
+
+### Files Changed
+- `api/meta.ts` — Token type introspection in `handleAdLibrary`, improved error messages, `token_type` and `meta_message` in error response
+- `src/components/AdLibraryBrowser.tsx` — Grid layout with iframe creative previews, hover overlay, updated error display for system user tokens
+- `src/components/AdLibraryBrowser.css` — Visual-first card design, 2-column grid, creative preview area, responsive breakpoints
+- `src/services/metaApi.ts` — Dev-mode diagnostic logging for Ad Library errors
+
+---
+
+## 2026-02-22 — Fix missing `last_refreshed_at` column breaking Meta connection
+
+### Fixed
+- **Meta connection fails with DB error**: All Supabase queries in `loadCredentials()` and `handleRefreshTokens()` selected `last_refreshed_at` from `organization_credentials`, but this column was never added to the production database. This caused a DB error on every Meta API call, blocking the entire integration with: "column organization_credentials.last_refreshed_at does not exist."
+- **Replaced with `updated_at`**: The refresh dedup logic (skip refresh if already refreshed within 5 minutes / 12 hours) now uses `updated_at`, which already exists and is written on every credential update.
+- **Removed phantom write**: `refreshMetaToken()` no longer writes `last_refreshed_at` on token refresh — `updated_at` serves the same purpose.
+
+### Files Changed
+- `api/meta.ts` — Replaced `last_refreshed_at` with `updated_at` in all `.select()` queries and dedup logic
+- `api/_lib/meta-token.ts` — Removed `last_refreshed_at` from token refresh DB update
+- `src/types/organization.ts` — Removed `last_refreshed_at` from `OrganizationCredential` interface
+
+---
+
+## 2026-02-22 — Fix Meta credentials stuck in expired status after re-authorization
+
+### Fixed
+- **Saving Integrations selection now resets credential status to `active`**: The `update-selection` endpoint in `api/meta.ts` only updated `ad_account_id`, `page_id`, and `pixel_id` but never touched the `status` field. If a previous API call with an expired token had set `status: 'expired'` (via Meta error code 190), reconnecting via OAuth and saving selections on the Integrations page would not reset it — leaving `loadCredentials()` to reject the row and return "Please connect your Meta Ads account first." Now the endpoint also sets `status: 'active'` and clears `last_error`.
+- **Stale credential cache auto-refresh**: `fetchAdInsights()` and `fetchCampaignSummaries()` now force-refresh the `_orgMeta` cache from the backend if the ad account ID is empty, preventing stale singleton state from blocking data loads after reconnection.
+- **Credential diagnostics in proxy errors**: When `loadCredentials()` returns null, the proxy now includes the specific reason (no DB row, status not active, token expired) in the error response. Frontend surfaces this diagnostic info in error messages for faster debugging.
+
+### Files Changed
+- `api/meta.ts` — `handleUpdateSelection` sets `status: 'active'` and `last_error: null`; `loadCredentials` tracks diagnostic reason; `handleProxy` includes diagnostics in 404 response
+- `src/services/metaApi.ts` — `fetchAdInsights` and `fetchCampaignSummaries` auto-refresh `_orgMeta` cache on empty ad account; `metaFetch` appends diagnostic suffix to error messages
+
+---
+
+## 2026-02-22 — Preserve Meta account selections during OAuth re-authorization
+
+### Fixed
+- **Dashboard shows no data after Meta re-authorization**: When a user re-authorized their Meta account (e.g., after token expiry), the OAuth callback unconditionally set `ad_account_id`, `page_id`, and `pixel_id` to `null` — wiping existing account selections. The status endpoint then returned `needsConfiguration: true` with no ad account to query, so the dashboard showed "connected" but no data appeared. Now the callback reads existing selections before upserting and preserves them if they're still valid in the new token's scope (i.e., the account/page still appears in the available accounts list from Meta). First-time connections still start with `null` selections as before.
+
+### Files Changed
+- `api/auth/meta/callback.ts` — Read existing credentials before upsert, validate selections against new token's available accounts/pages, preserve valid selections
+
+---
+
 ## 2026-02-22 — Restrict SEO IQ to super admin only
 
 ### Changed
