@@ -137,6 +137,7 @@ Rules — follow these exactly:
 - Body must be under 125 words
 - Subject must be under 6 words, all lowercase, no exclamation marks, no spam trigger words (free, guarantee, act now, limited time, etc.)
 - Personalize the opening line using the company intel provided — reference something specific about their business
+- If LinkedIn headline, seniority, or employment history is provided, weave it naturally into the opening line to show research depth. Do NOT say "I looked you up on LinkedIn."
 - One soft CTA: "Would a 15-min call make sense?" or similar low-pressure ask
 - End with: "Reply STOP to opt out."
 - Sign off with just the first name: {sender_name}
@@ -152,6 +153,27 @@ Respond with ONLY this JSON format, no other text:
     buckets = prospect.get("prospect_buckets", [])
     first_name = prospect.get("name", "").split()[0] if prospect.get("name") else ""
 
+    # Build Apollo enrichment context (if available)
+    apollo_lines = []
+    if company_intel.get("seniority"):
+        apollo_lines.append(f"Seniority: {company_intel['seniority']}")
+    if company_intel.get("departments"):
+        apollo_lines.append(f"Departments: {', '.join(company_intel['departments'])}")
+    if company_intel.get("apollo_headline"):
+        apollo_lines.append(f"LinkedIn Headline: {company_intel['apollo_headline']}")
+    if company_intel.get("location"):
+        apollo_lines.append(f"Location: {company_intel['location']}")
+    if company_intel.get("industry"):
+        apollo_lines.append(f"Industry: {company_intel['industry']}")
+    emp_history = company_intel.get("employment_history", [])
+    if emp_history and len(emp_history) > 1:
+        prev = emp_history[1]
+        prev_title = prev.get("title", "")
+        prev_org = prev.get("organization_name", "")
+        if prev_title and prev_org:
+            apollo_lines.append(f"Previous Role: {prev_title} at {prev_org}")
+    apollo_context = "\n".join(apollo_lines)
+
     user_message = f"""Draft a cold email for this prospect:
 
 Name: {prospect.get('name', 'Unknown')}
@@ -160,6 +182,7 @@ Website: {prospect.get('company_url', '')}
 Role: {prospect.get('role', '')}
 Bucket: {', '.join(buckets) if buckets else 'convertra_saas'}
 Estimated Ad Spend: {prospect.get('estimated_ad_spend', 'unknown')}
+{apollo_context}
 
 Company Intel:
 - Active ads: {company_intel.get('active_ad_count', 'unknown')}

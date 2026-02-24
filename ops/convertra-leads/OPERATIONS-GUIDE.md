@@ -26,7 +26,7 @@ crontab.example
 
 ### Add environment variables
 
-Edit `/home/ubuntu/convertra-leads/.env` and add these three lines:
+Edit `/home/ubuntu/convertra-leads/.env` and add these lines:
 
 ```bash
 # Existing (keep these)
@@ -34,16 +34,20 @@ META_ACCESS_TOKEN=...
 GMAIL_ADDRESS=convertraiq@gmail.com
 GMAIL_APP_PASSWORD=...
 
-# New (add these)
+# Core (add these)
 OPENAI_API_KEY=sk-...
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_CHAT_ID=...
+
+# Apollo.io enrichment (optional but recommended)
+APOLLO_API_KEY=your-apollo-api-key
 ```
 
 **Where to get these:**
 - `OPENAI_API_KEY` — From https://platform.openai.com/api-keys
 - `TELEGRAM_BOT_TOKEN` — Already exists in your OpenClaw config (`/home/ubuntu/.openclaw/openclaw.json`), or from @BotFather
 - `TELEGRAM_CHAT_ID` — Send a message to your bot, then visit `https://api.telegram.org/bot<TOKEN>/getUpdates` and look for `chat.id`
+- `APOLLO_API_KEY` — From Apollo.io → Settings → Integrations → API Keys → Create new key (enable all permissions). Free tier: 10,000 credits/month
 
 ### Create logs directory
 
@@ -191,8 +195,10 @@ Phase 2: Research
 Phase 3: Scoring
 └── 17-point rubric → hot/warm/cool/skip tiers
 
-Phase 4: Email Finding
-└── DNS verification + pattern matching + web search
+Phase 4: Enrichment + Email Finding
+├── Apollo.io enrichment (if APOLLO_API_KEY set)
+│   └── Verified emails, roles, LinkedIn, seniority, industry
+└── Fallback: DNS verification + pattern matching + web search
     (only for warm+ prospects, score >= 5)
 
 Phase 5: AI Email Drafting ← ONLY step that uses tokens
@@ -255,7 +261,8 @@ Round 8: supplements (2nd pass — returns 0 new, marked exhausted)
 Round 9: skincare 2026 (expanded keyword variant)
 
 FINAL BATCH (runs once after loop ends):
-├── Email finding for all warm+ leads (score >= 5)
+├── Apollo enrichment (verified emails + company intel)
+├── Email finding fallback for remaining leads (score >= 5)
 └── AI drafting via GPT-5.2 (~500 tokens each)
 ```
 
@@ -354,6 +361,21 @@ python3 cli.py score prospect --id p_042
 # Score all researched prospects
 python3 cli.py score batch --stage researched
 ```
+
+### Apollo enrichment
+
+```bash
+# Enrich a single person (uses 1 credit)
+python3 cli.py enrich person --name "Jane Smith" --domain example.com
+
+# Enrich a pipeline prospect by ID
+python3 cli.py enrich prospect --id p_042
+
+# Batch enrich all researched prospects (10 per API call)
+python3 cli.py enrich batch --stage researched --score-min 5
+```
+
+Apollo returns verified emails, job titles, LinkedIn URLs, seniority levels, employment history, and company data. All of this feeds into more personalized cold email drafts. If `APOLLO_API_KEY` is not set, enrichment is silently skipped and email finding falls back to pattern guessing.
 
 ### Email finding
 
@@ -552,6 +574,7 @@ python3 cli.py followup resume --id p_042
 │   ├── research.py          ← Website scraping
 │   ├── scorer.py            ← 17-point lead scoring
 │   ├── email_finder.py      ← Email discovery + DNS verify
+│   ├── enrichment.py        ← Apollo.io People Enrichment API (NEW)
 │   ├── mailer.py            ← Gmail SMTP + warmup
 │   ├── inbox.py             ← Gmail IMAP reader
 │   ├── followup.py          ← Sequence scheduling

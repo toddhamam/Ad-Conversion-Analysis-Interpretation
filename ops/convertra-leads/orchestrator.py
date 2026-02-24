@@ -252,16 +252,40 @@ def run_campaign(niches, include_jobs=False, campaign_name=None):
             f"(hot: {score_result.get('hot', 0)}, warm: {score_result.get('warm', 0)})"
         )
 
-        # Phase 4: Find emails (warm+ leads, score >= 5)
-        log.info("Phase 4: Finding emails...")
+        # Phase 4: Enrich + Find emails (warm+ leads, score >= 5)
+        log.info("Phase 4: Apollo enrichment + email finding...")
+
+        # Step 4a: Apollo enrichment (also finds emails)
+        apollo_stats = {"enriched": 0, "emails_found": 0, "credits_used": 0}
+        api_key = os.environ.get("APOLLO_API_KEY", "")
+        if api_key:
+            try:
+                from modules.enrichment import batch_enrich
+                apollo_stats = batch_enrich(stage="researched", score_min=5)
+                log.info(
+                    f"  Apollo: {apollo_stats.get('enriched', 0)} enriched, "
+                    f"{apollo_stats.get('emails_found', 0)} emails found, "
+                    f"{apollo_stats.get('credits_used', 0)} credits used"
+                )
+            except Exception as e:
+                log.error(f"  Apollo enrichment failed: {e}")
+        else:
+            log.info("  Apollo not configured — skipping enrichment.")
+
+        # Step 4b: Pattern-guess fallback for prospects Apollo missed
         from modules.email_finder import batch_find_emails
         email_result = batch_find_emails(stage="researched", score_min=5)
+        results["enrichment"] = {
+            "apollo_enriched": apollo_stats.get("enriched", 0),
+            "apollo_emails": apollo_stats.get("emails_found", 0),
+            "apollo_credits": apollo_stats.get("credits_used", 0),
+        }
         results["email_finding"] = {
             "found": email_result.get("found", 0),
             "not_found": email_result.get("not_found", 0),
         }
         log.info(
-            f"  Found: {email_result.get('found', 0)}, "
+            f"  Total emails: {email_result.get('found', 0)}, "
             f"Not found: {email_result.get('not_found', 0)}"
         )
 
@@ -293,6 +317,7 @@ def run_campaign(niches, include_jobs=False, campaign_name=None):
         scored_count=results.get("scoring", {}).get("scored", 0),
         emails_found=results.get("email_finding", {}).get("found", 0),
         drafted_count=results.get("drafting", {}).get("drafted", 0),
+        enrichment=results.get("enrichment"),
     )
     notify_result = send_notification(message)
     results["notification"] = notify_result
@@ -862,13 +887,31 @@ def run_prospect_hunt(target=20, niches=None, include_jobs=True, max_rounds=10,
         )
         send_notification(progress_msg)
 
-    # ── Final batch: email finding + drafting for all warm+ leads ──
-    log.info("=== FINAL BATCH: Email finding + AI drafting ===")
+    # ── Final batch: enrichment + email finding + drafting for all warm+ leads ──
+    log.info("=== FINAL BATCH: Enrichment + Email finding + AI drafting ===")
 
+    # Step 1: Apollo enrichment
+    apollo_stats = {"enriched": 0, "emails_found": 0, "credits_used": 0}
+    api_key = os.environ.get("APOLLO_API_KEY", "")
+    if api_key:
+        try:
+            from modules.enrichment import batch_enrich
+            apollo_stats = batch_enrich(stage="researched", score_min=email_score_min)
+            log.info(
+                f"  Apollo: {apollo_stats.get('enriched', 0)} enriched, "
+                f"{apollo_stats.get('emails_found', 0)} emails, "
+                f"{apollo_stats.get('credits_used', 0)} credits"
+            )
+        except Exception as e:
+            log.error(f"  Apollo enrichment failed: {e}")
+    else:
+        log.info("  Apollo not configured — skipping enrichment.")
+
+    # Step 2: Fallback email finding
     from modules.email_finder import batch_find_emails
     from modules.drafter import batch_draft
 
-    log.info("  Finding emails (score >= {})...".format(email_score_min))
+    log.info("  Finding remaining emails (score >= {})...".format(email_score_min))
     email_result = batch_find_emails(stage="researched", score_min=email_score_min)
     log.info(
         f"  Emails found: {email_result.get('found', 0)}, "
@@ -905,6 +948,11 @@ def run_prospect_hunt(target=20, niches=None, include_jobs=True, max_rounds=10,
             "niches_exhausted": len(exhausted_niches),
             "hot_scored": hot_total,
             "warm_scored": warm_total,
+        },
+        "enrichment": {
+            "enriched": apollo_stats.get("enriched", 0),
+            "emails_found": apollo_stats.get("emails_found", 0),
+            "credits_used": apollo_stats.get("credits_used", 0),
         },
         "email_finding": {
             "found": email_result.get("found", 0),
