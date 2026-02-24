@@ -1,5 +1,6 @@
 """Autonomous prospect discovery via DuckDuckGo search."""
 
+import re
 from urllib.parse import urlparse
 
 from modules.pipeline import load_pipeline
@@ -40,15 +41,110 @@ NICHE_KEYWORDS = {
 
 DEFAULT_NICHES = list(NICHE_KEYWORDS.keys())
 
-# Domains to always skip
+# Domains to always skip (exact match)
 SKIP_DOMAINS = {
+    # Social media
     "facebook.com", "instagram.com", "twitter.com", "x.com", "linkedin.com",
-    "youtube.com", "tiktok.com", "reddit.com", "pinterest.com",
-    "amazon.com", "ebay.com", "walmart.com", "target.com",
-    "google.com", "bing.com", "yahoo.com",
-    "wikipedia.org", "medium.com", "substack.com",
-    "indeed.com", "glassdoor.com", "ziprecruiter.com",
+    "youtube.com", "tiktok.com", "reddit.com", "pinterest.com", "threads.net",
+    # Marketplaces
+    "amazon.com", "ebay.com", "walmart.com", "target.com", "etsy.com", "alibaba.com",
+    # Search engines
+    "google.com", "bing.com", "yahoo.com", "duckduckgo.com",
+    # Content platforms
+    "wikipedia.org", "medium.com", "substack.com", "wordpress.com", "blogger.com",
+    "tumblr.com", "quora.com", "stackexchange.com", "stackoverflow.com",
+    # Job boards
+    "indeed.com", "glassdoor.com", "ziprecruiter.com", "monster.com",
+    "seek.com.au", "jora.com", "adzuna.com", "careerbuilder.com", "angel.co",
+    "onlinejobs.ph",
+    # Freelancer platforms (base domains — variants handled by _is_skip_domain)
+    "upwork.com", "fiverr.com", "toptal.com", "freelancer.com", "guru.com",
+    # Course marketplaces / piracy sites (not the course creators themselves)
+    "udemy.com", "skillshare.com", "coursera.org", "edx.org",
+    "teachable.com", "thinkific.com", "kajabi.com", "podia.com",
+    "xcourse.co", "pikacourses.com", "creativecourse.net", "ibusinesscourse.org",
+    "gcertificationcourse.com",
+    # Aggregator / review / tool sites
+    "crunchbase.com", "g2.com", "capterra.com", "trustpilot.com",
+    "producthunt.com", "similarweb.com", "semrush.com", "ahrefs.com",
+    # News / media
+    "techcrunch.com", "forbes.com", "entrepreneur.com", "inc.com",
+    "businessinsider.com", "hubspot.com", "neilpatel.com",
+    # Community platforms
+    "skool.com",
+    # Government
+    "gov.au", "gov.uk", "gov.com",
 }
+
+# Base domains that have many country-code variants (freelancer.ph, freelancer.co.za, etc.)
+_SKIP_BASE_DOMAINS = {
+    "freelancer", "indeed", "glassdoor", "seek",
+}
+
+# URL path patterns that indicate noise (blog posts, articles, job listings)
+_NOISE_PATH_RE = re.compile(
+    r"/blog/|/article/|/news/|/post/|/category/|/tag/"
+    r"|/\d{4}/\d{2}/"         # Date-based blog URLs
+    r"|/jobs?/"                # Job listings
+    r"|/courses?/"             # Course listing pages
+    r"|/reviews?/"             # Review pages
+    r"|/best-"                 # "Best X" listicle articles
+    r"|/top-\d+"              # "Top 10" articles
+    r"|/how-to-"              # How-to articles
+    r"|/what-is-"             # Informational articles
+    r"|/guide/"               # Guide articles
+    r"|/podcast/"
+    r"|/webinar"
+    r"|/projects/",           # Freelancer project pages
+    re.IGNORECASE
+)
+
+
+def _is_skip_domain(domain):
+    """Check if a domain should be skipped.
+
+    Handles:
+    - Exact matches (facebook.com)
+    - Subdomain variants (m.facebook.com)
+    - Country-code variants (freelancer.ph, freelancer.co.za, br.freelancer.com)
+    """
+    if domain in SKIP_DOMAINS:
+        return True
+
+    # Check if it's a subdomain of a skip domain (e.g., m.facebook.com, careers.singlegrain.com)
+    for skip in SKIP_DOMAINS:
+        if domain.endswith("." + skip):
+            return True
+
+    # Check base domain for country-code variants
+    # e.g., freelancer.ph, freelancer.co.za, freelancer.com.au
+    parts = domain.split(".")
+    if parts:
+        base = parts[0]
+        if base in _SKIP_BASE_DOMAINS:
+            return True
+
+    return False
+
+
+def _is_noise_url(url):
+    """Check if a URL is likely noise (blog post, article, job listing)."""
+    try:
+        parsed = urlparse(url)
+        path = parsed.path.lower()
+
+        # Check path patterns
+        if _NOISE_PATH_RE.search(path):
+            return True
+
+        # Deep paths (4+ segments) are usually articles, not company homepages
+        segments = [s for s in path.split("/") if s]
+        if len(segments) >= 4:
+            return True
+
+        return False
+    except Exception:
+        return False
 
 
 def search_prospects_by_niche(niche, limit=30):
@@ -74,7 +170,11 @@ def search_prospects_by_niche(niche, limit=30):
         hits = _ddg_search(query, max_results=limit // len(queries) + 5)
         for hit in hits:
             domain = _extract_domain(hit.get("href", ""))
-            if not domain or domain in seen_domains or domain in existing_domains or domain in SKIP_DOMAINS:
+            if not domain or domain in seen_domains or domain in existing_domains:
+                continue
+            if _is_skip_domain(domain):
+                continue
+            if _is_noise_url(hit.get("href", "")):
                 continue
             seen_domains.add(domain)
             all_results.append({
@@ -101,7 +201,11 @@ def search_prospects_by_keywords(keywords_list, limit=30):
         hits = _ddg_search(keyword, max_results=limit // len(keywords_list) + 5)
         for hit in hits:
             domain = _extract_domain(hit.get("href", ""))
-            if not domain or domain in seen_domains or domain in existing_domains or domain in SKIP_DOMAINS:
+            if not domain or domain in seen_domains or domain in existing_domains:
+                continue
+            if _is_skip_domain(domain):
+                continue
+            if _is_noise_url(hit.get("href", "")):
                 continue
             seen_domains.add(domain)
             all_results.append({

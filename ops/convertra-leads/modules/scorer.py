@@ -17,6 +17,10 @@ SCORING_RULES = {
     "active_blog": {"points": 1, "description": "Active blog/content"},
     "shopify_bigcommerce": {"points": 1, "description": "Shopify or BigCommerce"},
     "competitor_tool": {"points": 2, "description": "Using competitor tool"},
+    "hiring_volume": {"points": 2, "description": "3+ creative/marketing roles on website"},
+    "dtc_ecommerce": {"points": 1, "description": "Shopify + Klaviyo (real DTC running paid)"},
+    "has_contact": {"points": 1, "description": "Named contact found on website"},
+    "established_company": {"points": 1, "description": "20+ employees, active website"},
     "only_1_2_ads": {"points": -3, "description": "Only 1-2 active ads"},
     "dead_website": {"points": -5, "description": "Dead or dormant website"},
     "solo_operation": {"points": -3, "description": "Solo operation"},
@@ -107,6 +111,24 @@ def score_prospect(prospect_data):
     employees = intel.get("estimated_employees", "")
     if employees and _is_solo(employees):
         breakdown["solo_operation"] = SCORING_RULES["solo_operation"]["points"]
+
+    # Hiring volume — 3+ creative/marketing roles found on website
+    if len(hiring) >= 3:
+        breakdown["hiring_volume"] = SCORING_RULES["hiring_volume"]["points"]
+
+    # DTC ecommerce — Shopify + Klaviyo combo (real DTC running paid)
+    if any(t in tech for t in ["shopify", "bigcommerce"]) and "klaviyo" in tech:
+        breakdown["dtc_ecommerce"] = SCORING_RULES["dtc_ecommerce"]["points"]
+
+    # Has contact — named contact found on website (makes prospect actionable)
+    contacts = intel.get("contacts", [])
+    if contacts or prospect_data.get("name", "").strip():
+        breakdown["has_contact"] = SCORING_RULES["has_contact"]["points"]
+
+    # Established company — 20+ employees AND not a dead website
+    emp_count = _employee_count(str(employees)) if employees else 0
+    if emp_count >= 20 and not intel.get("dead_website", False):
+        breakdown["established_company"] = SCORING_RULES["established_company"]["points"]
 
     # Calculate total
     score = sum(breakdown.values())
