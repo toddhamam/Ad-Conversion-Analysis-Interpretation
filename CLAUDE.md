@@ -1051,6 +1051,7 @@ GOOGLE_ADS_DEVELOPER_TOKEN= # From Google Ads → Tools → API Center
 GOOGLE_ADS_CUSTOMER_ID=     # Google Ads account ID (no dashes, e.g. 1234567890)
 GOOGLE_ADS_REFRESH_TOKEN=   # OAuth refresh token with adwords scope
 ENCRYPTION_KEY=             # 32-byte hex key for encrypting Google OAuth tokens at rest
+META_CONFIG_ID=             # Facebook Login for Business configuration ID (from App Dashboard → FLB → Configurations)
 SENTRY_DSN=                 # Sentry DSN for backend error tracking (same as VITE_SENTRY_DSN)
 SENTRY_AUTH_TOKEN=          # Sentry auth token for source map uploads (build-time only)
 SENTRY_ORG=                 # Sentry organization slug (build-time only)
@@ -1190,6 +1191,35 @@ The Ad Library browser (CreativeIQ Step 1) searches Meta's public `ads_archive` 
 - Code 1 can also be transient — the handler retries up to 2 times with exponential backoff
 
 **Files**: `api/meta.ts` (`handleAdLibrary`), `src/services/metaApi.ts` (`searchAdLibrary`), `src/components/AdLibraryBrowser.tsx`
+
+### Facebook Login for Business (FLB) — OAuth Configuration
+
+The app uses **Facebook Login for Business** (not standard Facebook Login). This means the OAuth flow uses a `config_id` parameter instead of `scope` — permissions are defined in a Configuration object in the Meta App Dashboard, not in the OAuth URL.
+
+**Key difference from standard Facebook Login:**
+- Standard: `scope=ads_management,ads_read,...` in the OAuth URL
+- FLB: `config_id=<id>` in the OAuth URL — permissions come from the configuration
+
+**OAuth URL parameters:**
+- `client_id` — Meta App ID (still required)
+- `config_id` — FLB configuration ID (replaces `scope`)
+- `response_type=code` — server-side authorization code flow
+- `override_default_response_type=true` — required for server-side code flow with FLB
+- `redirect_uri` — callback URL
+- `state` — CSRF + org context
+
+**Creating/editing the FLB configuration:**
+1. Go to **developers.facebook.com** → App → **Facebook Login for Business** → **Configurations**
+2. Click **"+ Create configuration"** (or edit existing)
+3. Set **Login variation**: "General"
+4. Set **Token type**: "User access token"
+5. Select ALL permissions: `ads_management`, `ads_read`, `business_management`, `pages_read_engagement`, `pages_show_list`
+6. Save and copy the **config_id**
+7. Set `META_CONFIG_ID=<config_id>` in Vercel environment variables
+
+**Critical:** `public_profile` must have **Advanced Access** in the App Review dashboard. Without it, external users are blocked even if all other permissions are approved.
+
+**Callback flow is unchanged:** The token exchange (`/oauth/access_token`), long-lived token exchange, and credential storage all use `client_id` + `client_secret` as before — `config_id` only affects the initial authorization dialog.
 
 ### Meta API Token Management
 - **Short-lived tokens** (Graph API Explorer): Expire in 1-2 hours. Only for quick testing.
