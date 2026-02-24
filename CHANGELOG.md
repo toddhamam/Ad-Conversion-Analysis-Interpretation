@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-02-24 — Fix Meta OAuth: switch to Facebook Login for Business config_id flow
+
+### Problem
+External users were blocked at the Meta OAuth dialog with "access denied — user needs at least one permission." The app uses **Facebook Login for Business** (FLB) as its login product, which requires a `config_id` parameter instead of the standard `scope` parameter. The scope-based flow (reverted to in #228) is incompatible with FLB — permissions must be defined in a Configuration object in the Meta App Dashboard and referenced by `config_id`.
+
+### Solution
+Switched from `scope`-based OAuth URL to `config_id`-based flow. The FLB configuration in the Meta App Dashboard defines the permissions (`ads_management`, `ads_read`, `business_management`, `pages_read_engagement`, `pages_show_list`) and token type, and `config_id` references it in the OAuth dialog URL.
+
+### Changed
+- **`api/auth/meta/connect.ts`** — Replaced `scope` parameter with `config_id` from `META_CONFIG_ID` env var; added `override_default_response_type=true` for server-side code flow; updated config validation to require `META_CONFIG_ID`
+- **`CLAUDE.md`** — Added `META_CONFIG_ID` to backend env vars; added "Facebook Login for Business" documentation section with configuration setup steps
+
+### New Environment Variables (Vercel)
+- `META_CONFIG_ID` — Facebook Login for Business configuration ID (created in Meta Developer Dashboard → Facebook Login for Business → Configurations)
+
+### Dashboard Setup Required
+Before deploying, create/verify the FLB configuration: App Dashboard → Facebook Login for Business → Configurations → Create with "General" login variation, "User access token" type, and all 5 permissions selected.
+
+---
+
 ## 2026-02-24 — Add Transaction Fees and Net Profit dashboard metric cards
 
 ### Added
