@@ -336,6 +336,59 @@ def cmd_orchestrate_prospect(args):
     output(result)
 
 
+# ─── Enrich commands ─────────────────────────────────────────────────
+
+def cmd_enrich_person(args):
+    from modules.enrichment import enrich_person
+    parts = args.name.strip().split()
+    first = parts[0] if parts else ""
+    last = parts[-1] if len(parts) > 1 else ""
+    result = enrich_person(
+        first, last, args.domain,
+        organization_name=args.company or "",
+        linkedin_url=args.linkedin or "",
+    )
+    output(result)
+
+
+def cmd_enrich_prospect(args):
+    from modules.enrichment import enrich_person, map_apollo_to_prospect
+    from modules.pipeline import get_prospect, update_prospect
+    from modules.email_finder import _domain_from_url
+
+    prospect = get_prospect(args.id)
+    if not prospect:
+        error(f"Prospect {args.id} not found")
+
+    parts = prospect.get("name", "").strip().split()
+    if len(parts) < 2:
+        error(f"Prospect {args.id} needs first + last name")
+
+    domain = _domain_from_url(prospect.get("company_url", ""))
+    if not domain:
+        error(f"Prospect {args.id} has no company_url")
+
+    result = enrich_person(
+        parts[0], parts[-1], domain,
+        organization_name=prospect.get("company", ""),
+        linkedin_url=prospect.get("linkedin_url", ""),
+    )
+
+    if result["status"] == "matched" and result.get("person"):
+        updates = map_apollo_to_prospect(result["person"], prospect)
+        if updates:
+            update_prospect(args.id, updates)
+            result["updates_applied"] = list(updates.keys())
+
+    output(result)
+
+
+def cmd_enrich_batch(args):
+    from modules.enrichment import batch_enrich
+    result = batch_enrich(stage=args.stage, score_min=args.score_min)
+    output(result)
+
+
 # ─── Draft commands ──────────────────────────────────────────────────
 
 def cmd_draft_email(args):
@@ -570,6 +623,26 @@ def build_parser():
     e_search.add_argument("--name", required=True)
     e_search.add_argument("--company", required=True)
     e_search.set_defaults(func=cmd_email_search)
+
+    # ── enrich ──
+    enrich_parser = subparsers.add_parser("enrich", help="Apollo.io enrichment")
+    enrich_sub = enrich_parser.add_subparsers(dest="action")
+
+    en_person = enrich_sub.add_parser("person", help="Enrich a single person")
+    en_person.add_argument("--name", required=True, help="Full name")
+    en_person.add_argument("--domain", required=True, help="Company domain")
+    en_person.add_argument("--company", type=str, default="", help="Company name")
+    en_person.add_argument("--linkedin", type=str, default="", help="LinkedIn URL")
+    en_person.set_defaults(func=cmd_enrich_person)
+
+    en_prospect = enrich_sub.add_parser("prospect", help="Enrich a pipeline prospect")
+    en_prospect.add_argument("--id", required=True)
+    en_prospect.set_defaults(func=cmd_enrich_prospect)
+
+    en_batch = enrich_sub.add_parser("batch", help="Batch enrich prospects")
+    en_batch.add_argument("--stage", type=str, default="researched")
+    en_batch.add_argument("--score-min", type=int, dest="score_min")
+    en_batch.set_defaults(func=cmd_enrich_batch)
 
     # ── report ──
     report_parser = subparsers.add_parser("report", help="Campaign reports")

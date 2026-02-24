@@ -130,8 +130,11 @@ def format_daily_summary(report_data, inbox_data, followup_data, send_data):
     return "\n".join(lines)
 
 
-def format_campaign_summary(discovery_count, research_count, scored_count, emails_found, drafted_count):
+def format_campaign_summary(discovery_count, research_count, scored_count, emails_found, drafted_count, enrichment=None):
     """Format campaign pipeline results as Telegram markdown.
+
+    Args:
+        enrichment: optional dict with keys: enriched, emails_found, credits_used
 
     Returns:
         str: Formatted markdown string.
@@ -146,11 +149,20 @@ def format_campaign_summary(discovery_count, research_count, scored_count, email
         f"- Discovered: {discovery_count} prospects",
         f"- Researched: {research_count}",
         f"- Scored: {scored_count}",
+    ]
+
+    if enrichment:
+        apollo_enriched = enrichment.get("enriched", 0)
+        apollo_emails = enrichment.get("emails_found", 0)
+        credits = enrichment.get("credits_used", 0)
+        lines.append(f"- Apollo enriched: {apollo_enriched} ({apollo_emails} emails, {credits} credits)")
+
+    lines.extend([
         f"- Emails found: {emails_found}",
         f"- Emails drafted: {drafted_count}",
         "",
         f"Ready for outreach: {drafted_count} prospects in ready\\_to\\_send",
-    ]
+    ])
 
     return "\n".join(lines)
 
@@ -229,6 +241,8 @@ def format_prospect_hunt_summary(hunt_results):
 
     status_icon = "completed" if target_met else "stopped"
 
+    enrichment = hunt_results.get("enrichment", {})
+
     lines = [
         f"*Prospect Hunt {status_icon}* -- {date_str}",
         f"Rounds: {rounds}/{max_rounds} | Duration: {duration}",
@@ -241,6 +255,18 @@ def format_prospect_hunt_summary(hunt_results):
         f"- Hot (8+): {totals.get('hot_scored', 0)}",
         f"- Warm (5-7): {max(0, totals.get('warm_scored', 0) - totals.get('hot_scored', 0))}",
         "",
+    ]
+
+    if enrichment.get("enriched", 0) > 0:
+        lines.extend([
+            "*Apollo Enrichment*",
+            f"- Enriched: {enrichment.get('enriched', 0)}",
+            f"- Emails found: {enrichment.get('emails_found', 0)}",
+            f"- Credits used: {enrichment.get('credits_used', 0)}",
+            "",
+        ])
+
+    lines.extend([
         "*Outreach Ready*",
         f"- Emails found: {email_finding.get('found', 0)}",
         f"- Drafts written: {drafting.get('drafted', 0)}",
@@ -249,7 +275,7 @@ def format_prospect_hunt_summary(hunt_results):
         f"  - Warm: {final.get('warm_ready', 0)}",
         "",
         f"Target: {target} hot | Actual: {final.get('hot_ready', 0)} hot",
-    ]
+    ])
 
     if target_met:
         lines.append("*Target met!*")
