@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-02-24 — Fix Meta OAuth for external users: revert to scope-based flow
+
+### Problem
+External users were still blocked at the Facebook authorization dialog ("Feature unavailable") after switching to `config_id` (Facebook Login for Business) in PR #226. The `config_id` approach introduced an opaque dependency on an FLB dashboard configuration that could silently block external users — even with all 5 permissions approved via App Review. Investigation also revealed `public_profile` (automatically included in every OAuth flow) was stuck at "Ready for testing" instead of Advanced Access.
+
+### Solution
+Reverted from `config_id` to explicit `scope` parameter listing all 5 approved permissions. The standard scope-based OAuth flow works directly with Advanced Access permissions without requiring an intermediary FLB configuration. Also identified and escalated the `public_profile` access level issue on the Meta Developer Dashboard.
+
+### Changed
+- **`api/auth/meta/connect.ts`** — Replaced `config_id` + `override_default_response_type` with explicit `scope` parameter (`ads_management`, `ads_read`, `business_management`, `pages_read_engagement`, `pages_show_list`); removed `META_CONFIG_ID` env var dependency; simplified config validation to only require `META_APP_ID`
+
+### Removed Environment Variables
+- `META_CONFIG_ID` — No longer needed; permissions are specified directly via `scope` parameter
+
+---
+
 ## 2026-02-24 — Switch Meta OAuth to Facebook Login for Business (config_id)
 
 ### Problem

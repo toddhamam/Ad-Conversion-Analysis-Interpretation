@@ -5,10 +5,15 @@ import { initSentry } from '../../_lib/sentry.js';
 initSentry();
 
 const META_APP_ID = process.env.META_APP_ID;
-// Facebook Login for Business configuration ID — defines permissions and assets
-// requested during the OAuth flow. Created in Meta Developer Dashboard under
-// Facebook Login for Business → Configurations.
-const META_CONFIG_ID = process.env.META_CONFIG_ID;
+
+// Required scopes for Meta Marketing API access
+const SCOPES = [
+  'ads_management',
+  'ads_read',
+  'business_management',
+  'pages_read_engagement',
+  'pages_show_list',
+].join(',');
 
 function getRedirectUri(req: VercelRequest): string {
   if (process.env.META_REDIRECT_URI) return process.env.META_REDIRECT_URI;
@@ -27,10 +32,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ? returnUrl
     : (typeof organizationId === 'string' ? `/admin/organizations/${organizationId}` : '/admin');
 
-  if (!META_APP_ID || !META_CONFIG_ID) {
+  if (!META_APP_ID) {
     return res.redirect(
       302,
-      `${fallbackUrl}?error=config&message=${encodeURIComponent('Meta OAuth is not configured. Set META_APP_ID, META_APP_SECRET, and META_CONFIG_ID environment variables in Vercel.')}`
+      `${fallbackUrl}?error=config&message=${encodeURIComponent('Meta OAuth is not configured. Set META_APP_ID and META_APP_SECRET environment variables in Vercel.')}`
     );
   }
 
@@ -59,14 +64,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `meta_oauth_state=${csrfToken}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=600`
   );
 
-  // Build Facebook Login for Business OAuth URL
-  // Uses config_id instead of scope — the configuration defines permissions and assets
+  // Build Facebook OAuth URL with explicit scope
   const authUrl = new URL('https://www.facebook.com/v21.0/dialog/oauth');
   authUrl.searchParams.set('client_id', META_APP_ID);
   authUrl.searchParams.set('redirect_uri', getRedirectUri(req));
-  authUrl.searchParams.set('config_id', META_CONFIG_ID);
+  authUrl.searchParams.set('scope', SCOPES);
   authUrl.searchParams.set('response_type', 'code');
-  authUrl.searchParams.set('override_default_response_type', 'true');
   authUrl.searchParams.set('state', state);
 
   // Redirect to Facebook login
