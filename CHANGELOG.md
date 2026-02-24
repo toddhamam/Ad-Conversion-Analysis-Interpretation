@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-02-24 — Add Transaction Fees and Net Profit dashboard metric cards
+
+### Added
+- **Transaction Fees card** — Displays Stripe fees as a dollar figure (6.2% of total revenue) with a credit card icon
+- **Net Profit card** — Calculated as Total Revenue minus Ad Spend minus Transaction Fees, with a wallet icon
+- Both cards are visible by default, respond to the date range picker, and can be reordered/hidden via the dashboard customizer
+- Fee rate defined as a `TRANSACTION_FEE_RATE` constant for easy adjustment
+
+### Changed
+- **`src/pages/Dashboard.tsx`** — Added `transactionFees` and `netProfit` to `DashboardStats` interface, default metric config, icons, labels, formatting, and calculation logic
+
+---
+
 ## 2026-02-24 — Fix Meta OAuth for external users: revert to scope-based flow
 
 ### Problem
