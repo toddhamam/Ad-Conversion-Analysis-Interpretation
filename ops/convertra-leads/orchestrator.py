@@ -253,32 +253,32 @@ def run_campaign(niches, include_jobs=False, campaign_name=None):
         )
 
         # Phase 4: Enrich + Find emails (warm+ leads, score >= 5)
-        log.info("Phase 4: Apollo enrichment + email finding...")
+        log.info("Phase 4: Hunter enrichment + email finding...")
 
-        # Step 4a: Apollo enrichment (also finds emails)
-        apollo_stats = {"enriched": 0, "emails_found": 0, "credits_used": 0}
-        api_key = os.environ.get("APOLLO_API_KEY", "")
+        # Step 4a: Hunter.io enrichment (also finds emails)
+        hunter_stats = {"enriched": 0, "emails_found": 0, "credits_used": 0}
+        api_key = os.environ.get("HUNTER_API_KEY", "")
         if api_key:
             try:
                 from modules.enrichment import batch_enrich
-                apollo_stats = batch_enrich(stage="researched", score_min=5)
+                hunter_stats = batch_enrich(stage="researched", score_min=5)
                 log.info(
-                    f"  Apollo: {apollo_stats.get('enriched', 0)} enriched, "
-                    f"{apollo_stats.get('emails_found', 0)} emails found, "
-                    f"{apollo_stats.get('credits_used', 0)} credits used"
+                    f"  Hunter: {hunter_stats.get('enriched', 0)} enriched, "
+                    f"{hunter_stats.get('emails_found', 0)} emails found, "
+                    f"{hunter_stats.get('credits_used', 0)} credits used"
                 )
             except Exception as e:
-                log.error(f"  Apollo enrichment failed: {e}")
+                log.error(f"  Hunter enrichment failed: {e}")
         else:
-            log.info("  Apollo not configured — skipping enrichment.")
+            log.info("  Hunter not configured — skipping enrichment.")
 
-        # Step 4b: Pattern-guess fallback for prospects Apollo missed
+        # Step 4b: Pattern-guess fallback for prospects Hunter missed
         from modules.email_finder import batch_find_emails
         email_result = batch_find_emails(stage="researched", score_min=5)
         results["enrichment"] = {
-            "apollo_enriched": apollo_stats.get("enriched", 0),
-            "apollo_emails": apollo_stats.get("emails_found", 0),
-            "apollo_credits": apollo_stats.get("credits_used", 0),
+            "enriched": hunter_stats.get("enriched", 0),
+            "emails_found": hunter_stats.get("emails_found", 0),
+            "credits_used": hunter_stats.get("credits_used", 0),
         }
         results["email_finding"] = {
             "found": email_result.get("found", 0),
@@ -890,22 +890,22 @@ def run_prospect_hunt(target=20, niches=None, include_jobs=True, max_rounds=10,
     # ── Final batch: enrichment + email finding + drafting for all warm+ leads ──
     log.info("=== FINAL BATCH: Enrichment + Email finding + AI drafting ===")
 
-    # Step 1: Apollo enrichment
-    apollo_stats = {"enriched": 0, "emails_found": 0, "credits_used": 0}
-    api_key = os.environ.get("APOLLO_API_KEY", "")
+    # Step 1: Hunter.io enrichment
+    hunter_stats = {"enriched": 0, "emails_found": 0, "credits_used": 0}
+    api_key = os.environ.get("HUNTER_API_KEY", "")
     if api_key:
         try:
             from modules.enrichment import batch_enrich
-            apollo_stats = batch_enrich(stage="researched", score_min=email_score_min)
+            hunter_stats = batch_enrich(stage="researched", score_min=email_score_min)
             log.info(
-                f"  Apollo: {apollo_stats.get('enriched', 0)} enriched, "
-                f"{apollo_stats.get('emails_found', 0)} emails, "
-                f"{apollo_stats.get('credits_used', 0)} credits"
+                f"  Hunter: {hunter_stats.get('enriched', 0)} enriched, "
+                f"{hunter_stats.get('emails_found', 0)} emails, "
+                f"{hunter_stats.get('credits_used', 0)} credits"
             )
         except Exception as e:
-            log.error(f"  Apollo enrichment failed: {e}")
+            log.error(f"  Hunter enrichment failed: {e}")
     else:
-        log.info("  Apollo not configured — skipping enrichment.")
+        log.info("  Hunter not configured — skipping enrichment.")
 
     # Step 2: Fallback email finding
     from modules.email_finder import batch_find_emails
@@ -950,9 +950,9 @@ def run_prospect_hunt(target=20, niches=None, include_jobs=True, max_rounds=10,
             "warm_scored": warm_total,
         },
         "enrichment": {
-            "enriched": apollo_stats.get("enriched", 0),
-            "emails_found": apollo_stats.get("emails_found", 0),
-            "credits_used": apollo_stats.get("credits_used", 0),
+            "enriched": hunter_stats.get("enriched", 0),
+            "emails_found": hunter_stats.get("emails_found", 0),
+            "credits_used": hunter_stats.get("credits_used", 0),
         },
         "email_finding": {
             "found": email_result.get("found", 0),
