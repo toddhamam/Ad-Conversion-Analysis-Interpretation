@@ -124,12 +124,18 @@ def score_prospect(prospect_data):
 
 
 def classify_tier(score):
-    """Classify score into tier: hot, warm, cool, skip."""
-    if score >= 12:
+    """Classify score into tier: hot, warm, cool, skip.
+
+    Thresholds calibrated for achievable scores:
+    - Website research alone can yield ~5-7 pts (hiring + funding + tech + content)
+    - Ad Library data adds ~2-4 pts (ad count + platforms)
+    - Combined realistic max is ~11 pts (creative_fatigue/longest_running_days rarely available)
+    """
+    if score >= 8:
         return "hot"
-    elif score >= 8:
-        return "warm"
     elif score >= 5:
+        return "warm"
+    elif score >= 3:
         return "cool"
     else:
         return "skip"

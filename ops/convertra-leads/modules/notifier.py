@@ -205,6 +205,60 @@ def format_weekly_summary(pipeline_summary, campaign_report, red_flags):
     return "\n".join(lines)
 
 
+def format_prospect_hunt_summary(hunt_results):
+    """Format prospect hunt results as Telegram markdown.
+
+    Args:
+        hunt_results: dict from run_prospect_hunt()
+
+    Returns:
+        str: Formatted markdown string for Telegram.
+    """
+    from datetime import datetime
+    date_str = datetime.now().strftime("%Y-%m-%d")
+
+    target = hunt_results.get("target", 20)
+    rounds = hunt_results.get("rounds_completed", 0)
+    max_rounds = hunt_results.get("max_rounds", 10)
+    duration = hunt_results.get("duration", "")
+    totals = hunt_results.get("totals", {})
+    email_finding = hunt_results.get("email_finding", {})
+    drafting = hunt_results.get("drafting", {})
+    final = hunt_results.get("final_counts", {})
+    target_met = hunt_results.get("target_met", False)
+
+    status_icon = "completed" if target_met else "stopped"
+
+    lines = [
+        f"*Prospect Hunt {status_icon}* -- {date_str}",
+        f"Rounds: {rounds}/{max_rounds} | Duration: {duration}",
+        "",
+        "*Discovery*",
+        f"- {totals.get('total_discovered', 0)} prospects found",
+        f"- {totals.get('niches_exhausted', 0)} niches exhausted",
+        "",
+        "*Scoring*",
+        f"- Hot (8+): {totals.get('hot_scored', 0)}",
+        f"- Warm (5-7): {max(0, totals.get('warm_scored', 0) - totals.get('hot_scored', 0))}",
+        "",
+        "*Outreach Ready*",
+        f"- Emails found: {email_finding.get('found', 0)}",
+        f"- Drafts written: {drafting.get('drafted', 0)}",
+        f"- Ready to send: {final.get('total_ready', 0)}",
+        f"  - Hot: {final.get('hot_ready', 0)}",
+        f"  - Warm: {final.get('warm_ready', 0)}",
+        "",
+        f"Target: {target} hot | Actual: {final.get('hot_ready', 0)} hot",
+    ]
+
+    if target_met:
+        lines.append("*Target met!*")
+    else:
+        lines.append(f"_{max(0, target - final.get('hot_ready', 0))} short of target_")
+
+    return "\n".join(lines)
+
+
 def _split_message(message):
     """Split a message into chunks within Telegram's character limit.
 

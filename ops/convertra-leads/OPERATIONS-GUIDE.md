@@ -193,11 +193,11 @@ Phase 3: Scoring
 
 Phase 4: Email Finding
 └── DNS verification + pattern matching + web search
-    (only for prospects scoring 8+)
+    (only for warm+ prospects, score >= 5)
 
 Phase 5: AI Email Drafting ← ONLY step that uses tokens
 └── GPT-5.2 drafts personalized cold emails
-    (~500 tokens each, falls back to templates if API fails)
+    (~500 tokens each, falls back to templates if API fails, score >= 5)
 
 Phase 6: Summary
 └── Telegram notification with pipeline results
@@ -207,7 +207,81 @@ After a campaign, prospects are in `ready_to_send`. The next daily cron run will
 
 ---
 
-## 4. Individual Commands
+## 4. Prospect Hunt (Persistent Discovery)
+
+When a single campaign doesn't produce enough hot leads, use the prospect hunt. It loops discovery → research → score across all niches until it accumulates your target number of hot leads, then runs email finding and AI drafting as a single final batch.
+
+```bash
+ssh -i ~/.ssh/convertra-ops.key ubuntu@152.69.171.177
+cd /home/ubuntu/convertra-leads
+```
+
+### Basic usage
+
+```bash
+# Hunt for 20 hot leads (default target)
+python3 orchestrator.py prospect --target 20
+
+# Hunt for 5 hot leads (quick test)
+python3 orchestrator.py prospect --target 5
+
+# Specific niches only, no job listings
+python3 orchestrator.py prospect --target 20 --niches "supplements,skincare" --no-jobs
+
+# More rounds allowed, custom score threshold
+python3 orchestrator.py prospect --target 30 --max-rounds 15 --score-threshold 10
+```
+
+### How the hunt works
+
+```
+Round 1: supplements (niche)
+├── Discover: DuckDuckGo + Ad Library → 20 new prospects
+├── Research: scrape each company website
+├── Score: 17-point rubric → 3 hot, 5 warm, 12 other
+└── Telegram: "Hot scored: 3/20 target"
+
+Round 2: skincare (niche)
+├── Same pipeline → 4 more hot
+└── Telegram: "Hot scored: 7/20 target"
+
+Round 3: job_listings (every 3rd round)
+├── Search for companies hiring media buyers
+└── Telegram: "Hot scored: 9/20 target"
+
+... continues rotating through niches ...
+
+Round 8: supplements (2nd pass — returns 0 new, marked exhausted)
+Round 9: skincare 2026 (expanded keyword variant)
+
+FINAL BATCH (runs once after loop ends):
+├── Email finding for all warm+ leads (score >= 5)
+└── AI drafting via GPT-5.2 (~500 tokens each)
+```
+
+### Key behaviors
+
+- **All leads kept** — hot, warm, cool, and skip leads all stay in the pipeline. The target only controls when the loop stops.
+- **Niche rotation** — cycles through all 6 niches round-robin, plus job listings every 3rd round.
+- **Exhaustion detection** — if a niche returns 0 new prospects (DuckDuckGo gives the same results for repeated queries), it's marked exhausted and skipped.
+- **Expanded keywords** — when all standard niches exhaust, generates variants like "supplements 2026", "skincare startup", etc.
+- **Deferred AI costs** — discovery/research/scoring is free (no tokens). Email drafting only happens once at the end.
+- **Telegram progress** — sends a per-round update and a final summary card.
+
+### Scoring tiers (recalibrated)
+
+| Tier | Score | What it means |
+|------|-------|---------------|
+| **Hot** | 8+ | High-intent: multiple ad signals + strong company indicators |
+| **Warm** | 5-7 | Moderate intent: some ad activity or strong website signals |
+| **Cool** | 3-4 | Low intent: minimal signals but worth keeping |
+| **Skip** | < 3 | Not a fit: dead website, solo operation, or negative signals |
+
+Realistic max score from available data is ~11 points (website research: ~5-7 pts from hiring, funding, tech stack, content; Ad Library: ~2-4 pts from ad count, platforms).
+
+---
+
+## 5. Individual Commands
 
 For ad-hoc operations when you need to do something specific:
 
@@ -368,7 +442,7 @@ python3 cli.py notify send --message "Pipeline check: all systems go"
 
 ---
 
-## 5. Monitoring
+## 6. Monitoring
 
 ### Check logs
 
@@ -410,7 +484,7 @@ print(f\"Ready to send: {s.get('by_stage', {}).get('ready_to_send', 0)}\")
 
 ---
 
-## 6. Typical Weekly Workflow
+## 7. Typical Weekly Workflow
 
 | Day | What Happens | Your Action |
 |-----|-------------|-------------|
@@ -446,7 +520,7 @@ python3 cli.py followup resume --id p_042
 
 ---
 
-## 7. Token Cost Summary
+## 8. Token Cost Summary
 
 | Operation | Tokens | Frequency |
 |-----------|--------|-----------|
@@ -463,7 +537,7 @@ python3 cli.py followup resume --id p_042
 
 ---
 
-## 8. File Reference
+## 9. File Reference
 
 ```
 /home/ubuntu/convertra-leads/

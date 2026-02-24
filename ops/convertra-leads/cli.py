@@ -323,6 +323,19 @@ def cmd_orchestrate_campaign(args):
     output(result)
 
 
+def cmd_orchestrate_prospect(args):
+    from orchestrator import run_prospect_hunt
+    niches = [n.strip() for n in args.niches.split(",")] if args.niches else None
+    result = run_prospect_hunt(
+        target=args.target,
+        niches=niches,
+        include_jobs=args.include_jobs,
+        max_rounds=args.max_rounds,
+        campaign_name=args.campaign_name,
+    )
+    output(result)
+
+
 # ─── Draft commands ──────────────────────────────────────────────────
 
 def cmd_draft_email(args):
@@ -587,6 +600,15 @@ def build_parser():
     o_campaign.add_argument("--include-jobs", action="store_true", dest="include_jobs")
     o_campaign.add_argument("--campaign", type=str, dest="campaign_name")
     o_campaign.set_defaults(func=cmd_orchestrate_campaign)
+
+    o_prospect = orch_sub.add_parser("prospect", help="Hunt for N hot leads across niches")
+    o_prospect.add_argument("--target", type=int, default=20, help="Target hot leads (default: 20)")
+    o_prospect.add_argument("--niches", type=str, help="Comma-separated niches (default: all)")
+    o_prospect.add_argument("--include-jobs", action="store_true", default=True, dest="include_jobs")
+    o_prospect.add_argument("--no-jobs", action="store_false", dest="include_jobs")
+    o_prospect.add_argument("--max-rounds", type=int, default=10, dest="max_rounds", help="Max rounds (default: 10)")
+    o_prospect.add_argument("--campaign", type=str, dest="campaign_name")
+    o_prospect.set_defaults(func=cmd_orchestrate_prospect)
 
     # ── draft ──
     draft_parser = subparsers.add_parser("draft", help="AI email drafting")

@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """Convertra Leads Orchestrator — cron-driven pipeline automation.
 
-Replaces OpenClaw bot. Three modes:
+Replaces OpenClaw bot. Four modes:
   - daily: inbox -> followups -> send -> report -> notify
   - weekly: health check + red flag detection
   - campaign: discover -> research -> score -> email-find -> draft -> notify
+  - prospect: loop discovery until N hot leads, then batch email-find + draft
 
 Usage:
   python3 orchestrator.py daily
   python3 orchestrator.py weekly
   python3 orchestrator.py campaign --niches "supplements,skincare" [--include-jobs] [--campaign "feb-2026"]
+  python3 orchestrator.py prospect --target 20 [--niches "supplements,skincare"] [--max-rounds 10]
 """
 
 import argparse
@@ -250,10 +252,10 @@ def run_campaign(niches, include_jobs=False, campaign_name=None):
             f"(hot: {score_result.get('hot', 0)}, warm: {score_result.get('warm', 0)})"
         )
 
-        # Phase 4: Find emails
+        # Phase 4: Find emails (warm+ leads, score >= 5)
         log.info("Phase 4: Finding emails...")
         from modules.email_finder import batch_find_emails
-        email_result = batch_find_emails(stage="researched", score_min=8)
+        email_result = batch_find_emails(stage="researched", score_min=5)
         results["email_finding"] = {
             "found": email_result.get("found", 0),
             "not_found": email_result.get("not_found", 0),
@@ -263,10 +265,10 @@ def run_campaign(niches, include_jobs=False, campaign_name=None):
             f"Not found: {email_result.get('not_found', 0)}"
         )
 
-        # Phase 5: AI Draft emails (ONLY AI step)
+        # Phase 5: AI Draft emails (ONLY AI step, warm+ leads)
         log.info("Phase 5: AI email drafting (GPT-5.2)...")
         from modules.drafter import batch_draft
-        draft_result = batch_draft(stage="researched", score_min=8)
+        draft_result = batch_draft(stage="researched", score_min=5)
         results["drafting"] = {
             "drafted": draft_result.get("drafted", 0),
             "fallback": draft_result.get("fallback", 0),
@@ -729,6 +731,268 @@ def _run_discovery(niches, include_jobs, campaign_name):
 
 
 # ──────────────────────────────────────────────────────────────────────
+# PROSPECT HUNT — Loop until N hot leads
+# ──────────────────────────────────────────────────────────────────────
+
+def run_prospect_hunt(target=20, niches=None, include_jobs=True, max_rounds=10,
+                      score_threshold=8, email_score_min=5, campaign_name=None):
+    """Loop discovery until target hot leads are found, then batch email-find + draft.
+
+    Rotates through niches round-robin, inserts job listings every 3rd round,
+    detects niche exhaustion, and expands to keyword variants when needed.
+    All leads are kept (hot, warm, cool, skip) — target only controls when the loop stops.
+
+    Args:
+        target: Number of hot leads (fit_score >= score_threshold) to accumulate before stopping.
+        niches: List of niche keywords. Defaults to all 6 built-in niches.
+        include_jobs: Whether to include job listing searches in rotation.
+        max_rounds: Maximum discovery rounds before stopping regardless.
+        score_threshold: What counts as "hot" (default 12).
+        email_score_min: Minimum score for email finding + drafting (default 8 = warm+hot).
+        campaign_name: Optional campaign tag.
+
+    Returns:
+        dict: Full hunt summary with per-round stats and final pipeline counts.
+    """
+    from collections import deque
+    from modules.discovery import DEFAULT_NICHES
+
+    log.info("=== PROSPECT HUNT START ===")
+    log.info(f"  Target: {target} hot leads (score >= {score_threshold})")
+    log.info(f"  Max rounds: {max_rounds}, Include jobs: {include_jobs}")
+
+    start_time = time.time()
+    if not campaign_name:
+        campaign_name = f"hunt-{datetime.now().strftime('%Y-%m-%d')}"
+
+    all_niches = niches if niches else list(DEFAULT_NICHES)
+    niche_queue = deque(all_niches)
+    exhausted_niches = set()
+    jobs_used = False
+    round_results = []
+
+    results = {
+        "timestamp": datetime.now().isoformat(),
+        "mode": "prospect_hunt",
+        "campaign": campaign_name,
+        "target": target,
+        "score_threshold": score_threshold,
+        "email_score_min": email_score_min,
+    }
+
+    # ── Discovery loop ──
+    for round_num in range(1, max_rounds + 1):
+        # Check if target already met
+        hot_scored = _count_hot_scored(score_threshold)
+        if hot_scored >= target:
+            log.info(f"  Target met! {hot_scored}/{target} hot leads scored.")
+            break
+
+        # Pick next source
+        source, source_type = _pick_next_source(
+            niche_queue, exhausted_niches, round_num, include_jobs, jobs_used
+        )
+
+        if source is None:
+            # Try expanded keywords
+            expanded = _expand_keywords(all_niches, exhausted_niches)
+            if expanded:
+                log.info(f"  All standard niches exhausted — trying expanded keywords...")
+                for kw in expanded:
+                    niche_queue.append(kw)
+                source, source_type = niche_queue.popleft(), "expanded"
+            else:
+                log.info(f"  All sources exhausted after {round_num - 1} rounds.")
+                break
+
+        log.info(f"--- Round {round_num}/{max_rounds}: {source} ({source_type}) ---")
+
+        # Phase 1: Discovery (single source)
+        discovery = _run_discovery(
+            niches=[source] if source_type != "jobs" else [],
+            include_jobs=(source_type == "jobs"),
+            campaign_name=campaign_name,
+        )
+        discovered = discovery["total_added"]
+        log.info(f"  Discovered: {discovered} new prospects")
+
+        if discovered == 0:
+            exhausted_niches.add(source)
+            log.info(f"  Niche '{source}' exhausted (0 new) — will skip in future rounds.")
+        else:
+            # Phase 2: Research
+            log.info(f"  Researching...")
+            from modules.research import batch_research
+            research_result = batch_research(stage="discovered")
+            researched = research_result.get("researched", 0)
+            log.info(f"  Researched: {researched}")
+
+            # Phase 3: Score
+            log.info(f"  Scoring...")
+            from modules.scorer import batch_score
+            score_result = batch_score(stage="researched")
+            log.info(
+                f"  Scored: {score_result.get('scored', 0)} "
+                f"(hot: {score_result.get('hot', 0)}, warm: {score_result.get('warm', 0)})"
+            )
+
+        if source_type == "jobs":
+            jobs_used = True
+
+        # Track round stats
+        hot_scored = _count_hot_scored(score_threshold)
+        round_info = {
+            "round": round_num,
+            "source": source,
+            "source_type": source_type,
+            "discovered": discovered,
+            "hot_scored_total": hot_scored,
+            "target": target,
+        }
+        round_results.append(round_info)
+
+        # Telegram progress update
+        from modules.notifier import send_notification
+        progress_msg = (
+            f"*Prospect Hunt -- Round {round_num}/{max_rounds}*\n"
+            f"Source: {source} ({source_type})\n"
+            f"Discovered: {discovered} new\n"
+            f"Hot scored: {hot_scored}/{target} target\n"
+            f"Remaining: {max(0, target - hot_scored)} more needed"
+        )
+        send_notification(progress_msg)
+
+    # ── Final batch: email finding + drafting for all warm+ leads ──
+    log.info("=== FINAL BATCH: Email finding + AI drafting ===")
+
+    from modules.email_finder import batch_find_emails
+    from modules.drafter import batch_draft
+
+    log.info("  Finding emails (score >= {})...".format(email_score_min))
+    email_result = batch_find_emails(stage="researched", score_min=email_score_min)
+    log.info(
+        f"  Emails found: {email_result.get('found', 0)}, "
+        f"Not found: {email_result.get('not_found', 0)}"
+    )
+
+    log.info("  Drafting emails (GPT-5.2)...")
+    draft_result = batch_draft(stage="researched", score_min=email_score_min)
+    log.info(
+        f"  Drafted: {draft_result.get('drafted', 0)} "
+        f"(AI: {draft_result.get('drafted', 0) - draft_result.get('fallback', 0)}, "
+        f"template: {draft_result.get('fallback', 0)})"
+    )
+
+    # ── Final counts ──
+    from modules.pipeline import list_prospects
+    hot_ready = list_prospects(stage="ready_to_send", score_min=score_threshold).get("total", 0)
+    warm_ready = list_prospects(stage="ready_to_send", score_min=email_score_min).get("total", 0)
+    total_ready = list_prospects(stage="ready_to_send").get("total", 0)
+    hot_total = _count_hot_scored(score_threshold)
+    warm_total = _count_hot_scored(email_score_min)
+
+    elapsed = time.time() - start_time
+    duration = f"{int(elapsed // 60)}m {int(elapsed % 60)}s"
+
+    results.update({
+        "rounds_completed": len(round_results),
+        "max_rounds": max_rounds,
+        "duration": duration,
+        "target_met": hot_ready >= target,
+        "rounds": round_results,
+        "totals": {
+            "total_discovered": sum(r["discovered"] for r in round_results),
+            "niches_exhausted": len(exhausted_niches),
+            "hot_scored": hot_total,
+            "warm_scored": warm_total,
+        },
+        "email_finding": {
+            "found": email_result.get("found", 0),
+            "not_found": email_result.get("not_found", 0),
+        },
+        "drafting": {
+            "drafted": draft_result.get("drafted", 0),
+            "fallback": draft_result.get("fallback", 0),
+            "errors": draft_result.get("errors", 0),
+        },
+        "final_counts": {
+            "hot_ready": hot_ready,
+            "warm_ready": warm_ready,
+            "total_ready": total_ready,
+        },
+    })
+
+    # ── Final Telegram summary ──
+    from modules.notifier import send_notification, format_prospect_hunt_summary
+    message = format_prospect_hunt_summary(results)
+    notify_result = send_notification(message)
+    results["notification"] = notify_result
+
+    status = "TARGET MET" if hot_ready >= target else "TARGET NOT MET"
+    log.info(f"=== PROSPECT HUNT COMPLETE ({status}) ===")
+    log.info(f"  Hot ready: {hot_ready}/{target} | Warm ready: {warm_ready} | Duration: {duration}")
+    return results
+
+
+def _count_hot_scored(threshold):
+    """Count all prospects with fit_score >= threshold (any stage after scoring)."""
+    from modules.pipeline import list_prospects
+    result = list_prospects(score_min=threshold)
+    return result.get("total", 0)
+
+
+def _count_hot_ready(threshold):
+    """Count prospects with fit_score >= threshold AND stage == ready_to_send."""
+    from modules.pipeline import list_prospects
+    result = list_prospects(stage="ready_to_send", score_min=threshold)
+    return result.get("total", 0)
+
+
+def _pick_next_source(niche_queue, exhausted, round_num, include_jobs, jobs_used):
+    """Pick the next discovery source, rotating through niches.
+
+    Returns:
+        tuple: (source_name, source_type) or (None, None) if all exhausted.
+    """
+    # Every 3rd round, use job listings if available
+    if include_jobs and not jobs_used and round_num % 3 == 0:
+        return ("job_listings", "jobs")
+
+    # Try niches from queue
+    tried = 0
+    while niche_queue and tried < len(niche_queue):
+        niche = niche_queue.popleft()
+        if niche not in exhausted:
+            niche_queue.append(niche)  # Re-add to end for rotation
+            return (niche, "niche")
+        tried += 1
+
+    # All niches exhausted, try jobs as fallback
+    if include_jobs and not jobs_used:
+        return ("job_listings", "jobs")
+
+    return (None, None)
+
+
+def _expand_keywords(all_niches, exhausted):
+    """Generate expanded keyword variants when standard niches are exhausted.
+
+    Returns:
+        list of str: new pseudo-niche keywords to try.
+    """
+    modifiers = ["2026", "startup", "agency", "new brand", "emerging", "fast growing"]
+    expanded = []
+    for niche in all_niches:
+        for mod in modifiers:
+            key = f"{niche} {mod}"
+            if key not in exhausted:
+                expanded.append(key)
+                if len(expanded) >= 6:
+                    return expanded
+    return expanded
+
+
+# ──────────────────────────────────────────────────────────────────────
 # ENTRY POINT
 # ──────────────────────────────────────────────────────────────────────
 
@@ -750,6 +1014,15 @@ def main():
     camp.add_argument("--include-jobs", action="store_true", dest="include_jobs")
     camp.add_argument("--campaign", type=str, dest="campaign_name")
 
+    prospect = sub.add_parser("prospect", help="Hunt for N hot leads across niches")
+    prospect.add_argument("--target", type=int, default=20, help="Target hot leads (default: 20)")
+    prospect.add_argument("--niches", type=str, help="Comma-separated niches (default: all)")
+    prospect.add_argument("--include-jobs", action="store_true", default=True, dest="include_jobs")
+    prospect.add_argument("--no-jobs", action="store_false", dest="include_jobs")
+    prospect.add_argument("--max-rounds", type=int, default=10, dest="max_rounds", help="Max discovery rounds (default: 10)")
+    prospect.add_argument("--score-threshold", type=int, default=8, dest="score_threshold", help="Hot lead score (default: 8)")
+    prospect.add_argument("--campaign", type=str, dest="campaign_name")
+
     args = parser.parse_args()
 
     if args.mode == "daily":
@@ -759,6 +1032,16 @@ def main():
     elif args.mode == "campaign":
         niches = [n.strip() for n in args.niches.split(",")]
         result = run_campaign(niches, include_jobs=args.include_jobs, campaign_name=args.campaign_name)
+    elif args.mode == "prospect":
+        niches = [n.strip() for n in args.niches.split(",")] if args.niches else None
+        result = run_prospect_hunt(
+            target=args.target,
+            niches=niches,
+            include_jobs=args.include_jobs,
+            max_rounds=args.max_rounds,
+            score_threshold=args.score_threshold,
+            campaign_name=args.campaign_name,
+        )
     else:
         parser.print_help()
         sys.exit(1)
