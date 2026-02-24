@@ -1,4 +1,4 @@
-"""Email pattern generation + DNS MX verification + web search + Apollo enrichment."""
+"""Email pattern generation + DNS MX verification + web search + Hunter.io enrichment."""
 
 import logging
 import os
@@ -15,7 +15,7 @@ GENERIC_PREFIXES = {"noreply", "info", "hello", "support", "admin", "sales", "co
 def find_email(full_name, domain):
     """Find email for a person at a domain.
 
-    Priority: Apollo enrichment -> web search -> pattern guess.
+    Priority: Hunter enrichment -> web search -> pattern guess.
     """
     parts = full_name.strip().split()
     if len(parts) < 2:
@@ -27,20 +27,20 @@ def find_email(full_name, domain):
 
     candidates = _generate_candidates(first_name, last_name, domain)
 
-    # Try Apollo first (if API key configured and we have first+last name)
+    # Try Hunter.io first (if API key configured and we have first+last name)
     if first_name and last_name:
         try:
             from modules.enrichment import enrich_person
-            apollo_result = enrich_person(first_name, last_name, domain)
-            if apollo_result["status"] == "matched" and apollo_result.get("email"):
+            hunter_result = enrich_person(first_name, last_name, domain)
+            if hunter_result["status"] == "matched" and hunter_result.get("email"):
                 return {
                     "candidates": candidates,
-                    "best_match": apollo_result["email"],
+                    "best_match": hunter_result["email"],
                     "mx_valid": True,
                     "mx_records": [],
-                    "method": "apollo",
-                    "email_verified": apollo_result["email_verified"],
-                    "apollo_person": apollo_result.get("person"),
+                    "method": "hunter",
+                    "email_verified": hunter_result["email_verified"],
+                    "hunter_person": hunter_result.get("person"),
                 }
         except Exception:
             pass  # Fall through to existing logic
@@ -104,30 +104,30 @@ def verify_email(address):
 def batch_find_emails(stage="researched", score_min=None):
     """Find emails for pipeline prospects without verified email.
 
-    Uses Apollo bulk enrichment first (if configured), then falls back
-    to pattern guessing for prospects Apollo missed.
+    Uses Hunter.io enrichment first (if configured), then falls back
+    to pattern guessing for prospects Hunter missed.
     """
-    # Phase 1: Try Apollo bulk enrichment
-    apollo_emails = 0
-    api_key = os.environ.get("APOLLO_API_KEY", "")
+    # Phase 1: Try Hunter.io enrichment
+    hunter_emails = 0
+    api_key = os.environ.get("HUNTER_API_KEY", "")
     if api_key:
         try:
             from modules.enrichment import batch_enrich
-            apollo_stats = batch_enrich(stage=stage, score_min=score_min)
-            apollo_emails = apollo_stats.get("emails_found", 0)
+            hunter_stats = batch_enrich(stage=stage, score_min=score_min)
+            hunter_emails = hunter_stats.get("emails_found", 0)
             log.info(
-                f"Apollo enrichment: {apollo_stats.get('enriched', 0)} enriched, "
-                f"{apollo_emails} emails found, "
-                f"{apollo_stats.get('credits_used', 0)} credits used"
+                f"Hunter enrichment: {hunter_stats.get('enriched', 0)} enriched, "
+                f"{hunter_emails} emails found, "
+                f"{hunter_stats.get('credits_used', 0)} credits used"
             )
         except Exception as e:
-            log.warning(f"Apollo bulk enrichment failed: {e}")
+            log.warning(f"Hunter enrichment failed: {e}")
 
     # Phase 2: Pattern-guess fallback for prospects still without email
-    # Re-load pipeline since Apollo may have updated it
+    # Re-load pipeline since Hunter may have updated it
     data = load_pipeline()
     processed = 0
-    found = apollo_emails
+    found = hunter_emails
     not_found = 0
     results = []
 
@@ -136,11 +136,11 @@ def batch_find_emails(stage="researched", score_min=None):
             continue
         if score_min is not None and prospect.get("fit_score", 0) < score_min:
             continue
-        # Skip if already has a verified email (including Apollo-enriched)
+        # Skip if already has a verified email (including Hunter-enriched)
         if prospect.get("email") and prospect.get("email_verified"):
             continue
-        # Skip if Apollo already found an email (even unverified)
-        if prospect.get("email") and prospect.get("email_source") == "apollo":
+        # Skip if Hunter already found an email (even unverified)
+        if prospect.get("email") and prospect.get("email_source") == "hunter":
             continue
 
         name = prospect.get("name", "")
@@ -158,7 +158,7 @@ def batch_find_emails(stage="researched", score_min=None):
             update_prospect(prospect["id"], {
                 "email": result["best_match"],
                 "email_source": result["method"],
-                "email_verified": result.get("method") in ("web_search", "apollo"),
+                "email_verified": result.get("method") in ("web_search", "hunter"),
             })
             found += 1
             results.append({"id": prospect["id"], "email": result["best_match"], "method": result["method"]})
@@ -166,7 +166,7 @@ def batch_find_emails(stage="researched", score_min=None):
             not_found += 1
             results.append({"id": prospect["id"], "status": "not_found", "reason": result.get("message", "No valid email found")})
 
-    return {"processed": processed, "found": found, "not_found": not_found, "apollo_emails": apollo_emails, "results": results}
+    return {"processed": processed, "found": found, "not_found": not_found, "hunter_emails": hunter_emails, "results": results}
 
 
 def search_email_web(name, company):
