@@ -352,7 +352,7 @@ def cmd_enrich_person(args):
 
 
 def cmd_enrich_prospect(args):
-    from modules.enrichment import enrich_person, map_apollo_to_prospect
+    from modules.enrichment import enrich_person, map_hunter_to_prospect
     from modules.pipeline import get_prospect, update_prospect
     from modules.email_finder import _domain_from_url
 
@@ -375,7 +375,7 @@ def cmd_enrich_prospect(args):
     )
 
     if result["status"] == "matched" and result.get("person"):
-        updates = map_apollo_to_prospect(result["person"], prospect)
+        updates = map_hunter_to_prospect(result["person"], prospect)
         if updates:
             update_prospect(args.id, updates)
             result["updates_applied"] = list(updates.keys())
@@ -625,7 +625,7 @@ def build_parser():
     e_search.set_defaults(func=cmd_email_search)
 
     # ── enrich ──
-    enrich_parser = subparsers.add_parser("enrich", help="Apollo.io enrichment")
+    enrich_parser = subparsers.add_parser("enrich", help="Hunter.io enrichment")
     enrich_sub = enrich_parser.add_subparsers(dest="action")
 
     en_person = enrich_sub.add_parser("person", help="Enrich a single person")

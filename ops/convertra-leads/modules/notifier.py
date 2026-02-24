@@ -152,10 +152,10 @@ def format_campaign_summary(discovery_count, research_count, scored_count, email
     ]
 
     if enrichment:
-        apollo_enriched = enrichment.get("enriched", 0)
-        apollo_emails = enrichment.get("emails_found", 0)
+        hunter_enriched = enrichment.get("enriched", 0)
+        hunter_emails = enrichment.get("emails_found", 0)
         credits = enrichment.get("credits_used", 0)
-        lines.append(f"- Apollo enriched: {apollo_enriched} ({apollo_emails} emails, {credits} credits)")
+        lines.append(f"- Hunter enriched: {hunter_enriched} ({hunter_emails} emails, {credits} credits)")
 
     lines.extend([
         f"- Emails found: {emails_found}",
@@ -259,7 +259,7 @@ def format_prospect_hunt_summary(hunt_results):
 
     if enrichment.get("enriched", 0) > 0:
         lines.extend([
-            "*Apollo Enrichment*",
+            "*Hunter Enrichment*",
             f"- Enriched: {enrichment.get('enriched', 0)}",
             f"- Emails found: {enrichment.get('emails_found', 0)}",
             f"- Credits used: {enrichment.get('credits_used', 0)}",

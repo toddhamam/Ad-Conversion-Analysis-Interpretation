@@ -1,4 +1,4 @@
-"""Apollo.io People Enrichment API integration."""
+"""Hunter.io Email Finder + People Enrichment API integration."""
 
 import logging
 import os
@@ -10,206 +10,191 @@ from modules.pipeline import update_prospect
 
 log = logging.getLogger("enrichment")
 
-APOLLO_MATCH_URL = "https://api.apollo.io/api/v1/people/match"
-APOLLO_BULK_MATCH_URL = "https://api.apollo.io/api/v1/people/bulk_match"
-APOLLO_BATCH_SIZE = 10  # Max per bulk request
-RATE_LIMIT_DELAY = 2    # Seconds between retries
+HUNTER_FINDER_URL = "https://api.hunter.io/v2/email-finder"
+HUNTER_PEOPLE_URL = "https://api.hunter.io/v2/people/find"
+HUNTER_COMPANY_URL = "https://api.hunter.io/v2/companies/find"
+BATCH_DELAY = 0.5  # Seconds between calls (rate limit: 15/sec)
 MAX_RETRIES = 3
 
 
 def enrich_person(first_name, last_name, domain,
                   organization_name="", linkedin_url=""):
-    """Enrich a single person via Apollo People Match endpoint.
+    """Find email + enrich person via Hunter.io.
 
-    Args:
-        first_name: str
-        last_name: str
-        domain: str — company domain (e.g. "acme.com")
-        organization_name: str — optional company name
-        linkedin_url: str — optional LinkedIn profile URL
+    Step 1: Email Finder (name + domain → verified email)
+    Step 2: People Enrichment (email → title, seniority, LinkedIn, location)
 
     Returns:
         dict with keys:
             status: "matched" | "no_match" | "error" | "no_api_key"
-            person: dict (Apollo person object) or None
+            person: dict with enrichment data or None
             email: str or None
             email_verified: bool
     """
-    api_key = os.environ.get("APOLLO_API_KEY", "")
+    api_key = os.environ.get("HUNTER_API_KEY", "")
     if not api_key:
         return {"status": "no_api_key", "person": None,
                 "email": None, "email_verified": False}
 
-    payload = {
-        "api_key": api_key,
+    # Step 1: Find email
+    finder_result = _find_email(api_key, first_name, last_name, domain)
+    if finder_result["status"] != "found":
+        return {"status": finder_result["status"], "person": None,
+                "email": None, "email_verified": False,
+                "error": finder_result.get("error"),
+                "detail": finder_result.get("detail")}
+
+    email = finder_result["email"]
+    confidence = finder_result.get("confidence", 0)
+    verification = finder_result.get("verification", {})
+    verified = verification.get("status") == "valid"
+
+    # Build person dict from finder data
+    person = {
+        "email": email,
+        "email_status": "verified" if verified else "unverified",
+        "confidence": confidence,
         "first_name": first_name,
         "last_name": last_name,
         "domain": domain,
-        "reveal_personal_emails": True,
+        # Finder sometimes returns these
+        "title": finder_result.get("position", ""),
+        "linkedin_url": finder_result.get("linkedin", ""),
+        "twitter": finder_result.get("twitter", ""),
+        "phone_number": finder_result.get("phone_number", ""),
     }
-    if organization_name:
-        payload["organization_name"] = organization_name
-    if linkedin_url:
-        payload["linkedin_url"] = linkedin_url
+
+    # Step 2: People enrichment (if we got an email)
+    if email:
+        people_result = _enrich_person_by_email(api_key, email)
+        if people_result:
+            person.update({
+                "title": people_result.get("title") or person.get("title", ""),
+                "seniority": people_result.get("seniority", ""),
+                "linkedin_url": people_result.get("linkedin", "") or person.get("linkedin_url", ""),
+                "twitter": people_result.get("twitter", "") or person.get("twitter", ""),
+                "city": people_result.get("city", ""),
+                "state": people_result.get("state", ""),
+                "country": people_result.get("country", ""),
+            })
+            # Employment data
+            employment = people_result.get("employment") or {}
+            if employment:
+                person["organization"] = {
+                    "name": employment.get("name", ""),
+                    "industry": employment.get("industry", ""),
+                }
+
+    return {
+        "status": "matched",
+        "person": person,
+        "email": email,
+        "email_verified": verified,
+    }
+
+
+def _find_email(api_key, first_name, last_name, domain):
+    """Call Hunter Email Finder API."""
+    params = {
+        "api_key": api_key,
+        "domain": domain,
+        "first_name": first_name,
+        "last_name": last_name,
+    }
 
     for attempt in range(MAX_RETRIES):
         try:
-            resp = requests.post(APOLLO_MATCH_URL, json=payload, timeout=15)
+            resp = requests.get(HUNTER_FINDER_URL, params=params, timeout=15)
 
             if resp.status_code == 429:
-                wait = RATE_LIMIT_DELAY * (2 ** attempt)
-                log.warning(f"Apollo rate limit hit, waiting {wait}s...")
-                time.sleep(wait)
+                time.sleep(2 ** attempt)
                 continue
 
             if resp.status_code != 200:
-                return {"status": "error", "person": None,
-                        "email": None, "email_verified": False,
-                        "error": f"HTTP {resp.status_code}"}
+                try:
+                    err_body = resp.json()
+                except Exception:
+                    err_body = resp.text[:200]
+                return {"status": "error", "error": f"HTTP {resp.status_code}",
+                        "detail": err_body}
 
-            data = resp.json()
-            person = data.get("person")
+            data = resp.json().get("data", {})
+            email = data.get("email", "")
 
-            if not person:
-                return {"status": "no_match", "person": None,
-                        "email": None, "email_verified": False}
-
-            email = person.get("email", "")
-            email_status = person.get("email_status", "")
+            if not email:
+                return {"status": "no_match"}
 
             return {
-                "status": "matched",
-                "person": person,
-                "email": email or None,
-                "email_verified": email_status == "verified",
+                "status": "found",
+                "email": email,
+                "confidence": data.get("score", 0),
+                "verification": data.get("verification", {}),
+                "position": data.get("position", ""),
+                "linkedin": data.get("linkedin", ""),
+                "twitter": data.get("twitter", ""),
+                "phone_number": data.get("phone_number", ""),
             }
 
         except requests.RequestException as e:
             if attempt == MAX_RETRIES - 1:
-                return {"status": "error", "person": None,
-                        "email": None, "email_verified": False,
-                        "error": str(e)}
-            time.sleep(RATE_LIMIT_DELAY)
+                return {"status": "error", "error": str(e)}
+            time.sleep(1)
 
-    return {"status": "error", "person": None,
-            "email": None, "email_verified": False,
-            "error": "Max retries exceeded"}
+    return {"status": "error", "error": "Max retries exceeded"}
 
 
-def enrich_bulk(people):
-    """Enrich up to 10 people via Apollo Bulk Match endpoint.
+def _enrich_person_by_email(api_key, email):
+    """Call Hunter People Enrichment API. Returns enrichment dict or None."""
+    params = {"api_key": api_key, "email": email}
 
-    Args:
-        people: list of dicts, each with keys:
-            first_name, last_name, domain,
-            organization_name (opt), linkedin_url (opt)
+    try:
+        resp = requests.get(HUNTER_PEOPLE_URL, params=params, timeout=15)
+        if resp.status_code != 200:
+            return None
 
-    Returns:
-        list of dicts (same structure as enrich_person return).
-    """
-    api_key = os.environ.get("APOLLO_API_KEY", "")
-    if not api_key:
-        return [{"status": "no_api_key", "person": None,
-                 "email": None, "email_verified": False}
-                for _ in people]
+        data = resp.json().get("data", {})
+        if not data:
+            return None
 
-    details = []
-    for p in people[:APOLLO_BATCH_SIZE]:
-        entry = {
-            "first_name": p.get("first_name", ""),
-            "last_name": p.get("last_name", ""),
-            "domain": p.get("domain", ""),
-            "reveal_personal_emails": True,
-        }
-        if p.get("organization_name"):
-            entry["organization_name"] = p["organization_name"]
-        if p.get("linkedin_url"):
-            entry["linkedin_url"] = p["linkedin_url"]
-        details.append(entry)
+        # Flatten nested structure
+        result = {}
+        employment = data.get("employment") or {}
+        result["employment"] = employment
+        result["title"] = employment.get("title", "")
+        result["seniority"] = employment.get("seniority", "")
 
-    payload = {"api_key": api_key, "details": details}
+        # Location
+        geo = data.get("geo") or {}
+        result["city"] = geo.get("city", "")
+        result["state"] = geo.get("state", "")
+        result["country"] = geo.get("country", "")
 
-    for attempt in range(MAX_RETRIES):
-        try:
-            resp = requests.post(APOLLO_BULK_MATCH_URL, json=payload, timeout=30)
+        # Social
+        result["linkedin"] = data.get("linkedin", "")
+        result["twitter"] = data.get("twitter", "")
 
-            if resp.status_code == 429:
-                wait = RATE_LIMIT_DELAY * (2 ** attempt)
-                log.warning(f"Apollo bulk rate limit hit, waiting {wait}s...")
-                time.sleep(wait)
-                continue
+        return result
 
-            if resp.status_code != 200:
-                return [{"status": "error", "person": None,
-                         "email": None, "email_verified": False,
-                         "error": f"HTTP {resp.status_code}"}
-                        for _ in people]
-
-            data = resp.json()
-            matches = data.get("matches", [])
-
-            results = []
-            for match in matches:
-                person = match if match else None
-                if person:
-                    email = person.get("email", "")
-                    email_status = person.get("email_status", "")
-                    results.append({
-                        "status": "matched",
-                        "person": person,
-                        "email": email or None,
-                        "email_verified": email_status == "verified",
-                    })
-                else:
-                    results.append({
-                        "status": "no_match", "person": None,
-                        "email": None, "email_verified": False,
-                    })
-
-            # Pad if fewer results than input
-            while len(results) < len(people):
-                results.append({
-                    "status": "no_match", "person": None,
-                    "email": None, "email_verified": False,
-                })
-
-            return results
-
-        except requests.RequestException as e:
-            if attempt == MAX_RETRIES - 1:
-                return [{"status": "error", "person": None,
-                         "email": None, "email_verified": False,
-                         "error": str(e)} for _ in people]
-            time.sleep(RATE_LIMIT_DELAY)
-
-    return [{"status": "error", "person": None,
-             "email": None, "email_verified": False,
-             "error": "Max retries exceeded"} for _ in people]
+    except requests.RequestException:
+        return None
 
 
-def map_apollo_to_prospect(person_data, existing_prospect):
-    """Map Apollo person response fields onto a prospect update dict.
+def map_hunter_to_prospect(person_data, existing_prospect):
+    """Map Hunter person data onto a prospect update dict.
 
     Non-destructive: only overwrites empty fields, always adds enrichment data.
-    Email is always overwritten since Apollo is authoritative.
-
-    Args:
-        person_data: dict — Apollo person object
-        existing_prospect: dict — current prospect record
-
-    Returns:
-        dict: fields to pass to update_prospect()
+    Email is always overwritten since Hunter is authoritative.
     """
     if not person_data:
         return {}
 
     updates = {}
 
-    # Email — always overwrite (Apollo is authoritative)
+    # Email — always overwrite
     email = person_data.get("email", "")
     if email:
         updates["email"] = email
-        updates["email_source"] = "apollo"
+        updates["email_source"] = "hunter"
         updates["email_verified"] = (
             person_data.get("email_status") == "verified"
         )
@@ -230,20 +215,12 @@ def map_apollo_to_prospect(person_data, existing_prospect):
     if org_name and not existing_prospect.get("company"):
         updates["company"] = org_name
 
-    # Enrichment data into company_intel (additive — preserves existing fields)
+    # Enrichment data into company_intel (additive)
     intel = dict(existing_prospect.get("company_intel", {}))
-
-    headline = person_data.get("headline", "")
-    if headline:
-        intel["apollo_headline"] = headline
 
     seniority = person_data.get("seniority", "")
     if seniority:
         intel["seniority"] = seniority
-
-    departments = person_data.get("departments", [])
-    if departments:
-        intel["departments"] = departments
 
     # Location
     city = person_data.get("city", "")
@@ -253,41 +230,32 @@ def map_apollo_to_prospect(person_data, existing_prospect):
     if location_parts:
         intel["location"] = ", ".join(location_parts)
 
-    # Employment history (last 3 roles)
-    history = person_data.get("employment_history", [])
-    if history:
-        intel["employment_history"] = [
-            {
-                "title": h.get("title", ""),
-                "organization_name": h.get("organization_name", ""),
-                "current": h.get("current", False),
-            }
-            for h in history[:3]
-        ]
-
-    # Organization-level enrichment
-    if org.get("estimated_num_employees") and not intel.get("estimated_employees"):
-        intel["estimated_employees"] = str(org["estimated_num_employees"])
-
     if org.get("industry"):
         intel["industry"] = org["industry"]
 
-    if org.get("annual_revenue"):
-        intel["revenue"] = str(org["annual_revenue"])
+    # Twitter handle
+    twitter = person_data.get("twitter", "")
+    if twitter:
+        intel["twitter"] = twitter
+
+    # Confidence score
+    confidence = person_data.get("confidence", 0)
+    if confidence:
+        intel["email_confidence"] = confidence
 
     updates["company_intel"] = intel
 
     return updates
 
 
+# Keep backward-compatible alias
+map_apollo_to_prospect = map_hunter_to_prospect
+
+
 def batch_enrich(stage="researched", score_min=None):
-    """Enrich all matching prospects via Apollo bulk endpoint.
+    """Enrich all matching prospects via Hunter.io.
 
-    Batches in groups of 10 for the bulk API.
-
-    Args:
-        stage: Pipeline stage to filter on.
-        score_min: Minimum fit_score to include.
+    Calls Email Finder + People Enrichment per prospect.
 
     Returns:
         dict with keys:
@@ -306,14 +274,10 @@ def batch_enrich(stage="researched", score_min=None):
         "results": [],
     }
 
-    # Build batch groups of 10
-    batch = []
-    batch_prospects = []
-
-    for prospect in prospects:
-        # Skip if already enriched via Apollo
+    for i, prospect in enumerate(prospects):
+        # Skip if already enriched
         if (prospect.get("email") and
-                prospect.get("email_source") == "apollo" and
+                prospect.get("email_source") == "hunter" and
                 prospect.get("email_verified")):
             stats["skipped"] += 1
             continue
@@ -339,41 +303,20 @@ def batch_enrich(stage="researched", score_min=None):
             })
             continue
 
-        batch.append({
-            "first_name": parts[0],
-            "last_name": parts[-1],
-            "domain": domain,
-            "organization_name": prospect.get("company", ""),
-            "linkedin_url": prospect.get("linkedin_url", ""),
-        })
-        batch_prospects.append(prospect)
+        # Rate limit between calls
+        if i > 0 and stats["credits_used"] > 0:
+            time.sleep(BATCH_DELAY)
 
-        # Process when batch is full
-        if len(batch) >= APOLLO_BATCH_SIZE:
-            _process_batch(batch, batch_prospects, stats)
-            batch = []
-            batch_prospects = []
-
-    # Process remaining
-    if batch:
-        _process_batch(batch, batch_prospects, stats)
-
-    return stats
-
-
-def _process_batch(batch, prospects, stats):
-    """Process a single batch of up to 10 people through Apollo bulk API.
-
-    Mutates stats dict in place.
-    """
-    results = enrich_bulk(batch)
-    stats["credits_used"] += len(batch)
-
-    for prospect, result in zip(prospects, results):
+        result = enrich_person(
+            parts[0], parts[-1], domain,
+            organization_name=prospect.get("company", ""),
+            linkedin_url=prospect.get("linkedin_url", ""),
+        )
+        stats["credits_used"] += 1
         pid = prospect["id"]
 
         if result["status"] == "matched":
-            updates = map_apollo_to_prospect(result["person"], prospect)
+            updates = map_hunter_to_prospect(result["person"], prospect)
             if updates:
                 update_prospect(pid, updates)
                 stats["enriched"] += 1
@@ -402,3 +345,5 @@ def _process_batch(batch, prospects, stats):
                 "id": pid, "status": "error",
                 "error": result.get("error", "Unknown"),
             })
+
+    return stats
