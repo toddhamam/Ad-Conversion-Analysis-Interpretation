@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-02-24 — Switch Meta OAuth to Facebook Login for Business (config_id)
+
+### Problem
+External users could not authorize the app through the Meta OAuth flow despite all permissions being approved via App Review. The app uses **Facebook Login for Business**, which requires a `config_id` parameter instead of the standard `scope` parameter — without a configuration, external users were blocked at the authorization dialog.
+
+### Solution
+Replaced the `scope`-based OAuth URL with `config_id`-based flow to match Facebook Login for Business requirements.
+
+### Changed
+- **`api/auth/meta/connect.ts`** — Replaced `scope` parameter with `config_id` from `META_CONFIG_ID` env var; added `override_default_response_type` parameter; updated config validation to require `META_CONFIG_ID`; removed hardcoded `SCOPES` array
+
+### New Environment Variables (Vercel)
+- `META_CONFIG_ID` — Facebook Login for Business configuration ID (created in Meta Developer Dashboard → Facebook Login for Business → Configurations)
+
+---
+
 ## 2026-02-23 — Replace OpenClaw bot with pure Python orchestrator
 
 ### Problem
