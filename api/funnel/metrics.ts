@@ -293,10 +293,22 @@ async function handleDiscover(
     if (event.created_at < bucket.firstEvent) bucket.firstEvent = event.created_at;
     if (event.created_at > bucket.lastEvent) bucket.lastEvent = event.created_at;
 
-    const isPurchase = ['purchase', 'order_bump_purchase', 'upsell_accept', 'downsell_accept'].includes(event.event_type);
-    if (isPurchase) {
-      bucket.purchaseSessions.add(event.funnel_session_id);
+    // Order bump — count revenue but not as a purchase session (matches handleMetrics)
+    if (event.event_type === 'order_bump_purchase') {
       bucket.totalRevenueCents += event.revenue_cents || 0;
+      continue;
+    }
+
+    // Regular purchases, upsells, downsells — count revenue
+    const isPurchase = ['purchase', 'upsell_accept', 'downsell_accept'].includes(event.event_type);
+    if (isPurchase) {
+      bucket.totalRevenueCents += event.revenue_cents || 0;
+    }
+
+    // Only 'purchase' events count toward unique purchasing sessions
+    // (upsells/downsells are additional revenue on the same session, not new customers)
+    if (event.event_type === 'purchase') {
+      bucket.purchaseSessions.add(event.funnel_session_id);
     }
   }
 

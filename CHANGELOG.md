@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-02-24 — Fix funnel purchase counting inconsistency between overview and detail views
+
+### Problem
+After separating order bump metrics into their own display row, the funnel overview table (`handleDiscover`) and single funnel detail view (`handleMetrics`) used different logic to count purchases. The overview counted `order_bump_purchase`, `upsell_accept`, and `downsell_accept` as purchase sessions, while the detail view only counted `purchase` events. This caused the overview to show inflated purchase counts and conversion rates that didn't match the detail view.
+
+### Fixed
+- **`api/funnel/metrics.ts`** — Aligned `handleDiscover` purchase counting with `handleMetrics`:
+  - Order bump events now count toward revenue but are excluded from `purchaseSessions` (consistent with the separated order bump row in the detail view)
+  - Only `purchase` event types add to `purchaseSessions` (upsells/downsells are additional revenue on the same session, not new customers)
+  - Revenue from all purchase types (purchase, upsell_accept, downsell_accept, order_bump_purchase) is still correctly summed
+
+---
+
 ## 2026-02-24 — Switch Meta OAuth to Facebook Login for Business (config_id)
 
 ### Problem
