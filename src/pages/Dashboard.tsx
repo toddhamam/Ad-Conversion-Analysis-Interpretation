@@ -42,10 +42,15 @@ import {
   Users,
   Activity,
   Calculator,
+  CreditCard,
+  Wallet,
 } from 'lucide-react';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import { useOrganization } from '../contexts/OrganizationContext';
 import './Dashboard.css';
+
+// Stripe transaction fee rate (percentage of revenue)
+const TRANSACTION_FEE_RATE = 0.062; // 6.2%
 
 interface DashboardStats {
   totalRevenue: number;
@@ -57,6 +62,8 @@ interface DashboardStats {
   adSpend: number;
   roas: number;
   cac: number;
+  transactionFees: number;
+  netProfit: number;
 }
 
 // Default metric configuration
@@ -70,6 +77,8 @@ const DEFAULT_METRICS: MetricConfig[] = [
   { id: 'adSpend', label: 'Ad Spend', visible: true },
   { id: 'roas', label: 'ROAS', visible: true },
   { id: 'cac', label: 'CAC', visible: false },
+  { id: 'transactionFees', label: 'Transaction Fees', visible: true },
+  { id: 'netProfit', label: 'Net Profit', visible: true },
 ];
 
 const METRIC_ICONS: Record<string, ReactNode> = {
@@ -82,6 +91,8 @@ const METRIC_ICONS: Record<string, ReactNode> = {
   adSpend: <DollarSign size={24} strokeWidth={1.5} />,
   roas: <Target size={24} strokeWidth={1.5} />,
   cac: <Calculator size={24} strokeWidth={1.5} />,
+  transactionFees: <CreditCard size={24} strokeWidth={1.5} />,
+  netProfit: <Wallet size={24} strokeWidth={1.5} />,
 };
 
 const METRIC_LABELS: Record<string, string> = {
@@ -94,6 +105,8 @@ const METRIC_LABELS: Record<string, string> = {
   adSpend: 'Ad Spend',
   roas: 'ROAS',
   cac: 'CAC',
+  transactionFees: 'Transaction Fees',
+  netProfit: 'Net Profit',
 };
 
 // Metric periods - some are dynamic based on date range
@@ -104,10 +117,12 @@ const STATIC_PERIODS: Record<string, string> = {
   sessions: 'Unique visitors',
   roas: 'Return on ad spend',
   cac: 'Cost per customer',
+  transactionFees: 'Stripe fees (6.2%)',
+  netProfit: 'Revenue − spend − fees',
 };
 
 // Metrics that should show the date range
-const DATE_RANGE_METRICS = ['totalRevenue', 'uniqueCustomers', 'adSpend'];
+const DATE_RANGE_METRICS = ['totalRevenue', 'uniqueCustomers', 'adSpend', 'transactionFees', 'netProfit'];
 
 // Funnel-only metrics — hidden for non-super-admins (requires Supabase funnel data)
 const FUNNEL_ONLY_METRICS = ['uniqueCustomers', 'aov', 'sessions', 'cac'];
@@ -195,6 +210,10 @@ function SortableStatCard({
         return stats.roas > 0 ? `${stats.roas.toFixed(2)}x` : '—';
       case 'cac':
         return stats.cac > 0 ? formatCurrency(stats.cac) : '—';
+      case 'transactionFees':
+        return stats.transactionFees > 0 ? formatCurrency(stats.transactionFees) : '—';
+      case 'netProfit':
+        return stats.netProfit !== 0 ? formatCurrency(stats.netProfit) : '—';
       default:
         return '—';
     }
@@ -495,6 +514,12 @@ const Dashboard = () => {
   const conversionRate = metrics?.summary.conversionRate ||
     (totalClicks > 0 && totalPurchases > 0 ? (totalPurchases / totalClicks) * 100 : 0);
 
+  // Transaction fees: Stripe takes 6.2% of total revenue
+  const transactionFees = totalRevenue * TRANSACTION_FEE_RATE;
+
+  // Net profit: Revenue minus ad spend minus transaction fees
+  const netProfit = totalRevenue - adSpend - transactionFees;
+
   const stats: DashboardStats = {
     totalRevenue,
     totalPurchases,
@@ -505,6 +530,8 @@ const Dashboard = () => {
     adSpend,
     roas: metaData?.roas || 0,
     cac,
+    transactionFees,
+    netProfit,
   };
 
   const formatCurrency = (value: number) => {
