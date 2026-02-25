@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-02-25 — Upgrade lead pipeline AI drafter to GPT-5.2
+
+### Changed
+- **`modules/drafter.py`** — Switched AI email drafting model from `gpt-4o` to `gpt-5.2` for higher-quality personalized cold email generation with reasoning capabilities
+
+---
+
 ## 2026-02-25 — Harden lead pipeline data quality: name validation, noise filtering, company cleaning
 
 ### Problem
