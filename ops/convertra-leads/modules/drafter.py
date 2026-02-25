@@ -133,27 +133,34 @@ def _build_prompt(prospect):
 
     system_message = f"""You are an expert cold email copywriter for Convertra, an AI-powered ad creative platform.
 
-WHAT CONVERTRA DOES (use this to craft the pitch — do NOT copy it word for word):
-Convertra automates ad creative generation. It finds the patterns already driving results in a brand's Meta ad account, then auto-generates new creatives based on those winners — so brands can keep pace without waiting on designers, copywriters, or even in-house staff. More variations live into testing = more data = better performance.
+WHAT CONVERTRA DOES (use this context to craft the pitch, do NOT copy it word for word):
+Convertra automates ad creative generation. It maps the patterns already driving results in a brand's Meta ad account, then auto-generates (and publishes) winning creatives inside their ad account... without waiting on designers, copywriters, or even media buyers. More variations live into testing = more data = better performance.
 
 FOCUS: Meta/Facebook ads ONLY. Never mention Google Ads, multi-channel, or other platforms.
 
-STRUCTURE — every email must follow this 3-part structure:
-1. OPENING (1-2 sentences): Reference something specific about their business — hiring, ads running, growth signals. Keep it simple and direct. Do NOT mention tech stack names (Shopify, Klaviyo, HubSpot, etc.) or "Meta Pixel" — just say "your ads" or "ads live". Do NOT say "I looked you up on LinkedIn."
-2. CONVERTRA PITCH (1-2 sentences): Position the bottleneck (getting enough new ad variations live into testing, fast) then explain how Convertra automates this — finds winning patterns, auto-generates new creatives. Say "without waiting on designers, copywriters, or even in-house staff."
-3. CTA (exact format): "I shot a quick 2-min video for you showing exactly how this could work for {company_name}. Want me to send it across?"
+STRUCTURE: every email must follow this exact 5-part structure:
 
-Rules — follow these exactly:
-- Plain text only — no HTML, no markdown, no images, no bold, no formatting
+1. GREETING: "Hi {{first_name}}," on its own line. Never use an em dash after the name.
+
+2. OPENING (1-2 sentences): Start with "Just" followed by a specific observation about their business (hiring, ads running, product launches, growth signals). Keep it simple and direct. Use a period to end the first sentence, then connect it to the need for fresh ad creative. Do NOT mention tech stack names (Shopify, Klaviyo, HubSpot, etc.) or "Meta Pixel". Do NOT say "I looked you up on LinkedIn."
+
+3. CONVERTRA PITCH (2 sentences): First sentence positions the bottleneck (getting enough new ad variations live into testing, fast). Second sentence: "Convertra automates all of this: it maps the patterns already winning in your Meta account, then auto-generates (and publishes) winning creatives inside your ad account... without waiting on designers, copywriters, or even media buyers."
+
+4. CTA (exact format): "I shot a quick 2-min video for you showing exactly how this could work for {company_name}. Want me to send it across?"
+
+5. SIGN-OFF: Just the first name on its own line: {sender_name}
+
+Rules, follow these exactly:
+- NEVER use em dashes anywhere in the email. Em dashes are a dead giveaway of AI-written copy. Use periods, commas, or ellipsis (...) instead.
+- Plain text only, no HTML, no markdown, no images, no bold, no formatting
 - No links in the email (zero URLs)
 - Body must be under 100 words (shorter is better)
-- Subject must be under 6 words, all lowercase, no exclamation marks, no spam trigger words
-- Do NOT include "Reply STOP to opt out" or any unsubscribe language — this is a personal email, not a marketing blast
-- Sign off with just the first name: {sender_name}
-- Tone: casual, direct, peer-to-peer — like a founder messaging another founder
+- Subject format: "[company name] ad creative" all lowercase. For agencies use "[company name]'s creative pipeline"
+- Do NOT include "Reply STOP to opt out" or any unsubscribe language, this is a personal email, not a marketing blast
+- Tone: casual, direct, peer-to-peer, like a founder messaging another founder
 - Do NOT use the phrase "creative testing" more than once
-- Do NOT start multiple sentences with "Convertra..." — mention the product once, naturally
-- Use "Convertra automates all of this" or similar — NOT "Convertra plugs into"
+- Do NOT start multiple sentences with "Convertra...", mention the product once, naturally
+- Use "Convertra automates all of this" NOT "Convertra plugs into"
 
 Respond with ONLY this JSON format, no other text:
 {{"subject": "...", "body": "..."}}"""
@@ -196,8 +203,8 @@ Company Intel:
 - Funding: {company_intel.get('funding', 'unknown')}
 - Creative fatigue: {company_intel.get('creative_fatigue', False)}
 
-Personalization hooks: {', '.join(hooks) if hooks else 'None available — use company intel to craft one'}
-Pain signals: {', '.join(pains) if pains else 'None detected — use general ad creative bottleneck angle'}"""
+Personalization hooks: {', '.join(hooks) if hooks else 'None available, use company intel to craft one'}
+Pain signals: {', '.join(pains) if pains else 'None detected, use general ad creative bottleneck angle'}"""
 
     return system_message, user_message
 
@@ -311,7 +318,7 @@ def _fallback_template(prospect):
         "sender_first_name": sender_name,
     }
 
-    subject = template.get("subject", f"quick question about {company}'s ad creative")
+    subject = template.get("subject", f"{company} ad creative")
     body = template.get("body", "")
 
     for key, value in subs.items():
@@ -321,14 +328,16 @@ def _fallback_template(prospect):
     # If template was empty, use a generic fallback
     if not body:
         body = (
-            f"Hey {first_name},\n\n"
-            f"Saw {company} is scaling paid social -- {hook}. Smart move.\n\n"
-            f"One thing we're seeing with brands at your stage: the creative testing bottleneck "
-            f"becomes the ceiling on scale. Teams that automate the test-and-iterate cycle are "
-            f"shipping 10x more creatives without adding headcount.\n\n"
-            f"Would it make sense to show you how we're doing this? 15 min, no pitch -- "
-            f"just the framework.\n\n"
-            f"Either way, appreciate what you're building.\n\n"
+            f"Hi {first_name},\n\n"
+            f"Just saw {company} is scaling paid social. {hook}. That usually means "
+            f"the ads need a constant flow of fresh variations to keep up.\n\n"
+            f"The bottleneck is getting enough new variations live into testing fast. "
+            f"Convertra automates all of this: it maps the patterns already winning in "
+            f"your Meta account, then auto-generates (and publishes) winning creatives "
+            f"inside your ad account... without waiting on designers, copywriters, or "
+            f"even media buyers.\n\n"
+            f"I shot a quick 2-min video for you showing exactly how this could work "
+            f"for {company}. Want me to send it across?\n\n"
             f"{sender_name}"
         )
 
