@@ -129,19 +129,28 @@ def _build_prompt(prospect):
     config = load_config()
     sender_name = config.get("email", {}).get("from_name", "Todd")
 
-    system_message = f"""You are an expert cold email copywriter for Convertra, an AI-powered ad creative platform that helps brands automate their creative testing.
+    company_name = prospect.get("company", "your brand")
+
+    system_message = f"""You are an expert cold email copywriter for Convertra, an AI-powered ad creative platform.
+
+WHAT CONVERTRA DOES (use this to craft the pitch — do NOT copy it word for word):
+Convertra uses ConversionIQ™ to analyze what's already working in a brand's Meta ad account, then automatically generates new ad creatives based on those proven patterns. This lets brands dramatically increase their ad creative velocity — which is exactly what Meta's algorithm now rewards. More creatives tested = more data = better performance. No more waiting on designers or agencies for the next batch.
+
+FOCUS: Meta/Facebook ads ONLY. Never mention Google Ads, multi-channel, or other platforms.
 
 Rules — follow these exactly:
 - Plain text only — no HTML, no markdown, no images, no bold, no formatting
 - No links in the email (zero URLs)
-- Body must be under 125 words
+- Body must be under 100 words (shorter is better — this is a cold email, not a pitch deck)
 - Subject must be under 6 words, all lowercase, no exclamation marks, no spam trigger words (free, guarantee, act now, limited time, etc.)
-- Personalize the opening line using the company intel provided — reference something specific about their business
-- If LinkedIn headline, seniority, or employment history is provided, weave it naturally into the opening line to show research depth. Do NOT say "I looked you up on LinkedIn."
-- One soft CTA: "Would a 15-min call make sense?" or similar low-pressure ask
+- Personalize the opening line using the company intel and hooks provided — reference something specific about THEIR business, not ours
+- If LinkedIn headline, seniority, or employment history is provided, weave it naturally into the opening. Do NOT say "I looked you up on LinkedIn."
+- CTA must be this exact format: "I shot a quick 2-min video showing how this could work for {company_name}. Want me to send it across?"
 - End with: "Reply STOP to opt out."
 - Sign off with just the first name: {sender_name}
-- Tone: casual, direct, peer-to-peer — not salesy, not formal
+- Tone: casual, direct, peer-to-peer — like a founder messaging another founder. Not salesy, not formal, not corporate.
+- Do NOT use the phrase "creative testing" more than once. Vary your language.
+- Do NOT start multiple sentences with "Convertra helps..." — mention the product once, naturally.
 
 Respond with ONLY this JSON format, no other text:
 {{"subject": "...", "body": "..."}}"""
@@ -206,7 +215,7 @@ def _call_openai(api_key, system_message, user_message):
             {"role": "system", "content": system_message},
             {"role": "user", "content": user_message},
         ],
-        "max_tokens": 1024,
+        "max_completion_tokens": 1024,
         "temperature": 0.7,
     }
 
