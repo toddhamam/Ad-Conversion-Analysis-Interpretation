@@ -134,23 +134,26 @@ def _build_prompt(prospect):
     system_message = f"""You are an expert cold email copywriter for Convertra, an AI-powered ad creative platform.
 
 WHAT CONVERTRA DOES (use this to craft the pitch — do NOT copy it word for word):
-Convertra uses ConversionIQ™ to analyze what's already working in a brand's Meta ad account, then automatically generates new ad creatives based on those proven patterns. This lets brands dramatically increase their ad creative velocity — which is exactly what Meta's algorithm now rewards. More creatives tested = more data = better performance. No more waiting on designers or agencies for the next batch.
+Convertra automates ad creative generation. It finds the patterns already driving results in a brand's Meta ad account, then auto-generates new creatives based on those winners — so brands can keep pace without waiting on designers, copywriters, or even in-house staff. More variations live into testing = more data = better performance.
 
 FOCUS: Meta/Facebook ads ONLY. Never mention Google Ads, multi-channel, or other platforms.
+
+STRUCTURE — every email must follow this 3-part structure:
+1. OPENING (1-2 sentences): Reference something specific about their business — hiring, ads running, growth signals. Keep it simple and direct. Do NOT mention tech stack names (Shopify, Klaviyo, HubSpot, etc.) or "Meta Pixel" — just say "your ads" or "ads live". Do NOT say "I looked you up on LinkedIn."
+2. CONVERTRA PITCH (1-2 sentences): Position the bottleneck (getting enough new ad variations live into testing, fast) then explain how Convertra automates this — finds winning patterns, auto-generates new creatives. Say "without waiting on designers, copywriters, or even in-house staff."
+3. CTA (exact format): "I shot a quick 2-min video for you showing exactly how this could work for {company_name}. Want me to send it across?"
 
 Rules — follow these exactly:
 - Plain text only — no HTML, no markdown, no images, no bold, no formatting
 - No links in the email (zero URLs)
-- Body must be under 100 words (shorter is better — this is a cold email, not a pitch deck)
-- Subject must be under 6 words, all lowercase, no exclamation marks, no spam trigger words (free, guarantee, act now, limited time, etc.)
-- Personalize the opening line using the company intel and hooks provided — reference something specific about THEIR business, not ours
-- If LinkedIn headline, seniority, or employment history is provided, weave it naturally into the opening. Do NOT say "I looked you up on LinkedIn."
-- CTA must be this exact format: "I shot a quick 2-min video showing how this could work for {company_name}. Want me to send it across?"
-- End with: "Reply STOP to opt out."
+- Body must be under 100 words (shorter is better)
+- Subject must be under 6 words, all lowercase, no exclamation marks, no spam trigger words
+- Do NOT include "Reply STOP to opt out" or any unsubscribe language — this is a personal email, not a marketing blast
 - Sign off with just the first name: {sender_name}
-- Tone: casual, direct, peer-to-peer — like a founder messaging another founder. Not salesy, not formal, not corporate.
-- Do NOT use the phrase "creative testing" more than once. Vary your language.
-- Do NOT start multiple sentences with "Convertra helps..." — mention the product once, naturally.
+- Tone: casual, direct, peer-to-peer — like a founder messaging another founder
+- Do NOT use the phrase "creative testing" more than once
+- Do NOT start multiple sentences with "Convertra..." — mention the product once, naturally
+- Use "Convertra automates all of this" or similar — NOT "Convertra plugs into"
 
 Respond with ONLY this JSON format, no other text:
 {{"subject": "...", "body": "..."}}"""
@@ -326,8 +329,7 @@ def _fallback_template(prospect):
             f"Would it make sense to show you how we're doing this? 15 min, no pitch -- "
             f"just the framework.\n\n"
             f"Either way, appreciate what you're building.\n\n"
-            f"{sender_name}\n\n"
-            f"Reply STOP to opt out."
+            f"{sender_name}"
         )
 
     return {"subject": subject, "body": body}

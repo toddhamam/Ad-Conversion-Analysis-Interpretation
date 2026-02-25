@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-02-25 — Refine cold email copy: personal tone, structured prompt, no marketing language
+
+### Changed
+- **`modules/drafter.py`** — Rewrote system prompt with explicit 3-part structure (opening → pitch → CTA); removed all unsubscribe/STOP language (personal email, not marketing blast); removed tech stack jargon from openings (no Shopify/Klaviyo/HubSpot/Meta Pixel mentions); updated USP framing to "Convertra automates all of this"; expanded bottleneck to "without waiting on designers, copywriters, or even in-house staff"; updated CTA to "I shot a quick 2-min video for you showing exactly how this could work for {company}"; removed "Reply STOP" from fallback template
+- **`data/pipeline.json`** — All 10 emails re-drafted with refined copy
+
+---
+
 ## 2026-02-25 — Lead pipeline v3: GPT-5.2 drafting, personalization hooks, Meta-only copy
 
 ### Changed
