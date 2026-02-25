@@ -427,6 +427,56 @@ def cmd_notify_send(args):
     output(result)
 
 
+# ─── Instantly commands ─────────────────────────────────────────────
+
+def cmd_instantly_status(args):
+    from modules.instantly import status
+    result = status()
+    output(result)
+
+
+def cmd_instantly_accounts(args):
+    from modules.instantly import list_accounts
+    result = list_accounts()
+    output(result)
+
+
+def cmd_instantly_campaigns(args):
+    from modules.instantly import list_campaigns
+    result = list_campaigns()
+    output(result)
+
+
+def cmd_instantly_create_campaign(args):
+    from modules.instantly import create_campaign
+    result = create_campaign(name=args.name, sending_account=args.account)
+    output(result)
+
+
+def cmd_instantly_push_leads(args):
+    from modules.instantly import push_leads
+    result = push_leads(campaign_id=args.campaign_id, stage=args.stage, limit=args.limit)
+    output(result)
+
+
+def cmd_instantly_activate(args):
+    from modules.instantly import activate_campaign
+    result = activate_campaign(args.campaign_id)
+    output(result)
+
+
+def cmd_instantly_pause(args):
+    from modules.instantly import pause_campaign
+    result = pause_campaign(args.campaign_id)
+    output(result)
+
+
+def cmd_instantly_analytics(args):
+    from modules.instantly import campaign_analytics
+    result = campaign_analytics(args.campaign_id)
+    output(result)
+
+
 # ─── Argument parser ─────────────────────────────────────────────────
 
 def build_parser():
@@ -695,6 +745,42 @@ def build_parser():
     dr_batch.add_argument("--stage", type=str, default="researched")
     dr_batch.add_argument("--score-min", type=int, default=8, dest="score_min")
     dr_batch.set_defaults(func=cmd_draft_batch)
+
+    # ── instantly ──
+    instantly_parser = subparsers.add_parser("instantly", help="Instantly.ai email sending")
+    instantly_sub = instantly_parser.add_subparsers(dest="action")
+
+    i_status = instantly_sub.add_parser("status", help="Instantly workspace overview")
+    i_status.set_defaults(func=cmd_instantly_status)
+
+    i_accounts = instantly_sub.add_parser("accounts", help="List sending accounts")
+    i_accounts.set_defaults(func=cmd_instantly_accounts)
+
+    i_campaigns = instantly_sub.add_parser("campaigns", help="List campaigns")
+    i_campaigns.set_defaults(func=cmd_instantly_campaigns)
+
+    i_create = instantly_sub.add_parser("create-campaign", help="Create campaign with sequences")
+    i_create.add_argument("--name", required=True, help="Campaign name")
+    i_create.add_argument("--account", type=str, help="Sending account email")
+    i_create.set_defaults(func=cmd_instantly_create_campaign)
+
+    i_push = instantly_sub.add_parser("push-leads", help="Push pipeline leads to campaign")
+    i_push.add_argument("--campaign-id", required=True, dest="campaign_id")
+    i_push.add_argument("--stage", type=str, default="ready_to_send")
+    i_push.add_argument("--limit", type=int, default=100)
+    i_push.set_defaults(func=cmd_instantly_push_leads)
+
+    i_activate = instantly_sub.add_parser("activate", help="Activate a campaign")
+    i_activate.add_argument("--campaign-id", required=True, dest="campaign_id")
+    i_activate.set_defaults(func=cmd_instantly_activate)
+
+    i_pause = instantly_sub.add_parser("pause", help="Pause a campaign")
+    i_pause.add_argument("--campaign-id", required=True, dest="campaign_id")
+    i_pause.set_defaults(func=cmd_instantly_pause)
+
+    i_analytics = instantly_sub.add_parser("analytics", help="Campaign analytics")
+    i_analytics.add_argument("--campaign-id", required=True, dest="campaign_id")
+    i_analytics.set_defaults(func=cmd_instantly_analytics)
 
     # ── notify ──
     notify_parser = subparsers.add_parser("notify", help="Telegram notifications")

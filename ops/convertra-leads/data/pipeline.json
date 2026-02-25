@@ -130,6 +130,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T15:45:45.190199Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-25T21:37:33.406812Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T22:19:37.394091Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T22:24:27.388670Z"
         }
       ],
       "next_action": {
@@ -144,8 +159,8 @@
       "created": "2026-02-25",
       "updated": "2026-02-25",
       "draft_email": {
-        "subject": "more ad variations fast",
-        "body": "Siju \u2014 saw Trelish pushing Subscribe & Save for your flavoured cold coffees; that kind of offer usually needs a steady stream of fresh ads to keep performance stable.\n\nThe bottleneck is getting enough new variations live into testing fast. Convertra automates all of this: it finds the patterns already winning in your Meta ads, then auto-generates new creatives based on those winners, without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for Trelish. Want me to send it across?\n\nTodd"
+        "subject": "Ad fatigue?",
+        "body": "Hi Siju,\n\nJust saw Trelish is pushing a Subscribe and Save offer for your flavoured cold coffees. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -270,6 +285,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T15:46:06.079168Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-25T21:37:33.457196Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T22:19:37.670345Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T22:24:45.292792Z"
         }
       ],
       "next_action": {
@@ -284,8 +314,8 @@
       "created": "2026-02-25",
       "updated": "2026-02-25",
       "draft_email": {
-        "subject": "keeping arrae ads fresh",
-        "body": "Hey Jessica \u2014 Arrae feels like a serious DTC operation (strong product pages + consistent blog/newsletter). With product-led offers and seasonal pushes, it\u2019s tough to keep enough new Meta ad variations live without slowing down the team.\n\nConvertra automates all of this: it finds the patterns already winning in your Meta ads, then auto-generates new creatives based on those winners \u2014 without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for Arrae. Want me to send it across?\n\nTodd"
+        "subject": "One winning ad left?",
+        "body": "Hi Jessica,\n\nJust saw Arrae pushing the Tone Mixed Berry launch alongside an active blog and newsletter. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -360,6 +390,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T15:46:08.838998Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-25T21:37:33.462970Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T22:19:37.703434Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T22:24:48.212964Z"
         }
       ],
       "next_action": {
@@ -374,8 +419,8 @@
       "created": "2026-02-25",
       "updated": "2026-02-25",
       "draft_email": {
-        "subject": "keeping moodi ads fresh",
-        "body": "Hi Rach \u2014 saw Moodi\u2019s hot chocolate line and the content you\u2019re putting out; feels like a serious DTC engine that needs new angles for launches and seasonal pushes.\n\nThe bottleneck is getting enough new Meta ad variations live fast. Convertra automates all of this: it finds the patterns already driving results in your ads, then auto-generates new creatives based on those winners, without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for Moodi. Want me to send it across?\n\nTodd"
+        "subject": "Can't test ads quick enough?",
+        "body": "Hi Rach,\n\nJust saw Moodi pushing hot chocolate blends and keeping content moving with blog and newsletter. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -501,6 +546,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T15:45:50.925411Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-25T21:37:33.425085Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T22:19:37.461959Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T22:24:32.314482Z"
         }
       ],
       "next_action": {
@@ -515,8 +575,8 @@
       "created": "2026-02-25",
       "updated": "2026-02-25",
       "draft_email": {
-        "subject": "fresh meta ads fast",
-        "body": "Michelle \u2014 39 Degrees feels like a serious DTC operation (strong lifecycle + content), and with new products/seasonal pushes the ads need a steady flow of fresh variations.\n\nThe bottleneck is getting enough new Meta ad variations live into testing fast. Convertra automates all of this: it finds the patterns already driving results in your ad account, then auto-generates new creatives based on those winners \u2014 without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for 39 Degrees. Want me to send it across?\n\nTodd"
+        "subject": "3 days per creative?",
+        "body": "Hi Michelle,\n\nJust saw 39 Degrees is pushing a Signature Series lineup and keeping content flowing alongside it. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -592,6 +652,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T15:46:00.044163Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-25T21:37:33.444238Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T22:19:37.604233Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T22:24:40.784915Z"
         }
       ],
       "next_action": {
@@ -606,8 +681,8 @@
       "created": "2026-02-25",
       "updated": "2026-02-25",
       "draft_email": {
-        "subject": "fresh meta ads at speed",
-        "body": "Hi Lucy \u2014 OHMG Water looks like a serious DTC operation, and the blog/newsletter cadence suggests you\u2019re constantly pushing new angles and offers.\n\nThe usual bottleneck is getting enough new Meta ad variations live fast enough. Convertra automates all of this: it finds the patterns already working in your ads, then auto-generates new creatives based on those winners, without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for OHMG Water. Want me to send it across?\n\nTodd"
+        "subject": "Creative Velocity",
+        "body": "Hi Lucy,\n\nJust saw OHMG Water is running an active blog and newsletter alongside product pushes, which usually signals steady demand gen. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -1513,6 +1588,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T15:46:03.151154Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-25T21:37:33.450859Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T22:19:37.636292Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T22:24:43.417718Z"
         }
       ],
       "next_action": {
@@ -1527,8 +1617,8 @@
       "created": "2026-02-25",
       "updated": "2026-02-25",
       "draft_email": {
-        "subject": "more ad variations, faster",
-        "body": "Osmar \u2014 Dr. Brandt\u2019s subscribe-and-save push and steady content output tells me you\u2019re serious about keeping demand consistent.\n\nThe usual bottleneck on Meta is getting enough new ad variations live fast, especially as SKUs and seasonal angles change. Convertra automates all of this: it finds the patterns already driving results in your ads, then auto-generates new creatives based on those winners \u2014 without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for Dr. Brandt Skincare. Want me to send it across?\n\nTodd"
+        "subject": "Fatiguing meta ads?",
+        "body": "Hi Osmar,\n\nJust saw Dr. Brandt pushing Subscribe and Save alongside steady content. At that pace, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -1654,6 +1744,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T15:45:53.912398Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-25T21:37:33.431298Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T22:19:37.514819Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T22:24:34.943940Z"
         }
       ],
       "next_action": {
@@ -1668,8 +1773,8 @@
       "created": "2026-02-25",
       "updated": "2026-02-25",
       "draft_email": {
-        "subject": "more ad variations, faster",
-        "body": "Hey Chris \u2014 saw RATIONALE has a strong product lineup and consistent content going out; usually that pairs with a steady stream of ads live.\n\nThe bottleneck on Meta is getting enough fresh ad variations live into creative testing fast. Convertra automates all of this: it finds the patterns already winning in your ad account, then auto-generates new creatives based on those winners \u2014 without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for RATIONALE. Want me to send it across?\n\nTodd"
+        "subject": "Waiting on designers?",
+        "body": "Hi Chris,\n\nJust saw RATIONALE has a deep product lineup and stays active with content, which usually pairs with steady Meta testing. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -1846,6 +1951,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T15:45:57.379885Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-25T21:37:33.437798Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T22:19:37.566080Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T22:24:36.836396Z"
         }
       ],
       "next_action": {
@@ -1860,8 +1980,8 @@
       "created": "2026-02-25",
       "updated": "2026-02-25",
       "draft_email": {
-        "subject": "more ad variations, faster",
-        "body": "Hey Prateek \u2014 I\u2019ve been seeing Naked & Thriving keep a steady stream of content going (blog/newsletter), which usually pairs with a lot of ads live.\n\nOn Meta, the bottleneck is getting enough fresh ad variations out fast\u2014especially for new SKUs and seasonal angles. Convertra automates all of this: it finds the patterns already winning in your account, then auto-generates new creatives based on those winners, without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for Naked & Thriving Skincare. Want me to send it across?\n\nTodd"
+        "subject": "Not enough ad creative to test?",
+        "body": "Hi Prateek,\n\nJust saw Naked & Thriving pushing hard on content plus ongoing Facebook ads. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -2850,6 +2970,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T15:45:47.747663Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-25T21:37:33.417116Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T22:19:37.426350Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T22:24:30.414894Z"
         }
       ],
       "next_action": {
@@ -2865,8 +3000,8 @@
       "created": "2026-02-25",
       "updated": "2026-02-25",
       "draft_email": {
-        "subject": "more ad variations, faster",
-        "body": "Sam \u2014 saw Soar With Us is hiring across performance creative + paid social/media, and you\u2019ve clearly got ads live while pushing content too.\n\nWhen you\u2019re scaling paid, the bottleneck is getting enough new ad variations live into testing fast. Convertra automates all of this: it finds the patterns already winning in your Meta account, then auto-generates new creatives based on those winners \u2014 without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for Soar With Us. Want me to send it across?\n\nTodd"
+        "subject": "Soar With Us's ad fatigue",
+        "body": "Hi Sam,\n\nJust saw Soar With Us is hiring across performance creative and paid social, plus running active content. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -3713,6 +3848,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T15:46:11.507246Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-25T21:37:33.469213Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T22:19:37.739367Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T22:24:50.075549Z"
         }
       ],
       "next_action": {
@@ -3728,8 +3878,8 @@
       "created": "2026-02-25",
       "updated": "2026-02-25",
       "draft_email": {
-        "subject": "keeping meta ads fresh",
-        "body": "Phillip \u2014 saw PBJ Marketing is hiring a creative director and paid media roles. Looks like you\u2019re building more capacity to keep ads moving fast.\n\nThe bottleneck is usually getting enough new Meta ad variations live into testing without slowing down the team. Convertra automates all of this by finding the patterns already driving results in your ad account, then auto-generating new creatives based on those winners\u2014without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for PBJ Marketing. Want me to send it across?\n\nTodd"
+        "subject": "PBJ Marketing's ad fatigue",
+        "body": "Hi Phillip,\n\nJust saw PBJ Marketing is hiring a creative director and adding paid media support. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
       }
     },
     {
