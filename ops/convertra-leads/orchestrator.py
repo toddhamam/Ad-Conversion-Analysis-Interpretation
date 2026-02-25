@@ -261,7 +261,7 @@ def run_campaign(niches, include_jobs=False, campaign_name=None):
         if api_key:
             try:
                 from modules.enrichment import batch_enrich
-                hunter_stats = batch_enrich(stage="researched", score_min=5)
+                hunter_stats = batch_enrich(stage="researched", score_min=5, max_credits=25)
                 log.info(
                     f"  Hunter: {hunter_stats.get('enriched', 0)} enriched, "
                     f"{hunter_stats.get('emails_found', 0)} emails found, "
@@ -896,7 +896,7 @@ def run_prospect_hunt(target=20, niches=None, include_jobs=True, max_rounds=10,
     if api_key:
         try:
             from modules.enrichment import batch_enrich
-            hunter_stats = batch_enrich(stage="researched", score_min=email_score_min)
+            hunter_stats = batch_enrich(stage="researched", score_min=email_score_min, max_credits=25)
             log.info(
                 f"  Hunter: {hunter_stats.get('enriched', 0)} enriched, "
                 f"{hunter_stats.get('emails_found', 0)} emails, "
