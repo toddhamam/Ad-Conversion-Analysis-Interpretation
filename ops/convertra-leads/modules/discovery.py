@@ -5,37 +5,38 @@ from urllib.parse import urlparse
 
 from modules.pipeline import load_pipeline
 
-# Niche -> search queries that combine ICP signals with niche keywords
+# Niche -> search queries designed to find actual brand/company homepages (not articles)
+# Strategy: use e-commerce signals, Shopify stores, and negative modifiers to skip listicles
 NICHE_KEYWORDS = {
     "supplements": [
-        '"supplement brand" "media buyer" OR "ad creative"',
-        '"supplement" "DTC" scaling paid social',
-        '"supplement brand" hiring creative',
+        'supplement "shop now" OR "subscribe & save" OR "add to cart" -blog -article -guide',
+        'supplement brand site:myshopify.com',
+        '"supplement" "free shipping" DTC -"top 10" -"best" -review',
     ],
     "skincare": [
-        '"skincare brand" "media buyer" OR "ad creative"',
-        '"skincare" "DTC" scaling ads',
-        '"beauty brand" hiring creative',
+        'skincare "shop now" OR "subscribe & save" OR "add to cart" -blog -article -guide',
+        'skincare brand site:myshopify.com',
+        '"skincare" "free shipping" DTC -"top 10" -"best" -review',
     ],
     "fitness": [
-        '"fitness" "online coaching" paid ads',
-        '"fitness program" "media buyer"',
-        '"personal training" "Facebook ads"',
+        '"fitness program" OR "online coaching" "sign up" OR "join now" -blog -article',
+        '"fitness" "coaching" site:myshopify.com OR site:kajabi.com',
+        '"fitness brand" "free trial" OR "get started" -"top 10" -"best" -review',
     ],
     "courses": [
-        '"online course" "ad creative" OR "media buyer"',
-        '"coaching program" "scaling" ads',
-        '"digital course" "Facebook ads" OR "Meta ads"',
+        '"online course" "enroll now" OR "join" OR "get access" -blog -article -udemy -coursera',
+        '"coaching program" "apply now" OR "book a call" -blog -review',
+        '"digital course" site:kajabi.com OR site:teachable.com OR site:thinkific.com',
     ],
     "ecommerce": [
-        '"ecommerce" "media buyer" hiring',
-        '"DTC brand" "creative testing"',
-        '"ecommerce" scaling "paid social"',
+        'DTC brand "shop now" OR "free shipping" site:myshopify.com -blog -article',
+        '"ecommerce brand" "add to cart" -"top 10" -"best" -review -guide',
+        '"DTC" "Shopify" "Klaviyo" brand -blog -article',
     ],
     "saas": [
-        '"SaaS" "growth marketing" "paid social"',
-        '"SaaS" "media buyer" OR "creative strategist"',
-        '"B2B SaaS" "demand gen" ads',
+        '"SaaS" "start free trial" OR "book a demo" -blog -article -review -"top 10"',
+        '"SaaS" "growth marketing" company -blog -guide -article',
+        '"B2B SaaS" "pricing" "free trial" -review -comparison',
     ],
 }
 
@@ -73,6 +74,18 @@ SKIP_DOMAINS = {
     # News / media
     "techcrunch.com", "forbes.com", "entrepreneur.com", "inc.com",
     "businessinsider.com", "hubspot.com", "neilpatel.com",
+    "mediaweek.com.au", "adweek.com", "marketingdive.com", "digiday.com",
+    # Content / listicle / review sites
+    "ecommercefastlane.com", "magentobrain.com", "digitalagencynetwork.com",
+    "mysubscriptionaddiction.com", "ochatbot.com", "netalico.com",
+    "sleeknote.com", "privy.com", "oberlo.com", "pagefly.io",
+    "shogun.io", "gorgias.com", "yotpo.com", "loox.io",
+    "ecommerceceo.com", "ecommerceplatforms.io", "websiteplanet.com",
+    "wpbeginner.com", "elegantthemes.com", "themeisle.com",
+    # Job boards (additional)
+    "weekday.works", "lever.co", "greenhouse.io", "workable.com",
+    "breezy.hr", "bamboohr.com", "ashbyhq.com", "dover.com",
+    "otta.com", "himalayas.app", "builtin.com",
     # Community platforms
     "skool.com",
     # Design / portfolio
@@ -83,12 +96,12 @@ SKIP_DOMAINS = {
 
 # Base domains that have many country-code variants (freelancer.ph, freelancer.co.za, etc.)
 _SKIP_BASE_DOMAINS = {
-    "freelancer", "indeed", "glassdoor", "seek",
+    "freelancer", "indeed", "glassdoor", "seek", "jobs",
 }
 
 # URL path patterns that indicate noise (blog posts, articles, job listings)
 _NOISE_PATH_RE = re.compile(
-    r"/blog/|/article/|/news/|/post/|/category/|/tag/"
+    r"/blogs?/|/article/|/news/|/post/|/category/|/tag/"
     r"|/\d{4}/\d{2}/"         # Date-based blog URLs
     r"|/jobs?/"                # Job listings
     r"|/courses?/"             # Course listing pages
@@ -97,10 +110,16 @@ _NOISE_PATH_RE = re.compile(
     r"|/top-\d+"              # "Top 10" articles
     r"|/how-to-"              # How-to articles
     r"|/what-is-"             # Informational articles
-    r"|/guide/"               # Guide articles
+    r"|/guide[s]?[/-]"        # Guide articles (guide/ or guides/ or guide-)
     r"|/podcast/"
     r"|/webinar"
-    r"|/projects/",           # Freelancer project pages
+    r"|/projects/"             # Freelancer project pages
+    r"|/editorial-"            # Editorial content
+    r"|-vs-.*-guide"           # Comparison guides (shopify-vs-shopify-plus-guide)
+    r"|-complete-guide"        # Complete guide articles
+    r"|-strategy-"             # Strategy articles
+    r"|-for-shopify"           # "X for Shopify" tool/blog articles
+    r"|-for-ecommerce",        # "X for ecommerce" tool/blog articles
     re.IGNORECASE
 )
 
@@ -147,6 +166,16 @@ def _is_noise_url(url):
         if len(segments) >= 4:
             return True
 
+        # Long hyphenated slugs (6+ hyphens) are almost always article titles
+        if segments:
+            last_segment = segments[-1]
+            if last_segment.count("-") >= 6:
+                return True
+
+        # Path is a single long slug with many words — likely an article
+        if len(segments) == 1 and len(segments[0]) > 60:
+            return True
+
         return False
     except Exception:
         return False
@@ -183,7 +212,7 @@ def search_prospects_by_niche(niche, limit=30):
                 continue
             seen_domains.add(domain)
             all_results.append({
-                "company": hit.get("title", "").split(" - ")[0].split(" | ")[0].strip(),
+                "company": _clean_ddg_title(hit.get("title", "")),
                 "url": hit.get("href", ""),
                 "domain": domain,
                 "description": hit.get("body", "")[:200],
@@ -214,7 +243,7 @@ def search_prospects_by_keywords(keywords_list, limit=30):
                 continue
             seen_domains.add(domain)
             all_results.append({
-                "company": hit.get("title", "").split(" - ")[0].split(" | ")[0].strip(),
+                "company": _clean_ddg_title(hit.get("title", "")),
                 "url": hit.get("href", ""),
                 "domain": domain,
                 "description": hit.get("body", "")[:200],
@@ -264,6 +293,37 @@ def search_linkedin(query, limit=20):
         })
 
     return {"results": results[:limit], "total": len(results[:limit])}
+
+
+def _clean_ddg_title(title):
+    """Clean a DDG search result title into a usable company name.
+
+    Strips breadcrumb markers (›), domain prefixes, article-style suffixes,
+    and common noise patterns from DDG titles.
+    """
+    if not title:
+        return ""
+    # Strip breadcrumb-style prefixes: "domain.com › path › Page Title"
+    if "›" in title:
+        parts = title.split("›")
+        title = parts[-1].strip()
+    # Split on common separators and take first part
+    title = title.split(" - ")[0].split(" | ")[0].split(" :: ")[0].strip()
+    # Strip trailing year patterns like "2025", "2026", "(2026)"
+    title = re.sub(r'\s*\(?\d{4}\)?\s*$', '', title)
+    # Strip "The Complete Guide to..." type prefixes
+    noise_prefixes = [
+        "the complete guide to ", "a guide to ", "guide to ",
+        "how to ", "what is ", "why ", "top ",
+    ]
+    title_lower = title.lower()
+    for prefix in noise_prefixes:
+        if title_lower.startswith(prefix):
+            return ""  # This is an article, not a company name
+    # If title is too long (>60 chars) it's likely an article headline
+    if len(title) > 60:
+        return ""
+    return title.strip()
 
 
 def _ddg_search(query, max_results=10):

@@ -21,6 +21,9 @@ SCORING_RULES = {
     "dtc_ecommerce": {"points": 1, "description": "Shopify + Klaviyo (real DTC running paid)"},
     "has_contact": {"points": 1, "description": "Named contact found on website"},
     "established_company": {"points": 1, "description": "20+ employees, active website"},
+    "meta_pixel": {"points": 2, "description": "Meta/Facebook pixel detected — running Meta ads"},
+    "google_ads_tag": {"points": 1, "description": "Google Ads conversion tag detected"},
+    "ecommerce_store": {"points": 2, "description": "Confirmed ecommerce store (cart, products pages)"},
     "only_1_2_ads": {"points": -3, "description": "Only 1-2 active ads"},
     "dead_website": {"points": -5, "description": "Dead or dormant website"},
     "solo_operation": {"points": -3, "description": "Solo operation"},
@@ -129,6 +132,18 @@ def score_prospect(prospect_data):
     emp_count = _employee_count(str(employees)) if employees else 0
     if emp_count >= 20 and not intel.get("dead_website", False):
         breakdown["established_company"] = SCORING_RULES["established_company"]["points"]
+
+    # Meta Pixel detected — confirms they run Meta ads
+    if intel.get("has_meta_pixel", False):
+        breakdown["meta_pixel"] = SCORING_RULES["meta_pixel"]["points"]
+
+    # Google Ads tag detected
+    if intel.get("has_google_ads", False):
+        breakdown["google_ads_tag"] = SCORING_RULES["google_ads_tag"]["points"]
+
+    # Confirmed ecommerce store
+    if intel.get("is_ecommerce_store", False):
+        breakdown["ecommerce_store"] = SCORING_RULES["ecommerce_store"]["points"]
 
     # Calculate total
     score = sum(breakdown.values())

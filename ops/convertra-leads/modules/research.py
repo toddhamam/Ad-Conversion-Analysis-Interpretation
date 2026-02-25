@@ -26,7 +26,7 @@ TECH_PATTERNS = {
     "Wix": ["wix.com", "wixsite.com"],
     "Squarespace": ["squarespace.com", "sqsp.com"],
     "Webflow": ["webflow.io", "webflow.com"],
-    "Magento": ["magento", "mage/"],
+    "Magento": ["mage/static", "mage/cookies", "/magento/", "magento2", "mageplaza"],
 }
 
 # Hiring role keywords
@@ -80,7 +80,10 @@ NON_NAME_WORDS = {
     "media", "brand", "growth", "performance", "production", "account",
     # Ad/marketing jargon
     "advertising", "campaign", "conversion", "optimization", "acquisition",
-    "retention", "engagement", "analytics", "automation",
+    "retention", "engagement", "analytics", "automation", "static", "dynamic",
+    "framework", "method", "methods", "process", "integration", "decision",
+    "quick", "fast", "first", "next", "step", "steps", "phase",
+    "membership", "subscription", "platform", "system", "module",
     # Section headings / article phrases
     "final", "thoughts", "conclusion", "summary", "introduction", "overview",
     "key", "takeaways", "results", "findings", "review", "guide",
@@ -151,6 +154,11 @@ def scrape_company(url):
     signals["hiring_signals"] = _extract_hiring_signals(all_text)
     signals["content_marketing"] = _extract_content_signals(all_html, all_text)
 
+    # Detect ad pixels and ecommerce signals
+    signals["has_meta_pixel"] = _detect_meta_pixel(all_html)
+    signals["has_google_ads"] = _detect_google_ads(all_html)
+    signals["is_ecommerce_store"] = _detect_ecommerce_store(all_html, url)
+
     # Extract contacts from team/about pages
     signals["contacts"] = _extract_contacts(all_html, all_text)
 
@@ -192,6 +200,9 @@ def batch_research(stage="discovered"):
         intel["hiring_signals"] = signals.get("hiring_signals", [])
         intel["content_marketing"] = signals.get("content_marketing", False)
         intel["dead_website"] = signals.get("dead_website", False)
+        intel["has_meta_pixel"] = signals.get("has_meta_pixel", False)
+        intel["has_google_ads"] = signals.get("has_google_ads", False)
+        intel["is_ecommerce_store"] = signals.get("is_ecommerce_store", False)
 
         # Store extracted contacts
         contacts = signals.get("contacts", [])
@@ -333,14 +344,27 @@ def _looks_like_name(text):
         return False
     if text.isupper():
         return False
-    if any(w.lower() in NON_NAME_WORDS for w in words):
-        return False
+    # Check each word AND hyphenated sub-words against non-name vocabulary
+    for w in words:
+        if w.lower() in NON_NAME_WORDS:
+            return False
+        # Check hyphenated parts: "Creative-First" → check "creative" and "first"
+        if "-" in w:
+            for part in w.split("-"):
+                if part.lower() in NON_NAME_WORDS:
+                    return False
     # First word should start with uppercase
     if not words[0][0].isupper():
         return False
     # All words should be mostly alphabetic
     if not all(re.match(r"^[A-Za-z'\-\.]+$", w) for w in words):
         return False
+    # Reject CamelCase compounds: "OurBrand", "IntegrationMethods" — real names don't do this
+    for w in words:
+        # Strip hyphens for camelCase check
+        clean = w.replace("-", "")
+        if len(clean) > 3 and re.search(r'[a-z][A-Z]', clean):
+            return False
     return True
 
 
@@ -582,6 +606,42 @@ def _extract_content_signals(html, text):
         "/podcast" in html_lower,
     ]
     return any(indicators)
+
+
+def _detect_meta_pixel(html):
+    """Detect Meta/Facebook pixel in HTML source."""
+    html_lower = html.lower()
+    indicators = [
+        "fbq(", "fbevents.js", "facebook.com/tr?",
+        "connect.facebook.net", "meta pixel", "_fbp",
+    ]
+    return any(ind in html_lower for ind in indicators)
+
+
+def _detect_google_ads(html):
+    """Detect Google Ads conversion tracking in HTML source."""
+    html_lower = html.lower()
+    indicators = [
+        "googleadservices.com", "google_conversion", "gtag('event', 'conversion'",
+        "google-ads", "gads", "aw-conversion",
+        "googletagmanager.com/gtag", "ads/ga-audiences",
+    ]
+    return any(ind in html_lower for ind in indicators)
+
+
+def _detect_ecommerce_store(html, url):
+    """Detect if the site is an actual ecommerce store (not a blog about ecommerce)."""
+    html_lower = html.lower()
+    # Strong ecommerce signals
+    strong = [
+        "/cart", "/checkout", "add-to-cart", "add_to_cart",
+        "/products/", "/collections/", "shopify.com/cart",
+        "snipcart", "woocommerce-cart",
+    ]
+    # URL-based: myshopify.com domains are always stores
+    if "myshopify.com" in url.lower():
+        return True
+    return any(ind in html_lower for ind in strong)
 
 
 def _is_dead_website(response, soup, text):

@@ -245,7 +245,7 @@ def search_domain_contacts(domain):
 
             # Sort: prefer senior people
             seniority_rank = {"executive": 0, "senior": 1, "management": 2, "junior": 3}
-            contacts.sort(key=lambda c: seniority_rank.get(c.get("seniority", "").lower(), 99))
+            contacts.sort(key=lambda c: seniority_rank.get((c.get("seniority") or "").lower(), 99))
 
             return {
                 "status": "found",
