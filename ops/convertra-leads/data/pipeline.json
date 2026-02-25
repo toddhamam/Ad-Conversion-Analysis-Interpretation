@@ -1,10 +1,11 @@
 {
   "metadata": {
     "created": "2026-02-23",
-    "last_updated": "2026-02-23",
-    "total_prospects": 1,
+    "last_updated": "2026-02-25",
+    "total_prospects": 67,
     "campaigns": [
-      "test-feb-2026"
+      "test-feb-2026",
+      "hunt-2026-02-25"
     ]
   },
   "prospects": [
@@ -17,7 +18,7 @@
       "company_url": "https://acmedtc.com",
       "linkedin_url": "",
       "company_type": "dtc_brand",
-      "fit_score": 12,
+      "fit_score": 15,
       "campaign": "test-feb-2026",
       "stage": "researched",
       "source": "",
@@ -53,7 +54,3781 @@
       ],
       "notes": "",
       "created": "2026-02-23",
-      "updated": "2026-02-23"
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_002",
+      "name": "Siju Nair",
+      "email": "siju@trelish.in",
+      "company": "Trelish",
+      "role": "Co-Founder",
+      "company_url": "https://trelish.in/products/subscribe-save",
+      "linkedin_url": {
+        "handle": "sijugnair"
+      },
+      "company_type": "",
+      "fit_score": 9,
+      "campaign": "hunt-2026-02-25",
+      "stage": "ready_to_send",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [
+        "Meta Pixel installed \u2014 actively running Meta/Facebook ads",
+        "Shopify store \u2014 direct-to-consumer with built-in checkout",
+        "Funded: al Series Flavoured Series Cold Coffees Subscribe & Save A"
+      ],
+      "pain_signals": [
+        "Running Meta ads \u2014 creative velocity is now the #1 lever for Meta's algorithm",
+        "Product-focused ads need constant refresh for new SKUs and seasons",
+        "Post-funding growth pressure \u2014 need to scale ad spend efficiently"
+      ],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify"
+        ],
+        "estimated_employees": "",
+        "funding": "al Series Flavoured Series Cold Coffees Subscribe & Save A",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": true,
+        "has_google_ads": true,
+        "is_ecommerce_store": true,
+        "contacts": [],
+        "location": "India",
+        "twitter": {
+          "handle": null,
+          "id": null,
+          "bio": null,
+          "followers": null,
+          "following": null,
+          "statuses": null,
+          "favorites": null,
+          "location": null,
+          "site": null,
+          "avatar": null
+        },
+        "email_confidence": 95
+      },
+      "email_source": "hunter",
+      "email_verified": true,
+      "interactions": [
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T14:35:28.816137Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:40:42.188426Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:45:45.190199Z"
+        }
+      ],
+      "next_action": {
+        "type": "send_initial",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "hot"
+      ],
+      "notes": "Add to Cart .1. Save up to 15% on your coffee restocking. 2. Forget the hassle of tracking your inventory and ordering when you're out of coffee. 3. Customizable - from no. of packs to which coffee yo",
+      "created": "2026-02-25",
+      "updated": "2026-02-25",
+      "draft_email": {
+        "subject": "more ad variations fast",
+        "body": "Siju \u2014 saw Trelish pushing Subscribe & Save for your flavoured cold coffees; that kind of offer usually needs a steady stream of fresh ads to keep performance stable.\n\nThe bottleneck is getting enough new variations live into testing fast. Convertra automates all of this: it finds the patterns already winning in your Meta ads, then auto-generates new creatives based on those winners, without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for Trelish. Want me to send it across?\n\nTodd"
+      }
+    },
+    {
+      "id": "p_003",
+      "name": "",
+      "email": "",
+      "company": "Eu Natural",
+      "role": "",
+      "company_url": "https://store.eunatural.com/pages/natural-uric-acid-joint-mobility-support",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 6,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "ed Pure Ingredients Backed by Science Celery Seed Extrac Supports natural uric acid metabolism and joint comfort. Tart Cherry Extract Rich in",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": true,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "SHOP NOW . Supplement bottle labeled 'Uric Acid Purge' with celery seed and tart cherry. Rediscover the Freedom to Move with Purge.No obligation, modify or cancel your subscription anytime. Learn more",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_004",
+      "name": "Jessica Stoller",
+      "email": "jessica@arrae.com",
+      "company": "Arrae",
+      "role": "Director of Supply Chain",
+      "company_url": "https://www.arrae.com/products/tone-mixed-berry",
+      "linkedin_url": {
+        "handle": "jessicastoller"
+      },
+      "company_type": "",
+      "fit_score": 5,
+      "campaign": "hunt-2026-02-25",
+      "stage": "ready_to_send",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [
+        "Shopify + Klaviyo stack \u2014 serious DTC operation with lifecycle marketing",
+        "Active content marketing (blog/newsletter)"
+      ],
+      "pain_signals": [
+        "Product-focused ads need constant refresh for new SKUs and seasons"
+      ],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": [],
+        "seniority": "executive",
+        "location": "Canada",
+        "twitter": {
+          "handle": null,
+          "id": null,
+          "bio": null,
+          "followers": null,
+          "following": null,
+          "statuses": null,
+          "favorites": null,
+          "location": null,
+          "site": null,
+          "avatar": null
+        },
+        "email_confidence": 99
+      },
+      "email_source": "hunter",
+      "email_verified": true,
+      "interactions": [
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T14:35:34.386043Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:41:05.125899Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:46:06.079168Z"
+        }
+      ],
+      "next_action": {
+        "type": "send_initial",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "Purchase Type: Subscribe & SAVE UP TO 20%.See real progress and break through fitness plateaus. Faster recovery and enhanced workout results. A supplement that fits your lifestyle and actually works.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25",
+      "draft_email": {
+        "subject": "keeping arrae ads fresh",
+        "body": "Hey Jessica \u2014 Arrae feels like a serious DTC operation (strong product pages + consistent blog/newsletter). With product-led offers and seasonal pushes, it\u2019s tough to keep enough new Meta ad variations live without slowing down the team.\n\nConvertra automates all of this: it finds the patterns already winning in your Meta ads, then auto-generates new creatives based on those winners \u2014 without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for Arrae. Want me to send it across?\n\nTodd"
+      }
+    },
+    {
+      "id": "p_005",
+      "name": "Rach Matters",
+      "email": "rach@moodiblends.com",
+      "company": "Moodi",
+      "role": "Chief of Staff",
+      "company_url": "https://www.moodiblends.com/products/hot-chocolate",
+      "linkedin_url": {
+        "handle": "rach-matters"
+      },
+      "company_type": "",
+      "fit_score": 5,
+      "campaign": "hunt-2026-02-25",
+      "stage": "ready_to_send",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [
+        "Shopify + Klaviyo stack \u2014 serious DTC operation with lifecycle marketing",
+        "Active content marketing (blog/newsletter)"
+      ],
+      "pain_signals": [
+        "Product-focused ads need constant refresh for new SKUs and seasons"
+      ],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": [],
+        "location": "Australia",
+        "twitter": {
+          "handle": null,
+          "id": null,
+          "bio": null,
+          "followers": null,
+          "following": null,
+          "statuses": null,
+          "favorites": null,
+          "location": null,
+          "site": null,
+          "avatar": null
+        },
+        "email_confidence": 96
+      },
+      "email_source": "hunter",
+      "email_verified": true,
+      "interactions": [
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T14:35:34.745588Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:41:07.789948Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:46:08.838998Z"
+        }
+      ],
+      "next_action": {
+        "type": "send_initial",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "Subscribe & Save Save UP TO 21%.A luxurious combo to power your mornings and unwind at night. Regular price $94.80. Shop now . Join 200,000+ women on their wellness journey. Reviews reflect individual",
+      "created": "2026-02-25",
+      "updated": "2026-02-25",
+      "draft_email": {
+        "subject": "keeping moodi ads fresh",
+        "body": "Hi Rach \u2014 saw Moodi\u2019s hot chocolate line and the content you\u2019re putting out; feels like a serious DTC engine that needs new angles for launches and seasonal pushes.\n\nThe bottleneck is getting enough new Meta ad variations live fast. Convertra automates all of this: it finds the patterns already driving results in your ads, then auto-generates new creatives based on those winners, without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for Moodi. Want me to send it across?\n\nTodd"
+      }
+    },
+    {
+      "id": "p_006",
+      "name": "",
+      "email": "",
+      "company": "Manly",
+      "role": "",
+      "company_url": "https://www.usemanly.com.au/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 8,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": true,
+        "has_google_ads": true,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "hot"
+      ],
+      "notes": "Save up to 25% Subscribe today! Manly. SHOP NOW . 60 Day Money Back Guarantee. 10K+.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_007",
+      "name": "Michelle Arvaj",
+      "email": "michelle@39degrees.com.au",
+      "company": "39 Degrees",
+      "role": "Co-Founder",
+      "company_url": "https://www.39degrees.com.au/",
+      "linkedin_url": {
+        "handle": "michelle-arvaj-38699321"
+      },
+      "company_type": "",
+      "fit_score": 7,
+      "campaign": "hunt-2026-02-25",
+      "stage": "ready_to_send",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [
+        "Shopify + Klaviyo stack \u2014 serious DTC operation with lifecycle marketing",
+        "Funded: Shop All Signature Series Ancient Spa Rituals Ancient Spa",
+        "Active content marketing (blog/newsletter)"
+      ],
+      "pain_signals": [
+        "Product-focused ads need constant refresh for new SKUs and seasons",
+        "Post-funding growth pressure \u2014 need to scale ad spend efficiently"
+      ],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "Shop All Signature Series Ancient Spa Rituals Ancient Spa",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": [],
+        "location": "Australia",
+        "twitter": {
+          "handle": null,
+          "id": null,
+          "bio": null,
+          "followers": null,
+          "following": null,
+          "statuses": null,
+          "favorites": null,
+          "location": null,
+          "site": null,
+          "avatar": null
+        },
+        "email_confidence": 96
+      },
+      "email_source": "hunter",
+      "email_verified": true,
+      "interactions": [
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T14:35:30.098486Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:40:48.844117Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:45:50.925411Z"
+        }
+      ],
+      "next_action": {
+        "type": "send_initial",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "SHOP NOW . In a world that never slows down, this is how you switch off. Why they're loved. SAVE 10%. This bundle is designed for those who can\u2019t get enough of our Magnesium Bath Tonics. $263.80.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25",
+      "draft_email": {
+        "subject": "fresh meta ads fast",
+        "body": "Michelle \u2014 39 Degrees feels like a serious DTC operation (strong lifecycle + content), and with new products/seasonal pushes the ads need a steady flow of fresh variations.\n\nThe bottleneck is getting enough new Meta ad variations live into testing fast. Convertra automates all of this: it finds the patterns already driving results in your ad account, then auto-generates new creatives based on those winners \u2014 without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for 39 Degrees. Want me to send it across?\n\nTodd"
+      }
+    },
+    {
+      "id": "p_008",
+      "name": "Lucy Blake",
+      "email": "lucy@ohmgwater.com",
+      "company": "OHMG Water",
+      "role": "Sales Executive",
+      "company_url": "https://www.ohmgwater.com/",
+      "linkedin_url": {
+        "handle": "lucy-blake-4b5993206"
+      },
+      "company_type": "",
+      "fit_score": 6,
+      "campaign": "hunt-2026-02-25",
+      "stage": "ready_to_send",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [
+        "Shopify + Klaviyo stack \u2014 serious DTC operation with lifecycle marketing",
+        "Active content marketing (blog/newsletter)"
+      ],
+      "pain_signals": [
+        "Product-focused ads need constant refresh for new SKUs and seasons"
+      ],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": true,
+        "is_ecommerce_store": true,
+        "contacts": [],
+        "seniority": "executive",
+        "location": "London, United Kingdom",
+        "twitter": {
+          "handle": null,
+          "id": null,
+          "bio": null,
+          "followers": null,
+          "following": null,
+          "statuses": null,
+          "favorites": null,
+          "location": null,
+          "site": null,
+          "avatar": null
+        },
+        "email_confidence": 97
+      },
+      "email_source": "hunter",
+      "email_verified": true,
+      "interactions": [
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T14:35:32.642267Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:40:58.566457Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:46:00.044163Z"
+        }
+      ],
+      "next_action": {
+        "type": "send_initial",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "SHOP NOW . A delicious range of Sparkling Spring Waters infused with our unique TripleMg\u00ae formula, a unique blend of three types of bioavailable Magnesium to help you relax, unwind and rebalance. Subs",
+      "created": "2026-02-25",
+      "updated": "2026-02-25",
+      "draft_email": {
+        "subject": "fresh meta ads at speed",
+        "body": "Hi Lucy \u2014 OHMG Water looks like a serious DTC operation, and the blog/newsletter cadence suggests you\u2019re constantly pushing new angles and offers.\n\nThe usual bottleneck is getting enough new Meta ad variations live fast enough. Convertra automates all of this: it finds the patterns already working in your ads, then auto-generates new creatives based on those winners, without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for OHMG Water. Want me to send it across?\n\nTodd"
+      }
+    },
+    {
+      "id": "p_009",
+      "name": "",
+      "email": "",
+      "company": "Ants HQ",
+      "role": "",
+      "company_url": "https://www.antshq.co.uk/beginner-ant-species",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 3,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Wix"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "cool"
+      ],
+      "notes": "Add to Cart . Shop Nutrition. Elevate your ant keeping experience with nutritious foods providing essential proteins and vitamins. Choose from mealworms, fruit flies, and more to keep your ants health",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_010",
+      "name": "",
+      "email": "",
+      "company": "Give",
+      "role": "",
+      "company_url": "https://myhometownbutcher.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 0,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": false,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "skip"
+      ],
+      "notes": "COUPON CODE : WELCOME1 CLICK AND ADD TO CART >>> Become a Hometown \"Insider\" & Unlock 10% Off Today Our Meats Explore delicious meat bundles and select your favorites.Buy Once or Subscribe & Save . Th",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_011",
+      "name": "",
+      "email": "",
+      "company": "Voomie",
+      "role": "",
+      "company_url": "https://voomie-staging.myshopify.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 5,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo",
+          "HubSpot",
+          "WordPress"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "We create supplements for people with busy brains. Our supplements are designed to help people manage their busy brain naturally. Made by people just like you!",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_012",
+      "name": "",
+      "email": "",
+      "company": "Life-Space Probiotics",
+      "role": "",
+      "company_url": "https://life-space-aus.myshopify.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 5,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo",
+          "HubSpot"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "Discover Life-Space Probiotics: Australia's #1 Probiotic Brand for Gut Health. Premium, multi-strain probiotics, backed by science for all life stages.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_013",
+      "name": "",
+      "email": "",
+      "company": "White Wolf Nutrition",
+      "role": "",
+      "company_url": "https://whitewolfnutrition.myshopify.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 5,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "Discover White Wolf Nutrition, your go-to Australian supplement store online. Boost your health and shop now for quality nutrition supplements.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_014",
+      "name": "",
+      "email": "",
+      "company": "Foraged For You Store",
+      "role": "",
+      "company_url": "https://foragedforyou.myshopify.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 5,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "The Mothers Blend is a certified organic and real food supplement in Australia, made with nutrient dense & fermented food to support pregnant women.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_015",
+      "name": "",
+      "email": "",
+      "company": "Vital Everyday Australia",
+      "role": "",
+      "company_url": "https://vital-everyday-australia.myshopify.com/collections/vital-supplements",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 5,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "The Vital supplement range is a range of vegan vegecap supplements, each a complex blend of plant based, clinically researched ingredients.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_016",
+      "name": "",
+      "email": "",
+      "company": "Innermost",
+      "role": "",
+      "company_url": "https://liveinnermost.myshopify.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 7,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": true,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "Science-backed health supplements containing natural ingredients and modern essentials to target your specific health goals across body and mind.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_017",
+      "name": "",
+      "email": "",
+      "company": "BEST BODY",
+      "role": "",
+      "company_url": "https://kvbgs1-mc.myshopify.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 5,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "Homepage - Check out our range of best-selling apparel and supplements.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_018",
+      "name": "",
+      "email": "",
+      "company": "The Nue Co.",
+      "role": "",
+      "company_url": "https://the-nue-co.myshopify.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 7,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": true,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "We pair potent ingredients with proven formulations to craft supplements for whole body health. Everything we offer makes a difference in how you feel.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_019",
+      "name": "",
+      "email": "",
+      "company": "ALPINECELL",
+      "role": "",
+      "company_url": "https://04d82a.myshopify.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 5,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "Boost energy, blood flow, and daily wellness with AlpineCell\u2019s natural beetroot formulas. Clean ingredients, real results. Shop our best-selling supplements .",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_020",
+      "name": "",
+      "email": "",
+      "company": "",
+      "role": "",
+      "company_url": "https://12fuel.myshopify.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 6,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": true,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "Welcome to 12 Fuel. Fuel your body and your passion with our top-tier supplements and fan gear. From game day to workout day, we've got you covered.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_021",
+      "name": "",
+      "email": "",
+      "company": "dtchealthstore",
+      "role": "",
+      "company_url": "https://dtchealth.com/en-au/collections/flexicose?srsltid=AfmBOorz_dLtkLd24UjKIV6EwSfT050vySx-2bV4merf-LQKGNRe3TEI",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 4,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "cool"
+      ],
+      "notes": "FREE SHIPPING OVER $50! Flexicose Liquid Joint Health Supplement. Welcome to Flexicose, where joint care meets optimal living. Crafted with a healthy ...",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_022",
+      "name": "",
+      "email": "",
+      "company": "subscribe -and- save Adore Beauty's Subscribe & Save",
+      "role": "",
+      "company_url": "https://www.adorebeauty.com.au/cms/subscribe-and-save.html",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 0,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": false,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "skip"
+      ],
+      "notes": "Discover Australia's best beauty subscriptions with Adore Beauty's Subscribe & Save . Official stockist of hundreds of haircare, skincare & makeup products online",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_023",
+      "name": "",
+      "email": "",
+      "company": "subscribe",
+      "role": "",
+      "company_url": "https://ausnz.vidaglow.com/pages/subscribe-save",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 5,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "Save up to 20% and get free shipping when you subscribe to your beauty routine. Get clinically proven ingestible beauty and skincare automatically delivered to your door with Vida Glow AU. Free shippi",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_024",
+      "name": "",
+      "email": "",
+      "company": "Go-To Skincare",
+      "role": "",
+      "company_url": "https://gotoskincare.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 7,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": true,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "Simple, effective, uncomplicated skincare by Zo\u00eb Foster Blake. Face oils, face serums, SPF, all made in Australia using premium ingredients to keep skin happy.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_025",
+      "name": "",
+      "email": "",
+      "company": "subscribe",
+      "role": "",
+      "company_url": "https://www.drsturm.com/subscribe-save",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 0,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": false,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "skip"
+      ],
+      "notes": "Now available globaly, Subscribe & Save provides you with a simple way of replenishing your skincare essentials with no extra work, reminders or multiple orders required. Simply select the \u2018 Subscribe",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_026",
+      "name": "Osmar Rodriguez",
+      "email": "orodriguez@drbrandtskincare.com",
+      "company": "Dr. Brandt Skincare",
+      "role": "Senior Vice President of Operations",
+      "company_url": "https://www.drbrandtskincare.com/pages/subscribe-and-save",
+      "linkedin_url": {
+        "handle": "osmar-e-rodriguez-aa79222"
+      },
+      "company_type": "",
+      "fit_score": 6,
+      "campaign": "hunt-2026-02-25",
+      "stage": "ready_to_send",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [
+        "Shopify + Klaviyo stack \u2014 serious DTC operation with lifecycle marketing",
+        "Active content marketing (blog/newsletter)"
+      ],
+      "pain_signals": [
+        "Product-focused ads need constant refresh for new SKUs and seasons"
+      ],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": [
+          {
+            "name": "Brandt Skincare",
+            "role": "",
+            "source": "meta_author"
+          }
+        ],
+        "seniority": "executive",
+        "location": "North Miami Beach, Florida, United States",
+        "twitter": {
+          "handle": null,
+          "id": null,
+          "bio": null,
+          "followers": null,
+          "following": null,
+          "statuses": null,
+          "favorites": null,
+          "location": null,
+          "site": null,
+          "avatar": null
+        },
+        "email_confidence": 97
+      },
+      "email_source": "hunter",
+      "email_verified": false,
+      "interactions": [
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T14:35:33.497065Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:41:01.335711Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:46:03.151154Z"
+        }
+      ],
+      "next_action": {
+        "type": "send_initial",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "Dr. Brandt believed great skin shouldn't be complicated. Our Subscribe & Save Program makes it effortless - with exclusive perks, flexible deliveries, and gifts in every box.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25",
+      "draft_email": {
+        "subject": "more ad variations, faster",
+        "body": "Osmar \u2014 Dr. Brandt\u2019s subscribe-and-save push and steady content output tells me you\u2019re serious about keeping demand consistent.\n\nThe usual bottleneck on Meta is getting enough new ad variations live fast, especially as SKUs and seasonal angles change. Convertra automates all of this: it finds the patterns already driving results in your ads, then auto-generates new creatives based on those winners \u2014 without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for Dr. Brandt Skincare. Want me to send it across?\n\nTodd"
+      }
+    },
+    {
+      "id": "p_027",
+      "name": "",
+      "email": "",
+      "company": "",
+      "role": "",
+      "company_url": "https://www.kiehls.com.au/auto-replenishment.html",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 0,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": false,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "skip"
+      ],
+      "notes": "Never run out of your favourite skincare products ever again thanks to Kiehl's auto-replenishment service. Find out more about our skincare subscription here.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_028",
+      "name": "Chris Nolan",
+      "email": "chris.nolan@rationale.com",
+      "company": "RATIONALE",
+      "role": "Head of Insights",
+      "company_url": "https://rationale.com/collections/all-products",
+      "linkedin_url": {
+        "handle": "nolanchris"
+      },
+      "company_type": "",
+      "fit_score": 7,
+      "campaign": "hunt-2026-02-25",
+      "stage": "ready_to_send",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [
+        "Meta Pixel installed \u2014 actively running Meta/Facebook ads",
+        "Shopify + Klaviyo stack \u2014 serious DTC operation with lifecycle marketing",
+        "Active content marketing (blog/newsletter)"
+      ],
+      "pain_signals": [
+        "Running Meta ads \u2014 creative velocity is now the #1 lever for Meta's algorithm",
+        "Product-focused ads need constant refresh for new SKUs and seasons"
+      ],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo",
+          "HubSpot",
+          "WordPress"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": true,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": [],
+        "seniority": "executive",
+        "location": "Melbourne, Australia",
+        "twitter": {
+          "handle": null,
+          "id": null,
+          "bio": null,
+          "followers": null,
+          "following": null,
+          "statuses": null,
+          "favorites": null,
+          "location": null,
+          "site": null,
+          "avatar": null
+        },
+        "email_confidence": 97
+      },
+      "email_source": "hunter",
+      "email_verified": true,
+      "interactions": [
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T14:35:30.913242Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:40:51.571774Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:45:53.912398Z"
+        }
+      ],
+      "next_action": {
+        "type": "send_initial",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "From $114.00. Shop Now. Suited to. Combination skin. #1 The Hydragel. Hydrating gel for dehydrated skin. $222.00. Add to Cart. Added to Cart. Suited ...",
+      "created": "2026-02-25",
+      "updated": "2026-02-25",
+      "draft_email": {
+        "subject": "more ad variations, faster",
+        "body": "Hey Chris \u2014 saw RATIONALE has a strong product lineup and consistent content going out; usually that pairs with a steady stream of ads live.\n\nThe bottleneck on Meta is getting enough fresh ad variations live into creative testing fast. Convertra automates all of this: it finds the patterns already winning in your ad account, then auto-generates new creatives based on those winners \u2014 without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for RATIONALE. Want me to send it across?\n\nTodd"
+      }
+    },
+    {
+      "id": "p_029",
+      "name": "",
+      "email": "",
+      "company": "Blue Lagoon Skincare",
+      "role": "",
+      "company_url": "https://skincare.bluelagoon.com/pages/subscribe-and-save",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 7,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": true,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "Subscribe & Save. 15% off \u00b7 Free shipping \u00b7 Flexible delivery. Consistency is where results begin. Ensure your regimen remains uninterrupted with automatic ...",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_030",
+      "name": "",
+      "email": "",
+      "company": "Bush Harvest Co",
+      "role": "",
+      "company_url": "https://www.bushharvestco.com/pages/subscriptions?srsltid=AfmBOopxxbhxfjBOQpraWSYeiT82V3rmnw-XktGK8LU6sUQs36-wkQI3",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 6,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": true,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "SUBSCRIBE & SAVE ON SKINCARE. Never run out of your favourite Bush Harvest Co skincare products and save 15% every time. SAVE YOURSELF THE TIME AND HASSLE ...",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_031",
+      "name": "Prateek Cholkar",
+      "email": "prateek@nakedandthriving.com",
+      "company": "Naked & Thriving Skincare",
+      "role": "Director of Product",
+      "company_url": "https://www.nakedandthriving.com/en-hn/pages/subscribe?srsltid=AfmBOords5z7nlvQDMXTzDMCorcXBEAgvawrQFQHSXYoPCGtJrbrXyxr",
+      "linkedin_url": {
+        "handle": "prateek-cholkar-62590b20"
+      },
+      "company_type": "",
+      "fit_score": 7,
+      "campaign": "hunt-2026-02-25",
+      "stage": "ready_to_send",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [
+        "Meta Pixel installed \u2014 actively running Meta/Facebook ads",
+        "Shopify + Klaviyo stack \u2014 serious DTC operation with lifecycle marketing",
+        "Active content marketing (blog/newsletter)"
+      ],
+      "pain_signals": [
+        "Running Meta ads \u2014 creative velocity is now the #1 lever for Meta's algorithm",
+        "Product-focused ads need constant refresh for new SKUs and seasons"
+      ],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo",
+          "HubSpot"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": true,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": [],
+        "seniority": "executive",
+        "location": "Hyder\u0101b\u0101d, India",
+        "twitter": {
+          "handle": null,
+          "id": null,
+          "bio": null,
+          "followers": null,
+          "following": null,
+          "statuses": null,
+          "favorites": null,
+          "location": null,
+          "site": null,
+          "avatar": null
+        },
+        "email_confidence": 95
+      },
+      "email_source": "hunter",
+      "email_verified": true,
+      "interactions": [
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T14:35:31.371938Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:40:54.469340Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:45:57.379885Z"
+        }
+      ],
+      "next_action": {
+        "type": "send_initial",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "How do I sign up? On the product page, you can select Subscribe & Save, choose your frequency of delivery, add to cart, and complete your checkout. That's it!",
+      "created": "2026-02-25",
+      "updated": "2026-02-25",
+      "draft_email": {
+        "subject": "more ad variations, faster",
+        "body": "Hey Prateek \u2014 I\u2019ve been seeing Naked & Thriving keep a steady stream of content going (blog/newsletter), which usually pairs with a lot of ads live.\n\nOn Meta, the bottleneck is getting enough fresh ad variations out fast\u2014especially for new SKUs and seasonal angles. Convertra automates all of this: it finds the patterns already winning in your account, then auto-generates new creatives based on those winners, without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for Naked & Thriving Skincare. Want me to send it across?\n\nTodd"
+      }
+    },
+    {
+      "id": "p_032",
+      "name": "",
+      "email": "",
+      "company": "Skincare",
+      "role": "",
+      "company_url": "https://www.mecca.com/en-au/skincare/?page=3",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": -5,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": false,
+        "dead_website": true,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "skip"
+      ],
+      "notes": "4.8 1K \u00b7 Shop nearby Skip to main content. New MECCA MAX has dropped! Shop now. Pause movement. Open navigation menu. Services & Events \u00b7 MECCA Memo. Stores. MECCA-logo-black.svg.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_033",
+      "name": "",
+      "email": "",
+      "company": "RATIONALE",
+      "role": "",
+      "company_url": "https://rationale-au-prod.myshopify.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 7,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo",
+          "HubSpot",
+          "WordPress"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": true,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "Since 1992, RATIONALE has been delivering Luminous Skin for Life. Australian-made,science-led skincare, designed to protect by day and repair by night. Discover ...",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_034",
+      "name": "",
+      "email": "",
+      "company": "Go-To Skincare",
+      "role": "",
+      "company_url": "https://go-to-skincare.myshopify.com/collections/shop-all",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 7,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": true,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "Skincare products designed by formulators with decades of experience in natural skincare. Cruelty-free products that are backed by science. Free shipping.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_035",
+      "name": "",
+      "email": "",
+      "company": "Vanessa Megan Skincare",
+      "role": "",
+      "company_url": "https://vanessa-megan-skincare.myshopify.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 5,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo",
+          "HubSpot"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "Australia's leader in organic skincare and perfumes. Vanessa Megan's range is 100% natural & organic, cruelty free, vegan and toxin-free. Shop now!",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_036",
+      "name": "",
+      "email": "",
+      "company": "the breakout hack",
+      "role": "",
+      "company_url": "https://tbhskincare.myshopify.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 8,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": true,
+        "has_google_ads": true,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "hot"
+      ],
+      "notes": "Meet your new BFF for clear skin. The Breakout Hack (formerly tbh Skincare) offers gentle, non-toxic products for acne-prone skin without stripping the ...",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_037",
+      "name": "",
+      "email": "",
+      "company": "Roccoco Botanicals",
+      "role": "",
+      "company_url": "https://roccoco-botanicals.myshopify.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 5,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "m $80.00 (5.0) Next Backed by science, driven by results No One Does Skin Like We Do We\u2019re not here to make small cha",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "Discover Roccoco Botanicals, one of the best skincare brands in Australia. Shop gentle, effective products crafted for radiant, healthy skin.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_038",
+      "name": "",
+      "email": "",
+      "company": "Liberty Belle Rx",
+      "role": "",
+      "company_url": "https://liberty-belle-rx.myshopify.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 7,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": true,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "A high-performance active skincare range founded in Melbourne, Australia. Delivering effective skincare products created by Melbourne Plastic Surgeon Dr ...",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_039",
+      "name": "",
+      "email": "",
+      "company": "Sabbia Co",
+      "role": "",
+      "company_url": "https://katies-essentials.myshopify.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 6,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": true,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "Discover Sabbia Co's award winning skincare, featuring multifunctional products formulated with potent plant extracts. Proven to deliver unparalleled ...",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_040",
+      "name": "",
+      "email": "",
+      "company": "Essential Skincare Co",
+      "role": "",
+      "company_url": "https://essential-skincare-co.myshopify.com/",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 5,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": true,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "warm"
+      ],
+      "notes": "New Australian made skincare range of products that have no fragrances or harmful chemicals and can be customised with essential oils to suit your skin ...",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_041",
+      "name": "",
+      "email": "",
+      "company": "Milk Makeup",
+      "role": "",
+      "company_url": "https://milkmakeup21.myshopify.com/collections/skincare",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 8,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "ddg_search",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [],
+      "company_intel": {
+        "tech_stack": [
+          "Shopify",
+          "Klaviyo"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "hiring_signals": [],
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": true,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": [
+          {
+            "name": "Cooling Water Jelly Tint",
+            "role": "",
+            "source": "html_heading"
+          },
+          {
+            "name": "Cooling Water",
+            "role": "",
+            "source": "html_heading"
+          }
+        ]
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "hot"
+      ],
+      "notes": "Are you looking for a vegan & clean skincare brand to be part of your daily beauty routine? Try Milk Makeup's natural ingredients for dry, dull, ...",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_042",
+      "name": "",
+      "email": "",
+      "company": "Upwork",
+      "role": "",
+      "company_url": "https://upwork.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 0,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": false,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: Browse 914 open jobs and land a remote Media Buyer job today. See detailed job requirements, compensation, duration, employer history, & apply today.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_043",
+      "name": "",
+      "email": "",
+      "company": "Flexjobs",
+      "role": "",
+      "company_url": "https://flexjobs.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 0,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": false,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: Entry-level media buyer jobs are available, as well as manager and director-level roles for more experienced professionals . There are also opportunit",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_044",
+      "name": "",
+      "email": "",
+      "company": "Remoterocketship",
+      "role": "",
+      "company_url": "https://remoterocketship.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 0,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": false,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: Senior Media Buyer managing Meta Ads in a remote role focusing on lead-generation campaigns. Collaborating with creative and operational teams to opti",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_045",
+      "name": "",
+      "email": "",
+      "company": "Qureos",
+      "role": "",
+      "company_url": "https://qureos.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 2,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [
+          "HubSpot",
+          "Webflow"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": true,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: November 25, 2025 - Many media buyers begin their careers as marketing coordinators or media planners .",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_046",
+      "name": "",
+      "email": "",
+      "company": "Wellfound",
+      "role": "",
+      "company_url": "https://wellfound.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 6,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [
+          "growth marketer"
+        ],
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": true,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "warm"
+      ],
+      "notes": "Found via job listing: Social and Native Ads Media Buyer (Remote)Full-time \u00b7 $15k \u2013 $40k \u00b7 Remote only \u2022 South America+2 \u00b7 3 years of exp1 week ago \u00b7 1 week agoSave \u00b7 Apply ",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_047",
+      "name": "",
+      "email": "",
+      "company": "Tealhq",
+      "role": "",
+      "company_url": "https://tealhq.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 0,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": false,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: From negotiating ad space to analyzing campaign performance, these roles are essential in ensuring that advertisements reach the right audience at the",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_048",
+      "name": "Peter Marcely",
+      "email": "",
+      "company": "Working Nomads",
+      "role": "Founder",
+      "company_url": "https://workingnomads.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 3,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [
+          "HubSpot",
+          "WordPress"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": true,
+        "is_ecommerce_store": false,
+        "contacts": [
+          {
+            "name": "Peter Marcely",
+            "role": "Founder",
+            "source": "html_heading"
+          }
+        ]
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "cool"
+      ],
+      "notes": "Found via job listing: Explore the fully remote Paid Social jobs worldwide. Apply to positions ... Senior Paid Social Manager. Nebo. Marketing. Featured. 18 days ago. 18 day",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_049",
+      "name": "",
+      "email": "",
+      "company": "Careers",
+      "role": "",
+      "company_url": "https://careers.hilti.group",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 0,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": false,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: The Senior Paid Social Manager will lead the strategy, execution, and optimization of all B2B Paid Social campaigns, to drive digital net sales and le",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_050",
+      "name": "Sam Wright",
+      "email": "sam@soarwithus.co",
+      "company": "Soar With Us",
+      "role": "Chief Operating Officer",
+      "company_url": "https://soarwithus.co",
+      "linkedin_url": {
+        "handle": "sam-wright-324737216"
+      },
+      "company_type": "",
+      "fit_score": 9,
+      "campaign": "hunt-2026-02-25",
+      "stage": "ready_to_send",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [
+        "Hiring 4 creative/media roles: performance creative, paid social, paid media",
+        "Meta Pixel installed \u2014 actively running Meta/Facebook ads",
+        "Active content marketing (blog/newsletter)"
+      ],
+      "pain_signals": [
+        "Scaling paid team \u2014 likely hitting creative production bottleneck",
+        "Running Meta ads \u2014 creative velocity is now the #1 lever for Meta's algorithm"
+      ],
+      "company_intel": {
+        "hiring_signals": [
+          "performance creative",
+          "paid social",
+          "paid media",
+          "ad creative"
+        ],
+        "tech_stack": [
+          "Klaviyo",
+          "HubSpot"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": true,
+        "has_google_ads": true,
+        "is_ecommerce_store": false,
+        "contacts": [],
+        "seniority": "executive",
+        "location": "London, United Kingdom",
+        "twitter": {
+          "handle": null,
+          "id": null,
+          "bio": null,
+          "followers": null,
+          "following": null,
+          "statuses": null,
+          "favorites": null,
+          "location": null,
+          "site": null,
+          "avatar": null
+        },
+        "email_confidence": 97
+      },
+      "email_source": "hunter",
+      "email_verified": true,
+      "interactions": [
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T14:35:29.776025Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:40:45.258518Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:45:47.747663Z"
+        }
+      ],
+      "next_action": {
+        "type": "send_initial",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "hot"
+      ],
+      "notes": "Found via job listing: Paid Social Manager - Media Buying | Meta & TikTok Ads | Acquisition Strategy. Responsibility: Drive new customer growth through paid ads for our e-co",
+      "created": "2026-02-25",
+      "updated": "2026-02-25",
+      "draft_email": {
+        "subject": "more ad variations, faster",
+        "body": "Sam \u2014 saw Soar With Us is hiring across performance creative + paid social/media, and you\u2019ve clearly got ads live while pushing content too.\n\nWhen you\u2019re scaling paid, the bottleneck is getting enough new ad variations live into testing fast. Convertra automates all of this: it finds the patterns already winning in your Meta account, then auto-generates new creatives based on those winners \u2014 without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for Soar With Us. Want me to send it across?\n\nTodd"
+      }
+    },
+    {
+      "id": "p_051",
+      "name": "",
+      "email": "",
+      "company": "page",
+      "role": "",
+      "company_url": "https://thg.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 0,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": false,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: You will work closely with our Senior Paid Social Manager and wider marketing teams, gaining hands-on experience across major platforms while developi",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_052",
+      "name": "",
+      "email": "",
+      "company": "Jobgether",
+      "role": "",
+      "company_url": "https://jobgether.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 0,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": false,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: View Similar Jobs \u2192 Apply Now. Digital Masters GmbH. Senior Paid Social Manager (d/m/w). 30+ days ago. Digital Masters GmbH - Madtech: Marketing + Adv",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_053",
+      "name": "",
+      "email": "",
+      "company": "Working at Dell Careers",
+      "role": "",
+      "company_url": "https://jobs.dell.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 0,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": false,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: Regional Paid Social Manager \u00b7 Strong understanding of social media platforms and advertising tools. \u00b7 Excellent leadership, communication, and strate",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_054",
+      "name": "",
+      "email": "",
+      "company": "MPB",
+      "role": "",
+      "company_url": "https://careers.mpb.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 2,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "enterprise_partner"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [],
+        "estimated_employees": "100-500",
+        "funding": "",
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: Are you a Performance Marketer looking to work in a dynamic and varied position? MPB is hiring for a Performance Marketing Manager to join our paid me",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_055",
+      "name": "",
+      "email": "",
+      "company": "Zalando Jobs",
+      "role": "",
+      "company_url": "https://jobs.zalando.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 1,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: We are seeking an analytical and process-driven Performance Marketing Manager with a strong focus on Paid Social (TikTok/Snap/Pinterest) advertising t",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_056",
+      "name": "Career site",
+      "email": "",
+      "company": "Nordhealth",
+      "role": "Coo",
+      "company_url": "https://careers.nordhealth.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 3,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "enterprise_partner"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [],
+        "estimated_employees": "100-500",
+        "funding": "",
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": [
+          {
+            "name": "Career site",
+            "role": "Coo",
+            "source": "html_heading"
+          }
+        ]
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "cool"
+      ],
+      "notes": "Found via job listing: Provet Cloud is looking for a Performance Marketing Manager to take full ownership of our digital acquisition engine \u2014 across paid search, paid social",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_057",
+      "name": "Proactive problem solver",
+      "email": "",
+      "company": "Remocate",
+      "role": "Owner",
+      "company_url": "https://remocate.app",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 3,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [
+          "paid media"
+        ],
+        "tech_stack": [
+          "HubSpot",
+          "Webflow"
+        ],
+        "estimated_employees": "500+",
+        "funding": "",
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": true,
+        "is_ecommerce_store": false,
+        "contacts": [
+          {
+            "name": "Proactive problem solver",
+            "role": "Owner",
+            "source": "html_heading"
+          },
+          {
+            "name": "Cooking Diary",
+            "role": "",
+            "source": "html_heading"
+          },
+          {
+            "name": "Happy Color",
+            "role": "Partner",
+            "source": "html_heading"
+          }
+        ]
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "cool"
+      ],
+      "notes": "Found via job listing: We\u2019re looking for a Performance Marketing Manager to drive growth across paid channels. You\u2019ll run campaigns on Meta and Google Ads, test and scale ne",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_058",
+      "name": "",
+      "email": "",
+      "company": "Remotive",
+      "role": "",
+      "company_url": "https://remotive.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": -1,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [],
+        "estimated_employees": "1-5",
+        "funding": "",
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": true,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: Identifying, testing, and scaling new acquisition channels\u2014including TV, live events, direct mail, podcasts, and more\u2014to expand our reach. Collaborati",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_059",
+      "name": "Client Stories",
+      "email": "",
+      "company": "Monks",
+      "role": "Partner",
+      "company_url": "https://monks.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 2,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [
+          "HubSpot"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": [
+          {
+            "name": "Client Stories",
+            "role": "Partner",
+            "source": "html_heading"
+          }
+        ]
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: We are seeking a Growth Marketing Manager APAC to spearhead our outbound marketing initiatives aimed at enhancing demand generation and funnelling sal",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_060",
+      "name": "",
+      "email": "",
+      "company": "HelloFresh",
+      "role": "",
+      "company_url": "https://careers.hellofresh.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 1,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [
+          "paid social"
+        ],
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: Job Description. As the Senior Growth Marketing Manager, you will identify, test, and scale business expansion opportunities for the Youfoodz brand.",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_061",
+      "name": "",
+      "email": "",
+      "company": "Jobs",
+      "role": "",
+      "company_url": "https://jobs.gem.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 1,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": false,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": true,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: We're hiring a Growth Marketing Manager to own growth as a key partner in the business. This is a hands-on role with real ownership and strategic impa",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_062",
+      "name": "Linkedin Matthew Linn Co",
+      "email": "",
+      "company": "Thread",
+      "role": "Founder",
+      "company_url": "https://getthread.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 3,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [
+          "HubSpot"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": true,
+        "is_ecommerce_store": false,
+        "contacts": [
+          {
+            "name": "Customer Crazy",
+            "role": "Partner",
+            "source": "html_heading"
+          },
+          {
+            "name": "Linkedin Matthew Linn Co",
+            "role": "Founder",
+            "source": "text_pattern"
+          },
+          {
+            "name": "Bobby Jacobs",
+            "role": "Head Of Growth",
+            "source": "text_pattern"
+          }
+        ]
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "cool"
+      ],
+      "notes": "Found via job listing: Growth Marketing Manager. Steamboat Springs, CO - hybrid or remote. About ... First and foremost, you will produce and update high-quality and engagin",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_063",
+      "name": "",
+      "email": "",
+      "company": "Lumify Learn",
+      "role": "",
+      "company_url": "https://lumifylearn.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 1,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: Explore the daily responsibilities, required skills, and salary potential of a growth marketing manager. Discover industry statistics surrounding job ",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_064",
+      "name": "",
+      "email": "",
+      "company": "Basis Technologies",
+      "role": "",
+      "company_url": "https://careers.basistechnologies.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 1,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: We're seeking a Growth Marketing Manager to lead our inbound pipeline engine and own the performance of our digital demand, paid media, paid SEO and m",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_065",
+      "name": "Phillip Reinhardt",
+      "email": "phillip@pbjmarketing.com",
+      "company": "PBJ Marketing",
+      "role": "Founder",
+      "company_url": "https://pbjmarketing.com",
+      "linkedin_url": {
+        "handle": "phillipreinhardt"
+      },
+      "company_type": "",
+      "fit_score": 5,
+      "campaign": "hunt-2026-02-25",
+      "stage": "ready_to_send",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [
+        "Hiring a creative director \u2014 building out paid creative capacity",
+        "Running HubSpot \u2014 invested in marketing automation",
+        "Active content marketing (blog/newsletter)"
+      ],
+      "pain_signals": [
+        "Growing the team to keep up with creative demand"
+      ],
+      "company_intel": {
+        "hiring_signals": [
+          "creative director",
+          "paid media"
+        ],
+        "tech_stack": [
+          "HubSpot",
+          "Webflow"
+        ],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": true,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": [
+          {
+            "name": "Phillip Reinhardt",
+            "role": "Founder",
+            "source": "html_heading"
+          },
+          {
+            "name": "David Bosley",
+            "role": "Founder",
+            "source": "html_heading"
+          },
+          {
+            "name": "Nicki Betterbid",
+            "role": "Cto",
+            "source": "html_heading"
+          },
+          {
+            "name": "Pranali Gotpagar",
+            "role": "Cto",
+            "source": "html_heading"
+          },
+          {
+            "name": "Casey Ransford",
+            "role": "Partner",
+            "source": "html_heading"
+          }
+        ],
+        "seniority": "executive",
+        "location": "Washington, District of Columbia, United States",
+        "twitter": {
+          "handle": null,
+          "id": null,
+          "bio": null,
+          "followers": null,
+          "following": null,
+          "statuses": null,
+          "favorites": null,
+          "location": null,
+          "site": null,
+          "avatar": null
+        },
+        "email_confidence": 96
+      },
+      "email_source": "hunter",
+      "email_verified": true,
+      "interactions": [
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-25T14:35:35.385473Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:41:10.457184Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-25T15:46:11.507246Z"
+        }
+      ],
+      "next_action": {
+        "type": "send_initial",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "warm"
+      ],
+      "notes": "Found via job listing: We are looking for a detail-oriented, ... Manager will serve as a client liaison, developing and managing a portfolio of PPC accounts and marketing ca",
+      "created": "2026-02-25",
+      "updated": "2026-02-25",
+      "draft_email": {
+        "subject": "keeping meta ads fresh",
+        "body": "Phillip \u2014 saw PBJ Marketing is hiring a creative director and paid media roles. Looks like you\u2019re building more capacity to keep ads moving fast.\n\nThe bottleneck is usually getting enough new Meta ad variations live into testing without slowing down the team. Convertra automates all of this by finding the patterns already driving results in your ad account, then auto-generating new creatives based on those winners\u2014without waiting on designers, copywriters, or even in-house staff.\n\nI shot a quick 2-min video for you showing exactly how this could work for PBJ Marketing. Want me to send it across?\n\nTodd"
+      }
+    },
+    {
+      "id": "p_066",
+      "name": "",
+      "email": "",
+      "company": "Weareroast",
+      "role": "",
+      "company_url": "https://weareroast.com",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": -5,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": false,
+        "dead_website": true,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: 3 weeks ago - The Paid Media Account Manager is an established and proven expert in PPC but with strong capabilities in Paid Social and ideally at lea",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
+    },
+    {
+      "id": "p_067",
+      "name": "",
+      "email": "",
+      "company": "Simplyhired",
+      "role": "",
+      "company_url": "https://simplyhired.com.au",
+      "linkedin_url": "",
+      "company_type": "",
+      "fit_score": 0,
+      "campaign": "hunt-2026-02-25",
+      "stage": "researched",
+      "source": "job_listing",
+      "prospect_buckets": [
+        "convertra_saas"
+      ],
+      "estimated_ad_spend": "unknown",
+      "personalization_hooks": [],
+      "pain_signals": [
+        "actively hiring media buyers"
+      ],
+      "company_intel": {
+        "hiring_signals": [],
+        "tech_stack": [],
+        "estimated_employees": "",
+        "funding": "",
+        "content_marketing": false,
+        "dead_website": false,
+        "has_meta_pixel": false,
+        "has_google_ads": false,
+        "is_ecommerce_store": false,
+        "contacts": []
+      },
+      "email_source": "",
+      "email_verified": false,
+      "interactions": [],
+      "next_action": {
+        "type": "research",
+        "date": "2026-02-25",
+        "notes": ""
+      },
+      "tags": [
+        "job_listing",
+        "skip"
+      ],
+      "notes": "Found via job listing: Demonstrated experience in crisis and media management. The Communications Section Manager is a key leadership role responsible for strategic directio",
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
     }
   ]
 }

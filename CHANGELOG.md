@@ -1,9 +1,25 @@
 # Changelog
 
-## 2026-02-25 — Upgrade lead pipeline AI drafter to GPT-5.2
+## 2026-02-25 — Refine cold email copy: personal tone, structured prompt, no marketing language
 
 ### Changed
-- **`modules/drafter.py`** — Switched AI email drafting model from `gpt-4o` to `gpt-5.2` for higher-quality personalized cold email generation with reasoning capabilities
+- **`modules/drafter.py`** — Rewrote system prompt with explicit 3-part structure (opening → pitch → CTA); removed all unsubscribe/STOP language (personal email, not marketing blast); removed tech stack jargon from openings (no Shopify/Klaviyo/HubSpot/Meta Pixel mentions); updated USP framing to "Convertra automates all of this"; expanded bottleneck to "without waiting on designers, copywriters, or even in-house staff"; updated CTA to "I shot a quick 2-min video for you showing exactly how this could work for {company}"; removed "Reply STOP" from fallback template
+- **`data/pipeline.json`** — All 10 emails re-drafted with refined copy
+
+---
+
+## 2026-02-25 — Lead pipeline v3: GPT-5.2 drafting, personalization hooks, Meta-only copy
+
+### Changed
+- **`modules/drafter.py`** — Switched AI model from `gpt-4o` to `gpt-5.2`; fixed `max_tokens` → `max_completion_tokens` for GPT-5.2 compatibility; complete system prompt rewrite: Meta/Facebook-only positioning, ConversionIQ™ USP (analyzes proven patterns → auto-generates creatives → increases creative velocity), low-friction video CTA ("I shot a quick 2-min video…"), 100-word body limit, anti-repetition rules
+- **`modules/research.py`** — Added `_generate_hooks()` function to synthesize personalization hooks and pain signals from extracted company intel (hiring signals, Meta Pixel, ad count, creative fatigue, tech stack, ecommerce, funding, team size); removed all Google Ads references; hooks now capped at 4, pains at 3
+- **`data/pipeline.json`** — 66 new prospects discovered across supplements/skincare/ecommerce niches; 10 prospects enriched with emails and AI-drafted personalized cold emails via GPT-5.2
+
+### Results
+- **Prospects discovered**: 66 across 3 niches (6 hot, 37 warm, 23 cold)
+- **Emails found**: 19 via Hunter.io (12 credits used)
+- **Emails drafted**: 10/10 via GPT-5.2 with personalized hooks and Meta-only positioning
+- **Copy quality**: All emails under 100 words, personalized opening lines, low-friction video CTA
 
 ---
 

@@ -237,6 +237,11 @@ def batch_research(stage="discovered"):
             if best and best.get("role") and not prospect.get("role"):
                 updates["role"] = best["role"]
 
+        # Generate personalization hooks and pain signals from intel
+        hooks, pains = _generate_hooks(intel, prospect)
+        updates["personalization_hooks"] = hooks
+        updates["pain_signals"] = pains
+
         # Clean up company name from website content
         company_name = signals.get("company_name", "")
         if company_name and _is_valid_company_name(company_name):
@@ -516,6 +521,94 @@ def _is_valid_company_name(name):
     if any(name_lower.startswith(p) for p in ddg_phrases):
         return False
     return True
+
+
+# ── Hook & pain signal generation ──────────────────────────────────
+
+
+def _generate_hooks(intel, prospect):
+    """Synthesize personalization hooks and pain signals from extracted intel.
+
+    Hooks are specific, factual observations about the company.
+    Pain signals are inferred bottlenecks the prospect likely faces.
+
+    Returns:
+        tuple: (hooks: list[str], pains: list[str])
+    """
+    hooks = []
+    pains = []
+    company = prospect.get("company", "the company")
+
+    # ── Hiring signals → strongest hooks ──
+    hiring = intel.get("hiring_signals", [])
+    if len(hiring) >= 3:
+        hooks.append(f"Hiring {len(hiring)} creative/media roles: {', '.join(hiring[:3])}")
+        pains.append("Scaling paid team — likely hitting creative production bottleneck")
+    elif len(hiring) >= 1:
+        hooks.append(f"Hiring a {hiring[0]} — building out paid creative capacity")
+        pains.append("Growing the team to keep up with creative demand")
+
+    # ── Ad infrastructure → concrete proof of Meta spend ──
+    has_pixel = intel.get("has_meta_pixel", False)
+    if has_pixel:
+        hooks.append("Meta Pixel installed — actively running Meta/Facebook ads")
+        pains.append("Running Meta ads — creative velocity is now the #1 lever for Meta's algorithm")
+
+    # ── Active ad count → scale context ──
+    ad_count = intel.get("active_ad_count", 0)
+    if ad_count >= 50:
+        hooks.append(f"Running {ad_count}+ live ad creatives")
+        pains.append("High creative volume — likely experiencing creative fatigue")
+    elif ad_count >= 20:
+        hooks.append(f"Running {ad_count}+ ads — significant creative operation")
+        pains.append("Needs steady stream of fresh creatives to avoid fatigue")
+    elif ad_count >= 5:
+        hooks.append(f"Running {ad_count} active ads")
+
+    # ── Creative fatigue ──
+    if intel.get("creative_fatigue"):
+        pains.append("Visible creative fatigue — ad messaging looks repetitive")
+
+    # ── Tech stack → DTC sophistication ──
+    tech = intel.get("tech_stack", [])
+    is_shopify = "Shopify" in tech
+    has_klaviyo = "Klaviyo" in tech
+    has_hubspot = "HubSpot" in tech
+
+    if is_shopify and has_klaviyo:
+        hooks.append("Shopify + Klaviyo stack — serious DTC operation with lifecycle marketing")
+    elif is_shopify:
+        hooks.append("Shopify store — direct-to-consumer with built-in checkout")
+
+    if has_hubspot and not has_klaviyo:
+        hooks.append("Running HubSpot — invested in marketing automation")
+
+    # ── Ecommerce store ──
+    if intel.get("is_ecommerce_store"):
+        if not is_shopify:  # Avoid redundancy with Shopify hook
+            hooks.append("Active ecommerce store with cart/checkout flow")
+        pains.append("Product-focused ads need constant refresh for new SKUs and seasons")
+
+    # ── Funding → growth stage ──
+    funding = intel.get("funding", "")
+    if funding and len(funding) > 5:
+        # Only use if it looks like real funding data, not scraped garbage
+        funding_lower = funding.lower()
+        if any(kw in funding_lower for kw in ["series", "raised", "seed", "funded", "$"]):
+            hooks.append(f"Funded: {funding[:80]}")
+            pains.append("Post-funding growth pressure — need to scale ad spend efficiently")
+
+    # ── Team size → maturity signal ──
+    employees = intel.get("estimated_employees", "")
+    if employees and employees not in ("", "1-5"):
+        hooks.append(f"Team of {employees} employees")
+
+    # ── Content marketing → sophistication ──
+    if intel.get("content_marketing") and len(hooks) < 3:
+        hooks.append("Active content marketing (blog/newsletter)")
+
+    # Cap at 4 hooks and 3 pains (quality over quantity)
+    return hooks[:4], pains[:3]
 
 
 # ── Existing signal extraction ──────────────────────────────────────
