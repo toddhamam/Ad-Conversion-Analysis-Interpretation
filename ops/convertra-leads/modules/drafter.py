@@ -11,7 +11,7 @@ from modules.pipeline import get_prospect, list_prospects, update_prospect, upda
 
 
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
-MODEL = "gpt-5.2"
+MODEL = "gpt-4o"
 
 # Bucket -> template key mapping
 BUCKET_TEMPLATE_MAP = {
@@ -202,20 +202,22 @@ def _call_openai(api_key, system_message, user_message):
     }
     payload = {
         "model": MODEL,
-        "reasoning": {"effort": "low"},
         "messages": [
             {"role": "system", "content": system_message},
             {"role": "user", "content": user_message},
         ],
+        "max_tokens": 1024,
         "temperature": 0.7,
     }
 
     try:
-        resp = requests.post(OPENAI_API_URL, headers=headers, json=payload, timeout=30)
+        resp = requests.post(OPENAI_API_URL, headers=headers, json=payload, timeout=60)
         if resp.status_code != 200:
+            print(f"  [drafter] OpenAI error: Status {resp.status_code}, {resp.text[:300]}")
             return None
         return resp.json()
-    except Exception:
+    except Exception as e:
+        print(f"  [drafter] OpenAI request failed: {e}")
         return None
 
 
