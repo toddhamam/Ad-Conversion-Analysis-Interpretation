@@ -128,9 +128,9 @@ exec python3 /home/ubuntu/convertra-leads/cli.py pipeline list --tag hot --limit
 # For each approved prospect, use their data to write a personalized email:
 # - Use prospect's company_intel, pain_signals, personalization_hooks
 # - Template: convertra_saas (DTC/ecommerce) or enterprise_partner (agencies)
-# - Subject: <6 words, lowercase, no spam triggers
-# - Body: <125 words, plain text, personalized first line
-# - One CTA: "Would a 15-min call make sense?"
+# - Subject: pick from the Tier 1 subject line pool, rotate across prospects
+# - Body: <125 words, plain text, 4-part formula (Greeting → Opening+Bridge → Value Offer → Sign-off)
+# - CTA: offer to send ad variations (SaaS/DTC) or a video walkthrough (Agency)
 # - End with: "Reply STOP to opt out."
 # - NO links, images, or HTML in first email
 
@@ -151,39 +151,53 @@ After sending, the **daily routine** handles everything else (replies, follow-up
 
 When drafting cold emails, follow these rules exactly:
 
-### Templates by Prospect Bucket
+### Subject Lines (Tier 1 Pain-Point Pool — Rotate Across Prospects)
+
+1. `Ad fatigue?`
+2. `{first_name}, creative bottleneck?`
+3. `Waiting on designers?`
+4. `{first_name}, quick creative question`
+5. `Fresh creatives in 3 min`
+6. `{company} ad variations`
+7. `Saw {company}'s ads`
+8. `Creative testing at {company}`
+9. `{first_name}, ad creative idea`
+10. `Scaling {company}'s creatives`
+11. `{company}'s next winning ad`
+
+### 4-Part Email Body Formula
+
+**Greeting → Opening+Bridge → Value Offer → Sign-off**
 
 **convertra_saas** (DTC/Ecommerce founders, course creators):
-- Subject: `quick question about {company}'s ad creative`
-- Angle: Creative testing bottleneck is the ceiling on scale
-- Hook: Reference their specific ads, hiring, or growth signals
+- Opening+Bridge: `Just [specific observation]. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.`
+- Value Offer: `I mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?`
 
 **enterprise_partner** (Agencies, large brands):
-- Subject: `your clients' creative pipeline`
-- Angle: Scaling creative output across multiple client accounts
-- Hook: Reference their client portfolio or team size
+- Opening+Bridge: `Just [specific observation]. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing for each client.`
+- Value Offer: `Convertra can help you pump out fresh winning creatives to test for your clients in less than 3 minutes. I shot a video to show you how. Want me to send it over?`
 
 ### Deliverability Rules (Non-Negotiable)
 - Plain text only — no HTML, no images, no rich formatting
-- No links in the first email (link allowed in follow-up 2 only)
-- Personalize every email — the first line must be specific to the prospect
+- No links in any cold email (opener or follow-up)
+- Personalize every email — the opening line must be specific to the prospect
 - Under 125 words for the body
-- Subject under 6 words, lowercase, no exclamation marks, no spam trigger words
+- Subject: pick from the Tier 1 pool above, no exclamation marks, no spam trigger words
 - Always end with: `Reply STOP to opt out.`
 - Minimum 45-second delay between sends
 
 ---
 
-## Follow-Up Sequence Timing
+## Follow-Up Sequence Timing (Two-Touch Only)
 
 The CLI uses pre-built templates from `data/templates.json`. No AI needed.
 
 | Step | Days After Previous | Template | Stage After Send |
 |------|-------------------|----------|-----------------|
-| Email 1 | Day 0 | convertra_saas or enterprise_partner | email_1_sent |
-| Follow-up 1 | +3 days | The Bump (short, casual, <40 words) | followup_1_sent |
-| Follow-up 2 | +4 days (Day 7) | The Value-Add (insight + one link, <60 words) | followup_2_sent |
-| Breakup | +7 days (Day 14) | The Close (graceful exit, <35 words, no CTA) | breakup_sent |
+| Email 1 (Opener) | Day 0 | convertra_saas or enterprise_partner | email_1_sent |
+| Follow-up 1 (Bump) | +3 days | "Just floating this back up. The ad variations are ready whenever you want them." | followup_1_sent → sequence_complete |
+
+Non-responders after the follow-up are recycled into new campaigns with different subject lines and angles.
 
 **Skip conditions** (CLI enforces automatically): opted_out, invalid_email, replied_interested, replied_not_interested, replied_not_now, won, lost, sequence_complete, weekends, paused sequences.
 
@@ -192,8 +206,8 @@ The CLI uses pre-built templates from `data/templates.json`. No AI needed.
 ## Pipeline Stages (Full Lifecycle)
 
 ```
-researched → ready_to_send → email_1_sent → followup_1_sent → followup_2_sent
-→ breakup_sent → sequence_complete
+researched → ready_to_send → email_1_sent → followup_1_sent → sequence_complete
+→ Non-responders recycled into new campaigns with different subject lines/angles
 
 At any point, a prospect can branch to:
 → replied_interested → meeting_scheduled → meeting_completed → won / lost

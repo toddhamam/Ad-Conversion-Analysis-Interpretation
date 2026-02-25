@@ -79,11 +79,9 @@ exec python3 /home/ubuntu/convertra-leads/cli.py report daily
 |---|---|---|
 | `researched` | Prospect identified and qualified | Draft email |
 | `ready_to_send` | Email drafted and approved | Send initial email |
-| `email_1_sent` | Initial email sent | Wait 3 days, then follow up |
-| `followup_1_sent` | First follow-up sent | Wait 4 days |
-| `followup_2_sent` | Second follow-up sent | Wait 7 days |
-| `breakup_sent` | Final email in sequence | Wait 7 days |
-| `sequence_complete` | All emails sent, no reply | Archive or revisit |
+| `email_1_sent` | Initial email sent (opener) | Wait 3 days, then follow up |
+| `followup_1_sent` | Follow-up bump sent (day 3) | Mark sequence_complete |
+| `sequence_complete` | Two-touch sequence done, no reply | Recycle into new campaign with different subject/angle |
 | `replied_interested` | Positive reply | Schedule call |
 | `replied_not_now` | Timing not right | Set reminder |
 | `replied_not_interested` | Not interested | Close |

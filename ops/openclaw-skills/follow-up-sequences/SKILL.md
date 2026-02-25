@@ -17,7 +17,7 @@ Manage follow-up email sequences using the Convertra Leads CLI. Timing, scheduli
 exec python3 /home/ubuntu/convertra-leads/cli.py followup due [--date today]
 ```
 
-Returns prospects grouped by follow-up step (followup_1, followup_2, breakup) with due dates.
+Returns prospects with a due follow-up (followup_1 on day 3) with due dates.
 
 ### Schedule a Follow-Up
 
@@ -37,14 +37,14 @@ exec python3 /home/ubuntu/convertra-leads/cli.py followup pause --id p_001
 exec python3 /home/ubuntu/convertra-leads/cli.py followup resume --id p_001
 ```
 
-## Sequence Timing
+## Sequence Timing (Two-Touch Only)
 
 | Step | Delay After Previous | Stage After Send |
 |---|---|---|
-| Email 1 | Day 0 | `email_1_sent` |
-| Follow-up 1 | +3 days | `followup_1_sent` |
-| Follow-up 2 | +4 days (Day 7) | `followup_2_sent` |
-| Breakup | +7 days (Day 14) | `breakup_sent` |
+| Email 1 (Opener) | Day 0 | `email_1_sent` |
+| Follow-up 1 (Bump) | +3 days | `followup_1_sent` → `sequence_complete` |
+
+Non-responders after the follow-up are recycled into new campaigns with different subject lines and angles — not hammered with more emails in the same thread.
 
 ## Daily Routine
 
@@ -78,15 +78,13 @@ The CLI automatically skips follow-ups for prospects in these stages:
 
 Also skips weekends (Saturday/Sunday) and paused sequences.
 
-## Follow-Up Templates
+## Follow-Up Template
 
-Pre-built templates are in `data/templates.json` on the VPS. Three follow-up stages:
+Pre-built template is in `data/templates.json` on the VPS. One follow-up stage only:
 
-**Follow-up 1 (The Bump)**: Short, casual reminder. Under 40 words. Different angle than initial email.
+**Follow-up 1 (The Bump)**: Short, casual float-back-up. Under 40 words. No new angle — just a nudge.
 
-**Follow-up 2 (The Value-Add)**: Provide a relevant stat or insight. Under 60 words. One link allowed.
-
-**Breakup (The Close)**: Graceful exit. Under 35 words. No CTA — psychological reciprocity.
+Template: `"Just floating this back up. The ad variations are ready whenever you want them."`
 
 ## When to Use AI
 

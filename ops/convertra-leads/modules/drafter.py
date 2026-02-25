@@ -2,6 +2,7 @@
 
 import json
 import os
+import random
 import re
 
 import requests
@@ -19,6 +20,65 @@ BUCKET_TEMPLATE_MAP = {
     "enterprise_partner": "agency_owner",
     "media_buying": "saas_founder",
 }
+
+
+def _load_subject_lines():
+    """Load active subject line variants from templates.json.
+
+    Returns:
+        list of subject line strings from all active tiers.
+    """
+    templates = {}
+    if TEMPLATES_PATH.exists():
+        try:
+            with open(TEMPLATES_PATH) as f:
+                templates = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    subject_lines = []
+    tiers = templates.get("subject_lines", {})
+    for tier_data in tiers.values():
+        if tier_data.get("active"):
+            subject_lines.extend(tier_data.get("variants", []))
+
+    # Fallback if nothing loaded
+    if not subject_lines:
+        subject_lines = ["Ad fatigue?", "creative bottleneck?", "quick question"]
+
+    return subject_lines
+
+
+def _pick_subject_line(prospect):
+    """Pick a subject line from the active pool and fill placeholders.
+
+    Args:
+        prospect: dict — full prospect record.
+
+    Returns:
+        str — filled subject line.
+    """
+    pool = _load_subject_lines()
+    template = random.choice(pool)
+
+    first_name = prospect.get("name", "").split()[0] if prospect.get("name") else ""
+    company = prospect.get("company", "your company")
+    company_intel = prospect.get("company_intel", {})
+    ad_count = company_intel.get("active_ad_count", "")
+    role = prospect.get("role", "")
+
+    subs = {
+        "first_name": first_name,
+        "company": company,
+        "ad_count": str(ad_count) if ad_count else "dozens of",
+        "role": role if role else "growth lead",
+    }
+
+    result = template
+    for key, value in subs.items():
+        result = result.replace(f"{{{key}}}", value)
+
+    return result
 
 
 def draft_email(prospect):
@@ -130,37 +190,50 @@ def _build_prompt(prospect):
     sender_name = config.get("email", {}).get("from_name", "Todd")
 
     company_name = prospect.get("company", "your brand")
+    buckets = prospect.get("prospect_buckets", [])
+    first_bucket = buckets[0] if buckets else "convertra_saas"
+    is_agency = first_bucket == "enterprise_partner"
+
+    # Pick a subject line from the active pool
+    subject_line = _pick_subject_line(prospect)
+
+    if is_agency:
+        cta_instruction = f"""4. CTA (exact format): "Convertra can help you pump out fresh winning creatives to test for your clients in less than 3 minutes. I shot a video to show you how. Want me to send it over?"
+   Note: For agencies, Convertra is named because they are evaluating tooling for their workflow."""
+        bridge_suffix = " for each client"
+    else:
+        cta_instruction = f"""4. CTA (exact format): "I mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?"
+   Note: For SaaS/DTC founders, do NOT mention Convertra by name. The product is introduced on the reply, not the cold open."""
+        bridge_suffix = ""
 
     system_message = f"""You are an expert cold email copywriter for Convertra, an AI-powered ad creative platform.
 
-WHAT CONVERTRA DOES (use this context to craft the pitch, do NOT copy it word for word):
-Convertra automates ad creative generation. It maps the patterns already driving results in a brand's Meta ad account, then auto-generates (and publishes) winning creatives inside their ad account... without waiting on designers, copywriters, or even media buyers. More variations live into testing = more data = better performance.
+WHAT CONVERTRA DOES (use this context to understand the product, do NOT describe it in the email unless this is an agency prospect):
+Convertra automates ad creative generation. It maps the patterns already driving results in a brand's Meta ad account, then auto-generates (and publishes) winning creatives inside their ad account... without waiting on designers, copywriters, or even media buyers.
 
 FOCUS: Meta/Facebook ads ONLY. Never mention Google Ads, multi-channel, or other platforms.
 
-STRUCTURE: every email must follow this exact 5-part structure:
+STRUCTURE: every email must follow this exact 4-part structure:
 
 1. GREETING: "Hi {{first_name}}," on its own line. Never use an em dash after the name.
 
-2. OPENING (1-2 sentences): Start with "Just" followed by a specific observation about their business (hiring, ads running, product launches, growth signals). Keep it simple and direct. Use a period to end the first sentence, then connect it to the need for fresh ad creative. Do NOT mention tech stack names (Shopify, Klaviyo, HubSpot, etc.) or "Meta Pixel". Do NOT say "I looked you up on LinkedIn."
+2. OPENING + BRIDGE (2 sentences max): Start with "Just" followed by a specific observation about their business (ad count, hiring, product launches, growth signals). Then connect it to the universal challenge: "At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing{bridge_suffix}." Do NOT frame this as criticism of their team. Frame it as a natural challenge that comes with scale. Do NOT mention tech stack names (Shopify, Klaviyo, HubSpot, etc.) or "Meta Pixel". Do NOT say "I looked you up on LinkedIn."
 
-3. CONVERTRA PITCH (2 sentences): First sentence positions the bottleneck (getting enough new ad variations live into testing, fast). Second sentence: "Convertra automates all of this: it maps the patterns already winning in your Meta account, then auto-generates (and publishes) winning creatives inside your ad account... without waiting on designers, copywriters, or even media buyers."
-
-4. CTA (exact format): "I shot a quick 2-min video for you showing exactly how this could work for {company_name}. Want me to send it across?"
+{cta_instruction}
 
 5. SIGN-OFF: Just the first name on its own line: {sender_name}
+
+SUBJECT LINE: Use this exact subject line: "{subject_line}"
 
 Rules, follow these exactly:
 - NEVER use em dashes anywhere in the email. Em dashes are a dead giveaway of AI-written copy. Use periods, commas, or ellipsis (...) instead.
 - Plain text only, no HTML, no markdown, no images, no bold, no formatting
 - No links in the email (zero URLs)
-- Body must be under 100 words (shorter is better)
-- Subject format: "[company name] ad creative" all lowercase. For agencies use "[company name]'s creative pipeline"
+- Body must be under 80 words (shorter is better)
 - Do NOT include "Reply STOP to opt out" or any unsubscribe language, this is a personal email, not a marketing blast
 - Tone: casual, direct, peer-to-peer, like a founder messaging another founder
-- Do NOT use the phrase "creative testing" more than once
-- Do NOT start multiple sentences with "Convertra...", mention the product once, naturally
-- Use "Convertra automates all of this" NOT "Convertra plugs into"
+- Do NOT frame the bridge as criticism. Do NOT say things like "your team is spending more time on X than Y" or imply they are doing something wrong. The bottleneck is situational, not their fault.
+- The opening observation should be specific and positive (acknowledging their growth/activity), then the bridge names the universal challenge that comes with it.
 
 Respond with ONLY this JSON format, no other text:
 {{"subject": "...", "body": "..."}}"""
@@ -169,7 +242,6 @@ Respond with ONLY this JSON format, no other text:
     company_intel = prospect.get("company_intel", {})
     hooks = prospect.get("personalization_hooks", [])
     pains = prospect.get("pain_signals", [])
-    buckets = prospect.get("prospect_buckets", [])
     first_name = prospect.get("name", "").split()[0] if prospect.get("name") else ""
 
     # Build enrichment context (if available from Hunter.io)
@@ -203,8 +275,8 @@ Company Intel:
 - Funding: {company_intel.get('funding', 'unknown')}
 - Creative fatigue: {company_intel.get('creative_fatigue', False)}
 
-Personalization hooks: {', '.join(hooks) if hooks else 'None available, use company intel to craft one'}
-Pain signals: {', '.join(pains) if pains else 'None detected, use general ad creative bottleneck angle'}"""
+Personalization hooks: {', '.join(hooks) if hooks else 'None available, use company intel to craft opening observation'}
+Pain signals: {', '.join(pains) if pains else 'None detected, use ad count or general growth signal for opening'}"""
 
     return system_message, user_message
 
@@ -301,14 +373,17 @@ def _fallback_template(prospect):
 
     if hooks:
         hook = hooks[0]
+    elif company_intel.get("active_ad_count", 0) > 10:
+        hook = f"saw {company} is running {company_intel['active_ad_count']}+ Meta ads"
     elif company_intel.get("hiring_signals"):
         hook = f"noticed you're hiring a {company_intel['hiring_signals'][0]}"
-    elif company_intel.get("active_ad_count", 0) > 10:
-        hook = f"I can see you're running {company_intel['active_ad_count']}+ ads"
     elif pains:
         hook = pains[0]
     else:
-        hook = "I can see you're investing in paid social"
+        hook = f"saw {company} is investing in paid social"
+
+    # Pick subject line from active pool
+    subject = _pick_subject_line(prospect)
 
     # Fill template placeholders
     subs = {
@@ -318,27 +393,32 @@ def _fallback_template(prospect):
         "sender_first_name": sender_name,
     }
 
-    subject = template.get("subject", f"{company} ad creative")
     body = template.get("body", "")
 
     for key, value in subs.items():
-        subject = subject.replace(f"{{{key}}}", value)
         body = body.replace(f"{{{key}}}", value)
 
     # If template was empty, use a generic fallback
+    is_agency = first_bucket == "enterprise_partner"
     if not body:
-        body = (
-            f"Hi {first_name},\n\n"
-            f"Just saw {company} is scaling paid social. {hook}. That usually means "
-            f"the ads need a constant flow of fresh variations to keep up.\n\n"
-            f"The bottleneck is getting enough new variations live into testing fast. "
-            f"Convertra automates all of this: it maps the patterns already winning in "
-            f"your Meta account, then auto-generates (and publishes) winning creatives "
-            f"inside your ad account... without waiting on designers, copywriters, or "
-            f"even media buyers.\n\n"
-            f"I shot a quick 2-min video for you showing exactly how this could work "
-            f"for {company}. Want me to send it across?\n\n"
-            f"{sender_name}"
-        )
+        if is_agency:
+            body = (
+                f"Hi {first_name},\n\n"
+                f"Just {hook}. At that volume, the biggest challenge is usually "
+                f"keeping enough fresh variations flowing into testing for each client.\n\n"
+                f"Convertra can help you pump out fresh winning creatives to test "
+                f"for your clients in less than 3 minutes. I shot a video to show "
+                f"you how. Want me to send it over?\n\n"
+                f"{sender_name}"
+            )
+        else:
+            body = (
+                f"Hi {first_name},\n\n"
+                f"Just {hook}. At that volume, the biggest challenge is usually "
+                f"keeping enough fresh variations flowing into testing.\n\n"
+                f"I mocked up 2 fresh ad variations based on what's already winning "
+                f"in your account. Want me to send them over?\n\n"
+                f"{sender_name}"
+            )
 
     return {"subject": subject, "body": body}

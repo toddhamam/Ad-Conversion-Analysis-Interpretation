@@ -39,28 +39,37 @@ This is the ONLY step that uses AI tokens. For each prospect ready for outreach:
 3. Store the draft on the prospect record via `pipeline update`
 
 **Email Rules:**
-- Subject: Under 6 words, lowercase, no spam triggers
-- Body: Under 125 words, plain text only
+- Subject: Pick from the Tier 1 subject line pool (see below), rotate across prospects
+- Body: Under 125 words, plain text only, 4-part formula (Greeting → Opening+Bridge → Value Offer → Sign-off)
 - First line: Personalized to THEM specifically
-- One CTA only: "Would a 15-min call make sense?"
+- One CTA only: offer to send something tangible (ad variations, video)
 - End with: "Reply STOP to opt out."
 - No links, no images, no HTML in first email
 
-**Templates by Bucket:**
+**Tier 1 Subject Line Pool** (rotate — never reuse the same subject for the same prospect):
+1. `Ad fatigue?`
+2. `{first_name}, creative bottleneck?`
+3. `Waiting on designers?`
+4. `{first_name}, quick creative question`
+5. `Fresh creatives in 3 min`
+6. `{company} ad variations`
+7. `Saw {company}'s ads`
+8. `Creative testing at {company}`
+9. `{first_name}, ad creative idea`
+10. `Scaling {company}'s creatives`
+11. `{company}'s next winning ad`
+
+**Templates by Bucket (4-Part Formula):**
 
 **convertra_saas** (DTC/Ecommerce):
 ```
-Subject: quick question about [company]'s ad creative
+Subject: [pick from Tier 1 pool]
 
 Hey [first name],
 
-Saw [company] is scaling paid social — [specific observation]. Smart move.
+Just [specific observation about their ads/creative]. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.
 
-One thing we're seeing with brands at your stage: the creative testing bottleneck becomes the ceiling on scale. Teams that automate the test-and-iterate cycle are shipping 10x more creatives without adding headcount.
-
-Would it make sense to show you how we're doing this? 15 min, no pitch — just the framework.
-
-Either way, appreciate what you're building.
+I mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?
 
 [sender name]
 
@@ -69,15 +78,13 @@ Reply STOP to opt out.
 
 **enterprise_partner** (Agencies):
 ```
-Subject: your clients' creative pipeline
+Subject: [pick from Tier 1 pool]
 
 Hey [first name],
 
-[Specific observation about their agency].
+Just [specific observation about their agency/clients]. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing for each client.
 
-Quick question: how are you handling the creative testing volume as you scale accounts? We're working with a few agencies who are using AI to multiply their creative output without multiplying their team.
-
-Curious if that's a bottleneck you're feeling. If so, happy to share the approach in a quick call.
+Convertra can help you pump out fresh winning creatives to test for your clients in less than 3 minutes. I shot a video to show you how. Want me to send it over?
 
 [sender name]
 
@@ -114,20 +121,22 @@ exec python3 /home/ubuntu/convertra-leads/cli.py inbox check --days 3
 - Unsubscribe → `pipeline update --id p_001 --stage opted_out`
 - Bounce → `pipeline update --id p_001 --stage invalid_email`
 
-### Phase 5: Follow-Ups (CLI — No AI)
+### Phase 5: Follow-Up (CLI — No AI)
+
+Two-touch only: 1 opener + 1 follow-up (day 3). Non-responders after the follow-up are recycled into new campaigns with different subject lines and angles.
 
 ```bash
 # Check what follow-ups are due today
 exec python3 /home/ubuntu/convertra-leads/cli.py followup due
 
-# Schedule a follow-up
+# Schedule the follow-up (day 3 bump)
 exec python3 /home/ubuntu/convertra-leads/cli.py followup schedule --id p_001 --step followup_1
 ```
 
 ## Deliverability Rules
 
 1. Plain text only — no HTML
-2. No links in first email
+2. No links in any cold email (opener or follow-up)
 3. Under 125 words
 4. Personalize every email
 5. Monitor bounce rate — pause if >3%

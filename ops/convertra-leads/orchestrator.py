@@ -462,8 +462,8 @@ def _send_due_followups(remaining_capacity):
     due = get_due_followups()
     stats = {"sent": 0, "failed": 0, "skipped": 0, "capacity_used": 0}
 
-    # Process all follow-up types in order: followup_1, followup_2, breakup
-    for followup_type in ["followup_1", "followup_2", "breakup"]:
+    # Two-touch rule: only followup_1 (non-responders recycled into new campaign)
+    for followup_type in ["followup_1"]:
         for item in due.get(followup_type, []):
             if stats["capacity_used"] >= remaining_capacity:
                 stats["skipped"] += 1
@@ -500,10 +500,13 @@ def _send_due_followups(remaining_capacity):
 
 
 def _fill_followup_template(template_key, prospect):
-    """Fill a follow-up template with prospect data.
+    """Fill the follow-up template with prospect data.
+
+    Two-touch rule: only followup_1 is used. Non-responders are recycled
+    into a new campaign with a different subject line and angle.
 
     Args:
-        template_key: "followup_1" | "followup_2" | "breakup"
+        template_key: "followup_1"
         prospect: dict — prospect record
 
     Returns:
@@ -524,36 +527,14 @@ def _fill_followup_template(template_key, prospect):
     first_name = prospect.get("name", "").split()[0] if prospect.get("name") else "there"
     company = prospect.get("company", "your company")
 
-    # Build context-aware placeholders
-    company_intel = prospect.get("company_intel", {})
-    ad_count = company_intel.get("active_ad_count", 0)
-
     subs = {
         "first_name": first_name,
         "company": company,
         "sender_first_name": sender_name,
-        "different_angle": (
-            f"I actually put together a quick case study on how brands like {company} "
-            f"are solving creative fatigue — thought you might find it useful."
-        ),
-        "value_add_insight": (
-            f"Saw an interesting trend: DTC brands scaling past $50K/mo in ad spend are "
-            f"hitting a creative testing ceiling. The ones breaking through are automating "
-            f"their test-and-iterate cycle."
-        ),
-        "connection_to_problem": (
-            f"Given {company}'s growth trajectory, curious if this resonates."
-        ),
     }
 
-    # Customize based on what we know
-    if ad_count and ad_count > 30:
-        subs["different_angle"] = (
-            f"I noticed {company} is running {ad_count}+ creatives — that's serious volume. "
-            f"Curious what your creative refresh cadence looks like."
-        )
-
     body = template.get("body", "")
+
     # For follow-ups, use RE: original subject
     original_subject = ""
     for interaction in prospect.get("interactions", []):
@@ -561,7 +542,7 @@ def _fill_followup_template(template_key, prospect):
             original_subject = interaction["subject"]
             break
 
-    subject = f"RE: {original_subject}" if original_subject else f"RE: {company}'s ad creative"
+    subject = f"RE: {original_subject}" if original_subject else f"RE: {company} ad creative"
 
     # Fill placeholders
     for key, value in subs.items():
@@ -574,30 +555,11 @@ def _fill_followup_template(template_key, prospect):
 
     # If template was empty, use a minimal fallback
     if not body:
-        if template_key == "followup_1":
-            body = (
-                f"Hey {first_name},\n\n"
-                f"Just floating this back up — I know how buried inboxes get.\n\n"
-                f"{subs['different_angle']}\n\n"
-                f"Worth a quick chat?\n\n"
-                f"{sender_name}"
-            )
-        elif template_key == "followup_2":
-            body = (
-                f"Hey {first_name},\n\n"
-                f"{subs['value_add_insight']}\n\n"
-                f"{subs['connection_to_problem']}\n\n"
-                f"Happy to walk you through how we're approaching this if it's relevant.\n\n"
-                f"{sender_name}"
-            )
-        elif template_key == "breakup":
-            body = (
-                f"Hey {first_name},\n\n"
-                f"I'll take the hint and stop clogging your inbox.\n\n"
-                f"If creative testing velocity ever becomes a priority, feel free to reach "
-                f"back out — I'm not going anywhere.\n\n"
-                f"Cheers,\n{sender_name}"
-            )
+        body = (
+            f"Hi {first_name},\n\n"
+            f"Just floating this back up. The ad variations are ready whenever you want them.\n\n"
+            f"{sender_name}"
+        )
 
     return {"subject": subject, "body": body}
 
@@ -675,7 +637,7 @@ def _auto_pause_sequences():
     from modules.followup import pause_sequence
 
     paused = 0
-    active_stages = ["email_1_sent", "followup_1_sent", "followup_2_sent"]
+    active_stages = ["email_1_sent", "followup_1_sent"]
 
     for stage in active_stages:
         result = list_prospects(stage=stage)

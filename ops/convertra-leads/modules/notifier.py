@@ -193,7 +193,7 @@ def format_weekly_summary(pipeline_summary, campaign_report, red_flags):
     lines.append(f"- Hot: {by_tier.get('hot', 0)} | Warm: {by_tier.get('warm', 0)} | Cool: {by_tier.get('cool', 0)}")
 
     ready = by_stage.get("ready_to_send", 0)
-    in_sequence = sum(by_stage.get(s, 0) for s in ["email_1_sent", "followup_1_sent", "followup_2_sent"])
+    in_sequence = sum(by_stage.get(s, 0) for s in ["email_1_sent", "followup_1_sent"])
     lines.append(f"- Ready to send: {ready}")
     lines.append(f"- In active sequence: {in_sequence}")
     lines.append("")

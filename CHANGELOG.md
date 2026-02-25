@@ -1,5 +1,44 @@
 # Changelog
 
+## 2026-02-25 — Subject line formulas, value-first CTA, two-touch follow-up sequence
+
+### Overview
+Complete overhaul of cold email subject lines, body copy formula, and follow-up sequence based on comprehensive research across 5 sources (tested on 15K+ prospects, 500K+ emails/month senders). Introduces tiered subject line split testing, value-first CTA (tangible deliverable instead of video pitch), and two-touch follow-up rule.
+
+### Subject Lines
+- **11 Tier 1 (pain-point) variants** active for split testing: "Ad fatigue?", "{first_name}, creative bottleneck?", "Waiting on designers?", "Not enough ad creative to test?", "{company}'s ad fatigue", "3 days per creative?", "One winning ad left?", "Creative Velocity", "Fatiguing meta ads?", "Running out of ads to test?", "Can't test ads quick enough?"
+- **Tiers 2-6 documented** for future rounds: trigger events (6), growth signals (5), stat/outcome (3), neutral/ambiguous (4), angle-based (3)
+- Subject lines picked randomly from active pool per prospect with placeholder filling ({first_name}, {company}, {ad_count}, {role})
+
+### Email Body (v5 Formula — 4-part structure)
+- **SaaS/DTC**: Greeting → Opening+Bridge ("At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing") → Value Offer ("I mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?") → Sign-off. No product name in email.
+- **Agency**: Same structure but bridge adds "for each client" and CTA names Convertra with video offer (agencies evaluate tooling)
+- Bridge reframed: never criticize their team, position as universal challenge that comes with scale
+
+### Two-Touch Follow-up Rule
+- Reduced from 4 emails (opener + followup_1 + followup_2 + breakup) to 2 (opener + 1 follow-up on day 3)
+- Follow-up is a short bump: "Just floating this back up. The ad variations are ready whenever you want them."
+- Non-responders marked `sequence_complete` for recycle into new campaign with different subject line and angle
+- Based on 2026 data: follow-up 1 boosts replies 49%, follow-up 4+ drops response rates 55%
+
+### Changed
+- **`data/templates.json`** — Complete restructure: added `subject_lines` section with 6 tiers (32 total variants), updated saas_founder and agency_owner body templates to v5 formula, simplified followup_1 template, removed followup_2 and breakup templates
+- **`modules/drafter.py`** — Added `_load_subject_lines()` and `_pick_subject_line()` for tiered subject line pool; rewrote `_build_prompt()` with 4-part structure, separate SaaS vs Agency instructions, anti-criticism rules; updated `_fallback_template()` with new body copy and agency variant; reduced max word count from 100 to 80
+- **`modules/followup.py`** — Removed followup_2 and breakup from SEQUENCE_STEPS; added `mark_sequence_complete()` for recycling; simplified `resume_sequence()` to only handle followup_1; updated module docstring with two-touch research citations
+- **`modules/pipeline.py`** — Updated STAGE_TRANSITIONS: followup_1_sent now goes to mark_complete (was followup_2), removed followup_2_sent and breakup_sent stages
+- **`modules/reporter.py`** — Removed followup_2 and breakup email counting; updated in_sequence stage list
+- **`modules/notifier.py`** — Updated in_sequence stage list (removed followup_2_sent)
+- **`orchestrator.py`** — Simplified follow-up loop to only process followup_1; rewrote `_fill_followup_template()` to match new short bump format; updated active_stages list
+- **`config.py`** — Removed followup_2_days and breakup_days from default config
+- **`data/config.json`** — Removed followup_2_days and breakup_days from sequence_timing
+- **`OPERATIONS-GUIDE.md`** — Updated email copy formula to v5, updated follow-up sequence documentation
+- **`ops/openclaw-skills/cold-outreach/SKILL.md`** — Updated email rules, templates, and follow-up phase
+- **`ops/openclaw-skills/daily-ops/SKILL.md`** — Updated drafting rules, templates, and sequence timing
+- **`ops/openclaw-skills/follow-up-sequences/SKILL.md`** — Updated to two-touch sequence
+- **`ops/openclaw-skills/pipeline-tracker/SKILL.md`** — Updated prospect stages (removed followup_2_sent, breakup_sent)
+
+---
+
 ## 2026-02-25 — Refine cold email copy: personal tone, structured prompt, no marketing language
 
 ### Changed
