@@ -1,4 +1,13 @@
-"""Follow-up sequence scheduling — pure date logic."""
+"""Follow-up sequence scheduling — two-touch rule (1 opener + 1 follow-up).
+
+Based on 2026 cold email research:
+- Follow-up 1 boosts replies by 49%
+- Follow-up 3+ shows 20% fewer responses
+- Follow-up 4+ drops response rates by 55%
+
+Non-responders after 2 emails are marked sequence_complete and should be
+recycled into a new campaign with a different subject line and angle.
+"""
 
 from datetime import datetime, timedelta
 
@@ -8,8 +17,6 @@ from modules.pipeline import load_pipeline, update_prospect, update_stage
 
 SEQUENCE_STEPS = {
     "followup_1": {"from_stage": "email_1_sent", "to_stage": "followup_1_sent", "sequence_step": 2},
-    "followup_2": {"from_stage": "followup_1_sent", "to_stage": "followup_2_sent", "sequence_step": 3},
-    "breakup": {"from_stage": "followup_2_sent", "to_stage": "breakup_sent", "sequence_step": 4},
 }
 
 
@@ -20,8 +27,6 @@ def get_due_followups(date=None):
 
     data = load_pipeline()
     followup_1 = []
-    followup_2 = []
-    breakup = []
 
     for p in data["prospects"]:
         if should_skip(p):
@@ -46,16 +51,10 @@ def get_due_followups(date=None):
 
         if action_type == "followup_1":
             followup_1.append(summary)
-        elif action_type == "followup_2":
-            followup_2.append(summary)
-        elif action_type == "breakup":
-            breakup.append(summary)
 
-    total = len(followup_1) + len(followup_2) + len(breakup)
+    total = len(followup_1)
     return {
         "followup_1": followup_1,
-        "followup_2": followup_2,
-        "breakup": breakup,
         "total": total,
         "date": date,
     }
@@ -64,7 +63,7 @@ def get_due_followups(date=None):
 def schedule_followup(prospect_id, step, date=None):
     """Set next_action for a specific follow-up step."""
     if step not in SEQUENCE_STEPS:
-        return {"id": prospect_id, "status": "error", "message": f"Invalid step: {step}. Use: followup_1, followup_2, breakup"}
+        return {"id": prospect_id, "status": "error", "message": f"Invalid step: {step}. Use: followup_1"}
 
     config = load_config()
     timing = config.get("sequence_timing", {})
@@ -85,6 +84,26 @@ def schedule_followup(prospect_id, step, date=None):
         return result
 
     return {"id": prospect_id, "scheduled": step, "date": date}
+
+
+def mark_sequence_complete(prospect_id):
+    """Mark a prospect's sequence as complete after follow-up 1.
+
+    Prospect is ready to be recycled into a new campaign with a different
+    subject line and angle.
+    """
+    update_prospect(prospect_id, {
+        "next_action": {
+            "type": "recycle",
+            "date": None,
+            "notes": "Sequence complete. Ready for recycle into new campaign with different angle.",
+        }
+    })
+    update_stage(prospect_id, "sequence_complete", interaction={
+        "type": "sequence_complete",
+        "notes": "Two-touch sequence finished. Non-responder ready for recycle.",
+    })
+    return {"id": prospect_id, "status": "sequence_complete"}
 
 
 def pause_sequence(prospect_id):
@@ -113,20 +132,12 @@ def resume_sequence(prospect_id):
     config = load_config()
     timing = config.get("sequence_timing", {})
 
-    # Determine next step based on current stage
-    next_step = None
-    next_days = 3
+    # Only one follow-up step remains
     if stage == "email_1_sent":
         next_step = "followup_1"
         next_days = timing.get("followup_1_days", 3)
-    elif stage == "followup_1_sent":
-        next_step = "followup_2"
-        next_days = timing.get("followup_2_days", 7) - timing.get("followup_1_days", 3)
-    elif stage == "followup_2_sent":
-        next_step = "breakup"
-        next_days = timing.get("breakup_days", 14) - timing.get("followup_2_days", 7)
     else:
-        return {"id": prospect_id, "status": "error", "message": f"Cannot resume from stage: {stage}"}
+        return {"id": prospect_id, "status": "error", "message": f"Cannot resume from stage: {stage}. Sequence may already be complete."}
 
     next_date = (datetime.now() + timedelta(days=next_days)).strftime("%Y-%m-%d")
     next_action = {"type": next_step, "date": next_date, "notes": f"Resumed — {next_step} scheduled"}

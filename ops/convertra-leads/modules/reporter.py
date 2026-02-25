@@ -18,11 +18,9 @@ def campaign_report(campaign=None):
     if total == 0:
         return {"campaign": campaign or "all", "total_prospects": 0, "message": "No prospects found"}
 
-    # Count emails sent by step
+    # Count emails sent by step (two-touch rule: opener + 1 follow-up)
     emails_initial = 0
     emails_followup_1 = 0
-    emails_followup_2 = 0
-    emails_breakup = 0
 
     for p in prospects:
         for interaction in p.get("interactions", []):
@@ -32,12 +30,8 @@ def campaign_report(campaign=None):
                     emails_initial += 1
                 elif step == 2:
                     emails_followup_1 += 1
-                elif step == 3:
-                    emails_followup_2 += 1
-                elif step == 4:
-                    emails_breakup += 1
 
-    total_emails = emails_initial + emails_followup_1 + emails_followup_2 + emails_breakup
+    total_emails = emails_initial + emails_followup_1
 
     # Count by reply type
     replied_interested = _count_stage(prospects, "replied_interested")
@@ -59,9 +53,9 @@ def campaign_report(campaign=None):
     bounce_rate = (invalid_email / emails_initial * 100) if emails_initial > 0 else 0
     positive_rate = (replied_interested / total_replies * 100) if total_replies > 0 else 0
 
-    # Pipeline by stage
+    # Pipeline by stage (two-touch: opener + followup_1 only)
     in_sequence = sum(1 for p in prospects if p.get("stage") in (
-        "email_1_sent", "followup_1_sent", "followup_2_sent", "breakup_sent"
+        "email_1_sent", "followup_1_sent"
     ))
 
     return {
@@ -71,8 +65,6 @@ def campaign_report(campaign=None):
             "total": total_emails,
             "initial": emails_initial,
             "followup_1": emails_followup_1,
-            "followup_2": emails_followup_2,
-            "breakup": emails_breakup,
         },
         "replies": {
             "total": total_replies,

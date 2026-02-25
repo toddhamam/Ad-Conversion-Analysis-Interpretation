@@ -94,7 +94,5 @@ def _default_config():
         },
         "sequence_timing": {
             "followup_1_days": 3,
-            "followup_2_days": 7,
-            "breakup_days": 14,
         },
     }

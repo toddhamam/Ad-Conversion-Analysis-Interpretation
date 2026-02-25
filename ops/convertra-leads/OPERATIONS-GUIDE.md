@@ -115,7 +115,8 @@ Once cron is installed, the daily routine runs itself every weekday at 9am. You 
 
 2. **Follow-up sends** — Checks which prospects are due for follow-ups
    - Uses pre-built templates (NOT AI) — zero tokens
-   - Follows the 3/7/14 day sequence: followup_1 → followup_2 → breakup
+   - Two-touch rule: 1 opener + 1 follow-up (day 3), then sequence complete
+   - Non-responders marked `sequence_complete` for recycle into new campaign
    - Skips weekends, opted-out, and already-replied prospects
 
 3. **Ready email sends** — Sends any emails sitting in `ready_to_send` stage
@@ -400,34 +401,49 @@ python3 cli.py draft email --id p_042
 python3 cli.py draft batch --score-min 8
 ```
 
-#### Optimized Email Copy Formula (v4)
+#### Optimized Email Copy Formula (v5)
 
-Every cold email follows a strict 5-part structure. The AI drafter and fallback templates both use this formula.
+Every cold email follows a strict 4-part structure. Two variants: SaaS/DTC founders and Agency owners.
 
+**Subject Lines:** 11 Tier 1 (pain-point) variants actively split tested. Tiers 2-6 documented in `templates.json` for future rounds. Subject lines are picked randomly from the active pool per prospect.
+
+**SaaS/DTC Founder Formula:**
 ```
 1. GREETING:     Hi {first_name},
-2. OPENING:      Just [specific observation about their business]
-3. PITCH:        The bottleneck is [problem]. Convertra automates all of this:
-                 it maps the patterns already winning in your Meta account,
-                 then auto-generates (and publishes) winning creatives inside
-                 your ad account... without waiting on designers, copywriters,
-                 or even media buyers.
-4. CTA:          I shot a quick 2-min video for you showing exactly how this
-                 could work for {company}. Want me to send it across?
-5. SIGN-OFF:     {sender_name}
+2. OPENING:      Just [specific observation — ad count, hiring, growth signal].
+   BRIDGE:       At that volume, the biggest challenge is usually keeping enough
+                 fresh variations flowing into testing.
+3. VALUE OFFER:  I mocked up 2 fresh ad variations based on what's already winning
+                 in your account. Want me to send them over?
+4. SIGN-OFF:     {sender_name}
 ```
+- No product name in the email. Convertra is introduced on the reply.
+- CTA offers a tangible free deliverable, not a video pitch.
+
+**Agency Owner Formula:**
+```
+1. GREETING:     Hi {first_name},
+2. OPENING:      Just [specific observation — client accounts, scaling].
+   BRIDGE:       At that volume, the biggest challenge is usually keeping enough
+                 fresh variations flowing into testing for each client.
+3. VALUE OFFER:  Convertra can help you pump out fresh winning creatives to test
+                 for your clients in less than 3 minutes. I shot a video to show
+                 you how. Want me to send it over?
+4. SIGN-OFF:     {sender_name}
+```
+- Product named because agencies evaluate tooling.
+- Video CTA works because they're assessing a tool for their workflow.
 
 **Copy rules:**
 - NEVER use em dashes. They are a dead giveaway of AI-written copy. Use periods, commas, or ellipsis instead.
-- Opening must start with "Just" + a specific observation (product launches, hiring signals, ad activity)
-- Pitch uses "maps" (not "finds"), includes "(and publishes)", and ends with "media buyers" (not "in-house staff")
-- Subject format: `[company name] ad creative` (lowercase). Agencies: `[company name]'s creative pipeline`
-- No "Reply STOP to opt out", no links, under 100 words, plain text only
+- Opening must start with "Just" + a specific observation (ad count, hiring signals, product launches)
+- Bridge must NOT frame as criticism. Frame as a natural challenge that comes with scale.
+- Under 80 words, plain text only, no links, no "Reply STOP to opt out"
 
-**Follow-up sequence (templates, no AI):**
-- Follow-up 1 (day 3): "Convertra also publishes directly inside your ad account" angle
-- Follow-up 2 (day 7): "2-3 days per creative vs. minutes" angle
-- Breakup (day 14): Graceful exit, leave door open
+**Follow-up sequence — two-touch rule (based on 2026 cold email research):**
+- Follow-up 1 (day 3): Short bump — "Just floating this back up. The ad variations are ready whenever you want them."
+- That's it. No follow-up 2, no breakup email.
+- Non-responders after 2 emails are recycled into a new campaign with a different Tier 1 subject line and a different opening angle.
 
 ### Sending
 
