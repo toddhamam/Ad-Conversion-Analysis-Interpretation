@@ -56,7 +56,8 @@ SKIP_DOMAINS = {
     # Job boards
     "indeed.com", "glassdoor.com", "ziprecruiter.com", "monster.com",
     "seek.com.au", "jora.com", "adzuna.com", "careerbuilder.com", "angel.co",
-    "onlinejobs.ph",
+    "onlinejobs.ph", "trabajo.org", "jooble.org", "simplyhired.com",
+    "wellfound.com", "remoteok.com", "weworkremotely.com",
     # Freelancer platforms (base domains — variants handled by _is_skip_domain)
     "upwork.com", "fiverr.com", "toptal.com", "freelancer.com", "guru.com",
     # Course marketplaces / piracy sites (not the course creators themselves)
@@ -67,11 +68,15 @@ SKIP_DOMAINS = {
     # Aggregator / review / tool sites
     "crunchbase.com", "g2.com", "capterra.com", "trustpilot.com",
     "producthunt.com", "similarweb.com", "semrush.com", "ahrefs.com",
+    "sproutsocial.com", "starterstory.com", "later.com", "hootsuite.com",
+    "buffer.com", "mailchimp.com", "amraandelma.com",
     # News / media
     "techcrunch.com", "forbes.com", "entrepreneur.com", "inc.com",
     "businessinsider.com", "hubspot.com", "neilpatel.com",
     # Community platforms
     "skool.com",
+    # Design / portfolio
+    "behance.net", "dribbble.com",
     # Government
     "gov.au", "gov.uk", "gov.com",
 }

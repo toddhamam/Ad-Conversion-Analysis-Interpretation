@@ -54,10 +54,42 @@ ROLE_KEYWORDS = [
 
 # Words that disqualify a text from being a person's name
 NON_NAME_WORDS = {
+    # Page/site words
     "the", "our", "about", "meet", "team", "staff", "company", "inc", "ltd",
     "llc", "and", "blog", "news", "page", "home", "best", "top", "how",
     "what", "why", "services", "products", "solutions", "contact", "welcome",
     "join", "read", "more", "view", "all", "new", "get", "free", "buy",
+    # Common English words (prepositions, articles, verbs, adjectives)
+    # Real names never contain these; phrases/headlines always do
+    "a", "an", "in", "on", "at", "to", "of", "for", "from", "with", "by",
+    "is", "are", "was", "were", "has", "have", "had", "do", "does", "did",
+    "this", "that", "these", "those", "your", "his", "her", "its", "my",
+    "it", "we", "you", "they", "us", "or", "but", "not", "no", "so",
+    "if", "up", "out", "off", "into", "over", "just", "also", "very",
+    "can", "will", "would", "should", "could", "may", "must", "need",
+    "real", "big", "high", "low", "fast", "slow", "great", "good",
+    "viral", "trending", "trends", "immediately", "jump", "boost",
+    "hiring", "looking", "seeking", "wanted", "apply", "work",
+    # Job title words (these are roles, not names)
+    "manager", "director", "specialist", "coordinator", "executive",
+    "analyst", "designer", "developer", "engineer", "officer", "president",
+    "associate", "consultant", "strategist", "supervisor", "administrator",
+    "intern", "assistant", "representative", "architect", "lead",
+    "senior", "junior", "principal", "business", "development", "marketing",
+    "sales", "operations", "creative", "digital", "content", "social",
+    "media", "brand", "growth", "performance", "production", "account",
+    # Ad/marketing jargon
+    "advertising", "campaign", "conversion", "optimization", "acquisition",
+    "retention", "engagement", "analytics", "automation",
+    # Section headings / article phrases
+    "final", "thoughts", "conclusion", "summary", "introduction", "overview",
+    "key", "takeaways", "results", "findings", "review", "guide",
+    "tips", "strategies", "benefits", "features", "pricing", "testimonials",
+    "frequently", "asked", "questions", "related", "posts", "articles",
+    "share", "subscribe", "newsletter", "categories", "archives",
+    # Company/org suffixes
+    "labs", "studio", "studios", "group", "agency", "partners", "consulting",
+    "enterprises", "industries", "technologies", "tech", "ventures",
 }
 
 
@@ -185,15 +217,18 @@ def batch_research(stage="discovered"):
                 contacts,
                 key=lambda c: role_priority.get(c.get("role", "").lower(), 99)
             )
-            best = sorted_contacts[0]
-            if not prospect.get("name"):
+            # Only use names that have a role — "Jake Cooper, CEO" is real;
+            # "Measuring Scoop" with no role is probably not a person
+            contacts_with_roles = [c for c in sorted_contacts if c.get("role")]
+            best = contacts_with_roles[0] if contacts_with_roles else None
+            if best and not prospect.get("name"):
                 updates["name"] = best["name"]
-            if best.get("role") and not prospect.get("role"):
+            if best and best.get("role") and not prospect.get("role"):
                 updates["role"] = best["role"]
 
         # Clean up company name from website content
         company_name = signals.get("company_name", "")
-        if company_name:
+        if company_name and _is_valid_company_name(company_name):
             updates["company"] = company_name
 
         update_prospect(prospect["id"], updates)
@@ -429,6 +464,34 @@ def _extract_company_name(homepage_soup, url):
         return name_part.capitalize()
     except Exception:
         return ""
+
+
+def _is_valid_company_name(name):
+    """Reject company names that look like DDG page titles or garbage."""
+    if not name or len(name) < 2:
+        return False
+    # Too many words = probably a page title or article headline
+    if len(name.split()) > 5:
+        return False
+    # Contains emoji or non-ASCII special chars
+    if any(ord(c) > 127 for c in name) and not all(c.isalnum() or c.isspace() or c in "-&'.," for c in name):
+        return False
+    # Starts with #, number ranking, or list pattern
+    if re.match(r'^[#\d]', name):
+        return False
+    # Contains URL fragments
+    if any(x in name for x in ["›", "http", ".com", ".org", ".net", "www."]):
+        return False
+    # Contains review/rating patterns
+    if re.search(r'reviews?\s*\(?\d', name, re.IGNORECASE):
+        return False
+    # Looks like a DDG title (common patterns)
+    ddg_phrases = ["best ", "top ", "list of", "discover ", "how to", "#1 rated",
+                   "guide to", "tips for", "ways to"]
+    name_lower = name.lower()
+    if any(name_lower.startswith(p) for p in ddg_phrases):
+        return False
+    return True
 
 
 # ── Existing signal extraction ──────────────────────────────────────

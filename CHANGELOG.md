@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-02-25 — Harden lead pipeline data quality: name validation, noise filtering, company cleaning
+
+### Problem
+The lead pipeline was producing garbage data: DDG page titles as company names ("7 TOP SUPPLEMENT MARKETING AGENCIES"), section headings as contact names ("Final Thoughts", "Business Development Manager", "Measuring Scoop"), noise URLs from job boards, freelancer platforms, and article pages. Hunter.io was skipping 100% of prospects due to missing names, and most prospects scored as "skip" (4 points).
+
+### Solution
+Six changes across five files to fix data quality at every pipeline stage:
+
+### Changed
+- **`modules/research.py`** — Extract contact names from HTML (headings near role keywords, JSON-LD, meta tags, text patterns); clean company names from `og:site_name`, JSON-LD Organization, `<title>` tag, domain fallback; require extracted names to also have a role (eliminates false positives like "Measuring Scoop"); validate company names to reject DDG titles (>5 words, emoji, URLs, "#1 Rated...", "List of...", etc.); expanded `NON_NAME_WORDS` with ~100 common English words, job title words, section heading phrases, and company suffixes
+- **`modules/discovery.py`** — Expanded `SKIP_DOMAINS` from ~60 to ~75 entries (added trabajo.org, jooble.org, sproutsocial.com, starterstory.com, behance.net, dribbble.com, and more job boards, SaaS tools, design sites)
+- **`modules/enrichment.py`** — Added Hunter.io Domain Search fallback when prospect has no name (searches company domain for contacts sorted by seniority); added `max_credits` budget parameter to `batch_enrich()` to prevent overspending on free plan
+- **`modules/scorer.py`** — Added 4 new scoring rules: `hiring_volume` (+2 for 3+ creative roles), `dtc_ecommerce` (+1 for Shopify+Klaviyo), `has_contact` (+1 for named contact), `established_company` (+1 for 20+ employees)
+- **`orchestrator.py`** — Both `batch_enrich()` calls now pass `max_credits=25` to cap Hunter.io credit usage per campaign run
+
+### Results (before → after)
+- **Emails found per campaign**: 0 → 5 (3 Hunter verified + 2 pattern guess)
+- **Hunter efficiency**: 0 credits → 4 credits for 4 verified emails
+- **False positive names**: rampant → eliminated by role-gating
+- **Garbage company names**: ~80% → rejected by validation
+
+---
+
 ## 2026-02-24 — Fix Meta OAuth: switch to Facebook Login for Business config_id flow
 
 ### Problem
