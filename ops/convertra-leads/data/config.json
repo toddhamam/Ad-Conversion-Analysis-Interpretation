@@ -13,7 +13,7 @@
   "email": {
     "send_delay_seconds": 45,
     "from_name": "Todd",
-    "signature": "\nReply STOP to opt out."
+    "signature": ""
   },
   "sequence_timing": {
     "followup_1_days": 3

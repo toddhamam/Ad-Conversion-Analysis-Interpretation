@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-02-25 — Instantly API integration for cold email sending
+
+### Overview
+Full integration with Instantly.ai API v2 for automated cold email sending. Replaces Gmail SMTP with Instantly's infrastructure (warmup, rotation, deliverability tracking). Connected `todd@convertraiq.com` via Google Workspace as the sending account.
+
+### Added
+- **`modules/instantly.py`** — Complete Instantly API v2 integration: campaign creation with two-touch sequence, lead pushing with per-lead custom variables (`{{subject_line}}`, `{{email_body}}`, `{{followup_1_body}}`), account management, campaign activation/pause, analytics
+- **`cli.py`** — 8 new CLI commands under `instantly` subcommand: `status`, `accounts`, `campaigns`, `create-campaign`, `push-leads`, `activate`, `pause`, `analytics`
+
+### Changed
+- **`data/config.json`** — Removed "Reply STOP to opt out" signature (cold emails are personal, not marketing blasts)
+- **`data/pipeline.json`** — 10 prospects re-drafted with GPT-5.2 using new v5 email formula (tier 1 pain-point subject lines, 4-part body structure, value-first CTA), pushed to Instantly campaign
+
+### Technical Notes
+- Instantly API v2 uses `campaign` field (not `campaign_id`) when creating leads to associate them with a campaign
+- Account mapping uses `PATCH /campaigns/{id}` with `email_list` array
+- Schedule timezone must use `Australia/Brisbane` (Instantly doesn't accept `Australia/Sydney`)
+- Leads are added one at a time (no bulk endpoint in v2)
+- Campaign settings: text-only, no link tracking, open tracking enabled, stop on reply, 50/day limit, weekdays 9am-5pm AEST
+
+---
+
 ## 2026-02-25 — Subject line formulas, value-first CTA, two-touch follow-up sequence
 
 ### Overview
