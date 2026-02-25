@@ -1,23 +1,23 @@
 {
   "saas_founder": {
-    "subject": "quick question about {company}'s ad creative",
-    "body": "Hey {first_name},\n\nSaw {company} is scaling paid social — {personalization_hook}. Smart move.\n\nOne thing we're seeing with brands at your stage: the creative testing bottleneck becomes the ceiling on scale. Teams that automate the test-and-iterate cycle are shipping 10x more creatives without adding headcount.\n\nWould it make sense to show you how we're doing this? 15 min, no pitch — just the framework.\n\nEither way, appreciate what you're building.\n\n{sender_first_name}\n\nReply STOP to opt out."
+    "subject": "{company} ad creative",
+    "body": "Hi {first_name},\n\nJust saw {company} is scaling paid social. {personalization_hook}. That usually means the ads need a constant flow of fresh variations to keep up.\n\nThe bottleneck is getting enough new variations live into testing fast. Convertra automates all of this: it maps the patterns already winning in your Meta account, then auto-generates (and publishes) winning creatives inside your ad account... without waiting on designers, copywriters, or even media buyers.\n\nI shot a quick 2-min video for you showing exactly how this could work for {company}. Want me to send it across?\n\n{sender_first_name}"
   },
   "agency_owner": {
-    "subject": "your clients' creative pipeline",
-    "body": "Hey {first_name},\n\n{personalization_hook}.\n\nQuick question: how are you handling the creative testing volume as you scale accounts? We're working with a few agencies who are using AI to multiply their creative output without multiplying their team.\n\nCurious if that's a bottleneck you're feeling. If so, happy to share the approach in a quick call.\n\n{sender_first_name}\n\nReply STOP to opt out."
+    "subject": "{company}'s creative pipeline",
+    "body": "Hi {first_name},\n\n{personalization_hook}. Looks like you're building more capacity to keep client ads moving fast.\n\nThe bottleneck for agencies is usually getting enough new Meta ad variations live across accounts without the team becoming the ceiling. Convertra automates all of this: it maps the patterns already winning in each client's account, then auto-generates (and publishes) winning creatives inside their ad account... without waiting on designers, copywriters, or even media buyers.\n\nI shot a quick 2-min video for you showing exactly how this could work for {company}'s clients. Want me to send it across?\n\n{sender_first_name}"
   },
   "warm_intro": {
     "subject": "{mutual_connection} mentioned you",
-    "body": "Hey {first_name},\n\n{mutual_connection} and I were chatting about {topic} and your name came up — specifically around {relevant_context}.\n\nI work on {brief_description} and thought there might be some overlap worth exploring.\n\nWould you be open to a quick chat this week? No pressure either way.\n\n{sender_first_name}\n\nReply STOP to opt out."
+    "body": "Hi {first_name},\n\n{mutual_connection} and I were chatting about {topic} and your name came up, specifically around {relevant_context}.\n\nI work on {brief_description} and thought there might be some overlap worth exploring.\n\nWould you be open to a quick chat this week? No pressure either way.\n\n{sender_first_name}"
   },
   "followup_1": {
-    "body": "Hey {first_name},\n\nJust floating this back up — I know how buried inboxes get.\n\n{different_angle}\n\nWorth a quick chat?\n\n{sender_first_name}"
+    "body": "Hi {first_name},\n\nJust floating this back up. I know how buried inboxes get.\n\nOne thing I didn't mention: Convertra also publishes the winning creatives directly inside your ad account, so your team doesn't even need to touch Ads Manager.\n\nWorth a quick chat?\n\n{sender_first_name}"
   },
   "followup_2": {
-    "body": "Hey {first_name},\n\n{value_add_insight}\n\n{connection_to_problem}\n\nHappy to walk you through how we're approaching this if it's relevant.\n\n{sender_first_name}"
+    "body": "Hi {first_name},\n\nQuick thought. Most brands we talk to are spending 2-3 days per new ad creative. That's 2-3 days where a potentially winning variation isn't live and collecting data.\n\nConvertra cuts that to minutes. Happy to walk you through how if it's relevant.\n\n{sender_first_name}"
   },
   "breakup": {
-    "body": "Hey {first_name},\n\nI'll take the hint and stop clogging your inbox.\n\nIf creative testing velocity ever becomes a priority, feel free to reach back out — I'm not going anywhere.\n\nCheers,\n{sender_first_name}"
+    "body": "Hi {first_name},\n\nI'll take the hint and stop clogging your inbox.\n\nIf creative testing velocity ever becomes a priority, feel free to reach back out. I'm not going anywhere.\n\nCheers,\n{sender_first_name}"
   }
 }

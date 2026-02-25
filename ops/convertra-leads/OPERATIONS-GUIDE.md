@@ -400,6 +400,35 @@ python3 cli.py draft email --id p_042
 python3 cli.py draft batch --score-min 8
 ```
 
+#### Optimized Email Copy Formula (v4)
+
+Every cold email follows a strict 5-part structure. The AI drafter and fallback templates both use this formula.
+
+```
+1. GREETING:     Hi {first_name},
+2. OPENING:      Just [specific observation about their business]
+3. PITCH:        The bottleneck is [problem]. Convertra automates all of this:
+                 it maps the patterns already winning in your Meta account,
+                 then auto-generates (and publishes) winning creatives inside
+                 your ad account... without waiting on designers, copywriters,
+                 or even media buyers.
+4. CTA:          I shot a quick 2-min video for you showing exactly how this
+                 could work for {company}. Want me to send it across?
+5. SIGN-OFF:     {sender_name}
+```
+
+**Copy rules:**
+- NEVER use em dashes. They are a dead giveaway of AI-written copy. Use periods, commas, or ellipsis instead.
+- Opening must start with "Just" + a specific observation (product launches, hiring signals, ad activity)
+- Pitch uses "maps" (not "finds"), includes "(and publishes)", and ends with "media buyers" (not "in-house staff")
+- Subject format: `[company name] ad creative` (lowercase). Agencies: `[company name]'s creative pipeline`
+- No "Reply STOP to opt out", no links, under 100 words, plain text only
+
+**Follow-up sequence (templates, no AI):**
+- Follow-up 1 (day 3): "Convertra also publishes directly inside your ad account" angle
+- Follow-up 2 (day 7): "2-3 days per creative vs. minutes" angle
+- Breakup (day 14): Graceful exit, leave door open
+
 ### Sending
 
 ```bash
