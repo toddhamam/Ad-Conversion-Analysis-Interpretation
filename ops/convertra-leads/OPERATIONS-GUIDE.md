@@ -26,21 +26,26 @@ crontab.example
 
 ### Add environment variables
 
-Edit `/home/ubuntu/convertra-leads/.env` and add these lines:
+Edit `/home/ubuntu/convertra-leads/.env` — this must match the local copy at `ops/convertra-leads/.env` (gitignored).
 
 ```bash
-# Existing (keep these)
-META_ACCESS_TOKEN=...
+# Email (IMAP inbox monitoring + SMTP)
 GMAIL_ADDRESS=convertraiq@gmail.com
-GMAIL_APP_PASSWORD=...
+GMAIL_APP_PASSWORD=...              # Google App Passwords
 
-# Core (add these)
-OPENAI_API_KEY=sk-...
-TELEGRAM_BOT_TOKEN=...
-TELEGRAM_CHAT_ID=...
+# AI drafting
+OPENAI_API_KEY=sk-...               # GPT-5.2 for email drafting (~500 tokens/email)
 
-# Hunter.io enrichment (optional but recommended)
-HUNTER_API_KEY=your-hunter-api-key
+# Notifications
+TELEGRAM_BOT_TOKEN=...              # From @BotFather
+TELEGRAM_CHAT_ID=...                # Your chat ID
+
+# Enrichment
+HUNTER_API_KEY=...                   # hunter.io → API (25/mo free)
+APOLLO_API_KEY=...                   # apollo.io (backup enrichment)
+
+# Instantly (cold email sending)
+INSTANTLY_API_KEY=...                # app.instantly.ai → Settings → Integrations → API
 ```
 
 **Where to get these:**
@@ -48,6 +53,9 @@ HUNTER_API_KEY=your-hunter-api-key
 - `TELEGRAM_BOT_TOKEN` — Already exists in your OpenClaw config (`/home/ubuntu/.openclaw/openclaw.json`), or from @BotFather
 - `TELEGRAM_CHAT_ID` — Send a message to your bot, then visit `https://api.telegram.org/bot<TOKEN>/getUpdates` and look for `chat.id`
 - `HUNTER_API_KEY` — From Hunter.io → API → Copy your API key. Free plan: 25 searches/month, all endpoints accessible
+- `INSTANTLY_API_KEY` — From app.instantly.ai → Settings → Integrations → API. Base64-encoded key used for campaign management and lead push
+
+**Important:** Both `.env` files (local `ops/convertra-leads/.env` and VPS `/home/ubuntu/convertra-leads/.env`) must stay in sync. The local copy is gitignored and persists across branches.
 
 ### Create logs directory
 
