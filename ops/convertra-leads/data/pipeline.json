@@ -69,7 +69,7 @@
       "company_type": "",
       "fit_score": 9,
       "campaign": "hunt-2026-02-25",
-      "stage": "ready_to_send",
+      "stage": "email_1_sent",
       "source": "ddg_search",
       "prospect_buckets": [
         "convertra_saas"
@@ -132,11 +132,6 @@
           "date": "2026-02-25T15:45:45.190199Z"
         },
         {
-          "type": "pushed_to_instantly",
-          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
-          "date": "2026-02-25T21:37:33.406812Z"
-        },
-        {
           "type": "email_drafted",
           "notes": "Email drafted via template",
           "date": "2026-02-25T22:19:37.394091Z"
@@ -155,11 +150,16 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-26T11:00:14.871980Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-26T12:35:29.107584Z"
         }
       ],
       "next_action": {
-        "type": "send_initial",
-        "date": "2026-02-26",
+        "type": "followup_1",
+        "date": "2026-03-01",
         "notes": ""
       },
       "tags": [
@@ -235,7 +235,7 @@
       "company_type": "",
       "fit_score": 5,
       "campaign": "hunt-2026-02-25",
-      "stage": "ready_to_send",
+      "stage": "email_1_sent",
       "source": "ddg_search",
       "prospect_buckets": [
         "convertra_saas"
@@ -297,11 +297,6 @@
           "date": "2026-02-25T15:46:06.079168Z"
         },
         {
-          "type": "pushed_to_instantly",
-          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
-          "date": "2026-02-25T21:37:33.457196Z"
-        },
-        {
           "type": "email_drafted",
           "notes": "Email drafted via template",
           "date": "2026-02-25T22:19:37.670345Z"
@@ -320,11 +315,16 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-26T11:00:33.544566Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-26T12:35:29.195799Z"
         }
       ],
       "next_action": {
-        "type": "send_initial",
-        "date": "2026-02-26",
+        "type": "followup_1",
+        "date": "2026-03-01",
         "notes": ""
       },
       "tags": [
@@ -351,7 +351,7 @@
       "company_type": "",
       "fit_score": 5,
       "campaign": "hunt-2026-02-25",
-      "stage": "ready_to_send",
+      "stage": "email_1_sent",
       "source": "ddg_search",
       "prospect_buckets": [
         "convertra_saas"
@@ -412,11 +412,6 @@
           "date": "2026-02-25T15:46:08.838998Z"
         },
         {
-          "type": "pushed_to_instantly",
-          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
-          "date": "2026-02-25T21:37:33.462970Z"
-        },
-        {
           "type": "email_drafted",
           "notes": "Email drafted via template",
           "date": "2026-02-25T22:19:37.703434Z"
@@ -435,11 +430,16 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-26T11:00:36.387090Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-26T12:35:29.203062Z"
         }
       ],
       "next_action": {
-        "type": "send_initial",
-        "date": "2026-02-26",
+        "type": "followup_1",
+        "date": "2026-03-01",
         "notes": ""
       },
       "tags": [
@@ -515,7 +515,7 @@
       "company_type": "",
       "fit_score": 7,
       "campaign": "hunt-2026-02-25",
-      "stage": "ready_to_send",
+      "stage": "email_1_sent",
       "source": "ddg_search",
       "prospect_buckets": [
         "convertra_saas"
@@ -578,11 +578,6 @@
           "date": "2026-02-25T15:45:50.925411Z"
         },
         {
-          "type": "pushed_to_instantly",
-          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
-          "date": "2026-02-25T21:37:33.425085Z"
-        },
-        {
           "type": "email_drafted",
           "notes": "Email drafted via template",
           "date": "2026-02-25T22:19:37.461959Z"
@@ -601,11 +596,16 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-26T11:00:20.172068Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-26T12:35:29.144068Z"
         }
       ],
       "next_action": {
-        "type": "send_initial",
-        "date": "2026-02-26",
+        "type": "followup_1",
+        "date": "2026-03-01",
         "notes": ""
       },
       "tags": [
@@ -632,7 +632,7 @@
       "company_type": "",
       "fit_score": 6,
       "campaign": "hunt-2026-02-25",
-      "stage": "ready_to_send",
+      "stage": "email_1_sent",
       "source": "ddg_search",
       "prospect_buckets": [
         "convertra_saas"
@@ -694,11 +694,6 @@
           "date": "2026-02-25T15:46:00.044163Z"
         },
         {
-          "type": "pushed_to_instantly",
-          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
-          "date": "2026-02-25T21:37:33.444238Z"
-        },
-        {
           "type": "email_drafted",
           "notes": "Email drafted via template",
           "date": "2026-02-25T22:19:37.604233Z"
@@ -717,11 +712,16 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-26T11:00:26.700127Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-26T12:35:29.176930Z"
         }
       ],
       "next_action": {
-        "type": "send_initial",
-        "date": "2026-02-26",
+        "type": "followup_1",
+        "date": "2026-03-01",
         "notes": ""
       },
       "tags": [
@@ -1572,7 +1572,7 @@
       "company_type": "",
       "fit_score": 6,
       "campaign": "hunt-2026-02-25",
-      "stage": "ready_to_send",
+      "stage": "email_1_sent",
       "source": "ddg_search",
       "prospect_buckets": [
         "convertra_saas"
@@ -1640,11 +1640,6 @@
           "date": "2026-02-25T15:46:03.151154Z"
         },
         {
-          "type": "pushed_to_instantly",
-          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
-          "date": "2026-02-25T21:37:33.450859Z"
-        },
-        {
           "type": "email_drafted",
           "notes": "Email drafted via template",
           "date": "2026-02-25T22:19:37.636292Z"
@@ -1663,11 +1658,16 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-26T11:00:30.514991Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-26T12:35:29.188709Z"
         }
       ],
       "next_action": {
-        "type": "send_initial",
-        "date": "2026-02-26",
+        "type": "followup_1",
+        "date": "2026-03-01",
         "notes": ""
       },
       "tags": [
@@ -1740,7 +1740,7 @@
       "company_type": "",
       "fit_score": 7,
       "campaign": "hunt-2026-02-25",
-      "stage": "ready_to_send",
+      "stage": "email_1_sent",
       "source": "ddg_search",
       "prospect_buckets": [
         "convertra_saas"
@@ -1806,11 +1806,6 @@
           "date": "2026-02-25T15:45:53.912398Z"
         },
         {
-          "type": "pushed_to_instantly",
-          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
-          "date": "2026-02-25T21:37:33.431298Z"
-        },
-        {
           "type": "email_drafted",
           "notes": "Email drafted via template",
           "date": "2026-02-25T22:19:37.514819Z"
@@ -1829,11 +1824,16 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-26T11:00:22.849591Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-26T12:35:29.152332Z"
         }
       ],
       "next_action": {
-        "type": "send_initial",
-        "date": "2026-02-26",
+        "type": "followup_1",
+        "date": "2026-03-01",
         "notes": ""
       },
       "tags": [
@@ -1958,7 +1958,7 @@
       "company_type": "",
       "fit_score": 7,
       "campaign": "hunt-2026-02-25",
-      "stage": "ready_to_send",
+      "stage": "email_1_sent",
       "source": "ddg_search",
       "prospect_buckets": [
         "convertra_saas"
@@ -2023,11 +2023,6 @@
           "date": "2026-02-25T15:45:57.379885Z"
         },
         {
-          "type": "pushed_to_instantly",
-          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
-          "date": "2026-02-25T21:37:33.437798Z"
-        },
-        {
           "type": "email_drafted",
           "notes": "Email drafted via template",
           "date": "2026-02-25T22:19:37.566080Z"
@@ -2046,11 +2041,16 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-26T11:00:24.711449Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-26T12:35:29.165434Z"
         }
       ],
       "next_action": {
-        "type": "send_initial",
-        "date": "2026-02-26",
+        "type": "followup_1",
+        "date": "2026-03-01",
         "notes": ""
       },
       "tags": [
@@ -2983,7 +2983,7 @@
       "company_type": "",
       "fit_score": 9,
       "campaign": "hunt-2026-02-25",
-      "stage": "ready_to_send",
+      "stage": "email_1_sent",
       "source": "job_listing",
       "prospect_buckets": [
         "convertra_saas"
@@ -3052,11 +3052,6 @@
           "date": "2026-02-25T15:45:47.747663Z"
         },
         {
-          "type": "pushed_to_instantly",
-          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
-          "date": "2026-02-25T21:37:33.417116Z"
-        },
-        {
           "type": "email_drafted",
           "notes": "Email drafted via template",
           "date": "2026-02-25T22:19:37.426350Z"
@@ -3075,11 +3070,16 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-26T11:00:17.348206Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-26T12:35:29.136788Z"
         }
       ],
       "next_action": {
-        "type": "send_initial",
-        "date": "2026-02-26",
+        "type": "followup_1",
+        "date": "2026-03-01",
         "notes": ""
       },
       "tags": [
@@ -3848,7 +3848,7 @@
       "company_type": "",
       "fit_score": 5,
       "campaign": "hunt-2026-02-25",
-      "stage": "ready_to_send",
+      "stage": "email_1_sent",
       "source": "job_listing",
       "prospect_buckets": [
         "convertra_saas"
@@ -3940,11 +3940,6 @@
           "date": "2026-02-25T15:46:11.507246Z"
         },
         {
-          "type": "pushed_to_instantly",
-          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
-          "date": "2026-02-25T21:37:33.469213Z"
-        },
-        {
           "type": "email_drafted",
           "notes": "Email drafted via template",
           "date": "2026-02-25T22:19:37.739367Z"
@@ -3963,11 +3958,16 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-26T11:00:38.447608Z"
+        },
+        {
+          "type": "pushed_to_instantly",
+          "notes": "Added to Instantly campaign 8b466981-54d8-4487-ade3-b27ddab16a4e",
+          "date": "2026-02-26T12:35:29.209982Z"
         }
       ],
       "next_action": {
-        "type": "send_initial",
-        "date": "2026-02-26",
+        "type": "followup_1",
+        "date": "2026-03-01",
         "notes": ""
       },
       "tags": [

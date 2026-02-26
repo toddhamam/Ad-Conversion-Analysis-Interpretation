@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-02-26 — Push refined copy to Instantly campaign
+
+### Overview
+Pushed all 10 prospects with updated Meta-anchored email copy to the "Convertra Cold v1 — Pain Point" Instantly campaign. Old leads with stale copy were deleted first (Instantly doesn't overwrite existing leads on re-push), then re-pushed with the refined Conversion Intelligence CTA and Meta-specific openings.
+
+### Changed
+- **`pipeline.json`**: 10 prospects advanced from `ready_to_send` → `email_1_sent` with follow-up 1 scheduled for 2026-03-01
+- Old `pushed_to_instantly` interactions replaced with fresh push timestamps
+
+### Campaign Details
+- **Campaign**: Convertra Cold v1 — Pain Point (`8b466981-54d8-4487-ade3-b27ddab16a4e`)
+- **Sending account**: todd@convertraiq.com
+- **Schedule**: Weekdays 9am-5pm AEST
+- **Sequence**: 2-step (opener + follow-up at day 3)
+
+---
+
 ## 2026-02-26 — Meta ads copy refinement: Conversion Intelligence CTA, explicit ad anchoring
 
 ### Overview
