@@ -381,6 +381,11 @@ def batch_enrich(stage="researched", score_min=None, max_credits=None):
             stats["skipped"] += 1
             continue
 
+        # Skip if enrichment was already attempted and failed
+        if prospect.get("enrichment_status") in ("no_match", "no_useful_data"):
+            stats["skipped"] += 1
+            continue
+
         domain = _domain_from_url(prospect.get("company_url", ""))
         if not domain:
             stats["skipped"] += 1
@@ -434,6 +439,8 @@ def batch_enrich(stage="researched", score_min=None, max_credits=None):
                 # Otherwise, save name and fall through to Email Finder
                 update_prospect(prospect["id"], name_updates)
             else:
+                # Mark as dead end so we don't retry
+                update_prospect(prospect["id"], {"enrichment_status": "no_match"})
                 stats["skipped"] += 1
                 stats["results"].append({
                     "id": prospect["id"],
@@ -469,12 +476,16 @@ def batch_enrich(stage="researched", score_min=None, max_credits=None):
                     "role": result["person"].get("title", ""),
                 })
             else:
+                # Hunter matched but no useful data — mark so we don't retry
+                update_prospect(pid, {"enrichment_status": "no_useful_data"})
                 stats["no_match"] += 1
                 stats["results"].append({
                     "id": pid, "status": "no_useful_data",
                 })
 
         elif result["status"] == "no_match":
+            # Mark prospect so we don't waste credits retrying
+            update_prospect(pid, {"enrichment_status": "no_match"})
             stats["no_match"] += 1
             stats["results"].append({"id": pid, "status": "no_match"})
 

@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """Convertra Leads Orchestrator — cron-driven pipeline automation.
 
-Replaces OpenClaw bot. Four modes:
+Replaces OpenClaw bot. Five modes:
   - daily: inbox -> followups -> send -> report -> notify
   - weekly: health check + red flag detection
   - campaign: discover -> research -> score -> email-find -> draft -> notify
   - prospect: loop discovery until N hot leads, then batch email-find + draft
+  - fill: daily cron — hunt leads + push to Instantly (runs before sending window)
 
 Usage:
   python3 orchestrator.py daily
   python3 orchestrator.py weekly
   python3 orchestrator.py campaign --niches "supplements,skincare" [--include-jobs] [--campaign "feb-2026"]
   python3 orchestrator.py prospect --target 20 [--niches "supplements,skincare"] [--max-rounds 10]
+  python3 orchestrator.py fill --target 25 [--campaign-id "8b466981-..."]
 """
 
 import argparse
@@ -767,12 +769,17 @@ def run_prospect_hunt(target=20, niches=None, include_jobs=True, max_rounds=10,
         "email_score_min": email_score_min,
     }
 
-    # ── Discovery loop ──
+    # ── Discovery + enrichment loop ──
+    # Each round: discover → research → score → enrich → email find → draft
+    # Target is checked against ready_to_send count (not scored count)
+    # so the loop keeps going until enough prospects actually get emails and drafts.
+    from modules.notifier import send_notification
+
     for round_num in range(1, max_rounds + 1):
-        # Check if target already met
-        hot_scored = _count_hot_scored(score_threshold)
-        if hot_scored >= target:
-            log.info(f"  Target met! {hot_scored}/{target} hot leads scored.")
+        # Check if target already met (only count ready_to_send)
+        hot_ready = _count_hot_ready(score_threshold)
+        if hot_ready >= target:
+            log.info(f"  Target met! {hot_ready}/{target} hot leads ready to send.")
             break
 
         # Pick next source
@@ -823,70 +830,38 @@ def run_prospect_hunt(target=20, niches=None, include_jobs=True, max_rounds=10,
                 f"(hot: {score_result.get('hot', 0)}, warm: {score_result.get('warm', 0)})"
             )
 
+            # Phase 4: Enrich + email find + draft (process this round's leads)
+            log.info(f"  Enriching + finding emails + drafting...")
+            _run_enrichment_pass(email_score_min)
+
         if source_type == "jobs":
             jobs_used = True
 
         # Track round stats
-        hot_scored = _count_hot_scored(score_threshold)
+        hot_ready = _count_hot_ready(score_threshold)
         round_info = {
             "round": round_num,
             "source": source,
             "source_type": source_type,
             "discovered": discovered,
-            "hot_scored_total": hot_scored,
+            "hot_ready_total": hot_ready,
             "target": target,
         }
         round_results.append(round_info)
 
         # Telegram progress update
-        from modules.notifier import send_notification
         progress_msg = (
             f"*Prospect Hunt -- Round {round_num}/{max_rounds}*\n"
             f"Source: {source} ({source_type})\n"
             f"Discovered: {discovered} new\n"
-            f"Hot scored: {hot_scored}/{target} target\n"
-            f"Remaining: {max(0, target - hot_scored)} more needed"
+            f"Ready to send: {hot_ready}/{target} target\n"
+            f"Remaining: {max(0, target - hot_ready)} more needed"
         )
         send_notification(progress_msg)
 
-    # ── Final batch: enrichment + email finding + drafting for all warm+ leads ──
-    log.info("=== FINAL BATCH: Enrichment + Email finding + AI drafting ===")
-
-    # Step 1: Hunter.io enrichment
-    hunter_stats = {"enriched": 0, "emails_found": 0, "credits_used": 0}
-    api_key = os.environ.get("HUNTER_API_KEY", "")
-    if api_key:
-        try:
-            from modules.enrichment import batch_enrich
-            hunter_stats = batch_enrich(stage="researched", score_min=email_score_min, max_credits=25)
-            log.info(
-                f"  Hunter: {hunter_stats.get('enriched', 0)} enriched, "
-                f"{hunter_stats.get('emails_found', 0)} emails, "
-                f"{hunter_stats.get('credits_used', 0)} credits"
-            )
-        except Exception as e:
-            log.error(f"  Hunter enrichment failed: {e}")
-    else:
-        log.info("  Hunter not configured — skipping enrichment.")
-
-    # Step 2: Fallback email finding
-    from modules.email_finder import batch_find_emails
-    from modules.drafter import batch_draft
-
-    log.info("  Finding remaining emails (score >= {})...".format(email_score_min))
-    email_result = batch_find_emails(stage="researched", score_min=email_score_min)
-    log.info(
-        f"  Emails found: {email_result.get('found', 0)}, "
-        f"Not found: {email_result.get('not_found', 0)}"
-    )
-
-    log.info("  Drafting emails (GPT-5.2)...")
-    draft_result = batch_draft(stage="researched", score_min=email_score_min)
-    log.info(
-        f"  Drafted: {draft_result.get('drafted', 0)} "
-        f"(AI: {draft_result.get('drafted', 0) - draft_result.get('fallback', 0)}, "
-        f"template: {draft_result.get('fallback', 0)})"
-    )
+    # ── Final safety pass: catch any stragglers still in researched ──
+    log.info("=== FINAL PASS: Enrichment + Email finding + AI drafting ===")
+    _run_enrichment_pass(email_score_min)
 
     # ── Final counts ──
     from modules.pipeline import list_prospects
@@ -911,20 +886,6 @@ def run_prospect_hunt(target=20, niches=None, include_jobs=True, max_rounds=10,
             "hot_scored": hot_total,
             "warm_scored": warm_total,
         },
-        "enrichment": {
-            "enriched": hunter_stats.get("enriched", 0),
-            "emails_found": hunter_stats.get("emails_found", 0),
-            "credits_used": hunter_stats.get("credits_used", 0),
-        },
-        "email_finding": {
-            "found": email_result.get("found", 0),
-            "not_found": email_result.get("not_found", 0),
-        },
-        "drafting": {
-            "drafted": draft_result.get("drafted", 0),
-            "fallback": draft_result.get("fallback", 0),
-            "errors": draft_result.get("errors", 0),
-        },
         "final_counts": {
             "hot_ready": hot_ready,
             "warm_ready": warm_ready,
@@ -945,10 +906,20 @@ def run_prospect_hunt(target=20, niches=None, include_jobs=True, max_rounds=10,
 
 
 def _count_hot_scored(threshold):
-    """Count all prospects with fit_score >= threshold (any stage after scoring)."""
+    """Count prospects with fit_score >= threshold that are still actionable.
+
+    Only counts prospects in pre-send stages (discovered, researched, ready_to_send).
+    Prospects already pushed to Instantly (email_1_sent, followup_1_sent, etc.)
+    are excluded — they've already been handled and shouldn't count toward the
+    discovery target.
+    """
     from modules.pipeline import list_prospects
-    result = list_prospects(score_min=threshold)
-    return result.get("total", 0)
+    actionable_stages = ["discovered", "researched", "ready_to_send"]
+    total = 0
+    for stage in actionable_stages:
+        result = list_prospects(stage=stage, score_min=threshold)
+        total += result.get("total", 0)
+    return total
 
 
 def _count_hot_ready(threshold):
@@ -956,6 +927,45 @@ def _count_hot_ready(threshold):
     from modules.pipeline import list_prospects
     result = list_prospects(stage="ready_to_send", score_min=threshold)
     return result.get("total", 0)
+
+
+def _run_enrichment_pass(email_score_min):
+    """Run Hunter enrichment + pattern-guess email finding + AI drafting.
+
+    Processes all researched prospects with score >= email_score_min.
+    Skips prospects already marked as enrichment dead ends.
+    Advances successful prospects to ready_to_send.
+    """
+    api_key = os.environ.get("HUNTER_API_KEY", "")
+    if api_key:
+        try:
+            from modules.enrichment import batch_enrich
+            hunter_stats = batch_enrich(
+                stage="researched", score_min=email_score_min, max_credits=10
+            )
+            log.info(
+                f"    Hunter: {hunter_stats.get('enriched', 0)} enriched, "
+                f"{hunter_stats.get('emails_found', 0)} emails, "
+                f"{hunter_stats.get('credits_used', 0)} credits"
+            )
+        except Exception as e:
+            log.error(f"    Hunter enrichment failed: {e}")
+
+    from modules.email_finder import batch_find_emails
+    from modules.drafter import batch_draft
+
+    email_result = batch_find_emails(stage="researched", score_min=email_score_min)
+    log.info(
+        f"    Emails: {email_result.get('found', 0)} found, "
+        f"{email_result.get('not_found', 0)} not found"
+    )
+
+    draft_result = batch_draft(stage="researched", score_min=email_score_min)
+    log.info(
+        f"    Drafted: {draft_result.get('drafted', 0)} "
+        f"(AI: {draft_result.get('drafted', 0) - draft_result.get('fallback', 0)}, "
+        f"template: {draft_result.get('fallback', 0)})"
+    )
 
 
 def _pick_next_source(niche_queue, exhausted, round_num, include_jobs, jobs_used):
@@ -987,19 +997,188 @@ def _pick_next_source(niche_queue, exhausted, round_num, include_jobs, jobs_used
 def _expand_keywords(all_niches, exhausted):
     """Generate expanded keyword variants when standard niches are exhausted.
 
+    Strategy (in priority order):
+    1. Sub-niche product categories (e.g. "collagen supplement" instead of "supplements")
+       — these yield completely different DDG results
+    2. Location/business-type modifiers as a final fallback
+
     Returns:
-        list of str: new pseudo-niche keywords to try.
+        list of str: new keywords to try (up to 20).
     """
-    modifiers = ["2026", "startup", "agency", "new brand", "emerging", "fast growing"]
+    from modules.discovery import SUB_NICHES
+
     expanded = []
+
+    # Priority 1: Sub-niche product categories
+    for niche in all_niches:
+        sub_list = SUB_NICHES.get(niche, [])
+        for sub in sub_list:
+            if sub not in exhausted:
+                expanded.append(sub)
+                if len(expanded) >= 20:
+                    return expanded
+
+    # Priority 2: Modifier variants (fallback)
+    modifiers = [
+        "2026", "startup", "new brand", "Australia", "UK",
+        "online store", "DTC brand", "independent brand",
+    ]
     for niche in all_niches:
         for mod in modifiers:
             key = f"{niche} {mod}"
             if key not in exhausted:
                 expanded.append(key)
-                if len(expanded) >= 6:
+                if len(expanded) >= 20:
                     return expanded
+
     return expanded
+
+
+# ──────────────────────────────────────────────────────────────────────
+# DAILY FILL — Hunt leads + push to Instantly
+# ──────────────────────────────────────────────────────────────────────
+
+# Default Instantly campaign ID (Convertra Cold v1)
+DEFAULT_INSTANTLY_CAMPAIGN = "8b466981-54d8-4487-ade3-b27ddab16a4e"
+
+
+def run_fill(target=25, campaign_id=None, niches=None, max_rounds=25,
+             score_threshold=5, include_jobs=True):
+    """Daily lead fill: discover leads, draft emails, push to Instantly.
+
+    Designed to run on cron at 7am AEST (before 9am sending window).
+    Instantly handles warmup and send pacing — we just keep it topped up.
+
+    The fill command is persistent — it uses up to 25 rounds of discovery
+    with aggressive sub-niche expansion to hit the target. It won't stop
+    at 0 just because the first few niches are exhausted.
+
+    Steps:
+    1. Check how many leads are already ready_to_send (skip hunt if enough)
+    2. Run prospect_hunt to discover + research + score + enrich + email-find + draft
+    3. Push all ready_to_send leads to the active Instantly campaign
+    4. Send Telegram summary with full enrichment stats
+
+    Args:
+        target: Number of leads to prepare (default 25, middle of 20-30 range).
+        campaign_id: Instantly campaign UUID. Defaults to Convertra Cold v1.
+        niches: List of niche keywords. Defaults to all 6 built-in niches.
+        max_rounds: Max discovery rounds (default 25 — persistent).
+        score_threshold: Minimum fit_score for leads (default 5 = warm+hot).
+        include_jobs: Whether to include job listing searches.
+
+    Returns:
+        dict: Full fill summary with hunt results, enrichment stats, and push results.
+    """
+    log.info("=== DAILY FILL START ===")
+    cid = campaign_id or DEFAULT_INSTANTLY_CAMPAIGN
+    campaign_tag = f"fill-{datetime.now().strftime('%Y-%m-%d')}"
+
+    # Check enrichment capability
+    hunter_configured = bool(os.environ.get("HUNTER_API_KEY", ""))
+    log.info(f"  Hunter.io API: {'configured' if hunter_configured else 'NOT configured (enrichment will be skipped)'}")
+
+    results = {
+        "timestamp": datetime.now().isoformat(),
+        "mode": "fill",
+        "target": target,
+        "campaign_id": cid,
+        "hunter_configured": hunter_configured,
+    }
+
+    # Step 1: Check existing ready_to_send pipeline
+    from modules.pipeline import list_prospects as _list
+    existing = _list(stage="ready_to_send", score_min=score_threshold)
+    existing_count = existing.get("total", 0)
+    log.info(f"Step 1: {existing_count} leads already in ready_to_send (target: {target})")
+
+    needed = max(0, target - existing_count)
+    results["existing_ready"] = existing_count
+    results["needed"] = needed
+
+    # Step 2: Run prospect hunt if we need more leads
+    hunt_result = None
+    if needed > 0:
+        log.info(f"Step 2: Hunting for {needed} more leads (max {max_rounds} rounds)...")
+        hunt_result = run_prospect_hunt(
+            target=needed,
+            niches=niches,
+            include_jobs=include_jobs,
+            max_rounds=max_rounds,
+            score_threshold=score_threshold,
+            email_score_min=score_threshold,
+            campaign_name=campaign_tag,
+        )
+        results["hunt"] = {
+            "rounds": hunt_result.get("rounds_completed", 0),
+            "discovered": hunt_result.get("totals", {}).get("total_discovered", 0),
+            "niches_exhausted": hunt_result.get("totals", {}).get("niches_exhausted", 0),
+            "duration": hunt_result.get("duration", ""),
+            "target_met": hunt_result.get("target_met", False),
+            "hot_ready": hunt_result.get("final_counts", {}).get("hot_ready", 0),
+        }
+    else:
+        log.info(f"Step 2: Skipped — already have {existing_count} leads ready.")
+        results["hunt"] = {"skipped": True, "reason": "enough leads in pipeline"}
+
+    # Step 3: Push all ready_to_send leads to Instantly
+    log.info("Step 3: Pushing leads to Instantly...")
+    from modules.instantly import push_leads
+    push_result = push_leads(campaign_id=cid, stage="ready_to_send", limit=target + 10)
+    results["push"] = {
+        "pushed": push_result.get("pushed", 0),
+        "skipped": push_result.get("skipped", 0),
+        "errors": push_result.get("errors", 0),
+    }
+    log.info(
+        f"  Pushed: {push_result.get('pushed', 0)}, "
+        f"Skipped: {push_result.get('skipped', 0)}, "
+        f"Errors: {push_result.get('errors', 0)}"
+    )
+
+    # Step 4: Telegram notification with full stats
+    log.info("Step 4: Sending Telegram notification...")
+    from modules.notifier import send_notification
+
+    hunted = results.get("hunt", {}).get("discovered", 0)
+    pushed = results["push"]["pushed"]
+    errors = results["push"]["errors"]
+
+    message = (
+        f"*Daily Fill -- {datetime.now().strftime('%Y-%m-%d')}*\n\n"
+        f"Pipeline: {existing_count} existing ready\n"
+        f"Needed: {needed}\n"
+    )
+
+    if hunt_result:
+        hunt_info = results["hunt"]
+        message += (
+            f"\n*Hunt:*\n"
+            f"- {hunted} discovered\n"
+            f"- {hunt_info['rounds']} rounds in {hunt_info['duration']}\n"
+            f"- {hunt_info.get('niches_exhausted', 0)} niches exhausted\n"
+            f"- {hunt_info.get('hot_ready', 0)} ready to send after enrichment\n"
+            f"- Target {'MET' if hunt_info.get('target_met') else 'NOT MET'}\n"
+        )
+
+    message += (
+        f"\n*Instantly Push:*\n"
+        f"- {pushed} leads pushed to campaign\n"
+    )
+    if errors:
+        message += f"- {errors} errors\n"
+
+    # Final pipeline count
+    final_ready = _list(stage="ready_to_send", score_min=score_threshold).get("total", 0)
+    message += f"\nRemaining in pipeline: {final_ready} ready_to_send"
+    results["final_ready"] = final_ready
+
+    notify_result = send_notification(message)
+    results["notification"] = notify_result
+
+    status = "TARGET MET" if pushed >= target else f"pushed {pushed}/{target}"
+    log.info(f"=== DAILY FILL COMPLETE ({status}) ===")
+    return results
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -1033,6 +1212,15 @@ def main():
     prospect.add_argument("--score-threshold", type=int, default=8, dest="score_threshold", help="Hot lead score (default: 8)")
     prospect.add_argument("--campaign", type=str, dest="campaign_name")
 
+    fill = sub.add_parser("fill", help="Daily fill: hunt leads + push to Instantly")
+    fill.add_argument("--target", type=int, default=25, help="Leads to prepare (default: 25)")
+    fill.add_argument("--campaign-id", type=str, dest="campaign_id", help="Instantly campaign UUID")
+    fill.add_argument("--niches", type=str, help="Comma-separated niches (default: all)")
+    fill.add_argument("--max-rounds", type=int, default=25, dest="max_rounds", help="Max discovery rounds (default: 25)")
+    fill.add_argument("--score-threshold", type=int, default=5, dest="score_threshold", help="Min fit score (default: 5 = warm+)")
+    fill.add_argument("--include-jobs", action="store_true", default=True, dest="fill_include_jobs")
+    fill.add_argument("--no-jobs", action="store_false", dest="fill_include_jobs")
+
     args = parser.parse_args()
 
     if args.mode == "daily":
@@ -1051,6 +1239,16 @@ def main():
             max_rounds=args.max_rounds,
             score_threshold=args.score_threshold,
             campaign_name=args.campaign_name,
+        )
+    elif args.mode == "fill":
+        niches = [n.strip() for n in args.niches.split(",")] if args.niches else None
+        result = run_fill(
+            target=args.target,
+            campaign_id=args.campaign_id,
+            niches=niches,
+            max_rounds=args.max_rounds,
+            score_threshold=args.score_threshold,
+            include_jobs=args.fill_include_jobs,
         )
     else:
         parser.print_help()

@@ -10,8 +10,22 @@
 #   python3 orchestrator.py weekly
 #   python3 orchestrator.py campaign --niches "supplements"
 
+# ─────────────────────────────────────────
+# PRIMARY: Daily lead fill (Instantly)
+# ─────────────────────────────────────────
+
+# Daily fill: 7am AEST every weekday (Mon-Fri)
+# Hunts 25 leads, drafts emails, pushes to Instantly campaign
+# Persistent: runs up to 25 rounds with sub-niche expansion to hit target
+# Runs BEFORE the 9am sending window so leads are queued and ready
+0 7 * * 1-5 cd /home/ubuntu/convertra-leads && python3 orchestrator.py fill --target 25 >> /home/ubuntu/convertra-leads/logs/fill.log 2>&1
+
+# ─────────────────────────────────────────
+# SUPPORTING: Inbox monitoring + health checks
+# ─────────────────────────────────────────
+
 # Daily routine: 9am AEST every weekday (Mon-Fri)
-# Checks inbox, sends follow-ups, sends ready emails, reports via Telegram
+# Checks inbox for replies/bounces, sends legacy follow-ups, reports via Telegram
 0 9 * * 1-5 cd /home/ubuntu/convertra-leads && python3 orchestrator.py daily >> /home/ubuntu/convertra-leads/logs/daily.log 2>&1
 
 # Weekly review: 10am AEST every Monday
@@ -22,8 +36,14 @@
 0 0 * * 0 cd /home/ubuntu/convertra-leads && python3 cli.py pipeline backup >> /home/ubuntu/convertra-leads/logs/backup.log 2>&1
 
 # ─────────────────────────────────────────
-# OPTIONAL: Scheduled campaigns (uncomment and customize)
+# OPTIONAL: Adjust fill target
 # ─────────────────────────────────────────
 
-# Monthly discovery run: 8am AEST on the 1st of each month
-# 0 8 1 * * cd /home/ubuntu/convertra-leads && python3 orchestrator.py campaign --niches "supplements,skincare,fitness,courses,ecommerce,saas" --include-jobs --campaign "auto-$(date +\%Y-\%m)" >> /home/ubuntu/convertra-leads/logs/campaign.log 2>&1
+# Week 1 (conservative): 20 leads/day
+# 0 7 * * 1-5 cd /home/ubuntu/convertra-leads && python3 orchestrator.py fill --target 20 >> /home/ubuntu/convertra-leads/logs/fill.log 2>&1
+
+# Weeks 3+: Scale to 30-50 leads/day
+# 0 7 * * 1-5 cd /home/ubuntu/convertra-leads && python3 orchestrator.py fill --target 40 >> /home/ubuntu/convertra-leads/logs/fill.log 2>&1
+
+# Use a different Instantly campaign
+# 0 7 * * 1-5 cd /home/ubuntu/convertra-leads && python3 orchestrator.py fill --target 25 --campaign-id "YOUR-CAMPAIGN-UUID" >> /home/ubuntu/convertra-leads/logs/fill.log 2>&1
