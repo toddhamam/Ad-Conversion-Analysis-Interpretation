@@ -40,6 +40,56 @@ NICHE_KEYWORDS = {
     ],
 }
 
+# Sub-niche expansions — specific product categories that yield fresh DDG results
+# when the parent niche is exhausted. Each generates proper e-commerce queries.
+SUB_NICHES = {
+    "supplements": [
+        "collagen supplement", "nootropics", "pre workout", "protein powder",
+        "CBD gummies", "vitamin D supplement", "greens powder", "ashwagandha",
+        "creatine supplement", "omega 3 fish oil", "probiotics", "magnesium supplement",
+        "turmeric supplement", "mushroom supplement", "electrolyte powder",
+        "sleep supplement", "testosterone booster", "fat burner supplement",
+        "amino acids supplement", "elderberry supplement",
+    ],
+    "skincare": [
+        "retinol serum", "vitamin C serum", "hyaluronic acid", "anti aging cream",
+        "sunscreen SPF", "acne treatment", "face moisturizer", "eye cream",
+        "facial cleanser", "exfoliating serum", "niacinamide serum", "peptide cream",
+        "natural skincare", "Korean skincare", "men skincare", "organic face oil",
+        "dark spot corrector", "lip balm brand", "body lotion brand",
+    ],
+    "fitness": [
+        "personal training online", "yoga program online", "HIIT workout program",
+        "strength training app", "home workout program", "fitness coaching women",
+        "bodybuilding program", "marathon training plan", "pilates online",
+        "CrossFit programming", "calisthenics program", "nutrition coaching",
+        "weight loss coaching", "postpartum fitness", "senior fitness program",
+    ],
+    "courses": [
+        "copywriting course", "real estate course", "trading course",
+        "photography course", "marketing course online", "coding bootcamp",
+        "leadership coaching", "business coaching", "life coaching program",
+        "sales training program", "public speaking course", "mindset coaching",
+        "productivity course", "AI course online", "design course online",
+    ],
+    "ecommerce": [
+        "pet supplies DTC", "baby products brand", "home decor brand",
+        "jewelry brand online", "candle brand", "coffee brand DTC",
+        "clothing brand shopify", "activewear brand", "sneaker brand",
+        "sunglasses brand DTC", "luggage brand DTC", "kitchen gadgets brand",
+        "stationery brand", "phone accessories brand", "hair care brand",
+        "beard grooming brand", "organic food brand", "tea brand DTC",
+        "wine subscription", "snack brand DTC",
+    ],
+    "saas": [
+        "CRM software startup", "project management SaaS", "email marketing platform",
+        "analytics dashboard SaaS", "HR software startup", "accounting software SaaS",
+        "customer support software", "scheduling software", "invoicing software",
+        "social media management tool", "SEO tool startup", "AI writing tool",
+        "video editing SaaS", "form builder software", "survey tool SaaS",
+    ],
+}
+
 DEFAULT_NICHES = list(NICHE_KEYWORDS.keys())
 
 # Domains to always skip (exact match)
@@ -187,11 +237,11 @@ def search_prospects_by_niche(niche, limit=30):
     queries = NICHE_KEYWORDS.get(niche_lower)
 
     if not queries:
-        # Custom niche — generate generic ICP queries
+        # Custom niche — generate e-commerce focused queries (not weak ICP fallback)
         queries = [
-            f'"{niche}" "media buyer" OR "ad creative"',
-            f'"{niche}" "DTC" OR "ecommerce" scaling ads',
-            f'"{niche}" brand hiring creative OR growth',
+            f'"{niche}" "shop now" OR "add to cart" OR "subscribe & save" -blog -article -guide -review',
+            f'"{niche}" brand site:myshopify.com -blog -article',
+            f'"{niche}" "free shipping" OR "money back guarantee" -"top 10" -"best" -review -guide',
         ]
 
     all_results = []

@@ -234,14 +234,10 @@ def format_prospect_hunt_summary(hunt_results):
     max_rounds = hunt_results.get("max_rounds", 10)
     duration = hunt_results.get("duration", "")
     totals = hunt_results.get("totals", {})
-    email_finding = hunt_results.get("email_finding", {})
-    drafting = hunt_results.get("drafting", {})
     final = hunt_results.get("final_counts", {})
     target_met = hunt_results.get("target_met", False)
 
     status_icon = "completed" if target_met else "stopped"
-
-    enrichment = hunt_results.get("enrichment", {})
 
     lines = [
         f"*Prospect Hunt {status_icon}* -- {date_str}",
@@ -251,31 +247,17 @@ def format_prospect_hunt_summary(hunt_results):
         f"- {totals.get('total_discovered', 0)} prospects found",
         f"- {totals.get('niches_exhausted', 0)} niches exhausted",
         "",
-        "*Scoring*",
-        f"- Hot (8+): {totals.get('hot_scored', 0)}",
-        f"- Warm (5-7): {max(0, totals.get('warm_scored', 0) - totals.get('hot_scored', 0))}",
+        "*Pipeline*",
+        f"- Hot scored: {totals.get('hot_scored', 0)}",
+        f"- Warm scored: {max(0, totals.get('warm_scored', 0) - totals.get('hot_scored', 0))}",
         "",
-    ]
-
-    if enrichment.get("enriched", 0) > 0:
-        lines.extend([
-            "*Hunter Enrichment*",
-            f"- Enriched: {enrichment.get('enriched', 0)}",
-            f"- Emails found: {enrichment.get('emails_found', 0)}",
-            f"- Credits used: {enrichment.get('credits_used', 0)}",
-            "",
-        ])
-
-    lines.extend([
-        "*Outreach Ready*",
-        f"- Emails found: {email_finding.get('found', 0)}",
-        f"- Drafts written: {drafting.get('drafted', 0)}",
-        f"- Ready to send: {final.get('total_ready', 0)}",
+        "*Ready to Send*",
+        f"- Total: {final.get('total_ready', 0)}",
         f"  - Hot: {final.get('hot_ready', 0)}",
         f"  - Warm: {final.get('warm_ready', 0)}",
         "",
-        f"Target: {target} hot | Actual: {final.get('hot_ready', 0)} hot",
-    ])
+        f"Target: {target} | Ready: {final.get('hot_ready', 0)} | {'MET' if target_met else 'NOT MET'}",
+    ]
 
     if target_met:
         lines.append("*Target met!*")

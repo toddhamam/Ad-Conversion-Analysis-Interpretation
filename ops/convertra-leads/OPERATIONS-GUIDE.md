@@ -79,7 +79,10 @@ crontab -e
 Paste these lines:
 
 ```
-# Daily routine: 9am AEST weekdays
+# Daily fill: 7am AEST weekdays — hunt leads + push to Instantly
+0 7 * * 1-5 cd /home/ubuntu/convertra-leads && python3 orchestrator.py fill --target 25 >> /home/ubuntu/convertra-leads/logs/fill.log 2>&1
+
+# Daily routine: 9am AEST weekdays — inbox check, follow-ups, reports
 0 9 * * 1-5 cd /home/ubuntu/convertra-leads && python3 orchestrator.py daily >> /home/ubuntu/convertra-leads/logs/daily.log 2>&1
 
 # Weekly review: 10am AEST Monday
@@ -100,11 +103,88 @@ sudo docker compose down
 
 ---
 
-## 2. Daily Operations (Automated)
+## 2. Daily Lead Fill (Instantly — Automated)
+
+The `fill` mode is the core daily automation. It runs at **7am AEST** (before Instantly's 9am sending window) and ensures 20-30 fresh leads are queued in your Instantly campaign every morning.
+
+### What happens at 7am every weekday
+
+1. **Pipeline check** — Counts existing `ready_to_send` leads
+2. **Prospect hunt** — If more leads are needed, runs the full pipeline:
+   - Discovery (DuckDuckGo + Ad Library + job listings)
+   - Research (website scraping for signals)
+   - Scoring (17-point rubric, keeps warm+ leads with score >= 5)
+   - Email finding (Hunter.io + pattern matching)
+   - AI drafting (GPT-5.2, ~500 tokens each)
+3. **Instantly push** — Pushes all `ready_to_send` leads to the active campaign
+4. **Telegram notification** — Sends you a summary card
+
+### Telegram summary example
+
+```
+Daily Fill — 2026-02-27
+
+Pipeline: 3 existing ready
+Needed: 22
+
+Hunt:
+- 40 discovered
+- 24 drafted
+- 6 rounds in 12m 34s
+
+Instantly Push:
+- 24 leads pushed to campaign
+
+Remaining in pipeline: 0 ready_to_send
+```
+
+### Adjusting the daily target
+
+```bash
+# Week 1 (conservative warmup): 20 leads/day
+python3 orchestrator.py fill --target 20
+
+# Normal operation: 25 leads/day (default)
+python3 orchestrator.py fill --target 25
+
+# Scaling up: 40 leads/day
+python3 orchestrator.py fill --target 40
+
+# Different Instantly campaign
+python3 orchestrator.py fill --target 25 --campaign-id "YOUR-CAMPAIGN-UUID"
+
+# Specific niches only
+python3 orchestrator.py fill --target 25 --niches "supplements,skincare"
+```
+
+### How Instantly handles the sending
+
+Instantly manages its own warmup and send pacing. Your campaign is configured with:
+- **Daily limit**: 50/day
+- **Schedule**: Weekdays 9am-5pm AEST
+- **Two-touch sequence**: Initial email (day 0) + follow-up (day 3)
+- **Stop on reply**: Yes
+
+You just keep the campaign topped up with leads. Instantly decides how many to send each day based on account warmup status.
+
+### Cron schedule
+
+Edit with `crontab -e`:
+
+```
+# Daily fill at 7am AEST (before 9am sending window)
+0 7 * * 1-5 cd /home/ubuntu/convertra-leads && python3 orchestrator.py fill --target 25 >> /home/ubuntu/convertra-leads/logs/fill.log 2>&1
+```
+
+To scale up later, just change `--target 25` to `--target 40`.
+
+---
+
+## 3. Daily Inbox Monitoring (Automated)
 
 Once cron is installed, the daily routine runs itself every weekday at 9am. You don't need to do anything — just watch Telegram for the summary card.
 
-### What happens automatically each morning
+### What happens automatically at 9am
 
 1. **Inbox check** — Reads Gmail via IMAP, cross-references against pipeline
    - Bounces → marks prospect as `invalid_email`
@@ -156,7 +236,7 @@ The weekly review runs at 10am and checks for red flags:
 
 ---
 
-## 3. Running a Campaign (Manual)
+## 4. Running a Campaign (Manual)
 
 When you need fresh prospects, SSH in and launch a campaign:
 
@@ -214,7 +294,7 @@ After a campaign, prospects are in `ready_to_send`. The next daily cron run will
 
 ---
 
-## 4. Prospect Hunt (Persistent Discovery)
+## 5. Prospect Hunt (Persistent Discovery)
 
 When a single campaign doesn't produce enough hot leads, use the prospect hunt. It loops discovery → research → score across all niches until it accumulates your target number of hot leads, then runs email finding and AI drafting as a single final batch.
 
@@ -289,7 +369,7 @@ Realistic max score from available data is ~11 points (website research: ~5-7 pt
 
 ---
 
-## 5. Individual Commands
+## 6. Individual Commands
 
 For ad-hoc operations when you need to do something specific:
 
@@ -509,7 +589,7 @@ python3 cli.py notify send --message "Pipeline check: all systems go"
 
 ---
 
-## 6. Monitoring
+## 7. Monitoring
 
 ### Check logs
 
@@ -551,15 +631,16 @@ print(f\"Ready to send: {s.get('by_stage', {}).get('ready_to_send', 0)}\")
 
 ---
 
-## 7. Typical Weekly Workflow
+## 8. Typical Weekly Workflow
 
 | Day | What Happens | Your Action |
 |-----|-------------|-------------|
-| **Mon-Fri 9am** | Cron runs daily routine automatically | Check Telegram summary |
+| **Mon-Fri 7am** | Cron fills Instantly with 25 fresh leads | Check Telegram for fill summary |
+| **Mon-Fri 9am** | Cron checks inbox, sends legacy follow-ups | Check Telegram for inbox summary |
+| **Mon-Fri 9am-5pm** | Instantly sends queued emails automatically | Nothing — Instantly handles pacing |
 | **Monday 10am** | Cron runs weekly review | Review red flags in Telegram |
-| **When pipeline is low** | Weekly review says "< 10 ready to send" | SSH in, run a campaign |
 | **When you get a reply** | Daily routine auto-classifies it | Check Telegram, follow up personally if interested |
-| **Monthly** | Optional scheduled campaign | Uncomment the monthly cron line |
+| **When scaling up** | Change `--target 25` to `--target 40` in crontab | `crontab -e` on VPS |
 
 ### If you need to pause everything
 
@@ -587,7 +668,7 @@ python3 cli.py followup resume --id p_042
 
 ---
 
-## 8. Token Cost Summary
+## 9. Token Cost Summary
 
 | Operation | Tokens | Frequency |
 |-----------|--------|-----------|
@@ -599,12 +680,12 @@ python3 cli.py followup resume --id p_042
 | Follow-up emails (templates) | **0** | Automatic |
 | Telegram notifications | **0** | Every run |
 
-**Estimated monthly cost at 20 prospects/week**: ~40K tokens/month (~$0.50)
+**Estimated monthly cost at 25 prospects/day (fill mode)**: ~250K tokens/month (~$3)
 **vs. OpenClaw**: ~2M+ tokens/month
 
 ---
 
-## 9. File Reference
+## 10. File Reference
 
 ```
 /home/ubuntu/convertra-leads/
