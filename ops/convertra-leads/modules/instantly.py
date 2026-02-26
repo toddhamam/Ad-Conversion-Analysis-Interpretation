@@ -262,7 +262,7 @@ def _build_followup_body(prospect):
     else:
         body = (
             f"Hi {first_name},\n\n"
-            f"Just floating this back up. The ad variations are ready "
+            f"Just floating this back up. The 3 Meta ad variations are ready "
             f"whenever you want them.\n\n"
             f"{sender_name}"
         )

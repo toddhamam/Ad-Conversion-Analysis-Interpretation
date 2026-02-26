@@ -1,7 +1,7 @@
 {
   "metadata": {
     "created": "2026-02-23",
-    "last_updated": "2026-02-25",
+    "last_updated": "2026-02-26",
     "total_prospects": 67,
     "campaigns": [
       "test-feb-2026",
@@ -145,11 +145,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T22:24:27.388670Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-26T10:41:35.852610Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-26T11:00:14.871980Z"
         }
       ],
       "next_action": {
         "type": "send_initial",
-        "date": "2026-02-25",
+        "date": "2026-02-26",
         "notes": ""
       },
       "tags": [
@@ -157,10 +167,10 @@
       ],
       "notes": "Add to Cart .1. Save up to 15% on your coffee restocking. 2. Forget the hassle of tracking your inventory and ordering when you're out of coffee. 3. Customizable - from no. of packs to which coffee yo",
       "created": "2026-02-25",
-      "updated": "2026-02-25",
+      "updated": "2026-02-26",
       "draft_email": {
-        "subject": "Ad fatigue?",
-        "body": "Hi Siju,\n\nJust saw Trelish is pushing a Subscribe and Save offer for your flavoured cold coffees. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
+        "subject": "One winning ad left?",
+        "body": "Hi Siju,\n\nJust saw Trelish is actively running Meta ads pushing Subscribe and Save for your flavoured cold coffees. At that volume, the biggest challenge is usually keeping enough fresh ad creatives flowing into Meta testing.\n\nUsing my Conversion Intelligence technology I mocked up 3 fresh ad variations for you to test based on what's already proven to work on Meta right now. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -300,11 +310,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T22:24:45.292792Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-26T10:41:36.055318Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-26T11:00:33.544566Z"
         }
       ],
       "next_action": {
         "type": "send_initial",
-        "date": "2026-02-25",
+        "date": "2026-02-26",
         "notes": ""
       },
       "tags": [
@@ -312,10 +332,10 @@
       ],
       "notes": "Purchase Type: Subscribe & SAVE UP TO 20%.See real progress and break through fitness plateaus. Faster recovery and enhanced workout results. A supplement that fits your lifestyle and actually works.",
       "created": "2026-02-25",
-      "updated": "2026-02-25",
+      "updated": "2026-02-26",
       "draft_email": {
-        "subject": "One winning ad left?",
-        "body": "Hi Jessica,\n\nJust saw Arrae pushing the Tone Mixed Berry launch alongside an active blog and newsletter. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
+        "subject": "Running out of ads to test?",
+        "body": "Hi Jessica,\n\nJust noticed Arrae is pushing product focused Meta ads around Tone and other core SKUs. At that volume, the biggest challenge is usually keeping enough fresh ad creatives flowing into Meta testing.\n\nUsing my Conversion Intelligence technology I mocked up 3 fresh ad variations for you to test based on what's already proven to work on Meta right now. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -405,11 +425,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T22:24:48.212964Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-26T10:41:36.074349Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-26T11:00:36.387090Z"
         }
       ],
       "next_action": {
         "type": "send_initial",
-        "date": "2026-02-25",
+        "date": "2026-02-26",
         "notes": ""
       },
       "tags": [
@@ -417,10 +447,10 @@
       ],
       "notes": "Subscribe & Save Save UP TO 21%.A luxurious combo to power your mornings and unwind at night. Regular price $94.80. Shop now . Join 200,000+ women on their wellness journey. Reviews reflect individual",
       "created": "2026-02-25",
-      "updated": "2026-02-25",
+      "updated": "2026-02-26",
       "draft_email": {
         "subject": "Can't test ads quick enough?",
-        "body": "Hi Rach,\n\nJust saw Moodi pushing hot chocolate blends and keeping content moving with blog and newsletter. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
+        "body": "Hi Rach,\n\nJust saw Moodi running Meta ads around your blends, especially the hot chocolate angle. At that volume, the biggest challenge is usually keeping enough fresh ad creatives flowing into Meta testing.\n\nUsing my Conversion Intelligence technology I mocked up 3 fresh ad variations for you to test based on what's already proven to work on Meta right now. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -561,11 +591,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T22:24:32.314482Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-26T10:41:35.937204Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-26T11:00:20.172068Z"
         }
       ],
       "next_action": {
         "type": "send_initial",
-        "date": "2026-02-25",
+        "date": "2026-02-26",
         "notes": ""
       },
       "tags": [
@@ -573,10 +613,10 @@
       ],
       "notes": "SHOP NOW . In a world that never slows down, this is how you switch off. Why they're loved. SAVE 10%. This bundle is designed for those who can\u2019t get enough of our Magnesium Bath Tonics. $263.80.",
       "created": "2026-02-25",
-      "updated": "2026-02-25",
+      "updated": "2026-02-26",
       "draft_email": {
-        "subject": "3 days per creative?",
-        "body": "Hi Michelle,\n\nJust saw 39 Degrees is pushing a Signature Series lineup and keeping content flowing alongside it. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
+        "subject": "Can't test ads quick enough?",
+        "body": "Hi Michelle,\n\nJust saw 39 Degrees running Meta ads pushing your Ancient Spa Rituals and signature series. At that volume, the biggest challenge is usually keeping enough fresh ad creatives flowing into Meta testing.\n\nUsing my Conversion Intelligence technology I mocked up 3 fresh ad variations for you to test based on what's already proven to work on Meta right now. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -667,11 +707,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T22:24:40.784915Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-26T10:41:36.013221Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-26T11:00:26.700127Z"
         }
       ],
       "next_action": {
         "type": "send_initial",
-        "date": "2026-02-25",
+        "date": "2026-02-26",
         "notes": ""
       },
       "tags": [
@@ -679,10 +729,10 @@
       ],
       "notes": "SHOP NOW . A delicious range of Sparkling Spring Waters infused with our unique TripleMg\u00ae formula, a unique blend of three types of bioavailable Magnesium to help you relax, unwind and rebalance. Subs",
       "created": "2026-02-25",
-      "updated": "2026-02-25",
+      "updated": "2026-02-26",
       "draft_email": {
-        "subject": "Creative Velocity",
-        "body": "Hi Lucy,\n\nJust saw OHMG Water is running an active blog and newsletter alongside product pushes, which usually signals steady demand gen. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
+        "subject": "Can't test ads quick enough?",
+        "body": "Hi Lucy,\n\nJust saw OHMG Water is actively promoting your water products on Meta with product focused creative. At that volume, the biggest challenge is usually keeping enough fresh ad creatives flowing into Meta testing.\n\nUsing my Conversion Intelligence technology I mocked up 3 fresh ad variations for you to test based on what's already proven to work on Meta right now. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -1603,11 +1653,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T22:24:43.417718Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-26T10:41:36.035442Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-26T11:00:30.514991Z"
         }
       ],
       "next_action": {
         "type": "send_initial",
-        "date": "2026-02-25",
+        "date": "2026-02-26",
         "notes": ""
       },
       "tags": [
@@ -1615,10 +1675,10 @@
       ],
       "notes": "Dr. Brandt believed great skin shouldn't be complicated. Our Subscribe & Save Program makes it effortless - with exclusive perks, flexible deliveries, and gifts in every box.",
       "created": "2026-02-25",
-      "updated": "2026-02-25",
+      "updated": "2026-02-26",
       "draft_email": {
-        "subject": "Fatiguing meta ads?",
-        "body": "Hi Osmar,\n\nJust saw Dr. Brandt pushing Subscribe and Save alongside steady content. At that pace, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
+        "subject": "Dr. Brandt Skincare's ad fatigue",
+        "body": "Hi Osmar,\n\nJust saw Dr. Brandt Skincare running Meta ads that lean into product benefits and routine results. At that volume, the biggest challenge is usually keeping enough fresh ad creatives flowing into Meta testing.\n\nUsing my Conversion Intelligence technology I mocked up 3 fresh ad variations for you to test based on what's already proven to work on Meta right now. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -1759,11 +1819,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T22:24:34.943940Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-26T10:41:35.963237Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-26T11:00:22.849591Z"
         }
       ],
       "next_action": {
         "type": "send_initial",
-        "date": "2026-02-25",
+        "date": "2026-02-26",
         "notes": ""
       },
       "tags": [
@@ -1771,10 +1841,10 @@
       ],
       "notes": "From $114.00. Shop Now. Suited to. Combination skin. #1 The Hydragel. Hydrating gel for dehydrated skin. $222.00. Add to Cart. Added to Cart. Suited ...",
       "created": "2026-02-25",
-      "updated": "2026-02-25",
+      "updated": "2026-02-26",
       "draft_email": {
-        "subject": "Waiting on designers?",
-        "body": "Hi Chris,\n\nJust saw RATIONALE has a deep product lineup and stays active with content, which usually pairs with steady Meta testing. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
+        "subject": "Chris, creative bottleneck?",
+        "body": "Hi Chris,\n\nJust noticed RATIONALE is actively running Meta ads pushing product and seasonal offers. At that volume, the biggest challenge is usually keeping enough fresh ad creatives flowing into Meta testing.\n\nUsing my Conversion Intelligence technology I mocked up 3 fresh ad variations for you to test based on what's already proven to work on Meta right now. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -1966,11 +2036,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T22:24:36.836396Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-26T10:41:35.987634Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-26T11:00:24.711449Z"
         }
       ],
       "next_action": {
         "type": "send_initial",
-        "date": "2026-02-25",
+        "date": "2026-02-26",
         "notes": ""
       },
       "tags": [
@@ -1978,10 +2058,10 @@
       ],
       "notes": "How do I sign up? On the product page, you can select Subscribe & Save, choose your frequency of delivery, add to cart, and complete your checkout. That's it!",
       "created": "2026-02-25",
-      "updated": "2026-02-25",
+      "updated": "2026-02-26",
       "draft_email": {
-        "subject": "Not enough ad creative to test?",
-        "body": "Hi Prateek,\n\nJust saw Naked & Thriving pushing hard on content plus ongoing Facebook ads. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
+        "subject": "3 days per creative?",
+        "body": "Hi Prateek,\n\nJust noticed Naked & Thriving is actively running Meta ads pushing skincare products and offers. At that volume, the biggest challenge is usually keeping enough fresh ad creatives flowing into Meta testing.\n\nUsing my Conversion Intelligence technology I mocked up 3 fresh ad variations for you to test based on what's already proven to work on Meta right now. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -2985,11 +3065,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T22:24:30.414894Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-26T10:41:35.898017Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-26T11:00:17.348206Z"
         }
       ],
       "next_action": {
         "type": "send_initial",
-        "date": "2026-02-25",
+        "date": "2026-02-26",
         "notes": ""
       },
       "tags": [
@@ -2998,10 +3088,10 @@
       ],
       "notes": "Found via job listing: Paid Social Manager - Media Buying | Meta & TikTok Ads | Acquisition Strategy. Responsibility: Drive new customer growth through paid ads for our e-co",
       "created": "2026-02-25",
-      "updated": "2026-02-25",
+      "updated": "2026-02-26",
       "draft_email": {
-        "subject": "Soar With Us's ad fatigue",
-        "body": "Hi Sam,\n\nJust saw Soar With Us is hiring across performance creative and paid social, plus running active content. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
+        "subject": "Can't test ads quick enough?",
+        "body": "Hi Sam,\n\nJust saw Soar With Us is actively running Meta ads and hiring across performance creative and paid social. At that volume, the biggest challenge is usually keeping enough fresh ad creatives flowing into Meta testing.\n\nUsing my Conversion Intelligence technology I mocked up 3 fresh ad variations for you to test based on what's already proven to work on Meta right now. Want me to send them over?\n\nTodd"
       }
     },
     {
@@ -3863,11 +3953,21 @@
           "type": "email_drafted",
           "notes": "Email drafted via ai",
           "date": "2026-02-25T22:24:50.075549Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via template",
+          "date": "2026-02-26T10:41:36.105282Z"
+        },
+        {
+          "type": "email_drafted",
+          "notes": "Email drafted via ai",
+          "date": "2026-02-26T11:00:38.447608Z"
         }
       ],
       "next_action": {
         "type": "send_initial",
-        "date": "2026-02-25",
+        "date": "2026-02-26",
         "notes": ""
       },
       "tags": [
@@ -3876,10 +3976,10 @@
       ],
       "notes": "Found via job listing: We are looking for a detail-oriented, ... Manager will serve as a client liaison, developing and managing a portfolio of PPC accounts and marketing ca",
       "created": "2026-02-25",
-      "updated": "2026-02-25",
+      "updated": "2026-02-26",
       "draft_email": {
-        "subject": "PBJ Marketing's ad fatigue",
-        "body": "Hi Phillip,\n\nJust saw PBJ Marketing is hiring a creative director and adding paid media support. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\nTodd"
+        "subject": "Running out of ads to test?",
+        "body": "Hi Phillip,\n\nJust saw PBJ Marketing is hiring for a Creative Director and paid media roles alongside running active Facebook ads for clients. At that volume, the biggest challenge is usually keeping enough fresh ad creatives flowing into Meta testing.\n\nUsing my Conversion Intelligence technology I mocked up 3 fresh ad variations for you to test based on what's already proven to work on Meta right now. Want me to send them over?\n\nTodd"
       }
     },
     {

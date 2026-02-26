@@ -70,16 +70,16 @@
     }
   },
   "saas_founder": {
-    "body": "Hi {first_name},\n\nJust {personalization_hook}. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing.\n\nI mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?\n\n{sender_first_name}"
+    "body": "Hi {first_name},\n\nJust {personalization_hook}. At that volume, the biggest challenge is usually keeping enough fresh ad creatives flowing into Meta testing.\n\nUsing my Conversion Intelligence technology I mocked up 3 fresh ad variations for you to test based on what's already proven to work on Meta right now. Want me to send them over?\n\n{sender_first_name}"
   },
   "agency_owner": {
-    "body": "Hi {first_name},\n\nJust {personalization_hook}. At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing for each client.\n\nConvertra can help you pump out fresh winning creatives to test for your clients in less than 3 minutes. I shot a video to show you how. Want me to send it over?\n\n{sender_first_name}"
+    "body": "Hi {first_name},\n\nJust {personalization_hook}. At that volume, the biggest challenge is usually keeping enough fresh ad creatives flowing into Meta testing for each client.\n\nConvertra can help you pump out fresh winning creatives to test for your clients in less than 3 minutes. I shot a video to show you how. Want me to send it over?\n\n{sender_first_name}"
   },
   "warm_intro": {
     "subject": "{mutual_connection} mentioned you",
     "body": "Hi {first_name},\n\n{mutual_connection} and I were chatting about {topic} and your name came up, specifically around {relevant_context}.\n\nI work on {brief_description} and thought there might be some overlap worth exploring.\n\nWould you be open to a quick chat this week? No pressure either way.\n\n{sender_first_name}"
   },
   "followup_1": {
-    "body": "Hi {first_name},\n\nJust floating this back up. The ad variations are ready whenever you want them.\n\n{sender_first_name}"
+    "body": "Hi {first_name},\n\nJust floating this back up. The 3 Meta ad variations are ready whenever you want them.\n\n{sender_first_name}"
   }
 }

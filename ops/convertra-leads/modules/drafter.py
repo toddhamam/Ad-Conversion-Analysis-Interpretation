@@ -202,7 +202,7 @@ def _build_prompt(prospect):
    Note: For agencies, Convertra is named because they are evaluating tooling for their workflow."""
         bridge_suffix = " for each client"
     else:
-        cta_instruction = f"""4. CTA (exact format): "I mocked up 2 fresh ad variations based on what's already winning in your account. Want me to send them over?"
+        cta_instruction = f"""4. CTA (exact format): "Using my Conversion Intelligence technology I mocked up 3 fresh ad variations for you to test based on what's already proven to work on Meta right now. Want me to send them over?"
    Note: For SaaS/DTC founders, do NOT mention Convertra by name. The product is introduced on the reply, not the cold open."""
         bridge_suffix = ""
 
@@ -217,7 +217,7 @@ STRUCTURE: every email must follow this exact 4-part structure:
 
 1. GREETING: "Hi {{first_name}}," on its own line. Never use an em dash after the name.
 
-2. OPENING + BRIDGE (2 sentences max): Start with "Just" followed by a specific observation about their business (ad count, hiring, product launches, growth signals). Then connect it to the universal challenge: "At that volume, the biggest challenge is usually keeping enough fresh variations flowing into testing{bridge_suffix}." Do NOT frame this as criticism of their team. Frame it as a natural challenge that comes with scale. Do NOT mention tech stack names (Shopify, Klaviyo, HubSpot, etc.) or "Meta Pixel". Do NOT say "I looked you up on LinkedIn."
+2. OPENING + BRIDGE (2 sentences max): Start with "Just" followed by a specific observation about their Meta/Facebook ads activity (what they're promoting in their ads, their ad creative volume, offers running on Meta, ad count). The observation MUST reference their Meta ads or Facebook ads specifically. Never reference blogs, newsletters, content marketing, or general website activity... we only care about their paid Meta ads. Then connect it to the universal challenge: "At that volume, the biggest challenge is usually keeping enough fresh ad creatives flowing into Meta testing{bridge_suffix}." Do NOT frame this as criticism of their team. Frame it as a natural challenge that comes with scale. Do NOT mention tech stack names (Shopify, Klaviyo, HubSpot, etc.) or "Meta Pixel". Do NOT say "I looked you up on LinkedIn."
 
 {cta_instruction}
 
@@ -374,13 +374,13 @@ def _fallback_template(prospect):
     if hooks:
         hook = hooks[0]
     elif company_intel.get("active_ad_count", 0) > 10:
-        hook = f"saw {company} is running {company_intel['active_ad_count']}+ Meta ads"
+        hook = f"saw {company} is running {company_intel['active_ad_count']}+ ads on Meta"
     elif company_intel.get("hiring_signals"):
-        hook = f"noticed you're hiring a {company_intel['hiring_signals'][0]}"
+        hook = f"noticed you're hiring a {company_intel['hiring_signals'][0]} and running Meta ads"
     elif pains:
         hook = pains[0]
     else:
-        hook = f"saw {company} is investing in paid social"
+        hook = f"saw {company} is running ads on Meta"
 
     # Pick subject line from active pool
     subject = _pick_subject_line(prospect)
@@ -405,7 +405,7 @@ def _fallback_template(prospect):
             body = (
                 f"Hi {first_name},\n\n"
                 f"Just {hook}. At that volume, the biggest challenge is usually "
-                f"keeping enough fresh variations flowing into testing for each client.\n\n"
+                f"keeping enough fresh ad creatives flowing into Meta testing for each client.\n\n"
                 f"Convertra can help you pump out fresh winning creatives to test "
                 f"for your clients in less than 3 minutes. I shot a video to show "
                 f"you how. Want me to send it over?\n\n"
@@ -415,9 +415,10 @@ def _fallback_template(prospect):
             body = (
                 f"Hi {first_name},\n\n"
                 f"Just {hook}. At that volume, the biggest challenge is usually "
-                f"keeping enough fresh variations flowing into testing.\n\n"
-                f"I mocked up 2 fresh ad variations based on what's already winning "
-                f"in your account. Want me to send them over?\n\n"
+                f"keeping enough fresh ad creatives flowing into Meta testing.\n\n"
+                f"Using my Conversion Intelligence technology I mocked up 3 fresh ad variations "
+                f"for you to test based on what's already proven to work on Meta right now. "
+                f"Want me to send them over?\n\n"
                 f"{sender_name}"
             )
 
