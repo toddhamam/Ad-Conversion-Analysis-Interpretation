@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-02-26 — Meta ads copy refinement: Conversion Intelligence CTA, explicit ad anchoring
+
+### Overview
+Refined all cold email copy to explicitly reference Meta/Facebook ads throughout. Previous emails were vague about what we do (referencing blogs, newsletters, content marketing). Every email now makes it abundantly clear we're talking about their paid Meta ad creatives.
+
+### Changed
+- **Email CTA (SaaS/DTC)**: "I mocked up 2 fresh ad variations based on what's already winning in your account" → "Using my Conversion Intelligence technology I mocked up 3 fresh ad variations for you to test based on what's already proven to work on Meta right now"
+- **Email bridge**: "fresh variations flowing into testing" → "fresh ad creatives flowing into Meta testing"
+- **Follow-up 1**: "The ad variations are ready" → "The 3 Meta ad variations are ready"
+- **GPT system prompt**: Opening observation now MUST reference Meta/Facebook ads specifically. Blogs, newsletters, content marketing explicitly banned from openings
+- **Fallback hooks**: All generic template fallbacks now reference Meta ads (e.g., "running ads on Meta" instead of "investing in paid social")
+- **`instantly.py`**: Follow-up body fallback updated to match new copy
+- **`pipeline.json`**: All 10 prospects re-drafted via GPT-5.2 with Meta-anchored openings and Conversion Intelligence CTA
+
+### Files Modified
+- `ops/convertra-leads/modules/drafter.py` — GPT prompt, CTA, bridge, fallback hooks
+- `ops/convertra-leads/modules/instantly.py` — Follow-up body fallback
+- `ops/convertra-leads/data/templates.json` — All body templates + follow-up
+- `ops/convertra-leads/data/pipeline.json` — 10 re-drafted emails
+
+---
+
 ## 2026-02-25 — Instantly API integration for cold email sending
 
 ### Overview
