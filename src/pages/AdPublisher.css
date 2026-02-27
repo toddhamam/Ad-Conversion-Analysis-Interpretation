@@ -90,7 +90,7 @@
   font-size: 14px;
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .back-to-generator-btn:hover {
@@ -251,7 +251,7 @@
   font-size: 14px;
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .panel-header .back-btn:hover {
@@ -306,7 +306,7 @@
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .selection-btn:hover {
@@ -348,6 +348,7 @@
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
+  contain: layout style;
 }
 
 .ad-card {
@@ -466,7 +467,7 @@
   border: 2px solid var(--border-primary);
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
   text-align: center;
   font-family: inherit;
 }
@@ -767,7 +768,7 @@
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .primary-btn:hover:not(:disabled) {
@@ -790,7 +791,7 @@
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .secondary-btn:hover {
@@ -818,7 +819,7 @@
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .publish-btn:hover:not(:disabled) {
@@ -1035,7 +1036,7 @@
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   white-space: nowrap;
 }
 
@@ -1149,7 +1150,7 @@
   background: var(--bg-card);
   border: none;
   color: var(--text-secondary);
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .toggle-option:not(:last-child) {
@@ -1336,7 +1337,7 @@
   cursor: pointer;
   font-size: 13px;
   color: var(--text-secondary);
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   background: var(--bg-card);
 }
 
@@ -1428,7 +1429,7 @@
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .audience-add-btn:hover {
