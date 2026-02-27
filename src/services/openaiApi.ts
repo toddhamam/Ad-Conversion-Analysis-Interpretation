@@ -481,7 +481,6 @@ async function callOpenAI(
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
   options: {
     model?: string;
-    temperature?: number;
     maxTokens?: number;
     reasoningEffort?: ReasoningEffort;
   } = {}
@@ -544,7 +543,6 @@ async function callOpenAIWithVision(
   messages: ChatMessage[],
   options: {
     model?: string;
-    temperature?: number;
     maxTokens?: number;
     reasoningEffort?: ReasoningEffort;
   } = {}
@@ -671,7 +669,7 @@ Return ONLY the JSON object, no additional text.`;
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { temperature: 0.5, reasoningEffort });
+  ], { reasoningEffort });
 
   try {
     // Clean the response - remove markdown code blocks if present
@@ -752,7 +750,7 @@ Return ONLY the JSON object, no additional text.`;
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { temperature: 0.5, maxTokens: 1500 });
+  ], { maxTokens: 1500 });
 
   try {
     let cleanedResponse = response.trim();
@@ -819,7 +817,7 @@ Return ONLY the JSON object, no additional text.`;
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { temperature: 0.8, maxTokens: 1500 });
+  ], { maxTokens: 1500 });
 
   try {
     let cleanedResponse = response.trim();
@@ -1248,7 +1246,6 @@ Return ONLY the JSON object, no additional text.`;
   ];
 
   const response = await callOpenAIWithVision(messages, {
-    temperature: 0.5,
     maxTokens: 8000,
     reasoningEffort
   });
@@ -1650,7 +1647,7 @@ Return JSON only:
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { temperature: 0.85, maxTokens: 3500, reasoningEffort }); // Increased tokens for comprehensive responses
+  ], { maxTokens: 3500, reasoningEffort });
 
   try {
     let cleanedResponse = response.trim();
@@ -2368,7 +2365,7 @@ Return JSON only:
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { temperature: 0.8, maxTokens: 1500 });
+  ], { maxTokens: 1500 });
 
   try {
     let cleanedResponse = response.trim();
@@ -2454,7 +2451,7 @@ Return JSON only:
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { temperature: 0.7, maxTokens: 2000 });
+  ], { maxTokens: 2000 });
 
   try {
     let cleanedResponse = response.trim();
