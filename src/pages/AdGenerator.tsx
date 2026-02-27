@@ -6,11 +6,16 @@ import {
   generateAdPackage,
   generateCopyOptions,
   generateAdImage,
+  generateAdVideoWithVeo,
   CONCEPT_ANGLES,
   IMAGE_SIZE_OPTIONS,
   DEFAULT_IMAGE_SIZE,
   COPY_LENGTH_OPTIONS,
   DEFAULT_COPY_LENGTH,
+  VIDEO_ASPECT_RATIO_OPTIONS,
+  VIDEO_DURATION_OPTIONS,
+  VIDEO_MODEL_OPTIONS,
+  DEFAULT_VIDEO_CONFIG,
   type AdType,
   type AudienceType,
   type ConceptType,
@@ -21,6 +26,9 @@ import {
   type ImageSize,
   type CopyLength,
   type ProductContext,
+  type VideoAspectRatio,
+  type VideoDuration,
+  type VideoModel,
 } from '../services/openaiApi';
 import { getCacheStats as getImageCacheStats, uploadBrandImages, clearImageCache } from '../services/imageCache';
 import { fetchAdCreatives, type DatePreset } from '../services/metaApi';
@@ -131,7 +139,13 @@ function formatDate(isoString: string): string {
   });
 }
 
-function calculateCost(adType: AdType, variationCount: number, includeCopyGeneration: boolean): { min: number; max: number; note: string } {
+function calculateCost(
+  adType: AdType,
+  variationCount: number,
+  includeCopyGeneration: boolean,
+  videoModel?: VideoModel,
+  videoDuration?: VideoDuration,
+): { min: number; max: number; note: string } {
   const copyGenCost = includeCopyGeneration ? 0.02 : 0; // GPT-4o for copy generation
   const usingGemini = isGeminiConfigured();
 
@@ -153,12 +167,28 @@ function calculateCost(adType: AdType, variationCount: number, includeCopyGenera
       };
     }
   } else {
-    // Video storyboard is just text generation
-    return {
-      min: copyGenCost + 0.01,
-      max: copyGenCost + 0.04,
-      note: 'GPT-4o text generation',
-    };
+    // Video with Veo 3.1
+    if (usingGemini) {
+      const model = videoModel || 'fast';
+      const duration = videoDuration || 8;
+      const costPerSec = model === 'fast' ? 0.15 : 0.40;
+      const perVideoCost = costPerSec * duration;
+      // Add first-frame image gen cost (minimal for Gemini)
+      const firstFrameCost = 0.01;
+      const totalVideoCost = (perVideoCost * variationCount) + firstFrameCost;
+      return {
+        min: totalVideoCost + copyGenCost,
+        max: totalVideoCost + copyGenCost + 0.02,
+        note: `Veo ${model === 'fast' ? 'Fast' : 'Standard'} (${duration}s × ${variationCount})`,
+      };
+    } else {
+      // Storyboard only (text generation)
+      return {
+        min: copyGenCost + 0.01,
+        max: copyGenCost + 0.04,
+        note: 'GPT-4o text generation (storyboard only)',
+      };
+    }
   }
 }
 
@@ -189,6 +219,11 @@ const AdGenerator = () => {
   const [iqLevel, setIqLevel] = useState<ReasoningEffort>('medium');
   const [imageSize, setImageSize] = useState<ImageSize>(DEFAULT_IMAGE_SIZE);
   const [copyLength, setCopyLength] = useState<CopyLength>(DEFAULT_COPY_LENGTH);
+
+  // Video configuration
+  const [videoAspectRatio, setVideoAspectRatio] = useState<VideoAspectRatio>(DEFAULT_VIDEO_CONFIG.aspectRatio);
+  const [videoDuration, setVideoDuration] = useState<VideoDuration>(DEFAULT_VIDEO_CONFIG.duration);
+  const [videoModel, setVideoModel] = useState<VideoModel>(DEFAULT_VIDEO_CONFIG.model);
 
   // Copy source mode
   const [copySource, setCopySource] = useState<CopySource>('generate');
@@ -648,7 +683,11 @@ const AdGenerator = () => {
 
     setIsGeneratingCreatives(true);
     setError(null);
-    setGenerationProgress(adType === 'image' ? 'ConversionIQ™ generating images and finalizing copy...' : 'ConversionIQ™ creating video storyboard...');
+    setGenerationProgress(adType === 'image'
+      ? 'ConversionIQ™ generating images and finalizing copy...'
+      : isGeminiConfigured()
+        ? `ConversionIQ™ generating video with Veo ${videoModel === 'fast' ? 'Fast' : 'Standard'}...`
+        : 'ConversionIQ™ creating video storyboard...');
 
     try {
       const activeInspirationsForCreative = savedInspirations.filter(i => activeInspirationIds.includes(i.id));
@@ -669,6 +708,12 @@ const AdGenerator = () => {
         productContext: selectedProduct || undefined,
         adLibraryInspirations: activeInspirationsForCreative.length > 0 ? activeInspirationsForCreative : undefined,
         imageHeadlines,
+        videoConfig: adType === 'video' ? {
+          aspectRatio: videoAspectRatio,
+          duration: videoDuration,
+          resolution: '720p' as const,
+          model: videoModel,
+        } : undefined,
       });
 
       setGeneratedAds(prev => [result, ...prev]);
@@ -852,7 +897,55 @@ const AdGenerator = () => {
     }
   }, [generatedAds, analysisData, similarityValue, imageSize, selectedProduct]);
 
-  const costEstimate = calculateCost(adType, variationCount, currentStep === 'config');
+  // Regenerate a single video within an ad package
+  const handleRegenerateVideo = useCallback(async (adId: string, videoIndex: number) => {
+    const adToUpdate = generatedAds.find(ad => ad.id === adId);
+    const videos = adToUpdate?.videos || (adToUpdate?.video ? [adToUpdate.video] : []);
+    if (!adToUpdate || videos.length <= videoIndex) {
+      console.error('Cannot regenerate: ad or video not found');
+      return;
+    }
+
+    console.log(`🔄 Regenerating video ${videoIndex + 1} for ad ${adId}`);
+
+    try {
+      const newVideo = await generateAdVideoWithVeo({
+        audienceType: adToUpdate.audienceType,
+        conceptType: adToUpdate.conceptType,
+        analysisData,
+        selectedCopy: {
+          headlines: adToUpdate.copy.headlines,
+          bodyTexts: adToUpdate.copy.bodyTexts,
+        },
+        videoConfig: adToUpdate.videoConfig || {
+          aspectRatio: videoAspectRatio,
+          duration: videoDuration,
+          resolution: '720p',
+          model: videoModel,
+        },
+        productContext: selectedProduct || undefined,
+        variationIndex: videoIndex,
+        totalVariations: videos.length,
+      });
+
+      const updatedAds = generatedAds.map(ad => {
+        if (ad.id === adId) {
+          const updatedVideos = [...videos];
+          updatedVideos[videoIndex] = newVideo;
+          return { ...ad, video: updatedVideos[0], videos: updatedVideos };
+        }
+        return ad;
+      });
+
+      setGeneratedAds(updatedAds);
+      console.log('✅ Video regenerated successfully');
+    } catch (err: unknown) {
+      console.error('❌ Failed to regenerate video:', err);
+      throw new Error(err instanceof Error ? err.message : 'Failed to regenerate video');
+    }
+  }, [generatedAds, analysisData, videoAspectRatio, videoDuration, videoModel, selectedProduct]);
+
+  const costEstimate = calculateCost(adType, variationCount, currentStep === 'config', videoModel, videoDuration);
   const hasAnalysisData = !!analysisData;
   const isGenerating = isGeneratingCopy || isGeneratingCreatives;
 
@@ -1493,7 +1586,7 @@ const AdGenerator = () => {
               >
                 <span className="ad-type-icon">🎬</span>
                 <span className="ad-type-name">Video Ad</span>
-                <span className="ad-type-desc">Generate storyboard</span>
+                <span className="ad-type-desc">{isGeminiConfigured() ? 'Generate with Veo 3.1' : 'Generate storyboard'}</span>
               </button>
             </div>
           </div>
@@ -1516,6 +1609,65 @@ const AdGenerator = () => {
                     <span className="image-size-desc">{option.description}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Video Configuration - only shown for video ads with Gemini */}
+          {adType === 'video' && isGeminiConfigured() && (
+            <div className="config-section">
+              <label className="config-label">Video Format</label>
+              <p className="config-hint">Select the aspect ratio for your video ad</p>
+              <div className="image-size-options">
+                {VIDEO_ASPECT_RATIO_OPTIONS.map(option => (
+                  <button
+                    key={option.id}
+                    className={`image-size-btn ${videoAspectRatio === option.id ? 'active' : ''}`}
+                    onClick={() => setVideoAspectRatio(option.id)}
+                  >
+                    <span className="image-size-icon">{option.icon}</span>
+                    <span className="image-size-name">{option.name}</span>
+                    <span className="image-size-dimensions">{option.dimensions}</span>
+                    <span className="image-size-desc">{option.description}</span>
+                  </button>
+                ))}
+              </div>
+
+              <label className="config-label" style={{ marginTop: '16px' }}>Duration</label>
+              <div className="variation-options">
+                {VIDEO_DURATION_OPTIONS.map(option => (
+                  <button
+                    key={option.id}
+                    className={`variation-btn ${videoDuration === option.id ? 'active' : ''}`}
+                    onClick={() => setVideoDuration(option.id)}
+                    title={option.description}
+                  >
+                    {option.name}
+                  </button>
+                ))}
+              </div>
+
+              <label className="config-label" style={{ marginTop: '16px' }}>Generation Quality</label>
+              <div className="ad-type-options">
+                {VIDEO_MODEL_OPTIONS.map(option => (
+                  <button
+                    key={option.id}
+                    className={`ad-type-btn ${videoModel === option.id ? 'active' : ''}`}
+                    onClick={() => setVideoModel(option.id)}
+                  >
+                    <span className="ad-type-name">{option.name}</span>
+                    <span className="ad-type-desc">{option.description}</span>
+                    <span className="ad-type-desc">${option.costPerSec.toFixed(2)}/sec</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="video-cost-estimate">
+                <span className="cost-icon">🎬</span>
+                <span className="cost-text">
+                  ${(VIDEO_MODEL_OPTIONS.find(m => m.id === videoModel)?.costPerSec || 0.15) * videoDuration}
+                  /video ({videoDuration}s × ${(VIDEO_MODEL_OPTIONS.find(m => m.id === videoModel)?.costPerSec || 0.15).toFixed(2)})
+                </span>
               </div>
             </div>
           )}
@@ -1590,22 +1742,25 @@ const AdGenerator = () => {
           {/* Variation Count */}
           <div className="config-section">
             <label className="config-label">
-              Number of Variations {adType === 'video' && '(storyboard only)'}
+              Number of Variations {adType === 'video' && !isGeminiConfigured() && '(storyboard only)'}
             </label>
             <div className="variation-options">
-              {[1, 2, 3, 4, 5].map(count => (
+              {(adType === 'video' ? [1, 2, 3] : [1, 2, 3, 4, 5]).map(count => (
                 <button
                   key={count}
                   className={`variation-btn ${variationCount === count ? 'active' : ''}`}
                   onClick={() => setVariationCount(count)}
-                  disabled={adType === 'video' && count > 1}
+                  disabled={adType === 'video' && !isGeminiConfigured() && count > 1}
                 >
                   {count}
                 </button>
               ))}
             </div>
-            {adType === 'video' && variationCount > 1 && (
+            {adType === 'video' && !isGeminiConfigured() && variationCount > 1 && (
               <p className="variation-note">Video storyboards generate one concept at a time</p>
+            )}
+            {adType === 'video' && isGeminiConfigured() && variationCount > 1 && (
+              <p className="variation-note">Videos are generated sequentially (2-5 min each)</p>
             )}
           </div>
 
@@ -1718,6 +1873,7 @@ const AdGenerator = () => {
                 key={ad.id}
                 ad={ad}
                 onRegenerateImage={ad.adType === 'image' ? handleRegenerateImage : undefined}
+                onRegenerateVideo={ad.adType === 'video' ? handleRegenerateVideo : undefined}
               />
             ))}
           </div>

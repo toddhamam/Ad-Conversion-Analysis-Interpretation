@@ -210,6 +210,69 @@ export const COPY_LENGTH_OPTIONS: CopyLengthConfig[] = [
 
 export const DEFAULT_COPY_LENGTH: CopyLength = 'short';
 
+// =============================================================================
+// VIDEO CONFIGURATION - Veo 3.1 video generation options
+// =============================================================================
+export type VideoAspectRatio = '16:9' | '9:16';
+export type VideoDuration = 4 | 6 | 8;
+export type VideoResolution = '720p' | '1080p';
+export type VideoModel = 'standard' | 'fast';
+
+export interface VideoConfig {
+  aspectRatio: VideoAspectRatio;
+  duration: VideoDuration;
+  resolution: VideoResolution;
+  model: VideoModel;
+}
+
+export interface VideoSizeConfig {
+  id: VideoAspectRatio;
+  name: string;
+  description: string;
+  dimensions: string;
+  icon: string;
+}
+
+export const VIDEO_ASPECT_RATIO_OPTIONS: VideoSizeConfig[] = [
+  {
+    id: '9:16',
+    name: 'Portrait/Story',
+    description: 'Stories, Reels, TikTok',
+    dimensions: '1080×1920',
+    icon: '📱',
+  },
+  {
+    id: '16:9',
+    name: 'Landscape',
+    description: 'Feed ads, Facebook video',
+    dimensions: '1920×1080',
+    icon: '🖥️',
+  },
+];
+
+export const VIDEO_DURATION_OPTIONS: { id: VideoDuration; name: string; description: string }[] = [
+  { id: 4, name: '4s', description: 'Quick hook' },
+  { id: 6, name: '6s', description: 'Standard' },
+  { id: 8, name: '8s', description: 'Extended' },
+];
+
+export const VIDEO_RESOLUTION_OPTIONS: { id: VideoResolution; name: string; cost: string }[] = [
+  { id: '720p', name: '720p', cost: '$' },
+  { id: '1080p', name: '1080p HD', cost: '$$' },
+];
+
+export const VIDEO_MODEL_OPTIONS: { id: VideoModel; name: string; description: string; costPerSec: number }[] = [
+  { id: 'fast', name: 'Veo Fast', description: 'Quick generation, good quality', costPerSec: 0.15 },
+  { id: 'standard', name: 'Veo Standard', description: 'Best quality, slower', costPerSec: 0.40 },
+];
+
+export const DEFAULT_VIDEO_CONFIG: VideoConfig = {
+  aspectRatio: '9:16',
+  duration: 8,
+  resolution: '720p',
+  model: 'fast',
+};
+
 // Product context for accurate ad generation
 export interface ProductContext {
   id: string;
@@ -412,10 +475,14 @@ export interface GeneratedImageResult {
 }
 
 export interface GeneratedVideoResult {
-  videoUrl: string;
+  videoUrl: string;        // blob: URL for preview (in-memory, non-persistent)
+  veoFileRef: string;      // Veo file name/URI for backend publish (no key)
   duration: string;
   aspectRatio: string;
+  resolution: string;
+  model: string;           // 'fast' | 'standard'
   prompt: string;
+  estimatedCost?: string;  // e.g. "$1.20"
 }
 
 export interface GeneratedCopyResult {
@@ -443,7 +510,9 @@ export interface GeneratedAdPackage {
   audienceType: AudienceType;
   conceptType?: ConceptType;
   images?: GeneratedImageResult[];
-  video?: GeneratedVideoResult;
+  video?: GeneratedVideoResult;     // Backwards compat — first video or only video
+  videos?: GeneratedVideoResult[];  // All video variations
+  videoConfig?: VideoConfig;        // Config used for generation
   copy: GeneratedCopyResult;
   storyboard?: VideoStoryboard;
   whyItWorks: string;
@@ -2476,7 +2545,9 @@ Return JSON only:
 
 /**
  * Generate a video ad using Google Veo 3.1
- * This is a long-running operation that polls for completion
+ * Full-featured: product context, hook-first prompts, image-to-video,
+ * reference images, channel analysis integration, ad library inspirations,
+ * UGC audio cues, configurable model/duration/aspect/resolution.
  */
 export async function generateAdVideoWithVeo(config: {
   audienceType: AudienceType;
@@ -2486,66 +2557,210 @@ export async function generateAdVideoWithVeo(config: {
     headlines: string[];
     bodyTexts: string[];
   };
-  useFastModel?: boolean;
+  videoConfig?: VideoConfig;
+  productContext?: ProductContext;
+  // Base64 image to use as first frame (image-to-video)
+  firstFrameImage?: { base64Data: string; mimeType: string };
+  // Product mockup images as Veo reference images (up to 3)
+  referenceImages?: Array<{ base64Data: string; mimeType: string }>;
+  // Competitor ad inspirations from Ad Library
+  adLibraryInspirations?: import('../types').AdLibraryInspiration[];
+  // Which variation this is (for prompt variety)
+  variationIndex?: number;
+  totalVariations?: number;
 }): Promise<GeneratedVideoResult> {
   if (!isGeminiConfigured()) {
     throw new Error('Gemini API key not configured for Veo video generation');
   }
 
-  const model = config.useFastModel ? VEO_FAST_MODEL : DEFAULT_VIDEO_MODEL;
-  console.log(`🎬 Generating video with Veo (${model}) for ${config.audienceType} audience`);
+  const videoConfig = config.videoConfig || DEFAULT_VIDEO_CONFIG;
+  const modelId = videoConfig.model === 'fast' ? VEO_FAST_MODEL : DEFAULT_VIDEO_MODEL;
+  const durationSec = videoConfig.duration;
+  const variationIdx = config.variationIndex ?? 0;
+  const totalVars = config.totalVariations ?? 1;
+
+  console.log(`🎬 Generating video ${variationIdx + 1}/${totalVars} with Veo (${modelId}), ${durationSec}s ${videoConfig.aspectRatio} ${videoConfig.resolution}`);
 
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
   const conceptAngle = config.conceptType ? CONCEPT_ANGLES[config.conceptType] : null;
   const winningPatterns = config.analysisData?.winningPatterns;
+  const visualAnalysis = config.analysisData?.visualAnalysis;
+  const audienceInsights = config.analysisData?.audienceInsights;
 
-  // Build a compelling video prompt
-  const headline = config.selectedCopy?.headlines?.[0] || 'Discover something amazing';
-  const bodyText = config.selectedCopy?.bodyTexts?.[0] || '';
+  // Rotate through available headlines/body for each variation
+  const headlines = config.selectedCopy?.headlines || [];
+  const bodyTexts = config.selectedCopy?.bodyTexts || [];
+  const headline = headlines[variationIdx % Math.max(headlines.length, 1)] || 'Discover something amazing';
+  const bodyText = bodyTexts[variationIdx % Math.max(bodyTexts.length, 1)] || '';
 
-  let promptParts = [
-    `Create a professional 8-second social media advertisement video.`,
-    `Target audience: ${config.audienceType} (${audienceAngle.focus}).`,
-    `Tone: ${audienceAngle.tone}.`,
-  ];
+  // === Build hook-first video prompt ===
+  const promptParts: string[] = [];
 
-  if (conceptAngle && config.conceptType !== 'auto') {
-    promptParts.push(`Visual style: ${conceptAngle.visualDirection}.`);
-  }
-
-  if (winningPatterns?.visualElements) {
-    promptParts.push(`Include visual elements: ${winningPatterns.visualElements.slice(0, 3).join(', ')}.`);
-  }
-
+  // Hook-first structure: the opening seconds are everything
   promptParts.push(
-    `The video should convey: "${headline}"`,
-    bodyText ? `Supporting message: "${bodyText}"` : '',
-    `Style: Modern, clean, professional advertising aesthetic with dynamic motion.`,
-    `Include text overlay with the headline at key moments.`,
-    `Audio: Professional background music with a positive, energetic feel.`
+    `Create a ${durationSec}-second social media advertisement video (${videoConfig.aspectRatio} aspect ratio).`,
+    '',
+    `HOOK (first 1-2 seconds) — THIS IS THE MOST IMPORTANT PART:`,
+    `Open with an attention-grabbing visual that stops the scroll.`,
   );
 
-  const prompt = promptParts.filter(Boolean).join(' ');
-  console.log('📝 Veo prompt:', prompt.substring(0, 200) + '...');
+  // Use winning headline patterns for the hook
+  if (winningPatterns?.headlines?.length) {
+    const hookPattern = winningPatterns.headlines[variationIdx % winningPatterns.headlines.length];
+    promptParts.push(`Hook pattern proven to convert: "${hookPattern}"`);
+  }
+  promptParts.push(`Main headline to convey in the hook: "${headline}"`, '');
+
+  // Product context — tell the AI what this ad is for
+  if (config.productContext) {
+    promptParts.push(
+      'PRODUCT:',
+      `- Name: ${config.productContext.name}`,
+      `- By: ${config.productContext.author}`,
+      `- Description: ${config.productContext.description}`,
+      'The video must represent this product accurately.',
+      ''
+    );
+  }
+
+  // Target audience
+  promptParts.push(
+    `TARGET AUDIENCE: ${config.audienceType.toUpperCase()}`,
+    `- Focus: ${audienceAngle.focus}`,
+    `- Tone: ${audienceAngle.tone}`,
+    ''
+  );
+
+  // Concept angle
+  if (conceptAngle && config.conceptType !== 'auto') {
+    promptParts.push(
+      `CONCEPT: ${conceptAngle.name}`,
+      `- Visual direction: ${conceptAngle.visualDirection}`,
+      `- Messaging style: ${conceptAngle.messagingStyle}`,
+      ''
+    );
+  }
+
+  // Channel analysis deep integration — winning visual elements
+  if (visualAnalysis) {
+    promptParts.push('VISUAL INTELLIGENCE FROM HIGH-CONVERTING ADS:');
+    if (visualAnalysis.winningVisualElements?.length) {
+      promptParts.push(`- Winning elements to include: ${visualAnalysis.winningVisualElements.slice(0, 5).join(', ')}`);
+    }
+    if (visualAnalysis.colorPsychology) {
+      promptParts.push(`- Color strategy that converts: ${visualAnalysis.colorPsychology}`);
+    }
+    if (visualAnalysis.imageryPatterns) {
+      promptParts.push(`- Imagery patterns that work: ${visualAnalysis.imageryPatterns}`);
+    }
+    if (visualAnalysis.psychologicalTriggers?.length) {
+      promptParts.push(`- Psychological triggers: ${visualAnalysis.psychologicalTriggers.slice(0, 3).join(', ')}`);
+    }
+    if (visualAnalysis.losingVisualElements?.length) {
+      promptParts.push(`- AVOID (don't convert): ${visualAnalysis.losingVisualElements.slice(0, 3).join(', ')}`);
+    }
+    promptParts.push('');
+  }
+
+  // Winning copy patterns for emotional triggers
+  if (winningPatterns?.emotionalTriggers?.length) {
+    promptParts.push(`Emotional triggers that work: ${winningPatterns.emotionalTriggers.slice(0, 3).join(', ')}`);
+  }
+
+  // Audience visual preferences
+  if (audienceInsights?.visualPreferences?.length) {
+    promptParts.push(`Audience visual preferences: ${audienceInsights.visualPreferences.slice(0, 3).join(', ')}`);
+  }
+
+  // Ad Library inspiration — competitor thematic direction
+  if (config.adLibraryInspirations?.length) {
+    promptParts.push('', 'COMPETITOR/INDUSTRY INSPIRATION (thematic direction):');
+    config.adLibraryInspirations.slice(0, 3).forEach((insp, i) => {
+      const bodyPreview = insp.adCreativeBodies[0]?.substring(0, 150) || 'N/A';
+      promptParts.push(`  ${i + 1}. ${insp.pageName} (ran ${insp.durationDays} days): ${bodyPreview}`);
+    });
+    promptParts.push('');
+  }
+
+  // Supporting body text
+  if (bodyText) {
+    promptParts.push(`Supporting message: "${bodyText}"`, '');
+  }
+
+  // Video structure guidance
+  promptParts.push(
+    'VIDEO STRUCTURE:',
+    `- 0-2s: HOOK — scroll-stopping opening with "${headline}"`,
+    `- 2-${Math.floor(durationSec * 0.7)}s: BODY — demonstrate value, show the product/outcome`,
+    `- ${Math.floor(durationSec * 0.7)}-${durationSec}s: CTA — clear call to action with urgency`,
+    ''
+  );
+
+  // UGC-style direction + audio cues (Veo 3.1 native audio)
+  promptParts.push(
+    'STYLE & AUDIO:',
+    '- UGC (user-generated content) aesthetic — authentic, relatable, not overly polished',
+    '- Dynamic motion with smooth transitions between scenes',
+    `- Include a confident voiceover saying: "${headline}"`,
+    '- Ambient sound cues that match the scene (subtle, not overpowering)',
+    '- Text overlays with the headline at key moments — large, bold, readable on mobile',
+  );
+
+  // Variation diversity
+  if (totalVars > 1) {
+    promptParts.push(
+      '',
+      `This is variation ${variationIdx + 1} of ${totalVars}. Create a distinctly different creative approach while maintaining the same core message.`
+    );
+  }
+
+  const prompt = promptParts.filter(Boolean).join('\n');
+  console.log('📝 Veo prompt length:', prompt.length, 'chars');
+  if (import.meta.env.DEV) {
+    console.log('📝 Veo prompt:', prompt.substring(0, 500) + '...');
+  }
+
+  // === Build Veo API request ===
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const instance: Record<string, any> = { prompt };
+
+  // Image-to-video: use provided first-frame image
+  if (config.firstFrameImage) {
+    instance.image = {
+      bytesBase64Encoded: config.firstFrameImage.base64Data,
+      mimeType: config.firstFrameImage.mimeType,
+    };
+    console.log('🖼️ Using first-frame image for image-to-video');
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parameters: Record<string, any> = {
+    aspectRatio: videoConfig.aspectRatio,
+    durationSeconds: durationSec,
+    resolution: videoConfig.resolution,
+  };
+
+  // Reference images: product mockups for visual consistency (up to 3)
+  if (config.referenceImages?.length) {
+    parameters.referenceImages = config.referenceImages.slice(0, 3).map(img => ({
+      image: {
+        bytesBase64Encoded: img.base64Data,
+        mimeType: img.mimeType,
+      },
+      referenceType: 'STYLE',
+    }));
+    console.log(`📸 Attached ${parameters.referenceImages.length} reference image(s)`);
+  }
 
   // Submit video generation request (long-running operation)
-  const submitUrl = `${GEMINI_API_URL}/${model}:predictLongRunning?key=${GEMINI_API_KEY}`;
-
+  const submitUrl = `${GEMINI_API_URL}/${modelId}:predictLongRunning`;
   const submitResponse = await fetch(submitUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'x-goog-api-key': GEMINI_API_KEY,
     },
-    body: JSON.stringify({
-      instances: [{
-        prompt: prompt,
-      }],
-      parameters: {
-        aspectRatio: '9:16', // Vertical for social media
-        durationSeconds: 8,
-        resolution: '720p',
-      }
-    }),
+    body: JSON.stringify({ instances: [instance], parameters }),
   });
 
   if (!submitResponse.ok) {
@@ -2557,16 +2772,26 @@ export async function generateAdVideoWithVeo(config: {
   const operation = await submitResponse.json();
   console.log('⏳ Veo operation started:', operation.name);
 
+  // Null out large base64 data for GC (same pattern as image gen memory management)
+  if (config.firstFrameImage) {
+    (config.firstFrameImage as { base64Data: string }).base64Data = '';
+  }
+  if (config.referenceImages) {
+    config.referenceImages.length = 0;
+  }
+
   // Poll for completion (max 5 minutes)
-  const maxWaitTime = 5 * 60 * 1000; // 5 minutes
-  const pollInterval = 10 * 1000; // 10 seconds
+  const maxWaitTime = 5 * 60 * 1000;
+  const pollInterval = 10 * 1000;
   const startTime = Date.now();
 
   while (Date.now() - startTime < maxWaitTime) {
     await new Promise(resolve => setTimeout(resolve, pollInterval));
 
-    const statusUrl = `https://generativelanguage.googleapis.com/v1beta/${operation.name}?key=${GEMINI_API_KEY}`;
-    const statusResponse = await fetch(statusUrl);
+    const statusResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/${operation.name}`,
+      { headers: { 'x-goog-api-key': GEMINI_API_KEY } }
+    );
 
     if (!statusResponse.ok) {
       console.warn('⚠️ Status check failed, retrying...');
@@ -2574,7 +2799,8 @@ export async function generateAdVideoWithVeo(config: {
     }
 
     const status = await statusResponse.json();
-    console.log('🔄 Veo status:', status.done ? 'DONE' : 'PROCESSING');
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    console.log(`🔄 Veo status (${elapsed}s): ${status.done ? 'DONE' : 'PROCESSING'}`);
 
     if (status.done) {
       if (status.error) {
@@ -2586,23 +2812,43 @@ export async function generateAdVideoWithVeo(config: {
         throw new Error('No video generated in response');
       }
 
-      // Get the video URL from the file reference
+      // Get the video file reference (never store the API key in URLs)
       const videoFile = generatedVideo.video;
-      let videoUrl = '';
+      const veoFileRef = videoFile?.name || videoFile?.uri || '';
 
-      if (videoFile?.uri) {
-        videoUrl = videoFile.uri;
-      } else if (videoFile?.name) {
-        // Construct URL from file name
-        videoUrl = `https://generativelanguage.googleapis.com/v1beta/${videoFile.name}?key=${GEMINI_API_KEY}&alt=media`;
+      if (!veoFileRef) {
+        throw new Error('No video file reference in Veo response');
       }
 
-      console.log('✅ Veo video generated successfully');
+      // SECURITY: Download video binary immediately using key as header, not in URL.
+      // This prevents API key leakage in stored URLs or localStorage.
+      const downloadUrl = videoFile?.uri
+        || `https://generativelanguage.googleapis.com/v1beta/${videoFile.name}?alt=media`;
+      const videoResponse = await fetch(downloadUrl, {
+        headers: { 'x-goog-api-key': GEMINI_API_KEY },
+      });
+
+      let videoUrl = '';
+      if (videoResponse.ok) {
+        const videoBlob = await videoResponse.blob();
+        videoUrl = URL.createObjectURL(videoBlob);
+        console.log('✅ Veo video downloaded to blob successfully');
+      } else {
+        console.warn('⚠️ Video download failed, preview unavailable. File ref preserved for publish.');
+      }
+
+      const costPerSec = videoConfig.model === 'fast' ? 0.15 : 0.40;
+      const estimatedCost = `$${(costPerSec * durationSec).toFixed(2)}`;
+
       return {
         videoUrl,
-        duration: '8s',
-        aspectRatio: '9:16',
+        veoFileRef,
+        duration: `${durationSec}s`,
+        aspectRatio: videoConfig.aspectRatio,
+        resolution: videoConfig.resolution,
+        model: videoConfig.model,
         prompt,
+        estimatedCost,
       };
     }
   }
@@ -2639,6 +2885,8 @@ export async function generateAdPackage(config: {
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
   // Headlines to render directly into images, rotated across variations
   imageHeadlines?: string[];
+  // Video generation configuration (aspect ratio, duration, resolution, model)
+  videoConfig?: VideoConfig;
 }): Promise<GeneratedAdPackage> {
   const conceptName = config.conceptType ? CONCEPT_ANGLES[config.conceptType].name : 'general';
   const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
@@ -2760,26 +3008,86 @@ export async function generateAdPackage(config: {
 
     whyItWorks = `This ad package uses ${config.audienceType} audience targeting with ${images.length} image variation(s). ${copy.rationale}`;
   } else {
-    // Generate video with Veo 3.1
-    let video: GeneratedVideoResult | undefined;
+    // Generate video(s) with Veo 3.1 — supports multi-variation with auto first-frame
+    const videos: GeneratedVideoResult[] = [];
     let videoError: string | undefined;
+    const videoConfig = config.videoConfig || DEFAULT_VIDEO_CONFIG;
+    const variationCount = Math.min(config.variationCount, 3); // Cap at 3 for video
 
     if (USE_VEO_FOR_VIDEO && isGeminiConfigured()) {
+      // Step 1: Auto-generate first-frame image (image-to-video)
+      // Uses matching aspect ratio so the generated image fits the video frame
+      let firstFrameImage: { base64Data: string; mimeType: string } | undefined;
       try {
-        console.log('🎬 Generating video with Veo 3.1...');
-        video = await generateAdVideoWithVeo({
+        // Map video aspect ratio to matching image size
+        const firstFrameImageSize: ImageSize = videoConfig.aspectRatio === '9:16' ? '9:16' : '16:9';
+        console.log('🖼️ Auto-generating first-frame image for image-to-video...');
+        const firstFrameResult = await generateAdImage({
           audienceType: config.audienceType,
-          conceptType: config.conceptType,
           analysisData: config.analysisData,
-          selectedCopy: config.selectedCopy ? {
-            headlines: config.selectedCopy.headlines,
-            bodyTexts: config.selectedCopy.bodyTexts,
-          } : undefined,
+          variationIndex: 0,
+          totalVariations: 1,
+          similarityLevel: config.similarityLevel,
+          imageSize: firstFrameImageSize,
+          productContext: config.productContext,
+          adLibraryInspirations: config.adLibraryInspirations,
         });
+
+        // Extract base64 data from the data URI
+        if (firstFrameResult.imageUrl.startsWith('data:')) {
+          const [header, data] = firstFrameResult.imageUrl.split(',');
+          const mimeMatch = header.match(/data:([^;]+)/);
+          if (mimeMatch && data) {
+            firstFrameImage = { base64Data: data, mimeType: mimeMatch[1] };
+            console.log('✅ First-frame image generated successfully');
+          }
+        }
       } catch (error: unknown) {
-        console.error('❌ Veo video generation failed:', error);
-        videoError = error instanceof Error ? error.message : 'Video generation failed';
+        console.warn('⚠️ First-frame image generation failed, falling back to text-to-video:', error instanceof Error ? error.message : error);
+        // Continue without first frame — text-to-video still works
       }
+
+      // Step 2: Collect product reference images (up to 3)
+      const referenceImages: Array<{ base64Data: string; mimeType: string }> = [];
+      if (config.productContext?.productImages?.length) {
+        config.productContext.productImages.slice(0, 3).forEach(img => {
+          referenceImages.push({ base64Data: img.base64Data, mimeType: img.mimeType });
+        });
+      }
+
+      // Step 3: Generate videos serially (each takes 2-5 min polling; parallel won't save time)
+      for (let i = 0; i < variationCount; i++) {
+        try {
+          console.log(`🎬 Generating video ${i + 1}/${variationCount} with Veo 3.1...`);
+          const result = await generateAdVideoWithVeo({
+            audienceType: config.audienceType,
+            conceptType: config.conceptType,
+            analysisData: config.analysisData,
+            selectedCopy: config.selectedCopy ? {
+              headlines: config.selectedCopy.headlines,
+              bodyTexts: config.selectedCopy.bodyTexts,
+            } : undefined,
+            videoConfig,
+            productContext: config.productContext,
+            // Only use first frame on the first variation to get diverse results
+            firstFrameImage: i === 0 ? firstFrameImage : undefined,
+            referenceImages: [...referenceImages], // Copy — Veo function nulls the array for GC
+            adLibraryInspirations: config.adLibraryInspirations,
+            variationIndex: i,
+            totalVariations: variationCount,
+          });
+          videos.push(result);
+        } catch (error: unknown) {
+          console.error(`❌ Veo video ${i + 1}/${variationCount} failed:`, error instanceof Error ? error.message : error);
+          if (!videoError) {
+            videoError = error instanceof Error ? error.message : 'Video generation failed';
+          }
+        }
+      }
+
+      // Memory cleanup
+      firstFrameImage = undefined;
+      referenceImages.length = 0;
     }
 
     // Always generate storyboard as a supplement/fallback
@@ -2788,8 +3096,9 @@ export async function generateAdPackage(config: {
       analysisData: config.analysisData,
     });
 
-    if (video) {
-      whyItWorks = `This video ad was generated with Veo 3.1 for ${config.audienceType} audiences. ${storyboard.conceptSummary}`;
+    const video = videos[0]; // Backwards compat
+    if (videos.length > 0) {
+      whyItWorks = `This video ad was generated with Veo 3.1 (${videoConfig.model}) for ${config.audienceType} audiences with ${videos.length} variation(s). ${storyboard.conceptSummary}`;
     } else {
       whyItWorks = `This video ad storyboard is designed for ${config.audienceType} audiences. ${storyboard.conceptSummary}`;
     }
@@ -2804,6 +3113,8 @@ export async function generateAdPackage(config: {
       conceptType: config.conceptType,
       images,
       video,
+      videos: videos.length > 0 ? videos : undefined,
+      videoConfig,
       copy,
       storyboard,
       whyItWorks,

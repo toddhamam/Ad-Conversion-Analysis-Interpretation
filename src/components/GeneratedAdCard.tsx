@@ -6,6 +6,7 @@ import './GeneratedAdCard.css';
 interface GeneratedAdCardProps {
   ad: GeneratedAdPackage;
   onRegenerateImage?: (adId: string, imageIndex: number) => Promise<void>;
+  onRegenerateVideo?: (adId: string, videoIndex: number) => Promise<void>;
 }
 
 function formatDate(isoString: string): string {
@@ -86,11 +87,13 @@ function LazyImage({ src, alt, onLoad }: { src: string; alt: string; onLoad?: ()
 
 // Memoized to prevent all cards re-rendering when one ad changes in the parent array.
 // Each card holds potentially large base64 images, so unnecessary re-renders are expensive.
-const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage }: GeneratedAdCardProps) {
+const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, onRegenerateVideo }: GeneratedAdCardProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [downloadingImage, setDownloadingImage] = useState<number | null>(null);
   const [downloadingVideo, setDownloadingVideo] = useState(false);
   const [regeneratingImage, setRegeneratingImage] = useState<number | null>(null);
+  const [regeneratingVideo, setRegeneratingVideo] = useState<number | null>(null);
+  const [videoLoadErrors, setVideoLoadErrors] = useState<Set<number>>(new Set());
   // CRITICAL: Default to false to prevent Chrome crashes from rendering many large base64 images
   // Users can expand to see images - this prevents memory exhaustion on page load
   const [showImages, setShowImages] = useState(false);
@@ -152,7 +155,7 @@ const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage }:
     }
   };
 
-  const handleDownloadVideo = async (videoUrl: string) => {
+  const handleDownloadVideo = async (videoUrl: string, videoIndex: number) => {
     setDownloadingVideo(true);
     try {
       const response = await fetch(videoUrl);
@@ -160,7 +163,7 @@ const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage }:
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `ad_${ad.id}_video.mp4`;
+      link.download = `ad_${ad.id}_video_${videoIndex + 1}.mp4`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -170,6 +173,28 @@ const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage }:
     } finally {
       setDownloadingVideo(false);
     }
+  };
+
+  const handleRegenerateVideo = async (videoIndex: number) => {
+    if (!onRegenerateVideo) return;
+    setRegeneratingVideo(videoIndex);
+    try {
+      await onRegenerateVideo(ad.id, videoIndex);
+      // Clear any previous load error for this index
+      setVideoLoadErrors(prev => {
+        const next = new Set(prev);
+        next.delete(videoIndex);
+        return next;
+      });
+    } catch (err) {
+      console.error('Failed to regenerate video:', err);
+    } finally {
+      setRegeneratingVideo(null);
+    }
+  };
+
+  const handleVideoLoadError = (videoIndex: number) => {
+    setVideoLoadErrors(prev => new Set(prev).add(videoIndex));
   };
 
   const imageCount = ad.images?.length || 0;
@@ -203,39 +228,87 @@ const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage }:
         </div>
       )}
 
-      {/* Generated Video */}
-      {ad.adType === 'video' && ad.video && (
-        <div className="ad-video-section">
-          <h4 className="section-label">Generated Video</h4>
-          <div className="video-card">
-            <div className="video-container">
-              <video
-                src={ad.video.videoUrl}
-                controls
-                preload="metadata"
-                playsInline
-              >
-                Your browser does not support the video tag.
-              </video>
-            </div>
-            <div className="video-info">
-              <div className="video-meta">
-                <span className="video-duration"><Timer size={14} strokeWidth={1.5} /> {ad.video.duration}</span>
-                <span className="video-aspect"><Ruler size={14} strokeWidth={1.5} /> {ad.video.aspectRatio}</span>
-              </div>
-              <div className="video-actions">
-                <button
-                  className="action-btn download-btn"
-                  onClick={() => handleDownloadVideo(ad.video!.videoUrl)}
-                  disabled={downloadingVideo}
-                >
-                  {downloadingVideo ? <Loader size={14} strokeWidth={1.5} className="spinning" /> : <Download size={14} strokeWidth={1.5} />} Download Video
-                </button>
-              </div>
-            </div>
+      {/* Generated Video(s) */}
+      {ad.adType === 'video' && (() => {
+        const allVideos = ad.videos || (ad.video ? [ad.video] : []);
+        if (allVideos.length === 0) return null;
+        return (
+          <div className="ad-video-section">
+            <h4 className="section-label">Generated Video{allVideos.length > 1 ? `s (${allVideos.length})` : ''}</h4>
+            {allVideos.map((video, vidIdx) => {
+              const hasExpiredBlob = video.videoUrl.startsWith('blob:') && videoLoadErrors.has(vidIdx);
+              const hasNoUrl = !video.videoUrl;
+              return (
+                <div key={vidIdx} className="video-card">
+                  {regeneratingVideo === vidIdx && (
+                    <div className="regenerating-overlay">
+                      <Loader size={32} strokeWidth={1.5} className="spinning" />
+                      <span>Regenerating...</span>
+                    </div>
+                  )}
+                  <div className="video-container">
+                    {hasExpiredBlob || hasNoUrl ? (
+                      <div className="video-expired">
+                        <AlertTriangle size={24} strokeWidth={1.5} />
+                        <p>Video preview expired</p>
+                        <p className="video-expired-hint">Regenerate to view (blob URLs expire on page refresh)</p>
+                        {onRegenerateVideo && (
+                          <button
+                            className="action-btn regenerate-btn"
+                            onClick={() => handleRegenerateVideo(vidIdx)}
+                            disabled={regeneratingVideo !== null}
+                          >
+                            <RefreshCw size={14} strokeWidth={1.5} /> Regenerate
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <video
+                        src={video.videoUrl}
+                        controls
+                        preload="metadata"
+                        playsInline
+                        onError={() => handleVideoLoadError(vidIdx)}
+                      >
+                        Your browser does not support the video tag.
+                      </video>
+                    )}
+                  </div>
+                  <div className="video-info">
+                    <div className="video-meta">
+                      <span className="video-duration"><Timer size={14} strokeWidth={1.5} /> {video.duration}</span>
+                      <span className="video-aspect"><Ruler size={14} strokeWidth={1.5} /> {video.aspectRatio}</span>
+                      {video.resolution && <span className="video-badge">{video.resolution}</span>}
+                      {video.model && <span className="video-badge">{video.model === 'fast' ? 'Veo Fast' : 'Veo Standard'}</span>}
+                      {video.estimatedCost && <span className="video-badge">{video.estimatedCost}</span>}
+                    </div>
+                    <div className="video-actions">
+                      {!hasExpiredBlob && !hasNoUrl && (
+                        <button
+                          className="action-btn download-btn"
+                          onClick={() => handleDownloadVideo(video.videoUrl, vidIdx)}
+                          disabled={downloadingVideo}
+                        >
+                          {downloadingVideo ? <Loader size={14} strokeWidth={1.5} className="spinning" /> : <Download size={14} strokeWidth={1.5} />} Download
+                        </button>
+                      )}
+                      {onRegenerateVideo && (
+                        <button
+                          className="action-btn regenerate-btn"
+                          onClick={() => handleRegenerateVideo(vidIdx)}
+                          disabled={regeneratingVideo !== null}
+                        >
+                          <RefreshCw size={14} strokeWidth={1.5} /> Regenerate
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Image Ads - with lazy loading toggle */}
       {ad.adType === 'image' && imageCount > 0 && (

@@ -174,6 +174,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleAIChat(req, res);
       case 'ai-images':
         return handleAIImages(req, res);
+      case 'video-upload':
+        return handleVideoUpload(req, res);
       default:
         return res.status(400).json({ error: `Unknown route: ${route}` });
     }
@@ -1277,4 +1279,220 @@ async function handleAIImages(req: VercelRequest, res: VercelResponse) {
   }
 
   return res.status(200).json(data);
+}
+
+// ─── Route: video-upload ──────────────────────────────────────────────────────
+// Fetches video from Veo using server-side GEMINI_API_KEY, then uploads to Meta
+// using chunked upload API to stay within Vercel's 4.5MB body limit.
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB chunks (well within Vercel's 4.5MB limit)
+
+async function handleVideoUpload(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const creds = await loadCredentials(auth.organizationId);
+  if (!creds) {
+    return res.status(404).json({ error: 'Meta credentials not found' });
+  }
+
+  if (!creds.adAccountId) {
+    return res.status(400).json({ error: 'No ad account configured' });
+  }
+
+  const { veoFileRef, title } = req.body || {};
+  if (!veoFileRef) {
+    return res.status(400).json({ error: 'veoFileRef is required' });
+  }
+
+  if (!GEMINI_API_KEY) {
+    return res.status(500).json({ error: 'GEMINI_API_KEY not configured on server' });
+  }
+
+  try {
+    // Step 1: Validate veoFileRef — only accept Veo file references, never arbitrary URLs.
+    // This prevents SSRF attacks where a caller could pass an arbitrary URL and leak the API key.
+    if (veoFileRef.startsWith('http') || veoFileRef.includes('://')) {
+      return res.status(400).json({
+        error: 'Invalid veoFileRef',
+        message: 'Full URLs are not accepted. Provide a Veo file reference (e.g. files/abc123).',
+      });
+    }
+    if (!veoFileRef.match(/^files\/[a-zA-Z0-9_-]+$/)) {
+      return res.status(400).json({
+        error: 'Invalid veoFileRef format',
+        message: 'Expected format: files/{fileId}',
+      });
+    }
+
+    const downloadUrl = `https://generativelanguage.googleapis.com/v1beta/${veoFileRef}?alt=media`;
+
+    console.log('Fetching video from Veo...');
+    const veoResponse = await fetch(downloadUrl, {
+      headers: { 'x-goog-api-key': GEMINI_API_KEY },
+    });
+
+    if (!veoResponse.ok) {
+      const errText = await veoResponse.text();
+      console.error('Veo fetch failed:', errText);
+      return res.status(502).json({
+        error: 'Failed to fetch video from Veo',
+        message: `Veo returned ${veoResponse.status}`,
+      });
+    }
+
+    const videoBuffer = Buffer.from(await veoResponse.arrayBuffer());
+    const fileSize = videoBuffer.length;
+    console.log(`Video fetched: ${(fileSize / 1024 / 1024).toFixed(2)}MB`);
+
+    // Step 2: Meta chunked upload — start phase
+    const startParams = new URLSearchParams({
+      upload_phase: 'start',
+      file_size: String(fileSize),
+      access_token: creds.accessToken,
+    });
+
+    const startResponse = await fetch(
+      `${GRAPH_API_BASE}/${creds.adAccountId}/advideos?${startParams.toString()}`,
+      { method: 'POST' }
+    );
+    const startData = await startResponse.json();
+
+    if (!startResponse.ok || !startData.upload_session_id) {
+      console.error('Meta video upload start failed:', startData);
+      return res.status(502).json({
+        error: 'Failed to start Meta video upload',
+        message: startData.error?.message || 'No upload_session_id returned',
+      });
+    }
+
+    const uploadSessionId = startData.upload_session_id;
+    console.log('Meta upload session started:', uploadSessionId);
+
+    // Step 3: Meta chunked upload — transfer phase (send in chunks)
+    let offset = 0;
+    while (offset < fileSize) {
+      const end = Math.min(offset + CHUNK_SIZE, fileSize);
+      const chunk = videoBuffer.subarray(offset, end);
+
+      const boundary = `----MetaVideoChunk${Date.now()}`;
+      const parts: Buffer[] = [];
+
+      parts.push(Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="access_token"\r\n\r\n${creds.accessToken}\r\n`
+      ));
+      parts.push(Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="upload_phase"\r\n\r\ntransfer\r\n`
+      ));
+      parts.push(Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="upload_session_id"\r\n\r\n${uploadSessionId}\r\n`
+      ));
+      parts.push(Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="start_offset"\r\n\r\n${offset}\r\n`
+      ));
+      parts.push(Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="video_file_chunk"; filename="video.mp4"\r\nContent-Type: video/mp4\r\n\r\n`
+      ));
+      parts.push(chunk);
+      parts.push(Buffer.from('\r\n'));
+      parts.push(Buffer.from(`--${boundary}--\r\n`));
+
+      const multipartBody = Buffer.concat(parts);
+
+      const transferResponse = await fetch(
+        `${GRAPH_API_BASE}/${creds.adAccountId}/advideos`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': `multipart/form-data; boundary=${boundary}`,
+            'Content-Length': String(multipartBody.length),
+          },
+          body: multipartBody,
+        }
+      );
+
+      const transferData = await transferResponse.json();
+      if (!transferResponse.ok) {
+        console.error('Meta video chunk transfer failed:', transferData);
+        return res.status(502).json({
+          error: 'Failed to upload video chunk to Meta',
+          message: transferData.error?.message || 'Chunk transfer failed',
+        });
+      }
+
+      offset = end;
+      console.log(`Uploaded ${offset}/${fileSize} bytes`);
+    }
+
+    // Step 4: Meta chunked upload — finish phase
+    const finishParams = new URLSearchParams({
+      upload_phase: 'finish',
+      upload_session_id: uploadSessionId,
+      access_token: creds.accessToken,
+      ...(title ? { title } : {}),
+    });
+
+    const finishResponse = await fetch(
+      `${GRAPH_API_BASE}/${creds.adAccountId}/advideos?${finishParams.toString()}`,
+      { method: 'POST' }
+    );
+    const finishData = await finishResponse.json();
+
+    if (!finishResponse.ok || !finishData.video_id) {
+      console.error('Meta video upload finish failed:', finishData);
+      return res.status(502).json({
+        error: 'Failed to finalize Meta video upload',
+        message: finishData.error?.message || 'No video_id returned',
+      });
+    }
+
+    const videoId = finishData.video_id;
+    console.log('Meta video uploaded, ID:', videoId);
+
+    // Step 5: Poll for video processing completion (max 2 minutes)
+    const maxPollTime = 2 * 60 * 1000;
+    const pollStart = Date.now();
+    let videoStatus = 'processing';
+
+    while (Date.now() - pollStart < maxPollTime) {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      const statusResponse = await fetch(
+        `${GRAPH_API_BASE}/${videoId}?fields=status&access_token=${creds.accessToken}`
+      );
+      const statusData = await statusResponse.json();
+      videoStatus = statusData.status?.video_status || 'processing';
+
+      if (videoStatus === 'ready') {
+        console.log('Video processing complete, ready for use');
+        break;
+      }
+      if (videoStatus === 'error') {
+        return res.status(502).json({
+          error: 'Meta video processing failed',
+          message: 'Video was uploaded but failed to process',
+        });
+      }
+    }
+
+    return res.status(200).json({
+      video_id: videoId,
+      status: videoStatus,
+    });
+  } catch (err: unknown) {
+    console.error('Video upload error:', err);
+    captureError(err, { route: 'meta/video-upload', organizationId: auth.organizationId });
+    await flushSentry();
+    return res.status(500).json({
+      error: 'Video upload failed',
+      message: err instanceof Error ? err.message : 'Unknown error',
+    });
+  }
 }
