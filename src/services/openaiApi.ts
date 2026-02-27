@@ -2740,17 +2740,8 @@ export async function generateAdVideoWithVeo(config: {
     resolution: videoConfig.resolution,
   };
 
-  // Reference images: product mockups for visual consistency (up to 3)
-  if (config.referenceImages?.length) {
-    parameters.referenceImages = config.referenceImages.slice(0, 3).map(img => ({
-      image: {
-        bytesBase64Encoded: img.base64Data,
-        mimeType: img.mimeType,
-      },
-      referenceType: 'STYLE',
-    }));
-    console.log(`📸 Attached ${parameters.referenceImages.length} reference image(s)`);
-  }
+  // Note: Veo 3.1 does not support referenceImages parameter.
+  // Product context is conveyed via the text prompt instead.
 
   // Submit video generation request (long-running operation)
   const submitUrl = `${GEMINI_API_URL}/${modelId}:predictLongRunning`;
