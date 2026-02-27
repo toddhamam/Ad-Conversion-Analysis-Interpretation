@@ -29,6 +29,7 @@ import {
   type VideoAspectRatio,
   type VideoDuration,
   type VideoModel,
+  type VideoResolution,
 } from '../services/openaiApi';
 import { getCacheStats as getImageCacheStats, uploadBrandImages, clearImageCache } from '../services/imageCache';
 import { fetchAdCreatives, type DatePreset } from '../services/metaApi';
@@ -143,8 +144,9 @@ function calculateCost(
   adType: AdType,
   variationCount: number,
   includeCopyGeneration: boolean,
-  videoModel?: VideoModel,
+  _videoModel?: VideoModel,
   videoDuration?: VideoDuration,
+  videoResolution?: VideoResolution,
 ): { min: number; max: number; note: string } {
   const copyGenCost = includeCopyGeneration ? 0.02 : 0; // GPT-4o for copy generation
   const usingGemini = isGeminiConfigured();
@@ -169,14 +171,15 @@ function calculateCost(
   } else {
     // Video with Veo 3.1
     if (usingGemini) {
-      const model = videoModel || 'fast';
       const duration = videoDuration || 8;
-      const costPerSec = model === 'fast' ? 0.15 : 0.40;
-      const totalVideoCost = costPerSec * duration * variationCount;
+      const costPerSec = 0.40; // Single model: veo-3.1-generate-preview
+      // Enforce same 1080p→8s constraint as the API layer
+      const effectiveDuration = videoResolution !== '720p' ? 8 : duration;
+      const totalVideoCost = costPerSec * effectiveDuration * variationCount;
       return {
         min: totalVideoCost + copyGenCost,
         max: totalVideoCost + copyGenCost + 0.02,
-        note: `Veo ${model === 'fast' ? 'Fast' : 'Standard'} (${duration}s × ${variationCount})`,
+        note: `Veo 3.1 (${effectiveDuration}s × ${variationCount})`,
       };
     } else {
       // Storyboard only (text generation)
@@ -942,7 +945,7 @@ const AdGenerator = () => {
     }
   }, [generatedAds, analysisData, videoAspectRatio, videoDuration, videoModel, selectedProduct]);
 
-  const costEstimate = calculateCost(adType, variationCount, currentStep === 'config', videoModel, videoDuration);
+  const costEstimate = calculateCost(adType, variationCount, currentStep === 'config', videoModel, videoDuration, '720p');
   const hasAnalysisData = !!analysisData;
   const isGenerating = isGeneratingCopy || isGeneratingCreatives;
 
