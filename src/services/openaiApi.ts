@@ -481,7 +481,6 @@ async function callOpenAI(
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
   options: {
     model?: string;
-    temperature?: number;
     maxTokens?: number;
     reasoningEffort?: ReasoningEffort;
   } = {}
@@ -492,7 +491,6 @@ async function callOpenAI(
 
   const {
     model = DEFAULT_CHAT_MODEL,
-    temperature = 0.7,
     maxTokens = 2000,
     reasoningEffort = DEFAULT_REASONING_EFFORT
   } = options;
@@ -500,10 +498,10 @@ async function callOpenAI(
   console.log('🤖 Calling OpenAI API with model:', model);
   console.log('🧠 Reasoning effort:', reasoningEffort);
 
+  // GPT-5.2 with reasoning_effort only supports temperature=1 (default)
   const requestBody: Record<string, unknown> = {
     model,
     messages,
-    temperature,
     max_completion_tokens: maxTokens,
     reasoning_effort: reasoningEffort,
   };
@@ -545,7 +543,6 @@ async function callOpenAIWithVision(
   messages: ChatMessage[],
   options: {
     model?: string;
-    temperature?: number;
     maxTokens?: number;
     reasoningEffort?: ReasoningEffort;
   } = {}
@@ -557,7 +554,6 @@ async function callOpenAIWithVision(
   // Use GPT-5.2 for vision - multimodal capabilities
   const {
     model = DEFAULT_VISION_MODEL,
-    temperature = 0.7,
     maxTokens = 4000,
     reasoningEffort = DEFAULT_REASONING_EFFORT
   } = options;
@@ -566,10 +562,10 @@ async function callOpenAIWithVision(
   console.log('🧠 Reasoning effort:', reasoningEffort);
   console.log('📸 Processing images for analysis...');
 
+  // GPT-5.2 with reasoning_effort only supports temperature=1 (default)
   const requestBody: Record<string, unknown> = {
     model,
     messages,
-    temperature,
     max_completion_tokens: maxTokens,
     reasoning_effort: reasoningEffort,
   };
@@ -673,7 +669,7 @@ Return ONLY the JSON object, no additional text.`;
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { temperature: 0.5, reasoningEffort });
+  ], { reasoningEffort });
 
   try {
     // Clean the response - remove markdown code blocks if present
@@ -754,7 +750,7 @@ Return ONLY the JSON object, no additional text.`;
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { temperature: 0.5, maxTokens: 1500 });
+  ], { maxTokens: 1500 });
 
   try {
     let cleanedResponse = response.trim();
@@ -821,7 +817,7 @@ Return ONLY the JSON object, no additional text.`;
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { temperature: 0.8, maxTokens: 1500 });
+  ], { maxTokens: 1500 });
 
   try {
     let cleanedResponse = response.trim();
@@ -1250,7 +1246,6 @@ Return ONLY the JSON object, no additional text.`;
   ];
 
   const response = await callOpenAIWithVision(messages, {
-    temperature: 0.5,
     maxTokens: 8000,
     reasoningEffort
   });
@@ -1652,7 +1647,7 @@ Return JSON only:
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { temperature: 0.85, maxTokens: 3500, reasoningEffort }); // Increased tokens for comprehensive responses
+  ], { maxTokens: 3500, reasoningEffort });
 
   try {
     let cleanedResponse = response.trim();
@@ -2370,7 +2365,7 @@ Return JSON only:
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { temperature: 0.8, maxTokens: 1500 });
+  ], { maxTokens: 1500 });
 
   try {
     let cleanedResponse = response.trim();
@@ -2456,7 +2451,7 @@ Return JSON only:
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { temperature: 0.7, maxTokens: 2000 });
+  ], { maxTokens: 2000 });
 
   try {
     let cleanedResponse = response.trim();
