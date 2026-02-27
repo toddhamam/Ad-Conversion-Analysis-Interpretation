@@ -2724,11 +2724,13 @@ export async function generateAdVideoWithVeo(config: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const instance: Record<string, any> = { prompt };
 
-  // Image-to-video: use provided first-frame image
+  // Image-to-video: use provided first-frame image (Gemini API uses inlineData format)
   if (config.firstFrameImage) {
     instance.image = {
-      bytesBase64Encoded: config.firstFrameImage.base64Data,
-      mimeType: config.firstFrameImage.mimeType,
+      inlineData: {
+        mimeType: config.firstFrameImage.mimeType,
+        data: config.firstFrameImage.base64Data,
+      },
     };
     console.log('🖼️ Using first-frame image for image-to-video');
   }
@@ -2798,23 +2800,28 @@ export async function generateAdVideoWithVeo(config: {
         throw new Error(`Veo generation error: ${status.error.message}`);
       }
 
-      const generatedVideo = status.response?.generatedVideos?.[0];
+      // Veo 3.1 Gemini API response path: generateVideoResponse.generatedSamples
+      const generatedVideo = status.response?.generateVideoResponse?.generatedSamples?.[0];
       if (!generatedVideo) {
+        console.error('❌ Unexpected Veo response structure:', JSON.stringify(Object.keys(status.response || {})));
         throw new Error('No video generated in response');
       }
 
-      // Get the video file reference (never store the API key in URLs)
-      const videoFile = generatedVideo.video;
-      const veoFileRef = videoFile?.name || videoFile?.uri || '';
+      // Get the video file URI
+      const videoUri = generatedVideo.video?.uri || '';
 
-      if (!veoFileRef) {
+      if (!videoUri) {
         throw new Error('No video file reference in Veo response');
       }
 
+      // Extract file reference from URI, version-agnostic
+      // Veo URIs: https://generativelanguage.googleapis.com/v1beta/files/abc123:download?alt=media
+      const fileMatch = videoUri.match(/\bfiles\/[a-zA-Z0-9_-]+/);
+      const veoFileRef = fileMatch?.[0] || generatedVideo.video?.name || '';
+
       // SECURITY: Download video binary immediately using key as header, not in URL.
       // This prevents API key leakage in stored URLs or localStorage.
-      const downloadUrl = videoFile?.uri
-        || `https://generativelanguage.googleapis.com/v1beta/${videoFile.name}?alt=media`;
+      const downloadUrl = videoUri;
       const videoResponse = await fetch(downloadUrl, {
         headers: { 'x-goog-api-key': GEMINI_API_KEY },
       });
