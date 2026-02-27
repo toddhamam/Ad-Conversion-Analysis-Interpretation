@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-02-27 — Fix Chrome crash in AdPublisher from transition: all with base64 images
+
+### Fixed
+- **Replaced 11 `transition: all` declarations in AdPublisher.css** — When base64 images (1-5MB each) load into the DOM, `transition: all` forces Chrome to recalculate every CSS property on every frame, causing paint storms, UI freezes, and browser crashes. Each instance now targets only the specific properties that change on hover (e.g., `background-color`, `border-color`, `box-shadow`). Same root cause as PRs #181 and #182.
+- **Added CSS containment to `.ads-grid`** — `contain: layout style` isolates paint context so layout recalculations from base64 image rendering don't propagate to surrounding elements.
+- **Added blob URL cleanup on unmount in GeneratedAdCard** — Video blob URLs created by `URL.createObjectURL()` are now revoked when the component unmounts, preventing memory leaks across navigation.
+- **Added blob URL cleanup before video regeneration** — Old video blob URLs are revoked before generating a replacement, preventing accumulation during regenerate cycles.
+
+### Files Modified
+- `src/pages/AdPublisher.css` — 11x `transition: all` replaced, `.ads-grid` containment added
+- `src/components/GeneratedAdCard.tsx` — Blob URL cleanup on unmount + before regenerate
+
+---
+
 ## 2026-02-27 — Fix Veo 3.1 referenceImages API error
 
 ### Fixed

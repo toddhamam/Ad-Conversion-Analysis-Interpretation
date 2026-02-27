@@ -98,6 +98,21 @@ const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, o
   // Users can expand to see images - this prevents memory exhaustion on page load
   const [showImages, setShowImages] = useState(false);
 
+  // Track latest video blob URLs via ref so unmount cleanup revokes current URLs,
+  // not stale ones captured at mount time (cards are keyed by ad.id, props update without remount)
+  const videoBlobUrlsRef = useRef<string[]>([]);
+  useEffect(() => {
+    videoBlobUrlsRef.current = (ad.videos || [])
+      .map(v => v.videoUrl)
+      .filter((url): url is string => !!url && url.startsWith('blob:'));
+  }, [ad.videos]);
+
+  useEffect(() => {
+    return () => {
+      videoBlobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, []);
+
   const handleRegenerateImage = async (index: number) => {
     if (!onRegenerateImage || regeneratingImage !== null) return;
 
@@ -177,9 +192,15 @@ const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, o
 
   const handleRegenerateVideo = async (videoIndex: number) => {
     if (!onRegenerateVideo) return;
+    // Capture old URL but don't revoke yet — preserve preview if regeneration fails
+    const oldUrl = ad.videos?.[videoIndex]?.videoUrl;
     setRegeneratingVideo(videoIndex);
     try {
       await onRegenerateVideo(ad.id, videoIndex);
+      // Revoke old blob URL only after successful replacement
+      if (oldUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(oldUrl);
+      }
       // Clear any previous load error for this index
       setVideoLoadErrors(prev => {
         const next = new Set(prev);
