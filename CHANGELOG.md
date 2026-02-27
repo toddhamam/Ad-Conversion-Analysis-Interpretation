@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-02-27 — Remove IQ selector, wire reasoning_effort into OpenAI API
+
+### Overview
+The ConversionIQ Level selector (IQ Standard / IQ Deep / IQ Maximum) was never actually sending the `reasoning_effort` parameter to the OpenAI API — all three levels produced identical results. This removes the selector UI entirely and hardcodes `reasoning_effort: "high"` so users get better output quality by default.
+
+### Changed
+- **Wired `reasoning_effort` into API calls** (`openaiApi.ts`): Both `callOpenAI()` and `callOpenAIWithVision()` now send `reasoning_effort: "high"` in the Chat Completions request body. Previously the parameter was accepted but silently discarded.
+- **Default reasoning level upgraded** (`openaiApi.ts`): Changed `DEFAULT_REASONING_EFFORT` from `'medium'` to `'high'` for deeper creative analysis.
+
+### Removed
+- **IQ Selector component** (`IQSelector.tsx`, `IQSelector.css`): Deleted the 3-option selector UI and all associated CSS (280 lines).
+- **IQ Selector from AdGenerator** (`AdGenerator.tsx`): Removed from Step 1 config section.
+- **IQ Selector from Insights** (`Insights.tsx`): Removed from above the "Run Analysis" button.
+- **IQ Selector from AdAnalysisPanel** (`AdAnalysisPanel.tsx`): Removed from the analysis start section; simplified loading text.
+- **Exported constants** (`openaiApi.ts`): Deleted `IQ_LEVELS`, `USER_IQ_LEVELS`, and unexported `ReasoningEffort` type — no longer needed externally.
+
+### Files Modified
+- `src/services/openaiApi.ts` — Wired `reasoning_effort`, removed IQ level config (~65 lines deleted)
+- `src/pages/AdGenerator.tsx` — Removed IQ selector and `iqLevel` state
+- `src/pages/Insights.tsx` — Removed IQ selector, simplified loading message
+- `src/components/AdAnalysisPanel.tsx` — Removed IQ selector, simplified loading text
+- `src/components/IQSelector.tsx` — Deleted
+- `src/components/IQSelector.css` — Deleted
+
+---
+
 ## 2026-02-27 — Fix Veo params: remove personGeneration, add negativePrompt
 
 ### Overview

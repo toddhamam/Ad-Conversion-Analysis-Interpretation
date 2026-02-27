@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { analyzeAdCreative, isOpenAIConfigured, IQ_LEVELS, type AdCreativeData, type AdAnalysisResult, type ReasoningEffort } from '../services/openaiApi';
+import { analyzeAdCreative, isOpenAIConfigured, type AdCreativeData, type AdAnalysisResult } from '../services/openaiApi';
 import { Bot, Sparkles, AlertTriangle, Palette, PenLine, BarChart3, Lightbulb } from 'lucide-react';
-import IQSelector from './IQSelector';
 import './AdAnalysisPanel.css';
 
 interface AdAnalysisPanelProps {
@@ -14,7 +13,6 @@ export default function AdAnalysisPanel({ ad, onClose }: AdAnalysisPanelProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
-  const [iqLevel, setIqLevel] = useState<ReasoningEffort>('medium');
 
   const runAnalysis = async () => {
     if (!isOpenAIConfigured()) {
@@ -27,8 +25,8 @@ export default function AdAnalysisPanel({ ad, onClose }: AdAnalysisPanelProps) {
     setHasStarted(true);
 
     try {
-      console.log('🔍 Starting analysis for ad:', ad.id, '| IQ Level:', iqLevel);
-      const result = await analyzeAdCreative(ad, { reasoningEffort: iqLevel });
+      console.log('🔍 Starting analysis for ad:', ad.id);
+      const result = await analyzeAdCreative(ad);
       console.log('✅ Analysis complete:', result);
       setAnalysis(result);
     } catch (err: any) {
@@ -69,11 +67,6 @@ export default function AdAnalysisPanel({ ad, onClose }: AdAnalysisPanelProps) {
         {!hasStarted && !loading && (
           <div className="analysis-start-section">
             <p>Click below to get AI-powered insights on this ad's creative, copy, and performance.</p>
-            <IQSelector
-              value={iqLevel}
-              onChange={setIqLevel}
-              compact={true}
-            />
             <button className="analysis-start-btn" onClick={runAnalysis}>
               <span className="btn-icon"><Sparkles size={18} strokeWidth={1.5} /></span>
               Analyze Ad
@@ -85,13 +78,7 @@ export default function AdAnalysisPanel({ ad, onClose }: AdAnalysisPanelProps) {
           <div className="analysis-loading">
             <div className="loading-spinner-ai"></div>
             <p>ConversionIQ™ analyzing creative, copy, and performance data...</p>
-            <p className="loading-subtext">
-              {iqLevel === 'xhigh'
-                ? `${IQ_LEVELS[iqLevel].name} - This may take 20-30 seconds`
-                : iqLevel === 'high'
-                  ? `${IQ_LEVELS[iqLevel].name} - This may take 15-20 seconds`
-                  : `${IQ_LEVELS[iqLevel].name} - This may take 10-15 seconds`}
-            </p>
+            <p className="loading-subtext">This may take 15-20 seconds</p>
           </div>
         )}
 

@@ -3,13 +3,10 @@ import { fetchAdCreatives, type AdCreative } from '../services/metaApi';
 import {
   analyzeChannelPerformance,
   isOpenAIConfigured,
-  IQ_LEVELS,
   type AdCreativeData,
   type ChannelAnalysisResult,
-  type ReasoningEffort,
 } from '../services/openaiApi';
 import ChannelInsightsPanel from '../components/ChannelInsightsPanel';
-import IQSelector from '../components/IQSelector';
 import SEO from '../components/SEO';
 import {
   Smartphone,
@@ -94,8 +91,6 @@ const Insights = () => {
   const [loadingMessage, setLoadingMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [adsCount, setAdsCount] = useState(0);
-  const [iqLevel, setIqLevel] = useState<ReasoningEffort>('medium');
-
   // Load cached analysis when channel changes
   useEffect(() => {
     const cached = getCachedAnalysis(selectedChannel);
@@ -140,10 +135,10 @@ const Insights = () => {
         return;
       }
 
-      setLoadingMessage(`ConversionIQ™ analyzing ${ads.length} ads with ${IQ_LEVELS[iqLevel].name}...`);
+      setLoadingMessage(`ConversionIQ™ analyzing ${ads.length} ads...`);
 
       // Run the analysis with selected reasoning effort
-      const result = await analyzeChannelPerformance(ads, channelConfig.name, { reasoningEffort: iqLevel });
+      const result = await analyzeChannelPerformance(ads, channelConfig.name);
 
       // Cache the result
       setCachedAnalysis(selectedChannel, result);
@@ -156,7 +151,7 @@ const Insights = () => {
       setLoading(false);
       setLoadingMessage('');
     }
-  }, [selectedChannel, iqLevel]);
+  }, [selectedChannel]);
 
   const selectedChannelConfig = CHANNELS.find(c => c.id === selectedChannel);
 
@@ -189,14 +184,6 @@ const Insights = () => {
           </button>
         ))}
       </div>
-
-      {/* ConversionIQ Level Selector */}
-      <IQSelector
-        value={iqLevel}
-        onChange={setIqLevel}
-        disabled={loading}
-        compact={true}
-      />
 
       {/* Analysis Controls */}
       <div className="analysis-controls">

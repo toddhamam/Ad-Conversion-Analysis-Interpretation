@@ -22,7 +22,6 @@ import {
   type ChannelAnalysisResult,
   type GeneratedAdPackage,
   type CopyOption,
-  type ReasoningEffort,
   type ImageSize,
   type CopyLength,
   type ProductContext,
@@ -35,7 +34,6 @@ import { getCacheStats as getImageCacheStats, uploadBrandImages, clearImageCache
 import { fetchAdCreatives, type DatePreset } from '../services/metaApi';
 import GeneratedAdCard from '../components/GeneratedAdCard';
 import CopySelectionPanel from '../components/CopySelectionPanel';
-import IQSelector from '../components/IQSelector';
 import AdLibraryBrowser from '../components/AdLibraryBrowser';
 import InspirationSelector from '../components/InspirationSelector';
 import SEO from '../components/SEO';
@@ -216,7 +214,6 @@ const AdGenerator = () => {
   const [conceptType, setConceptType] = useState<ConceptType>('auto');
   const [variationCount, setVariationCount] = useState(2);
   const [analysisData, setAnalysisData] = useState<ChannelAnalysisResult | null>(null);
-  const [iqLevel, setIqLevel] = useState<ReasoningEffort>('medium');
   const [imageSize, setImageSize] = useState<ImageSize>(DEFAULT_IMAGE_SIZE);
   const [copyLength, setCopyLength] = useState<CopyLength>(DEFAULT_COPY_LENGTH);
 
@@ -623,7 +620,6 @@ const AdGenerator = () => {
         audienceType,
         conceptType,
         analysisData,
-        reasoningEffort: iqLevel,
         copyLength,
         productContext: selectedProduct || undefined,
         adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
@@ -703,7 +699,6 @@ const AdGenerator = () => {
           callToActions: selectedCTATexts,
         },
         similarityLevel: similarityValue, // 0 = identical to references, 100 = completely different
-        reasoningEffort: iqLevel,
         imageSize, // Selected image dimensions/aspect ratio
         productContext: selectedProduct || undefined,
         adLibraryInspirations: activeInspirationsForCreative.length > 0 ? activeInspirationsForCreative : undefined,
@@ -1242,17 +1237,6 @@ const AdGenerator = () => {
                   </button>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* ConversionIQ Level Selection — AI generation only */}
-          {copySource === 'generate' && (
-            <div className="config-section">
-              <IQSelector
-                value={iqLevel}
-                onChange={setIqLevel}
-                disabled={isGeneratingCopy}
-              />
             </div>
           )}
 
