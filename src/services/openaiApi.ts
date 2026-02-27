@@ -2728,15 +2728,16 @@ export async function generateAdVideoWithVeo(config: {
   // Text-to-video is used instead. If image-to-video support is added in the future,
   // images must be uploaded via the Gemini Files API and referenced by fileUri.
 
-  // Parameter names/types from googleapis/python-genai _GenerateVideosConfig_to_mldev.
-  // Only include params confirmed accepted by the model — others get 400 rejected.
-  // Rejected by veo-3.1-generate-preview: numberOfVideos, enhancePrompt, generateAudio, seed
+  // IMPORTANT: This code uses the Gemini API (generativelanguage.googleapis.com), NOT Vertex AI.
+  // The Vertex AI docs list many params (personGeneration, enhancePrompt, generateAudio,
+  // sampleCount, seed) but the Gemini API rejects ALL of them with 400 errors.
+  // Only these four params are accepted by the Gemini API predictLongRunning endpoint:
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parameters: Record<string, any> = {
     aspectRatio: videoConfig.aspectRatio,
     durationSeconds: durationSec,
     resolution: videoConfig.resolution,
-    personGeneration: 'allow_adult',
+    negativePrompt: 'blurry, low quality, distorted, watermark',
   };
 
   // Submit video generation request (long-running operation)
