@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-02-27 — Align Veo 3.1 API parameters with official Gemini docs
+
+### Fixed
+- **`durationSeconds` sent as string** (`openaiApi.ts`): Veo API requires `durationSeconds` as a string (`"8"` not `8`). Was sending a number, which could cause silent failures or parameter rejection.
+- **Added `personGeneration: 'allow_all'`** (`openaiApi.ts`): Without this parameter, Veo filters out human subjects from generated videos. Critical for ad content that features people.
+- **Added `numberOfVideos: 1`** (`openaiApi.ts`): Explicit per official docs.
+- **Consolidated to single Veo model** (`openaiApi.ts`): The `veo-3.1-fast-generate-preview` model ID is not documented in the official Gemini API docs and may be unreliable. Both `fast` and `standard` now use `veo-3.1-generate-preview`. UI model selector collapsed to single "Veo 3.1" option with unified $0.40/sec costing.
+- **Enforced 1080p → 8s duration constraint** (`openaiApi.ts`): The Veo API requires exactly 8s duration for 1080p/4k resolution. Duration is now auto-coerced to 8s when resolution is not 720p, applied consistently across the API request, prompt text, returned metadata, and cost estimates.
+- **Unified duration across all code paths** (`openaiApi.ts`, `AdGenerator.tsx`): Previously, the API request used the coerced duration but the prompt, cost calculation, and returned metadata still used the user-selected value, causing mismatches.
+
+### Files Modified
+- `src/services/openaiApi.ts` — `durationSeconds` string coercion, `personGeneration`, `numberOfVideos`, single `VEO_MODEL` constant, 1080p duration enforcement, unified cost calculation
+- `src/pages/AdGenerator.tsx` — Single-model cost calculation, 1080p duration enforcement in `calculateCost()`, added `videoResolution` parameter
+
+---
+
 ## 2026-02-27 — Fix Veo 3.1 inlineData rejection for image-to-video
 
 ### Fixed

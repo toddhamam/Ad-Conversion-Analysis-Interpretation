@@ -132,8 +132,8 @@ const DEFAULT_IMAGE_MODEL = 'gemini-3-pro-image-preview'; // Nano Banana Pro for
 const USE_GEMINI_FOR_IMAGES = true; // Switch to use Gemini instead of DALL-E
 
 // Video Generation - Using Google Veo 3.1
-const DEFAULT_VIDEO_MODEL = 'veo-3.1-generate-preview'; // Latest Veo with native audio
-const VEO_FAST_MODEL = 'veo-3.1-fast-generate-preview'; // Faster generation, still has audio
+// Only 'veo-3.1-generate-preview' is documented in the official Gemini API docs.
+const VEO_MODEL = 'veo-3.1-generate-preview';
 const USE_VEO_FOR_VIDEO = true; // Use Veo instead of storyboard-only
 const DALLE_MODEL = 'dall-e-3'; // DALL-E fallback for image generation
 
@@ -216,6 +216,8 @@ export const DEFAULT_COPY_LENGTH: CopyLength = 'short';
 export type VideoAspectRatio = '16:9' | '9:16';
 export type VideoDuration = 4 | 6 | 8;
 export type VideoResolution = '720p' | '1080p';
+// Only one model is available — 'standard' maps to veo-3.1-generate-preview.
+// 'fast' is kept as an alias for backwards compatibility but uses the same model.
 export type VideoModel = 'standard' | 'fast';
 
 export interface VideoConfig {
@@ -262,15 +264,14 @@ export const VIDEO_RESOLUTION_OPTIONS: { id: VideoResolution; name: string; cost
 ];
 
 export const VIDEO_MODEL_OPTIONS: { id: VideoModel; name: string; description: string; costPerSec: number }[] = [
-  { id: 'fast', name: 'Veo Fast', description: 'Quick generation, good quality', costPerSec: 0.15 },
-  { id: 'standard', name: 'Veo Standard', description: 'Best quality, slower', costPerSec: 0.40 },
+  { id: 'standard', name: 'Veo 3.1', description: 'High quality with native audio', costPerSec: 0.40 },
 ];
 
 export const DEFAULT_VIDEO_CONFIG: VideoConfig = {
   aspectRatio: '9:16',
   duration: 8,
   resolution: '720p',
-  model: 'fast',
+  model: 'standard',
 };
 
 // Product context for accurate ad generation
@@ -297,7 +298,7 @@ console.log('🤖 Using models:', {
   chat: DEFAULT_CHAT_MODEL,
   vision: DEFAULT_VISION_MODEL,
   image: USE_GEMINI_FOR_IMAGES ? `Gemini ${DEFAULT_IMAGE_MODEL}` : 'DALL-E 3',
-  video: USE_VEO_FOR_VIDEO ? `Veo ${DEFAULT_VIDEO_MODEL}` : 'Storyboard only'
+  video: USE_VEO_FOR_VIDEO ? `Veo ${VEO_MODEL}` : 'Storyboard only'
 });
 console.log('🎨 Gemini API Key:', GEMINI_API_KEY ? 'configured' : 'NOT CONFIGURED');
 
@@ -2571,8 +2572,9 @@ export async function generateAdVideoWithVeo(config: {
   }
 
   const videoConfig = config.videoConfig || DEFAULT_VIDEO_CONFIG;
-  const modelId = videoConfig.model === 'fast' ? VEO_FAST_MODEL : DEFAULT_VIDEO_MODEL;
-  const durationSec = videoConfig.duration;
+  const modelId = VEO_MODEL;
+  // Enforce API constraint: 1080p and 4k require exactly 8s duration
+  const durationSec = videoConfig.resolution !== '720p' ? 8 : videoConfig.duration;
   const variationIdx = config.variationIndex ?? 0;
   const totalVars = config.totalVariations ?? 1;
 
@@ -2729,12 +2731,13 @@ export async function generateAdVideoWithVeo(config: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parameters: Record<string, any> = {
     aspectRatio: videoConfig.aspectRatio,
-    durationSeconds: durationSec,
+    // Veo API requires durationSeconds as a string, not a number
+    durationSeconds: String(durationSec),
     resolution: videoConfig.resolution,
+    // Required for ad videos that show people — without this, Veo filters out human subjects
+    personGeneration: 'allow_all',
+    numberOfVideos: 1,
   };
-
-  // Note: Veo 3.1 does not support referenceImages parameter.
-  // Product context is conveyed via the text prompt instead.
 
   // Submit video generation request (long-running operation)
   const submitUrl = `${GEMINI_API_URL}/${modelId}:predictLongRunning`;
@@ -2818,7 +2821,7 @@ export async function generateAdVideoWithVeo(config: {
         console.warn('⚠️ Video download failed, preview unavailable. File ref preserved for publish.');
       }
 
-      const costPerSec = videoConfig.model === 'fast' ? 0.15 : 0.40;
+      const costPerSec = 0.40; // veo-3.1-generate-preview
       const estimatedCost = `$${(costPerSec * durationSec).toFixed(2)}`;
 
       return {
