@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-02-27 — Fix Veo params: remove personGeneration, add negativePrompt
+
+### Overview
+The `personGeneration: 'allow_adult'` parameter was being rejected by the Gemini API with a 400 error. This parameter is documented in the **Vertex AI** docs but is **not supported** by the Gemini API (`generativelanguage.googleapis.com`) that this codebase uses. This is the 4th time this parameter has been toggled (PRs #250-#252) due to confusion between the two APIs.
+
+### Fixed
+- **Removed `personGeneration: 'allow_adult'`** (`openaiApi.ts`): Gemini API rejects this with "allow_adult for personGeneration is currently not supported." Only the Vertex AI endpoint accepts it.
+- **Added `negativePrompt`** (`openaiApi.ts`): Replaced with a supported parameter for basic quality control (`'blurry, low quality, distorted, watermark'`). Does not include "text overlay" since the positive prompt requests text overlays.
+- **Added Gemini vs Vertex AI documentation** (`openaiApi.ts`): Clear comment explaining that Vertex AI docs list params (`personGeneration`, `enhancePrompt`, `generateAudio`, `sampleCount`, `seed`) that the Gemini API rejects.
+
+### Veo 3.1 Gemini API — Confirmed Working Parameters (Updated)
+```json
+{
+  "instances": [{ "prompt": "..." }],
+  "parameters": {
+    "aspectRatio": "9:16",
+    "durationSeconds": 8,
+    "resolution": "720p",
+    "negativePrompt": "blurry, low quality, distorted, watermark"
+  }
+}
+```
+
+### Confirmed Rejected by Gemini API (Vertex AI only)
+`personGeneration`, `enhancePrompt`, `generateAudio`, `sampleCount`, `seed`, `numberOfVideos`, `inlineData`
+
+### Files Modified
+- `src/services/openaiApi.ts` — Veo request parameters, documentation comments
+
+---
+
 ## 2026-02-27 — Fix Veo 3.1 video generation: correct API parameters from SDK source
 
 ### Overview
@@ -15,21 +46,11 @@ Comprehensive fix for Veo 3.1 video generation. The official Gemini API docs are
 - **Enforced 1080p → 8s duration** (`openaiApi.ts`): API requires 8s for 1080p/4k. Auto-coerced consistently across request, prompt, metadata, and cost.
 - **Unified duration/cost across all code paths** (`openaiApi.ts`, `AdGenerator.tsx`).
 
-### Veo 3.1 Gemini API — Confirmed Working Parameters
-```json
-{
-  "instances": [{ "prompt": "..." }],
-  "parameters": {
-    "aspectRatio": "9:16",
-    "durationSeconds": 8,
-    "resolution": "720p",
-    "personGeneration": "allow_adult"
-  }
-}
-```
+### Veo 3.1 Gemini API — Confirmed Working Parameters (Superseded)
+> **Note**: `personGeneration` was later found to be rejected by the Gemini API. See entry above for the corrected parameter list.
 
 ### Confirmed Rejected by veo-3.1-generate-preview
-`inlineData`, `numberOfVideos`, `enhancePrompt`, `generateAudio`, `seed`
+`inlineData`, `numberOfVideos`, `enhancePrompt`, `generateAudio`, `seed`, `personGeneration`
 
 ### Files Modified
 - `src/services/openaiApi.ts` — Veo request parameters, model constants, duration enforcement, cost calculation
