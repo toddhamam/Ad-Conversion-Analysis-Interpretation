@@ -35,6 +35,18 @@ Full video ad generation pipeline using Google Veo 3.1, from creative generation
 
 ---
 
+## 2026-02-27 — Meta App Review approved, go-live documentation (#243)
+
+### Overview
+All 5 Meta App Review permissions (ads_management, ads_read, pages_read_engagement, business_management, pages_show_list) approved with Advanced Access. App verified live with external (non-tester) users completing full OAuth flow. Documentation updated with go-live checklist and beta tester provisioning process.
+
+### Changed
+- **`CLAUDE.md` — Submission History**: Marked resubmission as approved, added go-live verification entry
+- **`CLAUDE.md` — Go-Live Checklist**: Added complete 9-step pipeline from development to live Meta Tech Partner status
+- **`CLAUDE.md` — Beta Tester Provisioning**: Documented how to grant beta testers full access via Supabase `organizations` table without requiring Stripe (set `plan_tier`, `subscription_status`, `current_period_end`)
+
+---
+
 ## 2026-02-26 — Push refined copy to Instantly campaign
 
 ### Overview
