@@ -1720,6 +1720,24 @@ To maximize AI citations:
 - Signup: `http://localhost:5175/signup`
 - Dashboard: `http://localhost:5175/dashboard` (requires auth)
 
+### Beta Tester Provisioning
+
+To grant beta testers full app access without requiring credit card or Stripe subscription, update these 3 fields on their **organization** row in the Supabase `organizations` table:
+
+| Field | Value | Purpose |
+|-------|-------|---------|
+| `plan_tier` | `starter` or `pro` | Sets feature limits (pro = more creatives/analyses) |
+| `subscription_status` | `trialing` | Grants full access without Stripe |
+| `current_period_end` | Future ISO date (e.g. `2026-06-01 00:00:00+00`) | Controls when access expires — **required**, without this trial days = 0 and access is blocked |
+
+**Important**: All 3 fields must be set. If `current_period_end` is null or in the past, `trialDaysRemaining` calculates as 0 and the user sees the expired trial gate even with `subscription_status = 'trialing'`.
+
+After updating, the user must hard-refresh (Cmd+Shift+R) for the app to re-fetch the organization data.
+
+To end the beta: either let `current_period_end` expire naturally, or set `subscription_status` to `canceled`.
+
+**Do not** set `is_super_admin = true` for beta testers — this grants access to admin routes and bypasses all gates permanently. The `role` field on the `users` table (`owner`/`admin`/`member`/`viewer`) controls org-level permissions (inviting users, managing settings) and does not affect subscription gating.
+
 ### Dev Server Troubleshooting
 - Port 5175 may be in use by other processes/workspaces - try 5176, 5177 if needed
 - Verify the running server is for the correct workspace (check `cwd` of process)
@@ -1989,4 +2007,19 @@ These are completed during the "Data handling" step of the submission:
 | Date | Action | Result |
 |------|--------|--------|
 | 2026-02-12 | Initial submission of all 5 permissions | Rejected — screencast showed "Reconnect" flow, missing first-time consent screen |
-| 2026-02-18 | Resubmission with fresh first-time OAuth flow intro spliced into all 5 videos | Pending review |
+| 2026-02-18 | Resubmission with fresh first-time OAuth flow intro spliced into all 5 videos | Approved — all 5 permissions granted Advanced Access |
+| 2026-02-27 | App fully live | Verified working — external (non-tester) users can complete full OAuth flow and use all features |
+
+### Go-Live Checklist (Completed)
+
+The full pipeline from development to live Meta Tech Partner:
+
+1. **App Settings** — Privacy Policy URL, Terms of Service URL, Data Deletion URL, App Icon, Category all configured
+2. **Business Verification** — Completed (green dot in Settings → Basic)
+3. **Data Use Checkup** — Completed (green dot in Settings → Basic)
+4. **Facebook Login for Business** — Configuration created with all 5 permissions, `config_id` set in env vars
+5. **App Review submission** — All 5 permissions submitted with screen recordings showing first-time OAuth consent flow
+6. **Advanced Access granted** — All permissions show only "reduce access" option (no "increase" option = Advanced Access confirmed)
+7. **App Published** — Publish toggle enabled in App Dashboard
+8. **`public_profile` Advanced Access** — Confirmed in App Review dashboard (blocks external users if missing)
+9. **External user test** — Verified a non-tester user can complete the full OAuth → credential storage → API proxy flow
