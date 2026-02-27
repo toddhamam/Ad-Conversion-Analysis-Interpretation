@@ -2728,15 +2728,14 @@ export async function generateAdVideoWithVeo(config: {
   // Text-to-video is used instead. If image-to-video support is added in the future,
   // images must be uploaded via the Gemini Files API and referenced by fileUri.
 
+  // Only include parameters confirmed to work in REST text-to-video calls.
+  // numberOfVideos is only valid for video extension, not text-to-video.
+  // personGeneration is not shown in any REST example and may be rejected.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parameters: Record<string, any> = {
     aspectRatio: videoConfig.aspectRatio,
-    // Veo API requires durationSeconds as a string, not a number
     durationSeconds: String(durationSec),
     resolution: videoConfig.resolution,
-    // Required for ad videos that show people — without this, Veo filters out human subjects
-    personGeneration: 'allow_all',
-    numberOfVideos: 1,
   };
 
   // Submit video generation request (long-running operation)
