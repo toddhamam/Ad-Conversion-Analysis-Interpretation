@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-02-27 — Veo 3.1 video ad generation + Meta video publishing
+
+### Overview
+Full video ad generation pipeline using Google Veo 3.1, from creative generation through Meta publishing. Users can now generate video ads alongside image ads in CreativeIQ, preview multi-variation results, and publish mixed image+video ad sets to Meta in a single batch.
+
+### Added
+- **Veo 3.1 video engine** (`openaiApi.ts`): Rewrote `generateAdVideoWithVeo()` with hook-first prompt engineering, product context injection, channel analysis deep integration, image-to-video support, ad library inspirations, UGC audio cues, and configurable model/duration/aspect/resolution
+- **Video config types** (`openaiApi.ts`): `VideoAspectRatio`, `VideoDuration`, `VideoResolution`, `VideoModel`, `VideoConfig` with option arrays and defaults
+- **Multi-variation video generation** (`openaiApi.ts`): `generateAdPackage()` video branch supports up to 3 serial variations with auto first-frame image generation and memory cleanup
+- **Video config UI** (`AdGenerator.tsx`): Format (16:9/9:16), duration (5-8s), quality (fast $0.15/s vs standard $0.40/s) selectors with per-video cost display
+- **Multi-video display** (`GeneratedAdCard.tsx`): Loop rendering with resolution/model/cost badges, expired blob URL detection with "regenerate to view" fallback, per-video download and regeneration
+- **Meta video upload** (`api/meta.ts`): `video-upload` route through existing catch-all — fetches from Veo with server-side key, chunked upload to Meta (2MB chunks for Vercel 4.5MB limit), polls for processing completion
+- **Video publish pipeline** (`metaApi.ts`): `uploadVideoToMeta()`, `createAdWithVideoCreative()` with `video_data` spec, per-ad media type dispatch in `publishAds()`
+- **Per-ad media type** (`AdPublisher.tsx`): Mixed image+video selections with media type badges, `loadMediaDataForPublish()` supporting both types
+- **CSS** for video badges, cost estimates, media type indicators
+
+### Security
+- **API key in header** (`openaiApi.ts`): All Veo API calls use `x-goog-api-key` header instead of `?key=` URL parameter — key never stored in video URLs
+- **SSRF protection** (`api/meta.ts`): `video-upload` rejects full URLs from clients; strict regex validation (`files/[a-zA-Z0-9_-]+` only) with hardcoded `generativelanguage.googleapis.com` base
+- **Null guards** (`metaApi.ts`): Explicit checks for `veoFileRef` (video) and `imageBase64` (image) with clear "regenerate before publishing" error messages
+- **Video readiness enforcement** (`metaApi.ts`): Client rejects `status !== 'ready'` responses — prevents flaky ad creation from in-progress video processing
+
+### Files Modified
+- `src/services/openaiApi.ts` — Video types, config, generation engine, package builder
+- `src/pages/AdGenerator.tsx` — Video config UI, cost calculation, regeneration handler
+- `src/pages/AdGenerator.css` — Video cost estimate styles
+- `src/components/GeneratedAdCard.tsx` — Multi-video display, badges, regeneration
+- `src/components/GeneratedAdCard.css` — Video card, badge, expired state styles
+- `api/meta.ts` — Video upload route (chunked upload proxy)
+- `src/services/metaApi.ts` — Video upload, video creative creation, per-ad publish dispatch
+- `src/pages/AdPublisher.tsx` — Media-aware metadata extraction, publish data loading
+- `src/pages/AdPublisher.css` — Media type badge styles
+
+---
+
 ## 2026-02-27 — Meta App Review approved, go-live documentation (#243)
 
 ### Overview

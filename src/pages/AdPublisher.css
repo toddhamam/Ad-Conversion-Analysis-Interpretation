@@ -1523,3 +1523,13 @@
     border-bottom: 1px solid var(--border-primary);
   }
 }
+
+/* Media Type Badge (image/video indicator) */
+.ad-media-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  margin-right: 6px;
+  flex-shrink: 0;
+}

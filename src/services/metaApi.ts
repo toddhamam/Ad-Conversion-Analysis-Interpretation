@@ -924,7 +924,9 @@ export interface CreateAdRequest {
 export interface PublishConfig {
   mode: 'new_campaign' | 'new_adset' | 'existing_adset';
   ads: Array<{
-    imageBase64: string;
+    mediaType: 'image' | 'video';  // Per-ad media type
+    imageBase64?: string;           // For image ads
+    veoFileRef?: string;            // For video ads (Veo file reference)
     headline: string;
     bodyText: string;
     callToAction: CallToActionType;
@@ -954,6 +956,7 @@ export interface PublishResult {
   adIds?: string[];
   creativeIds?: string[];
   imageHashes?: string[];
+  videoIds?: string[];
   error?: string;
   details?: string;
 }
@@ -1414,6 +1417,107 @@ export async function createAdWithCreative(request: {
   return { adId: data.id, creativeId: data.creative_id || '' };
 }
 
+/**
+ * Upload a Veo-generated video to Meta via the backend chunked upload proxy.
+ * Backend fetches from Veo using server-side GEMINI_API_KEY, then does chunked upload to Meta.
+ */
+export async function uploadVideoToMeta(veoFileRef: string, title?: string): Promise<string> {
+  const token = await getAuthToken();
+  const response = await fetch('/api/meta/video-upload', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ veoFileRef, title }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ message: 'Unknown error' }));
+    throw new Error(err.message || `Video upload failed (${response.status})`);
+  }
+
+  const data = await response.json();
+  if (!data.video_id) {
+    throw new Error('Video upload returned no video_id');
+  }
+
+  // Ensure video is fully processed before returning — Meta will reject ad creation
+  // if the video is still processing. The backend polls for up to 2 minutes, but may
+  // return with status 'processing' on timeout.
+  if (data.status && data.status !== 'ready') {
+    throw new Error(
+      `Video uploaded (ID: ${data.video_id}) but Meta is still processing it (status: ${data.status}). ` +
+      'Please wait a minute and try publishing again.'
+    );
+  }
+
+  return data.video_id;
+}
+
+/**
+ * Create an ad with a video creative (inline spec, same pattern as image ads).
+ * Uses object_story_spec.video_data instead of link_data.
+ */
+export async function createAdWithVideoCreative(request: {
+  name: string;
+  adsetId: string;
+  pageId: string;
+  videoId: string;
+  headline: string;
+  bodyText: string;
+  linkUrl: string;
+  callToAction: string;
+  pixelId?: string;
+  urlTags?: string;
+}): Promise<{ adId: string; creativeId: string }> {
+  const adAccountId = getAdAccountId();
+  if (!adAccountId) throw new Error('No ad account configured');
+
+  const creative: Record<string, unknown> = {
+    name: request.name,
+    object_story_spec: {
+      page_id: request.pageId,
+      video_data: {
+        video_id: request.videoId,
+        title: request.headline,
+        message: request.bodyText,
+        link_description: request.headline,
+        call_to_action: {
+          type: request.callToAction,
+          value: { link: request.linkUrl },
+        },
+      },
+    },
+  };
+
+  if (request.urlTags) {
+    creative.url_tags = request.urlTags;
+  }
+
+  const body: Record<string, unknown> = {
+    name: request.name,
+    adset_id: request.adsetId,
+    creative,
+    status: 'PAUSED',
+  };
+
+  if (request.pixelId) {
+    body.tracking_specs = [
+      { 'action.type': ['offsite_conversion'], 'fb_pixel': [request.pixelId] },
+    ];
+  }
+
+  const data = await metaFetch(`${adAccountId}/ads`, {
+    method: 'POST',
+    body,
+    formEncoded: true,
+  });
+
+  if (!data.id) throw new Error('Video ad creation returned no ID');
+  return { adId: data.id, creativeId: data.creative_id || '' };
+}
+
 // ─── Targeting & Audiences ───────────────────────────────────────────────────
 
 export async function searchTargetingSuggestions(
@@ -1502,9 +1606,13 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
   const result: PublishResult = {
     success: false,
     imageHashes: [],
+    videoIds: [],
     creativeIds: [],
     adIds: [],
   };
+
+  // Per-ad upload results: image_hash for images, video_id for videos
+  const adMediaIds: Array<{ type: 'image' | 'video'; imageHash?: string; videoId?: string }> = [];
 
   const diagnostics: string[] = [];
 
@@ -1515,13 +1623,35 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
       console.warn(`Page pre-validation failed: ${pageValidation.error} — proceeding anyway`);
     }
 
-    // Step 1: Upload all images
+    // Step 1: Upload media per ad (image or video)
     for (let i = 0; i < config.ads.length; i++) {
-      try {
-        const hash = await uploadAdImage(config.ads[i].imageBase64);
-        result.imageHashes!.push(hash);
-      } catch (imgError: unknown) {
-        throw new Error(`Image upload failed for ad ${i + 1}: ${imgError instanceof Error ? imgError.message : 'Unknown error'}`);
+      const ad = config.ads[i];
+      const mediaType = ad.mediaType || 'image'; // Backwards compat default
+
+      if (mediaType === 'video') {
+        if (!ad.veoFileRef) {
+          throw new Error(`Video ad ${i + 1} is missing veoFileRef — regenerate the video before publishing.`);
+        }
+        try {
+          console.log(`Uploading video ${i + 1} to Meta via backend proxy...`);
+          const videoId = await uploadVideoToMeta(ad.veoFileRef, ad.headline);
+          adMediaIds.push({ type: 'video', videoId });
+          result.videoIds!.push(videoId);
+        } catch (vidError: unknown) {
+          throw new Error(`Video upload failed for ad ${i + 1}: ${vidError instanceof Error ? vidError.message : 'Unknown error'}`);
+        }
+      } else {
+        // Image upload (default)
+        if (!ad.imageBase64) {
+          throw new Error(`Image ad ${i + 1} is missing image data — regenerate the image before publishing.`);
+        }
+        try {
+          const hash = await uploadAdImage(ad.imageBase64);
+          adMediaIds.push({ type: 'image', imageHash: hash });
+          result.imageHashes!.push(hash);
+        } catch (imgError: unknown) {
+          throw new Error(`Image upload failed for ad ${i + 1}: ${imgError instanceof Error ? imgError.message : 'Unknown error'}`);
+        }
       }
     }
 
@@ -1602,26 +1732,51 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
     }
     result.adsetId = adsetId;
 
-    // Step 4: Create ads with inline creatives
+    // Step 4: Create ads with inline creatives (per-ad media type dispatch)
     const pageId = config.settings.pageId || getPageId();
     if (!pageId) throw new Error('Facebook Page ID is required.');
 
     for (let i = 0; i < config.ads.length; i++) {
       const ad = config.ads[i];
-      const imageHash = result.imageHashes![i];
+      const media = adMediaIds[i];
 
-      const { adId, creativeId } = await createAdWithCreative({
-        name: `CI Ad ${i + 1} - ${ad.headline.substring(0, 30)}`,
-        adsetId,
-        pageId,
-        imageHash,
-        headline: ad.headline,
-        bodyText: ad.bodyText,
-        linkUrl: config.settings.landingPageUrl,
-        callToAction: ad.callToAction,
-        pixelId: config.settings.pixelId,
-        urlTags: config.settings.urlTags,
-      });
+      let adId: string;
+      let creativeId: string;
+
+      if (media.type === 'video' && media.videoId) {
+        // Video ad — use video_data spec
+        const result2 = await createAdWithVideoCreative({
+          name: `CI Video Ad ${i + 1} - ${ad.headline.substring(0, 30)}`,
+          adsetId,
+          pageId,
+          videoId: media.videoId,
+          headline: ad.headline,
+          bodyText: ad.bodyText,
+          linkUrl: config.settings.landingPageUrl,
+          callToAction: ad.callToAction,
+          pixelId: config.settings.pixelId,
+          urlTags: config.settings.urlTags,
+        });
+        adId = result2.adId;
+        creativeId = result2.creativeId;
+      } else {
+        // Image ad — use link_data spec
+        const result2 = await createAdWithCreative({
+          name: `CI Ad ${i + 1} - ${ad.headline.substring(0, 30)}`,
+          adsetId,
+          pageId,
+          imageHash: media.imageHash || '',
+          headline: ad.headline,
+          bodyText: ad.bodyText,
+          linkUrl: config.settings.landingPageUrl,
+          callToAction: ad.callToAction,
+          pixelId: config.settings.pixelId,
+          urlTags: config.settings.urlTags,
+        });
+        adId = result2.adId;
+        creativeId = result2.creativeId;
+      }
+
       result.adIds!.push(adId);
       if (creativeId) result.creativeIds!.push(creativeId);
     }

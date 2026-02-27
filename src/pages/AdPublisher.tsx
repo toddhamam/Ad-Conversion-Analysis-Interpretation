@@ -153,7 +153,10 @@ const COMMON_COUNTRIES = [
 interface AdMetadata {
   id: string;
   packageIndex: number;
-  imageIndex: number;
+  imageIndex: number;         // -1 for video ads
+  mediaType: 'image' | 'video';
+  videoIndex?: number;        // Index into videos array
+  veoFileRef?: string;        // Veo file reference for backend publish
   headline: string;
   bodyText: string;
   cta: string;
@@ -184,7 +187,7 @@ function formatAudienceSize(size?: number): string {
 }
 
 // Module-level cache for packages loaded from publishStore or localStorage.
-// Set once on mount, used by both extractMetadata and loadImageDataForPublish
+// Set once on mount, used by both extractMetadata and loadMediaDataForPublish
 // so we don't re-parse or re-read between the two calls.
 let _cachedPackages: any[] | null = null;
 
@@ -235,26 +238,50 @@ function extractMetadata(): AdMetadata[] {
       const pkg = packages[pkgIndex];
       if (!pkg) continue;
 
-      const images = pkg.images || [];
-      if (!Array.isArray(images) || images.length === 0) continue;
-
       const copy = pkg.copy || {};
       const headlines = Array.isArray(copy.headlines) ? copy.headlines : ['Ad Creative'];
       const bodyTexts = Array.isArray(copy.bodyTexts) ? copy.bodyTexts : [''];
       const ctas = Array.isArray(copy.callToActions) ? copy.callToActions : ['Learn More'];
 
-      for (let imgIndex = 0; imgIndex < images.length; imgIndex++) {
-        items.push({
-          id: `${pkg.id || pkgIndex}_${imgIndex}`,
-          packageIndex: pkgIndex,
-          imageIndex: imgIndex,
-          headline: headlines[imgIndex % headlines.length] || 'Ad Creative',
-          bodyText: bodyTexts[imgIndex % bodyTexts.length] || '',
-          cta: ctas[imgIndex % ctas.length] || 'Learn More',
-          audienceType: pkg.audienceType || 'prospecting',
-          conceptType: pkg.conceptType || 'auto',
-          generatedAt: pkg.generatedAt || new Date().toISOString(),
-        });
+      const commonFields = {
+        packageIndex: pkgIndex,
+        audienceType: pkg.audienceType || 'prospecting',
+        conceptType: pkg.conceptType || 'auto',
+        generatedAt: pkg.generatedAt || new Date().toISOString(),
+      };
+
+      // Image ads
+      const images = pkg.images || [];
+      if (Array.isArray(images) && images.length > 0) {
+        for (let imgIndex = 0; imgIndex < images.length; imgIndex++) {
+          items.push({
+            ...commonFields,
+            id: `${pkg.id || pkgIndex}_img_${imgIndex}`,
+            imageIndex: imgIndex,
+            mediaType: 'image' as const,
+            headline: headlines[imgIndex % headlines.length] || 'Ad Creative',
+            bodyText: bodyTexts[imgIndex % bodyTexts.length] || '',
+            cta: ctas[imgIndex % ctas.length] || 'Learn More',
+          });
+        }
+      }
+
+      // Video ads
+      const videos = pkg.videos || (pkg.video ? [pkg.video] : []);
+      if (pkg.adType === 'video' && videos.length > 0) {
+        for (let vidIdx = 0; vidIdx < videos.length; vidIdx++) {
+          items.push({
+            ...commonFields,
+            id: `${pkg.id || pkgIndex}_vid_${vidIdx}`,
+            imageIndex: -1,
+            mediaType: 'video' as const,
+            videoIndex: vidIdx,
+            veoFileRef: videos[vidIdx]?.veoFileRef,
+            headline: headlines[vidIdx % headlines.length] || 'Ad Creative',
+            bodyText: bodyTexts[vidIdx % bodyTexts.length] || '',
+            cta: ctas[vidIdx % ctas.length] || 'Learn More',
+          });
+        }
       }
     }
 
@@ -265,10 +292,18 @@ function extractMetadata(): AdMetadata[] {
   }
 }
 
-async function loadImageDataForPublish(metadata: AdMetadata[]): Promise<{ imageUrl: string; headline: string; bodyText: string; cta: string }[]> {
+interface AdPublishData {
+  mediaType: 'image' | 'video';
+  imageUrl?: string;      // For image ads
+  veoFileRef?: string;    // For video ads
+  headline: string;
+  bodyText: string;
+  cta: string;
+}
+
+async function loadMediaDataForPublish(metadata: AdMetadata[]): Promise<AdPublishData[]> {
   return new Promise((resolve) => {
     try {
-      // Use cached packages from extractMetadata, or reload
       const packages = _cachedPackages ?? loadPackages();
 
       if (!Array.isArray(packages) || packages.length === 0) {
@@ -280,22 +315,34 @@ async function loadImageDataForPublish(metadata: AdMetadata[]): Promise<{ imageU
         const pkg = packages[meta.packageIndex];
         if (!pkg) return null;
 
+        if (meta.mediaType === 'video') {
+          return {
+            mediaType: 'video' as const,
+            veoFileRef: meta.veoFileRef,
+            headline: meta.headline,
+            bodyText: meta.bodyText,
+            cta: meta.cta,
+          };
+        }
+
+        // Image ad
         const images = pkg.images || [];
         const img = images[meta.imageIndex];
         if (!img) return null;
 
         const imageUrl = img.imageUrl || img.url || img;
         return {
+          mediaType: 'image' as const,
           imageUrl,
           headline: meta.headline,
           bodyText: meta.bodyText,
           cta: meta.cta,
         };
-      }).filter(Boolean) as { imageUrl: string; headline: string; bodyText: string; cta: string }[];
+      }).filter(Boolean) as AdPublishData[];
 
       resolve(results);
     } catch (err) {
-      console.error('[AdPublisher] Error loading image data for publish:', err);
+      console.error('[AdPublisher] Error loading media data for publish:', err);
       resolve([]);
     }
   });
@@ -796,16 +843,18 @@ const AdPublisher = () => {
     setPublishResult(null);
 
     try {
-      const adsWithImages = await loadImageDataForPublish(selectedMetadata);
+      const adsWithMedia = await loadMediaDataForPublish(selectedMetadata);
 
-      if (adsWithImages.length === 0) {
+      if (adsWithMedia.length === 0) {
         throw new Error('No ads to publish');
       }
 
       const config: PublishConfig = {
         mode: publishMode,
-        ads: adsWithImages.map(ad => ({
-          imageBase64: ad.imageUrl,
+        ads: adsWithMedia.map(ad => ({
+          mediaType: ad.mediaType,
+          imageBase64: ad.mediaType === 'image' ? ad.imageUrl : undefined,
+          veoFileRef: ad.mediaType === 'video' ? ad.veoFileRef : undefined,
           headline: ad.headline,
           bodyText: `${ad.bodyText}\n\n${landingPageUrl}`,
           callToAction: ctaButtonType,
@@ -957,7 +1006,10 @@ const AdPublisher = () => {
                         onChange={() => toggleSelection(item.id)}
                       />
                       <div className="ad-list-content">
-                        <div className="ad-list-headline">{item.headline}</div>
+                        <div className="ad-list-headline">
+                          <span className="ad-media-badge">{item.mediaType === 'video' ? '🎬' : '🖼️'}</span>
+                          {item.headline}
+                        </div>
                         <div className="ad-list-meta">
                           {formatDate(item.generatedAt)} • {item.audienceType} • {item.conceptType}
                         </div>
@@ -1904,7 +1956,10 @@ const AdPublisher = () => {
                   {selectedMetadata.slice(0, 20).map(item => (
                     <div key={item.id} className="ad-list-item preview">
                       <div className="ad-list-content">
-                        <div className="ad-list-headline">{item.headline}</div>
+                        <div className="ad-list-headline">
+                          <span className="ad-media-badge">{item.mediaType === 'video' ? '🎬' : '🖼️'}</span>
+                          {item.headline}
+                        </div>
                         <div className="ad-list-meta">{item.cta}</div>
                       </div>
                     </div>
