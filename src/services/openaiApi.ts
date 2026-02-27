@@ -2544,10 +2544,11 @@ Return JSON only:
 }
 
 /**
- * Generate a video ad using Google Veo 3.1
- * Full-featured: product context, hook-first prompts, image-to-video,
- * reference images, channel analysis integration, ad library inspirations,
- * UGC audio cues, configurable model/duration/aspect/resolution.
+ * Generate a video ad using Google Veo 3.1 (text-to-video).
+ * Product context, hook-first prompts, channel analysis integration,
+ * ad library inspirations, UGC audio cues, configurable model/duration/aspect/resolution.
+ *
+ * Note: Veo 3.1 does not support inlineData for image-to-video on the Gemini API.
  */
 export async function generateAdVideoWithVeo(config: {
   audienceType: AudienceType;
@@ -2559,10 +2560,6 @@ export async function generateAdVideoWithVeo(config: {
   };
   videoConfig?: VideoConfig;
   productContext?: ProductContext;
-  // Base64 image to use as first frame (image-to-video)
-  firstFrameImage?: { base64Data: string; mimeType: string };
-  // Product mockup images as Veo reference images (up to 3)
-  referenceImages?: Array<{ base64Data: string; mimeType: string }>;
   // Competitor ad inspirations from Ad Library
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
   // Which variation this is (for prompt variety)
@@ -2724,16 +2721,10 @@ export async function generateAdVideoWithVeo(config: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const instance: Record<string, any> = { prompt };
 
-  // Image-to-video: use provided first-frame image (Gemini API uses inlineData format)
-  if (config.firstFrameImage) {
-    instance.image = {
-      inlineData: {
-        mimeType: config.firstFrameImage.mimeType,
-        data: config.firstFrameImage.base64Data,
-      },
-    };
-    console.log('🖼️ Using first-frame image for image-to-video');
-  }
+  // Note: Veo 3.1 on the Gemini API does not support inlineData for image-to-video.
+  // The model rejects base64 image data with "inlineData isn't supported by this model".
+  // Text-to-video is used instead. If image-to-video support is added in the future,
+  // images must be uploaded via the Gemini Files API and referenced by fileUri.
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parameters: Record<string, any> = {
@@ -2764,14 +2755,6 @@ export async function generateAdVideoWithVeo(config: {
 
   const operation = await submitResponse.json();
   console.log('⏳ Veo operation started:', operation.name);
-
-  // Null out large base64 data for GC (same pattern as image gen memory management)
-  if (config.firstFrameImage) {
-    (config.firstFrameImage as { base64Data: string }).base64Data = '';
-  }
-  if (config.referenceImages) {
-    config.referenceImages.length = 0;
-  }
 
   // Poll for completion (max 5 minutes)
   const maxWaitTime = 5 * 60 * 1000;
@@ -3006,54 +2989,17 @@ export async function generateAdPackage(config: {
 
     whyItWorks = `This ad package uses ${config.audienceType} audience targeting with ${images.length} image variation(s). ${copy.rationale}`;
   } else {
-    // Generate video(s) with Veo 3.1 — supports multi-variation with auto first-frame
+    // Generate video(s) with Veo 3.1 — text-to-video, supports multi-variation
     const videos: GeneratedVideoResult[] = [];
     let videoError: string | undefined;
     const videoConfig = config.videoConfig || DEFAULT_VIDEO_CONFIG;
     const variationCount = Math.min(config.variationCount, 3); // Cap at 3 for video
 
     if (USE_VEO_FOR_VIDEO && isGeminiConfigured()) {
-      // Step 1: Auto-generate first-frame image (image-to-video)
-      // Uses matching aspect ratio so the generated image fits the video frame
-      let firstFrameImage: { base64Data: string; mimeType: string } | undefined;
-      try {
-        // Map video aspect ratio to matching image size
-        const firstFrameImageSize: ImageSize = videoConfig.aspectRatio === '9:16' ? '9:16' : '16:9';
-        console.log('🖼️ Auto-generating first-frame image for image-to-video...');
-        const firstFrameResult = await generateAdImage({
-          audienceType: config.audienceType,
-          analysisData: config.analysisData,
-          variationIndex: 0,
-          totalVariations: 1,
-          similarityLevel: config.similarityLevel,
-          imageSize: firstFrameImageSize,
-          productContext: config.productContext,
-          adLibraryInspirations: config.adLibraryInspirations,
-        });
+      // Note: Veo 3.1 does not support inlineData for image-to-video.
+      // First-frame image generation is skipped — text-to-video is used instead.
 
-        // Extract base64 data from the data URI
-        if (firstFrameResult.imageUrl.startsWith('data:')) {
-          const [header, data] = firstFrameResult.imageUrl.split(',');
-          const mimeMatch = header.match(/data:([^;]+)/);
-          if (mimeMatch && data) {
-            firstFrameImage = { base64Data: data, mimeType: mimeMatch[1] };
-            console.log('✅ First-frame image generated successfully');
-          }
-        }
-      } catch (error: unknown) {
-        console.warn('⚠️ First-frame image generation failed, falling back to text-to-video:', error instanceof Error ? error.message : error);
-        // Continue without first frame — text-to-video still works
-      }
-
-      // Step 2: Collect product reference images (up to 3)
-      const referenceImages: Array<{ base64Data: string; mimeType: string }> = [];
-      if (config.productContext?.productImages?.length) {
-        config.productContext.productImages.slice(0, 3).forEach(img => {
-          referenceImages.push({ base64Data: img.base64Data, mimeType: img.mimeType });
-        });
-      }
-
-      // Step 3: Generate videos serially (each takes 2-5 min polling; parallel won't save time)
+      // Step 1: Generate videos serially (each takes 2-5 min polling; parallel won't save time)
       for (let i = 0; i < variationCount; i++) {
         try {
           console.log(`🎬 Generating video ${i + 1}/${variationCount} with Veo 3.1...`);
@@ -3067,9 +3013,6 @@ export async function generateAdPackage(config: {
             } : undefined,
             videoConfig,
             productContext: config.productContext,
-            // Only use first frame on the first variation to get diverse results
-            firstFrameImage: i === 0 ? firstFrameImage : undefined,
-            referenceImages: [...referenceImages], // Copy — Veo function nulls the array for GC
             adLibraryInspirations: config.adLibraryInspirations,
             variationIndex: i,
             totalVariations: variationCount,
@@ -3082,10 +3025,6 @@ export async function generateAdPackage(config: {
           }
         }
       }
-
-      // Memory cleanup
-      firstFrameImage = undefined;
-      referenceImages.length = 0;
     }
 
     // Always generate storyboard as a supplement/fallback

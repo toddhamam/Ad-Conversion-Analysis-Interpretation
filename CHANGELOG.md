@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-02-27 — Fix Veo 3.1 inlineData rejection for image-to-video
+
+### Fixed
+- **Removed unsupported `inlineData` image passing from Veo API request** (`openaiApi.ts`): Veo 3.1 on the Gemini API rejects base64 image data with `"inlineData isn't supported by this model"`. The code was generating a first-frame image with Gemini and passing it via `instance.image.inlineData`, which caused a `400 INVALID_ARGUMENT` error on every video generation attempt. Text-to-video is now used instead.
+- **Removed unnecessary first-frame image generation step** (`openaiApi.ts`): The `generateAdImage()` call that produced a first-frame image for image-to-video is no longer executed, saving an API call and reducing generation time.
+- **Fixed inflated video cost estimate** (`AdGenerator.tsx`): Removed the `$0.01 firstFrameCost` from `calculateCost()` since first-frame image generation is no longer performed. Video cost is now `costPerSec × duration × variationCount` without the extra charge.
+- **Updated stale comments** referencing "auto first-frame" and image-to-video capabilities that no longer apply.
+
+### Files Modified
+- `src/services/openaiApi.ts` — Removed `inlineData` image passing, first-frame generation, `firstFrameImage`/`referenceImages` params from `generateAdVideoWithVeo()`, and related GC cleanup
+- `src/pages/AdGenerator.tsx` — Removed `firstFrameCost` from video cost calculation
+
+---
+
 ## 2026-02-27 — Fix Chrome crash in AdPublisher from transition: all with base64 images
 
 ### Fixed

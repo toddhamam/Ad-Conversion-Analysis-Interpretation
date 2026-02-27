@@ -172,10 +172,7 @@ function calculateCost(
       const model = videoModel || 'fast';
       const duration = videoDuration || 8;
       const costPerSec = model === 'fast' ? 0.15 : 0.40;
-      const perVideoCost = costPerSec * duration;
-      // Add first-frame image gen cost (minimal for Gemini)
-      const firstFrameCost = 0.01;
-      const totalVideoCost = (perVideoCost * variationCount) + firstFrameCost;
+      const totalVideoCost = costPerSec * duration * variationCount;
       return {
         min: totalVideoCost + copyGenCost,
         max: totalVideoCost + copyGenCost + 0.02,
