@@ -492,7 +492,6 @@ async function callOpenAI(
 
   const {
     model = DEFAULT_CHAT_MODEL,
-    temperature = 0.7,
     maxTokens = 2000,
     reasoningEffort = DEFAULT_REASONING_EFFORT
   } = options;
@@ -500,10 +499,10 @@ async function callOpenAI(
   console.log('🤖 Calling OpenAI API with model:', model);
   console.log('🧠 Reasoning effort:', reasoningEffort);
 
+  // GPT-5.2 with reasoning_effort only supports temperature=1 (default)
   const requestBody: Record<string, unknown> = {
     model,
     messages,
-    temperature,
     max_completion_tokens: maxTokens,
     reasoning_effort: reasoningEffort,
   };
@@ -557,7 +556,6 @@ async function callOpenAIWithVision(
   // Use GPT-5.2 for vision - multimodal capabilities
   const {
     model = DEFAULT_VISION_MODEL,
-    temperature = 0.7,
     maxTokens = 4000,
     reasoningEffort = DEFAULT_REASONING_EFFORT
   } = options;
@@ -566,10 +564,10 @@ async function callOpenAIWithVision(
   console.log('🧠 Reasoning effort:', reasoningEffort);
   console.log('📸 Processing images for analysis...');
 
+  // GPT-5.2 with reasoning_effort only supports temperature=1 (default)
   const requestBody: Record<string, unknown> = {
     model,
     messages,
-    temperature,
     max_completion_tokens: maxTokens,
     reasoning_effort: reasoningEffort,
   };
