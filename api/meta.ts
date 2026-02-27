@@ -1325,7 +1325,7 @@ async function handleVideoUpload(req: VercelRequest, res: VercelResponse) {
         message: 'Full URLs are not accepted. Provide a Veo file reference (e.g. files/abc123).',
       });
     }
-    if (!veoFileRef.match(/^files\/[a-zA-Z0-9_-]+$/)) {
+    if (!veoFileRef.match(/^files\/[a-zA-Z0-9_-]+(?::download)?$/)) {
       return res.status(400).json({
         error: 'Invalid veoFileRef format',
         message: 'Expected format: files/{fileId}',

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-02-27 — Fix Veo 3.1 referenceImages API error
+
+### Fixed
+- **Removed unsupported `referenceImages` parameter from Veo API request** (`openaiApi.ts`): Veo 3.1 models (`veo-3.1-generate-preview`, `veo-3.1-fast-generate-preview`) do not support the `referenceImages` parameter, causing a `400 INVALID_ARGUMENT` error on every video generation attempt. Product context is already conveyed via the text prompt, so visual guidance still reaches the model without structured image references.
+
+### Files Modified
+- `src/services/openaiApi.ts` — Removed `parameters.referenceImages` assignment in `generateAdVideoWithVeo()`
+
+---
+
 ## 2026-02-27 — Veo 3.1 video ad generation + Meta video publishing
 
 ### Overview
