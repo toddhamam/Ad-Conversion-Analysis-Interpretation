@@ -1,18 +1,39 @@
 # Changelog
 
-## 2026-02-27 — Align Veo 3.1 API parameters with official Gemini docs
+## 2026-02-27 — Fix Veo 3.1 video generation: correct API parameters from SDK source
+
+### Overview
+Comprehensive fix for Veo 3.1 video generation. The official Gemini API docs are inconsistent with what the API actually accepts — parameter names, types, and supported values documented on the website differ from the runtime behavior. All parameter names and types were sourced directly from Google's official SDK function [`_GenerateVideosConfig_to_mldev`](https://github.com/googleapis/python-genai/blob/main/google/genai/models.py) which maps Python config to the actual Gemini REST API request body.
 
 ### Fixed
-- **`durationSeconds` sent as string** (`openaiApi.ts`): Veo API requires `durationSeconds` as a string (`"8"` not `8`). Was sending a number, which could cause silent failures or parameter rejection.
-- **Added `personGeneration: 'allow_all'`** (`openaiApi.ts`): Without this parameter, Veo filters out human subjects from generated videos. Critical for ad content that features people.
-- **Added `numberOfVideos: 1`** (`openaiApi.ts`): Explicit per official docs.
-- **Consolidated to single Veo model** (`openaiApi.ts`): The `veo-3.1-fast-generate-preview` model ID is not documented in the official Gemini API docs and may be unreliable. Both `fast` and `standard` now use `veo-3.1-generate-preview`. UI model selector collapsed to single "Veo 3.1" option with unified $0.40/sec costing.
-- **Enforced 1080p → 8s duration constraint** (`openaiApi.ts`): The Veo API requires exactly 8s duration for 1080p/4k resolution. Duration is now auto-coerced to 8s when resolution is not 720p, applied consistently across the API request, prompt text, returned metadata, and cost estimates.
-- **Unified duration across all code paths** (`openaiApi.ts`, `AdGenerator.tsx`): Previously, the API request used the coerced duration but the prompt, cost calculation, and returned metadata still used the user-selected value, causing mismatches.
+- **Removed unsupported `inlineData` image passing** (`openaiApi.ts`): Veo 3.1 rejects base64 image data. First-frame image generation step also removed (saves an API call).
+- **`durationSeconds` as number** (`openaiApi.ts`): API rejects strings — must be a number (`8` not `"8"`).
+- **`personGeneration: 'allow_adult'`** (`openaiApi.ts`): Correct enum value from SDK (not `'allow_all'`).
+- **Removed `numberOfVideos`** — REST param name is `sampleCount` (SDK maps `number_of_videos` → `sampleCount`), and it's rejected by `veo-3.1-generate-preview` for text-to-video.
+- **Removed `enhancePrompt`** — rejected by `veo-3.1-generate-preview` despite being in SDK.
+- **Consolidated to single Veo model** (`openaiApi.ts`): `veo-3.1-fast-generate-preview` is not in official docs. Both fast/standard now use `veo-3.1-generate-preview`. UI shows single "Veo 3.1" option with $0.40/sec.
+- **Enforced 1080p → 8s duration** (`openaiApi.ts`): API requires 8s for 1080p/4k. Auto-coerced consistently across request, prompt, metadata, and cost.
+- **Unified duration/cost across all code paths** (`openaiApi.ts`, `AdGenerator.tsx`).
+
+### Veo 3.1 Gemini API — Confirmed Working Parameters
+```json
+{
+  "instances": [{ "prompt": "..." }],
+  "parameters": {
+    "aspectRatio": "9:16",
+    "durationSeconds": 8,
+    "resolution": "720p",
+    "personGeneration": "allow_adult"
+  }
+}
+```
+
+### Confirmed Rejected by veo-3.1-generate-preview
+`inlineData`, `numberOfVideos`, `enhancePrompt`, `generateAudio`, `seed`
 
 ### Files Modified
-- `src/services/openaiApi.ts` — `durationSeconds` string coercion, `personGeneration`, `numberOfVideos`, single `VEO_MODEL` constant, 1080p duration enforcement, unified cost calculation
-- `src/pages/AdGenerator.tsx` — Single-model cost calculation, 1080p duration enforcement in `calculateCost()`, added `videoResolution` parameter
+- `src/services/openaiApi.ts` — Veo request parameters, model constants, duration enforcement, cost calculation
+- `src/pages/AdGenerator.tsx` — Single-model cost, duration enforcement, `videoResolution` param
 
 ---
 

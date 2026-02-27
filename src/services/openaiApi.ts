@@ -2728,18 +2728,15 @@ export async function generateAdVideoWithVeo(config: {
   // Text-to-video is used instead. If image-to-video support is added in the future,
   // images must be uploaded via the Gemini Files API and referenced by fileUri.
 
-  // Parameter names and types from googleapis/python-genai _GenerateVideosConfig_to_mldev:
-  //   aspectRatio: string, durationSeconds: number, resolution: string,
-  //   personGeneration: string, negativePrompt: string, enhancePrompt: boolean,
-  //   sampleCount: number (maps from number_of_videos)
-  // NOT supported on Gemini API: generateAudio, seed, fps, outputGcsUri
+  // Parameter names/types from googleapis/python-genai _GenerateVideosConfig_to_mldev.
+  // Only include params confirmed accepted by the model — others get 400 rejected.
+  // Rejected by veo-3.1-generate-preview: numberOfVideos, enhancePrompt, generateAudio, seed
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parameters: Record<string, any> = {
     aspectRatio: videoConfig.aspectRatio,
-    durationSeconds: durationSec, // Must be a number, not a string
+    durationSeconds: durationSec,
     resolution: videoConfig.resolution,
     personGeneration: 'allow_adult',
-    enhancePrompt: true,
   };
 
   // Submit video generation request (long-running operation)
