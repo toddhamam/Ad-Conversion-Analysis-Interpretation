@@ -2737,7 +2737,7 @@ export async function generateAdVideoWithVeo(config: {
     aspectRatio: videoConfig.aspectRatio,
     durationSeconds: durationSec,
     resolution: videoConfig.resolution,
-    negativePrompt: 'blurry, low quality, distorted, watermark, text overlay',
+    negativePrompt: 'blurry, low quality, distorted, watermark',
   };
 
   // Submit video generation request (long-running operation)
