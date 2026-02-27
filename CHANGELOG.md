@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-02-27 — Remove temperature from OpenAI calls (reasoning_effort compatibility)
+
+### Overview
+GPT-5.2 with `reasoning_effort` only supports `temperature=1` (the default). Now that `reasoning_effort: "high"` is sent in every request (PR #254), custom temperature values at call sites caused API errors. This removes `temperature` from the `callOpenAI`/`callOpenAIWithVision` function signatures and all 8 call sites. The Gemini API call in `analyzeReferenceImages()` retains its own temperature since it's a separate API.
+
+### Fixed
+- **Removed `temperature` from function signatures** (`openaiApi.ts`): Eliminated from both `callOpenAI()` and `callOpenAIWithVision()` option types to prevent silent no-op configuration.
+- **Removed `temperature` from all call sites** (`openaiApi.ts`): 8 callers were passing values between 0.3–0.85 that were silently ignored or caused API errors.
+
+### Files Modified
+- `src/services/openaiApi.ts` — Removed temperature from signatures and all OpenAI call sites
+
+---
+
 ## 2026-02-27 — Remove IQ selector, wire reasoning_effort into OpenAI API
 
 ### Overview
