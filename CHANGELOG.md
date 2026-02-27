@@ -8,7 +8,7 @@ Comprehensive fix for Veo 3.1 video generation. The official Gemini API docs are
 ### Fixed
 - **Removed unsupported `inlineData` image passing** (`openaiApi.ts`): Veo 3.1 rejects base64 image data. First-frame image generation step also removed (saves an API call).
 - **`durationSeconds` as number** (`openaiApi.ts`): API rejects strings — must be a number (`8` not `"8"`).
-- **`personGeneration: 'allow_adult'`** (`openaiApi.ts`): Correct enum value from SDK (not `'allow_all'`).
+- **Removed `personGeneration`** — all values (including `'allow_adult'` from SDK) rejected by `veo-3.1-generate-preview`.
 - **Removed `numberOfVideos`** — REST param name is `sampleCount` (SDK maps `number_of_videos` → `sampleCount`), and it's rejected by `veo-3.1-generate-preview` for text-to-video.
 - **Removed `enhancePrompt`** — rejected by `veo-3.1-generate-preview` despite being in SDK.
 - **Consolidated to single Veo model** (`openaiApi.ts`): `veo-3.1-fast-generate-preview` is not in official docs. Both fast/standard now use `veo-3.1-generate-preview`. UI shows single "Veo 3.1" option with $0.40/sec.
@@ -22,14 +22,13 @@ Comprehensive fix for Veo 3.1 video generation. The official Gemini API docs are
   "parameters": {
     "aspectRatio": "9:16",
     "durationSeconds": 8,
-    "resolution": "720p",
-    "personGeneration": "allow_adult"
+    "resolution": "720p"
   }
 }
 ```
 
 ### Confirmed Rejected by veo-3.1-generate-preview
-`inlineData`, `numberOfVideos`, `enhancePrompt`, `generateAudio`, `seed`
+`inlineData`, `numberOfVideos`, `enhancePrompt`, `generateAudio`, `seed`, `personGeneration`
 
 ### Files Modified
 - `src/services/openaiApi.ts` — Veo request parameters, model constants, duration enforcement, cost calculation
