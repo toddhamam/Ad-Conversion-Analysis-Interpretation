@@ -61,71 +61,10 @@ const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models'
 const DEFAULT_CHAT_MODEL = 'gpt-5.2'; // Latest GPT-5.2 with reasoning capabilities
 const DEFAULT_VISION_MODEL = 'gpt-5.2'; // GPT-5.2 has multimodal vision support
 
-// Reasoning configuration for GPT-5.2 Thinking
-// Options: 'none' | 'low' | 'medium' | 'high' | 'xhigh'
-export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
-const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'medium';
-
-// ConversionIQ™ branded reasoning levels for UI
-// Timing estimates based on GPT-5.2 reasoning behavior for typical ad analysis tasks
-export const IQ_LEVELS: Record<ReasoningEffort, {
-  name: string;
-  tagline: string;
-  description: string;
-  timing: string;
-  tokenLabel: string;
-  tokenUsage: 'low' | 'medium' | 'high';
-  icon: string;
-}> = {
-  none: {
-    name: 'IQ Off',
-    tagline: 'Basic processing',
-    description: 'No AI reasoning applied',
-    timing: '~5 sec',
-    tokenLabel: 'Low',
-    tokenUsage: 'low',
-    icon: '○'
-  },
-  low: {
-    name: 'IQ Quick',
-    tagline: 'Fast analysis',
-    description: 'Light reasoning for simple tasks',
-    timing: '~10 sec',
-    tokenLabel: 'Low',
-    tokenUsage: 'low',
-    icon: '◔'
-  },
-  medium: {
-    name: 'IQ Standard',
-    tagline: 'Smart & efficient',
-    description: 'Balanced insights with quick turnaround. Great for everyday analysis.',
-    timing: '10-20 sec',
-    tokenLabel: 'Standard',
-    tokenUsage: 'medium',
-    icon: '◑'
-  },
-  high: {
-    name: 'IQ Deep',
-    tagline: 'Thorough analysis',
-    description: 'Extended reasoning for nuanced insights. Ideal for strategic decisions.',
-    timing: '20-40 sec',
-    tokenLabel: '2x Standard',
-    tokenUsage: 'medium',
-    icon: '◕'
-  },
-  xhigh: {
-    name: 'IQ Maximum',
-    tagline: 'Ultra-intelligent',
-    description: 'Maximum reasoning depth. Best for complex, high-stakes creative strategy.',
-    timing: '30-90 sec',
-    tokenLabel: '3-5x Standard',
-    tokenUsage: 'high',
-    icon: '●'
-  }
-};
-
-// User-facing levels (exclude 'none' and 'low' for standard users)
-export const USER_IQ_LEVELS: ReasoningEffort[] = ['medium', 'high', 'xhigh'];
+// Reasoning configuration for GPT-5.2
+// Uses 'high' by default for thorough creative analysis
+type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'high';
 
 // Image Generation - Using Google Gemini Nano Banana Pro
 const DEFAULT_IMAGE_MODEL = 'gemini-3-pro-image-preview'; // Nano Banana Pro for professional ad assets
@@ -537,7 +476,6 @@ export interface CopyOptionsResult {
 
 /**
  * Make a request to OpenAI API (text-only)
- * The reasoningEffort parameter is accepted for future use but not currently sent to the API.
  */
 async function callOpenAI(
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
@@ -562,13 +500,12 @@ async function callOpenAI(
   console.log('🤖 Calling OpenAI API with model:', model);
   console.log('🧠 Reasoning effort:', reasoningEffort);
 
-  // Build request body — reasoning.effort is not supported by the current model API
-  // IQ level is used to adjust prompt depth instead (handled by callers)
   const requestBody: Record<string, unknown> = {
     model,
     messages,
     temperature,
     max_completion_tokens: maxTokens,
+    reasoning_effort: reasoningEffort,
   };
 
   const response = await openaiProxy('chat', requestBody);
@@ -603,7 +540,6 @@ async function callOpenAI(
 
 /**
  * Make a request to OpenAI API with vision/image support
- * The reasoningEffort parameter is accepted for future use but not currently sent to the API.
  */
 async function callOpenAIWithVision(
   messages: ChatMessage[],
@@ -630,13 +566,12 @@ async function callOpenAIWithVision(
   console.log('🧠 Reasoning effort:', reasoningEffort);
   console.log('📸 Processing images for analysis...');
 
-  // Build request body — reasoning.effort is not supported by the current model API
-  // IQ level is used to adjust prompt depth instead (handled by callers)
   const requestBody: Record<string, unknown> = {
     model,
     messages,
     temperature,
     max_completion_tokens: maxTokens,
+    reasoning_effort: reasoningEffort,
   };
 
   const response = await openaiProxy('chat', requestBody);
