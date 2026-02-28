@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-02-28 — Add Support links in sidebar and profile dropdown
+
+### Overview
+The feedback widget is now more discoverable. "Support" and "Support & Feedback" links in the sidebar footer and user profile dropdown open the floating feedback widget when clicked, using a custom DOM event (`open-feedback-widget`) for cross-component communication.
+
+### Added
+- **Sidebar "Support" button**: Secondary/utility nav item in the sidebar footer (above collapse toggle). Uses muted styling to differentiate from primary navigation. Shows chat bubble icon + "Support" label (icon-only when collapsed).
+- **User dropdown "Support & Feedback" item**: Added between "Billing Details" and "Sign Out" in the profile dropdown menu.
+- **Custom event listener** in `FeedbackWidget.tsx`: Listens for `open-feedback-widget` custom event to allow external triggering.
+
+### Fixed
+- **CSS `transition: all` violation** in `Sidebar.css`: Replaced `transition: all 0.2s ease` on `.collapse-toggle` with specific properties (`background-color`, `color`) to prevent browser crashes when base64 images render.
+
+### Files Modified
+- `src/components/FeedbackWidget.tsx` — Added custom event listener for external triggering
+- `src/components/Sidebar.tsx` — Added Support button in footer
+- `src/components/Sidebar.css` — Added `.sidebar-support-btn` styles, fixed `transition: all`
+- `src/components/UserProfileDropdown.tsx` — Added "Support & Feedback" menu item
+
+---
+
 ## 2026-02-28 — Add user feedback pipeline with auto plan generation
 
 ### Overview
