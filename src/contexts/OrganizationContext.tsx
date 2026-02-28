@@ -216,10 +216,16 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
     : 0;
   // Free plan is only valid for super admins — all other users must be on trial or paid
   const isFreePlanAdmin = organization?.plan_tier === 'free' && (user?.is_super_admin ?? false);
+  // Grace window: if trialing but period_end is missing (webhook hasn't synced dates yet),
+  // grant access for up to 10 minutes after the org was last updated, then fail closed
+  const trialingGracePeriod = isTrialing && !trialEndDate && organization?.updated_at
+    ? (Date.now() - new Date(organization.updated_at).getTime()) < 10 * 60 * 1000
+    : false;
   const isSubscriptionValid =
     (organization?.subscription_status === 'active' && (organization?.plan_tier !== 'free' || isFreePlanAdmin)) ||
     organization?.subscription_status === 'past_due' ||
-    (isTrialing && trialDaysRemaining > 0);
+    (isTrialing && trialDaysRemaining > 0) ||
+    trialingGracePeriod;
 
   const value: OrganizationContextValue = {
     organization,
