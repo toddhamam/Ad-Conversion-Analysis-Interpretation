@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-02-28 — Fix billing webhook crash & subscription gate blocking new subscribers
+
+### Overview
+A `RangeError: Invalid time value` in the Stripe billing webhook (`customer.subscription.created` handler) was crashing the entire webhook when `current_period_start`/`current_period_end` were missing or non-numeric on the subscription object. This prevented period dates from being written to the organization record, which caused the frontend `SubscriptionGate` to treat newly subscribed users as "trial expired" — blocking app access and forcing them to re-authorize their Meta account.
+
+### Fixed
+- **Safe Stripe timestamp parsing** (`webhook.ts`): Added `safeTimestampToISO()` helper that validates timestamps are finite numbers before calling `Date.toISOString()`, returning `null` instead of throwing `RangeError`.
+- **Period date extraction with trial fallback** (`webhook.ts`): Added `extractPeriodDates()` helper that extracts `current_period_start`/`end` with a fallback to `trial_start`/`trial_end` for trialing subscriptions only.
+- **Applied safe parsing to all 3 webhook handlers** (`webhook.ts`): `checkout.session.completed`, `customer.subscription.created`, and `customer.subscription.updated` now use the safe helpers instead of raw `new Date((sub as any).current_period_start * 1000).toISOString()`.
+- **Conditional period date updates** (`webhook.ts`): Period dates use conditional spread (`...(periods.start ? { ... } : {})`) so null dates don't overwrite existing valid values.
+- **Bounded grace period for new trials** (`OrganizationContext.tsx`): If a subscription is `trialing` but `current_period_end` is missing (webhook sync delay), grant access for up to 10 minutes after `updated_at`, then fail closed.
+
+### Files Modified
+- `api/billing/webhook.ts` — Safe timestamp helpers, applied to all subscription event handlers
+- `src/contexts/OrganizationContext.tsx` — 10-minute grace window for trialing subscriptions without period dates
+
+---
+
 ## 2026-02-27 — Remove temperature from OpenAI calls (reasoning_effort compatibility)
 
 ### Overview

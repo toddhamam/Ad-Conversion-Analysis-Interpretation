@@ -18,6 +18,41 @@ const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_K
   ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
   : null;
 
+/**
+ * Safely convert a Stripe Unix timestamp to ISO string.
+ * Returns null if the value is missing, not a number, or produces an invalid date.
+ */
+function safeTimestampToISO(ts: unknown): string | null {
+  if (typeof ts !== 'number' || !Number.isFinite(ts)) return null;
+  try {
+    return new Date(ts * 1000).toISOString();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extract period dates from a Stripe subscription object.
+ * Falls back to trial_start/trial_end for trialing subscriptions
+ * if current_period fields are missing.
+ */
+function extractPeriodDates(sub: Record<string, unknown>): { start: string | null; end: string | null } {
+  let start = safeTimestampToISO(sub.current_period_start);
+  let end = safeTimestampToISO(sub.current_period_end);
+
+  // Fallback: use trial dates only for trialing subscriptions
+  if (sub.status === 'trialing') {
+    if (!start && sub.trial_start) {
+      start = safeTimestampToISO(sub.trial_start);
+    }
+    if (!end && sub.trial_end) {
+      end = safeTimestampToISO(sub.trial_end);
+    }
+  }
+
+  return { start, end };
+}
+
 // Disable body parsing to get raw body for webhook verification
 export const config = {
   api: {
@@ -91,8 +126,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             try {
               const sub = await stripe.subscriptions.retrieve(session.subscription);
               subscriptionStatus = sub.status;
-              currentPeriodStart = new Date((sub as any).current_period_start * 1000).toISOString();
-              currentPeriodEnd = new Date((sub as any).current_period_end * 1000).toISOString();
+              const periods = extractPeriodDates(sub as unknown as Record<string, unknown>);
+              currentPeriodStart = periods.start;
+              currentPeriodEnd = periods.end;
             } catch (subErr) {
               // Don't default to 'active' — let customer.subscription.created webhook set correct status
               console.error('[Billing Webhook] Failed to retrieve subscription (will rely on subscription.created event):', subErr);
@@ -135,13 +171,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Sync subscription to organization
         if (supabase && organizationId) {
+          const periods = extractPeriodDates(subscription as unknown as Record<string, unknown>);
           await supabase
             .from('organizations')
             .update({
               subscription_id: subscription.id,
               subscription_status: subscription.status,
-              current_period_start: new Date((subscription as any).current_period_start * 1000).toISOString(),
-              current_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
+              ...(periods.start ? { current_period_start: periods.start } : {}),
+              ...(periods.end ? { current_period_end: periods.end } : {}),
               updated_at: new Date().toISOString(),
             })
             .eq('id', organizationId);
@@ -163,12 +200,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Sync subscription changes to organization
         if (supabase && organizationId) {
+          const periods = extractPeriodDates(subscription as unknown as Record<string, unknown>);
           await supabase
             .from('organizations')
             .update({
               subscription_status: subscription.cancel_at_period_end ? 'canceling' : subscription.status,
-              current_period_start: new Date((subscription as any).current_period_start * 1000).toISOString(),
-              current_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
+              ...(periods.start ? { current_period_start: periods.start } : {}),
+              ...(periods.end ? { current_period_end: periods.end } : {}),
               updated_at: new Date().toISOString(),
             })
             .eq('id', organizationId);
