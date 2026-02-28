@@ -360,6 +360,25 @@
   padding: 12px;
 }
 
+/* Support button in footer — styled as utility, not primary nav */
+.sidebar-support-btn {
+  border: none;
+  background: transparent;
+  width: 100%;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.sidebar-support-btn:hover {
+  color: var(--text-secondary);
+}
+
+.sidebar.collapsed .sidebar-support-btn {
+  padding: 10px;
+  justify-content: center;
+}
+
 .collapse-toggle {
   display: flex;
   align-items: center;
@@ -373,7 +392,7 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .sidebar.collapsed .collapse-toggle {

@@ -14,6 +14,17 @@ export default function FeedbackWidget() {
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
+  // Listen for external open requests (from sidebar/dropdown "Support" links)
+  useEffect(() => {
+    const handleOpenRequest = () => {
+      setIsOpen(true);
+      setSubmitted(false);
+      setError(null);
+    };
+    document.addEventListener('open-feedback-widget', handleOpenRequest);
+    return () => document.removeEventListener('open-feedback-widget', handleOpenRequest);
+  }, []);
+
   // Close on click outside
   useEffect(() => {
     if (!isOpen) return;

@@ -192,6 +192,16 @@ const UserProfileDropdown = () => {
             <span>Billing Details</span>
           </button>
 
+          <button className="menu-item" onClick={() => {
+            setIsOpen(false);
+            document.dispatchEvent(new CustomEvent('open-feedback-widget'));
+          }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <span>Support & Feedback</span>
+          </button>
+
           <div className="menu-divider"></div>
 
           <button className="menu-item menu-item-danger" onClick={handleSignOut}>
