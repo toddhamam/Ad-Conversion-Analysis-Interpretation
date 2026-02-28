@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import UserProfileDropdown from './UserProfileDropdown';
 import TrialBanner from './TrialBanner';
 import SubscriptionGate from './SubscriptionGate';
+import FeedbackWidget from './FeedbackWidget';
 import { useOrganization } from '../contexts/OrganizationContext';
 import './MainLayout.css';
 
@@ -71,6 +72,7 @@ const MainLayout = () => {
           </SubscriptionGate>
         </main>
       </div>
+      <FeedbackWidget />
     </div>
   );
 };

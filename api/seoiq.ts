@@ -132,6 +132,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Routes with their own auth mechanisms
   if (route === 'provision-org') return handleProvisionOrg(req, res);
   if (route === 'autopilot-cron') return handleAutopilotCron(req, res);
+  if (route === 'feedback-pending') return handleFeedbackPending(req, res);
+  if (route === 'feedback-script-update') return handleFeedbackScriptUpdate(req, res);
 
   // All other routes require JWT authentication
   const auth = await authenticateRequest(req);
@@ -164,6 +166,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handleResearchKeywords(req, res, auth);
     case 'diagnose-ads':
       return handleDiagnoseAds(req, res);
+    case 'feedback-submit':
+      return handleFeedbackSubmit(req, res, auth);
+    case 'feedback-list':
+      return handleFeedbackList(req, res, auth);
+    case 'feedback-update':
+      return handleFeedbackUpdate(req, res, auth);
     default:
       return res.status(404).json({ error: `Unknown route: ${route}` });
   }
@@ -1880,4 +1888,241 @@ async function handleAutopilotSchedule(req: VercelRequest, res: VercelResponse, 
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FEEDBACK HANDLERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function handleFeedbackSubmit(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { type, title, description, page_url } = req.body;
+
+  if (!type || !title || !description) {
+    return res.status(400).json({ error: 'type, title, and description are required' });
+  }
+
+  if (typeof title !== 'string' || typeof description !== 'string') {
+    return res.status(400).json({ error: 'title and description must be strings' });
+  }
+
+  if (!['feature_request', 'bug_report'].includes(type)) {
+    return res.status(400).json({ error: 'type must be feature_request or bug_report' });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('user_feedback')
+      .insert({
+        organization_id: auth.organizationId,
+        user_id: auth.userId,
+        type,
+        title: title.slice(0, 200),
+        description: description.slice(0, 2000),
+        page_url: page_url || null,
+        status: 'pending',
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Failed to submit feedback:', error);
+      captureError(error, { route: 'feedback-submit', organizationId: auth.organizationId });
+      await flushSentry();
+      return res.status(500).json({ error: 'Failed to submit feedback' });
+    }
+
+    return res.status(201).json({ feedback: data });
+  } catch (err: unknown) {
+    console.error('Feedback submit error:', err);
+    captureError(err, { route: 'feedback-submit', organizationId: auth.organizationId });
+    await flushSentry();
+    return res.status(500).json({ error: 'Failed to submit feedback' });
+  }
+}
+
+async function handleFeedbackList(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { data: userProfile } = await supabase
+    .from('users')
+    .select('role, is_super_admin')
+    .eq('id', auth.userId)
+    .single();
+
+  if (!userProfile) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const isAdmin = userProfile.is_super_admin || userProfile.role === 'owner' || userProfile.role === 'admin';
+  if (!isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { data, error } = await supabase
+    .from('user_feedback')
+    .select('*')
+    .eq('organization_id', auth.organizationId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Failed to fetch feedback:', error);
+    return res.status(500).json({ error: 'Failed to fetch feedback' });
+  }
+
+  return res.status(200).json(data || []);
+}
+
+async function handleFeedbackUpdate(req: VercelRequest, res: VercelResponse, auth: AuthContext) {
+  if (req.method !== 'PUT') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { data: userProfile } = await supabase
+    .from('users')
+    .select('role, is_super_admin')
+    .eq('id', auth.userId)
+    .single();
+
+  if (!userProfile) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const isAdmin = userProfile.is_super_admin || userProfile.role === 'owner' || userProfile.role === 'admin';
+  if (!isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { id, status, plan_file_path } = req.body;
+
+  if (!id || !status) {
+    return res.status(400).json({ error: 'id and status are required' });
+  }
+
+  const validStatuses = ['pending', 'planning', 'planned', 'approved', 'rejected', 'built'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
+  }
+
+  const updateData: Record<string, unknown> = {
+    status,
+    updated_at: new Date().toISOString(),
+  };
+  if (plan_file_path !== undefined) {
+    updateData.plan_file_path = plan_file_path;
+  }
+
+  const { data, error } = await supabase
+    .from('user_feedback')
+    .update(updateData)
+    .eq('id', id)
+    .eq('organization_id', auth.organizationId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Failed to update feedback:', error);
+    return res.status(500).json({ error: 'Failed to update feedback' });
+  }
+
+  return res.status(200).json(data);
+}
+
+async function handleFeedbackPending(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Secured by shared secret — fail closed if not configured
+  const feedbackSecret = process.env.FEEDBACK_SCRIPT_SECRET;
+  if (!feedbackSecret) {
+    console.error('FEEDBACK_SCRIPT_SECRET is not configured');
+    return res.status(500).json({ error: 'Server misconfiguration' });
+  }
+  const authHeader = req.headers.authorization;
+  if (authHeader !== `Bearer ${feedbackSecret}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('user_feedback')
+      .select('*')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Failed to fetch pending feedback:', error);
+      return res.status(500).json({ error: 'Failed to fetch pending feedback' });
+    }
+
+    return res.status(200).json(data || []);
+  } catch (err: unknown) {
+    console.error('Feedback pending error:', err);
+    captureError(err, { route: 'feedback-pending' });
+    await flushSentry();
+    return res.status(500).json({ error: 'Failed to fetch pending feedback' });
+  }
+}
+
+async function handleFeedbackScriptUpdate(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'PUT') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Secured by shared secret — fail closed if not configured
+  const feedbackSecret = process.env.FEEDBACK_SCRIPT_SECRET;
+  if (!feedbackSecret) {
+    console.error('FEEDBACK_SCRIPT_SECRET is not configured');
+    return res.status(500).json({ error: 'Server misconfiguration' });
+  }
+  const authHeader = req.headers.authorization;
+  if (authHeader !== `Bearer ${feedbackSecret}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { id, status, plan_file_path } = req.body;
+
+  if (!id || !status) {
+    return res.status(400).json({ error: 'id and status are required' });
+  }
+
+  const validStatuses = ['pending', 'planning', 'planned', 'approved', 'rejected', 'built'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
+  }
+
+  const updateData: Record<string, unknown> = {
+    status,
+    updated_at: new Date().toISOString(),
+  };
+  if (plan_file_path !== undefined) {
+    updateData.plan_file_path = plan_file_path;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('user_feedback')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Failed to update feedback:', error);
+      return res.status(500).json({ error: 'Failed to update feedback' });
+    }
+
+    return res.status(200).json(data);
+  } catch (err: unknown) {
+    console.error('Feedback script-update error:', err);
+    captureError(err, { route: 'feedback-script-update' });
+    await flushSentry();
+    return res.status(500).json({ error: 'Failed to update feedback' });
+  }
 }
