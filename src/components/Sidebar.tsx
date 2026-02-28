@@ -174,6 +174,19 @@ const Sidebar = ({
       )}
 
       <div className="sidebar-footer">
+        <button
+          className="nav-item sidebar-support-btn"
+          onClick={() => {
+            onCloseMobile?.();
+            document.dispatchEvent(new CustomEvent('open-feedback-widget'));
+          }}
+          title="Support & Feedback"
+        >
+          <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          {!collapsed && <span className="nav-label">Support</span>}
+        </button>
         <button className="collapse-toggle" onClick={onToggleCollapse} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
           <svg className="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             {collapsed ? (
