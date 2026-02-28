@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-02-28 — Add user feedback pipeline with auto plan generation
+
+### Overview
+Users can now submit feature requests and bug reports via a floating widget in the app. Submissions are stored in Supabase and can be automatically processed by a cron script that invokes Claude Code CLI to generate implementation plans for each item. This creates a feedback-to-plan pipeline where users submit overnight and plans are ready for review in the morning.
+
+### Added
+- **Floating feedback widget** (`FeedbackWidget.tsx`): Bottom-right chat-style button on all protected pages. Opens a panel with "Feature Request" and "Bug Report" tabs, title/description inputs, and submit button. Responsive, accessible, on-brand styling.
+- **Backend API routes** in `api/seoiq.ts`: 5 new handlers — `feedback-submit` (JWT auth), `feedback-list` (admin-only), `feedback-update` (admin-only), `feedback-pending` (shared secret), `feedback-script-update` (shared secret). Fail-closed auth on script endpoints.
+- **Frontend API service** (`feedbackApi.ts`): Submit, list, and update functions with Supabase auth header injection.
+- **Supabase migration** (`007_user_feedback.sql`): `user_feedback` table with status workflow (`pending` → `planning` → `planned` → `approved`/`rejected` → `built`), indexes, and RLS policies.
+- **Cron script** (`scripts/process-feedback.sh`): Fetches pending feedback, invokes `claude -p` for each item to generate implementation plans as markdown files in `feedback/plans/`. Includes launchd plist template for macOS scheduling.
+- **Vercel rewrite**: `/api/feedback/*` → `api/seoiq.ts` catch-all (stays within 12-function limit).
+- **TypeScript types** (`feedback.ts`): `UserFeedback`, `SubmitFeedbackRequest`, `FeedbackType`, `FeedbackStatus`.
+
+### Security
+- Script endpoints (`feedback-pending`, `feedback-script-update`) fail closed — return 500 if `FEEDBACK_SCRIPT_SECRET` is not configured
+- Request body type validation on title/description fields
+- Curl responses logged on failure instead of silently swallowed
+
+### Files Created
+- `src/components/FeedbackWidget.tsx` — Floating widget component
+- `src/components/FeedbackWidget.css` — Widget styles
+- `src/services/feedbackApi.ts` — Frontend API service
+- `src/types/feedback.ts` — TypeScript types
+- `scripts/process-feedback.sh` — Cron script for auto plan generation
+- `supabase/migrations/007_user_feedback.sql` — Database migration
+- `feedback/plans/.gitkeep` — Plan output directory
+
+### Files Modified
+- `api/seoiq.ts` — Added 5 feedback route handlers (~200 lines)
+- `vercel.json` — Added `/api/feedback/:path` rewrite
+- `src/components/MainLayout.tsx` — Mounted FeedbackWidget
+- `.gitignore` — Added `feedback/plans/*.md`
+
+---
+
 ## 2026-02-28 — Add 24 Facebook Ads metrics to customizable dashboard
 
 ### Overview

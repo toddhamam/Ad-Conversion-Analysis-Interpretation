@@ -35,3 +35,6 @@ coverage/
 # Python
 __pycache__/
 *.pyc
+
+# Feedback plans (generated locally by process-feedback script)
+feedback/plans/*.md
