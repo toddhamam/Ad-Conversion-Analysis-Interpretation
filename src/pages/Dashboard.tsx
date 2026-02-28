@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { DashboardMetrics } from '../types/funnel';
-import { fetchCampaignSummaries, type CampaignSummary, type DatePreset, loadOrgMetaCredentials, clearOrgMetaCache } from '../services/metaApi';
+import { fetchCampaignSummaries, fetchAccountLevelInsights, type CampaignSummary, type AccountLevelInsights, type DatePreset, loadOrgMetaCredentials, clearOrgMetaCache } from '../services/metaApi';
 import { getAuthToken } from '../lib/authToken';
 import Loading from '../components/Loading';
 import SEO from '../components/SEO';
@@ -44,6 +44,14 @@ import {
   Calculator,
   CreditCard,
   Wallet,
+  MousePointerClick,
+  Eye,
+  Radio,
+  Repeat,
+  Heart,
+  ExternalLink,
+  Play,
+  UserCheck,
 } from 'lucide-react';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import { useOrganization } from '../contexts/OrganizationContext';
@@ -64,10 +72,41 @@ interface DashboardStats {
   cac: number;
   transactionFees: number;
   netProfit: number;
+  // Lead metrics
+  leads: number;
+  costPerLead: number;
+  leadRate: number;
+  // Click metrics
+  linkClicks: number;
+  cpc: number;
+  costPerLinkClick: number;
+  uniqueLinkClicks: number;
+  costPerUniqueLinkClick: number;
+  linkCtr: number;
+  uniqueLinkCtr: number;
+  // Awareness metrics
+  impressions: number;
+  reach: number;
+  cpm: number;
+  frequency: number;
+  // Engagement metrics
+  postEngagements: number;
+  cpe: number;
+  // Funnel metrics
+  landingPageViews: number;
+  costPerLandingPageView: number;
+  addToCart: number;
+  costPerAddToCart: number;
+  initiateCheckout: number;
+  costPerInitiateCheckout: number;
+  // Video metrics
+  videoViews: number;
+  costPerVideoView: number;
 }
 
 // Default metric configuration
 const DEFAULT_METRICS: MetricConfig[] = [
+  // Core metrics (visible by default)
   { id: 'totalRevenue', label: 'Total Revenue', visible: true },
   { id: 'totalPurchases', label: 'Total Conversions', visible: true },
   { id: 'conversionRate', label: 'Conversion Rate', visible: true },
@@ -79,6 +118,36 @@ const DEFAULT_METRICS: MetricConfig[] = [
   { id: 'cac', label: 'CAC', visible: false },
   { id: 'transactionFees', label: 'Transaction Fees', visible: true },
   { id: 'netProfit', label: 'Net Profit', visible: true },
+  // Lead metrics
+  { id: 'leads', label: 'Leads', visible: false },
+  { id: 'costPerLead', label: 'Cost Per Lead', visible: false },
+  { id: 'leadRate', label: 'Lead Rate', visible: false },
+  // Click metrics
+  { id: 'linkClicks', label: 'Link Clicks', visible: false },
+  { id: 'cpc', label: 'CPC (All Clicks)', visible: false },
+  { id: 'costPerLinkClick', label: 'Cost Per Link Click', visible: false },
+  { id: 'uniqueLinkClicks', label: 'Unique Link Clicks', visible: false },
+  { id: 'costPerUniqueLinkClick', label: 'Cost Per Unique Link Click', visible: false },
+  { id: 'linkCtr', label: 'Link CTR', visible: false },
+  { id: 'uniqueLinkCtr', label: 'Unique Link CTR', visible: false },
+  // Awareness metrics
+  { id: 'impressions', label: 'Impressions', visible: false },
+  { id: 'reach', label: 'Reach', visible: false },
+  { id: 'cpm', label: 'CPM', visible: false },
+  { id: 'frequency', label: 'Frequency', visible: false },
+  // Engagement metrics
+  { id: 'postEngagements', label: 'Post Engagements', visible: false },
+  { id: 'cpe', label: 'CPE (Cost Per Engagement)', visible: false },
+  // Funnel metrics
+  { id: 'landingPageViews', label: 'Landing Page Views', visible: false },
+  { id: 'costPerLandingPageView', label: 'Cost Per LPV', visible: false },
+  { id: 'addToCart', label: 'Add to Cart', visible: false },
+  { id: 'costPerAddToCart', label: 'Cost Per Add to Cart', visible: false },
+  { id: 'initiateCheckout', label: 'Initiate Checkout', visible: false },
+  { id: 'costPerInitiateCheckout', label: 'Cost Per Checkout', visible: false },
+  // Video metrics
+  { id: 'videoViews', label: 'Video Views (3-sec)', visible: false },
+  { id: 'costPerVideoView', label: 'Cost Per Video View', visible: false },
 ];
 
 const METRIC_ICONS: Record<string, ReactNode> = {
@@ -93,6 +162,36 @@ const METRIC_ICONS: Record<string, ReactNode> = {
   cac: <Calculator size={24} strokeWidth={1.5} />,
   transactionFees: <CreditCard size={24} strokeWidth={1.5} />,
   netProfit: <Wallet size={24} strokeWidth={1.5} />,
+  // Lead metrics
+  leads: <UserCheck size={24} strokeWidth={1.5} />,
+  costPerLead: <DollarSign size={24} strokeWidth={1.5} />,
+  leadRate: <BarChart3 size={24} strokeWidth={1.5} />,
+  // Click metrics
+  linkClicks: <MousePointerClick size={24} strokeWidth={1.5} />,
+  cpc: <DollarSign size={24} strokeWidth={1.5} />,
+  costPerLinkClick: <DollarSign size={24} strokeWidth={1.5} />,
+  uniqueLinkClicks: <MousePointerClick size={24} strokeWidth={1.5} />,
+  costPerUniqueLinkClick: <DollarSign size={24} strokeWidth={1.5} />,
+  linkCtr: <Crosshair size={24} strokeWidth={1.5} />,
+  uniqueLinkCtr: <Crosshair size={24} strokeWidth={1.5} />,
+  // Awareness metrics
+  impressions: <Eye size={24} strokeWidth={1.5} />,
+  reach: <Radio size={24} strokeWidth={1.5} />,
+  cpm: <DollarSign size={24} strokeWidth={1.5} />,
+  frequency: <Repeat size={24} strokeWidth={1.5} />,
+  // Engagement metrics
+  postEngagements: <Heart size={24} strokeWidth={1.5} />,
+  cpe: <DollarSign size={24} strokeWidth={1.5} />,
+  // Funnel metrics
+  landingPageViews: <ExternalLink size={24} strokeWidth={1.5} />,
+  costPerLandingPageView: <DollarSign size={24} strokeWidth={1.5} />,
+  addToCart: <ShoppingCart size={24} strokeWidth={1.5} />,
+  costPerAddToCart: <DollarSign size={24} strokeWidth={1.5} />,
+  initiateCheckout: <CreditCard size={24} strokeWidth={1.5} />,
+  costPerInitiateCheckout: <DollarSign size={24} strokeWidth={1.5} />,
+  // Video metrics
+  videoViews: <Play size={24} strokeWidth={1.5} />,
+  costPerVideoView: <DollarSign size={24} strokeWidth={1.5} />,
 };
 
 const METRIC_LABELS: Record<string, string> = {
@@ -107,6 +206,30 @@ const METRIC_LABELS: Record<string, string> = {
   cac: 'CAC',
   transactionFees: 'Transaction Fees',
   netProfit: 'Net Profit',
+  leads: 'Leads',
+  costPerLead: 'Cost Per Lead',
+  leadRate: 'Lead Rate',
+  linkClicks: 'Link Clicks',
+  cpc: 'CPC (All Clicks)',
+  costPerLinkClick: 'Cost Per Link Click',
+  uniqueLinkClicks: 'Unique Link Clicks',
+  costPerUniqueLinkClick: 'Cost Per Unique Link Click',
+  linkCtr: 'Link CTR',
+  uniqueLinkCtr: 'Unique Link CTR',
+  impressions: 'Impressions',
+  reach: 'Reach',
+  cpm: 'CPM',
+  frequency: 'Frequency',
+  postEngagements: 'Post Engagements',
+  cpe: 'CPE (Cost Per Engagement)',
+  landingPageViews: 'Landing Page Views',
+  costPerLandingPageView: 'Cost Per LPV',
+  addToCart: 'Add to Cart',
+  costPerAddToCart: 'Cost Per Add to Cart',
+  initiateCheckout: 'Initiate Checkout',
+  costPerInitiateCheckout: 'Cost Per Checkout',
+  videoViews: 'Video Views (3-sec)',
+  costPerVideoView: 'Cost Per Video View',
 };
 
 // Metric periods - some are dynamic based on date range
@@ -119,10 +242,28 @@ const STATIC_PERIODS: Record<string, string> = {
   cac: 'Cost per customer',
   transactionFees: 'Stripe fees (6.2%)',
   netProfit: 'Revenue − spend − fees',
+  costPerLead: 'Spend ÷ leads',
+  leadRate: 'Leads ÷ link clicks',
+  cpc: 'Spend ÷ all clicks',
+  costPerLinkClick: 'Spend ÷ link clicks',
+  costPerUniqueLinkClick: 'Spend ÷ unique link clicks',
+  linkCtr: 'Link clicks ÷ impressions',
+  uniqueLinkCtr: 'Unique link clicks ÷ impressions',
+  cpm: 'Cost per 1,000 impressions',
+  frequency: 'Impressions ÷ reach',
+  cpe: 'Spend ÷ engagements',
+  costPerLandingPageView: 'Spend ÷ landing page views',
+  costPerAddToCart: 'Spend ÷ add to carts',
+  costPerInitiateCheckout: 'Spend ÷ checkouts',
+  costPerVideoView: 'Spend ÷ video views',
 };
 
-// Metrics that should show the date range
-const DATE_RANGE_METRICS = ['totalRevenue', 'uniqueCustomers', 'adSpend', 'transactionFees', 'netProfit'];
+// Metrics that should show the date range (raw counts and totals)
+const DATE_RANGE_METRICS = [
+  'totalRevenue', 'uniqueCustomers', 'adSpend', 'transactionFees', 'netProfit',
+  'leads', 'linkClicks', 'uniqueLinkClicks', 'impressions', 'reach',
+  'postEngagements', 'landingPageViews', 'addToCart', 'initiateCheckout', 'videoViews',
+];
 
 // Funnel-only metrics — hidden for non-super-admins (requires Supabase funnel data)
 const FUNNEL_ONLY_METRICS = ['uniqueCustomers', 'aov', 'sessions', 'cac'];
@@ -163,6 +304,7 @@ interface SortableStatCardProps {
   stats: DashboardStats;
   dateRangeLabel: string;
   formatCurrency: (value: number) => string;
+  formatCurrencyPrecise: (value: number) => string;
   formatNumber: (value: number) => string;
 }
 
@@ -171,6 +313,7 @@ function SortableStatCard({
   stats,
   dateRangeLabel,
   formatCurrency,
+  formatCurrencyPrecise,
   formatNumber,
 }: SortableStatCardProps) {
   const {
@@ -191,6 +334,7 @@ function SortableStatCard({
 
   // Format value based on metric type
   const formatValue = () => {
+    const val = stats[id as keyof DashboardStats] as number;
     switch (id) {
       case 'totalRevenue':
         return formatCurrency(stats.totalRevenue);
@@ -214,6 +358,38 @@ function SortableStatCard({
         return stats.transactionFees > 0 ? formatCurrency(stats.transactionFees) : '—';
       case 'netProfit':
         return stats.netProfit !== 0 ? formatCurrency(stats.netProfit) : '—';
+      // Currency metrics (cost-per) — use precise formatter for sub-dollar values
+      case 'costPerLead':
+      case 'cpc':
+      case 'costPerLinkClick':
+      case 'costPerUniqueLinkClick':
+      case 'cpe':
+      case 'costPerLandingPageView':
+      case 'costPerAddToCart':
+      case 'costPerInitiateCheckout':
+      case 'costPerVideoView':
+      case 'cpm':
+        return val > 0 ? formatCurrencyPrecise(val) : '—';
+      // Percentage metrics
+      case 'leadRate':
+      case 'linkCtr':
+      case 'uniqueLinkCtr':
+        return val > 0 ? `${val.toFixed(2)}%` : '—';
+      // Frequency — decimal
+      case 'frequency':
+        return val > 0 ? val.toFixed(2) : '—';
+      // Count metrics
+      case 'leads':
+      case 'linkClicks':
+      case 'uniqueLinkClicks':
+      case 'impressions':
+      case 'reach':
+      case 'postEngagements':
+      case 'landingPageViews':
+      case 'addToCart':
+      case 'initiateCheckout':
+      case 'videoViews':
+        return formatNumber(val);
       default:
         return '—';
     }
@@ -302,7 +478,16 @@ const Dashboard = () => {
     totalPurchaseValue: number;
     totalClicks: number;
     roas: number;
+    totalImpressions: number;
+    totalLeads: number;
+    totalLinkClicks: number;
+    totalPostEngagements: number;
+    totalLandingPageViews: number;
+    totalAddToCart: number;
+    totalInitiateCheckout: number;
+    totalVideoViews: number;
   } | null>(null);
+  const [accountInsights, setAccountInsights] = useState<AccountLevelInsights | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [funnelWarning, setFunnelWarning] = useState<string | null>(null);
@@ -402,7 +587,15 @@ const Dashboard = () => {
             return [] as CampaignSummary[];
           });
 
-        const [funnelResponse, campaigns] = await Promise.all([funnelPromise, metaPromise]);
+        // Fetch account-level insights for unique-user metrics (reach, unique link clicks)
+        // These can't be summed across campaigns without double-counting users
+        const accountPromise = fetchAccountLevelInsights(metaDateOptions)
+          .catch((err) => {
+            console.error('Failed to fetch account-level insights:', err);
+            return { reach: 0, uniqueLinkClicks: 0 } as AccountLevelInsights;
+          });
+
+        const [funnelResponse, campaigns, acctInsights] = await Promise.all([funnelPromise, metaPromise, accountPromise]);
 
         // Process funnel data (super admin only)
         if (funnelResponse && funnelResponse.ok) {
@@ -426,6 +619,14 @@ const Dashboard = () => {
           const totalPurchaseValue = campaigns.reduce((sum, c) => sum + c.purchaseValue, 0);
           const totalClicks = campaigns.reduce((sum, c) => sum + c.clicks, 0);
           const roas = totalSpend > 0 ? totalPurchaseValue / totalSpend : 0;
+          const totalImpressions = campaigns.reduce((sum, c) => sum + c.impressions, 0);
+          const totalLeads = campaigns.reduce((sum, c) => sum + c.leads, 0);
+          const totalLinkClicks = campaigns.reduce((sum, c) => sum + c.linkClicks, 0);
+          const totalPostEngagements = campaigns.reduce((sum, c) => sum + c.postEngagements, 0);
+          const totalLandingPageViews = campaigns.reduce((sum, c) => sum + c.landingPageViews, 0);
+          const totalAddToCart = campaigns.reduce((sum, c) => sum + c.addToCart, 0);
+          const totalInitiateCheckout = campaigns.reduce((sum, c) => sum + c.initiateCheckout, 0);
+          const totalVideoViews = campaigns.reduce((sum, c) => sum + c.videoViews, 0);
 
           setMetaData({
             totalSpend,
@@ -433,10 +634,22 @@ const Dashboard = () => {
             totalPurchaseValue,
             totalClicks,
             roas,
+            totalImpressions,
+            totalLeads,
+            totalLinkClicks,
+            totalPostEngagements,
+            totalLandingPageViews,
+            totalAddToCart,
+            totalInitiateCheckout,
+            totalVideoViews,
           });
         } else {
           setMetaData(null);
         }
+
+        // Account-level unique-user metrics (reach, unique link clicks)
+        // Fetched separately at account level to avoid double-counting across campaigns
+        setAccountInsights(acctInsights);
       } catch (err) {
         console.error('Failed to load dashboard data:', err);
         setError('Failed to load performance data');
@@ -520,6 +733,36 @@ const Dashboard = () => {
   // Net profit: Revenue minus ad spend minus transaction fees
   const netProfit = totalRevenue - adSpend - transactionFees;
 
+  // Extended Facebook Ads metrics — raw counts from Meta API
+  const totalImpressions = metaData?.totalImpressions || 0;
+  const totalLeads = metaData?.totalLeads || 0;
+  const totalLinkClicks = metaData?.totalLinkClicks || 0;
+  // Reach and unique link clicks use account-level data (not campaign sums)
+  // to avoid double-counting users who appear in multiple campaigns
+  const totalReach = accountInsights?.reach || 0;
+  const totalUniqueLinkClicks = accountInsights?.uniqueLinkClicks || 0;
+  const totalPostEngagements = metaData?.totalPostEngagements || 0;
+  const totalLandingPageViews = metaData?.totalLandingPageViews || 0;
+  const totalAddToCart = metaData?.totalAddToCart || 0;
+  const totalInitiateCheckout = metaData?.totalInitiateCheckout || 0;
+  const totalVideoViews = metaData?.totalVideoViews || 0;
+
+  // Derived Facebook Ads metrics
+  const costPerLead = totalLeads > 0 && adSpend > 0 ? adSpend / totalLeads : 0;
+  const leadRate = totalLinkClicks > 0 && totalLeads > 0 ? (totalLeads / totalLinkClicks) * 100 : 0;
+  const cpcAll = totalClicks > 0 && adSpend > 0 ? adSpend / totalClicks : 0;
+  const costPerLinkClick = totalLinkClicks > 0 && adSpend > 0 ? adSpend / totalLinkClicks : 0;
+  const costPerUniqueLinkClick = totalUniqueLinkClicks > 0 && adSpend > 0 ? adSpend / totalUniqueLinkClicks : 0;
+  const linkCtr = totalImpressions > 0 && totalLinkClicks > 0 ? (totalLinkClicks / totalImpressions) * 100 : 0;
+  const uniqueLinkCtr = totalImpressions > 0 && totalUniqueLinkClicks > 0 ? (totalUniqueLinkClicks / totalImpressions) * 100 : 0;
+  const cpmVal = totalImpressions > 0 && adSpend > 0 ? (adSpend / totalImpressions) * 1000 : 0;
+  const frequencyVal = totalReach > 0 && totalImpressions > 0 ? totalImpressions / totalReach : 0;
+  const cpeVal = totalPostEngagements > 0 && adSpend > 0 ? adSpend / totalPostEngagements : 0;
+  const costPerLandingPageView = totalLandingPageViews > 0 && adSpend > 0 ? adSpend / totalLandingPageViews : 0;
+  const costPerAddToCartVal = totalAddToCart > 0 && adSpend > 0 ? adSpend / totalAddToCart : 0;
+  const costPerInitiateCheckoutVal = totalInitiateCheckout > 0 && adSpend > 0 ? adSpend / totalInitiateCheckout : 0;
+  const costPerVideoViewVal = totalVideoViews > 0 && adSpend > 0 ? adSpend / totalVideoViews : 0;
+
   const stats: DashboardStats = {
     totalRevenue,
     totalPurchases,
@@ -532,6 +775,31 @@ const Dashboard = () => {
     cac,
     transactionFees,
     netProfit,
+    // Extended Facebook Ads metrics
+    leads: totalLeads,
+    costPerLead,
+    leadRate,
+    linkClicks: totalLinkClicks,
+    cpc: cpcAll,
+    costPerLinkClick,
+    uniqueLinkClicks: totalUniqueLinkClicks,
+    costPerUniqueLinkClick,
+    linkCtr,
+    uniqueLinkCtr,
+    impressions: totalImpressions,
+    reach: totalReach,
+    cpm: cpmVal,
+    frequency: frequencyVal,
+    postEngagements: totalPostEngagements,
+    cpe: cpeVal,
+    landingPageViews: totalLandingPageViews,
+    costPerLandingPageView,
+    addToCart: totalAddToCart,
+    costPerAddToCart: costPerAddToCartVal,
+    initiateCheckout: totalInitiateCheckout,
+    costPerInitiateCheckout: costPerInitiateCheckoutVal,
+    videoViews: totalVideoViews,
+    costPerVideoView: costPerVideoViewVal,
   };
 
   const formatCurrency = (value: number) => {
@@ -540,6 +808,16 @@ const Dashboard = () => {
       currency: 'USD',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  // Precise currency for cost-per metrics where values are often < $1
+  const formatCurrencyPrecise = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(value);
   };
 
@@ -665,6 +943,7 @@ const Dashboard = () => {
                     stats={stats}
                     dateRangeLabel={dateRangeLabel}
                     formatCurrency={formatCurrency}
+                    formatCurrencyPrecise={formatCurrencyPrecise}
                     formatNumber={formatNumber}
                   />
                 ))}

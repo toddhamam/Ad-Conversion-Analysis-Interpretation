@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-02-28 — Add 24 Facebook Ads metrics to customizable dashboard
+
+### Overview
+Users requested lead gen metrics (leads, cost per lead) and other standard Facebook Ads metrics on their dashboard. Previously the dashboard only showed ecommerce-focused metrics. This adds 24 new optional metric cards covering leads, clicks, awareness, engagement, funnel events, and video — all hidden by default, enabled via the dashboard customizer.
+
+### Added
+- **Lead metrics**: Leads, Cost Per Lead, Lead Rate
+- **Click metrics**: Link Clicks, CPC (All Clicks), Cost Per Link Click, Unique Link Clicks, Cost Per Unique Link Click, Link CTR, Unique Link CTR
+- **Awareness metrics**: Impressions, Reach, CPM, Frequency
+- **Engagement metrics**: Post Engagements, CPE (Cost Per Engagement)
+- **Funnel metrics**: Landing Page Views, Cost Per LPV, Add to Cart, Cost Per Add to Cart, Initiate Checkout, Cost Per Checkout
+- **Video metrics**: Video Views (3-sec), Cost Per Video View
+- **Account-level insights fetch** (`fetchAccountLevelInsights`): Reach and unique link clicks are fetched at account level to avoid double-counting users across campaigns
+- **Precise currency formatter** (`formatCurrencyPrecise`): Cost-per metrics use 2 decimal places so sub-dollar values (e.g. $0.43 CPC) display correctly
+
+### Fixed
+- **Reach/unique link click double-counting**: These unique-user metrics are now fetched at account level instead of summing campaign-level values
+- **Video views label accuracy**: Changed from "ThruPlay" to "3-sec" to match the actual `video_view` action type
+
+### Files Modified
+- `src/services/metaApi.ts` — Extended CampaignSummary interface, added action extraction helpers, added `fetchAccountLevelInsights()`
+- `src/pages/Dashboard.tsx` — 24 new metrics in all config maps, account-level fetch, precise currency formatter
+
+---
+
 ## 2026-02-28 — Fix billing webhook crash & subscription gate blocking new subscribers
 
 ### Overview

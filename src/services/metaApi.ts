@@ -482,6 +482,16 @@ export interface CampaignSummary {
   impressions: number;
   clicks: number;
   ctr: number;
+  // Extended Facebook Ads metrics
+  leads: number;
+  linkClicks: number;
+  uniqueLinkClicks: number;
+  postEngagements: number;
+  landingPageViews: number;
+  addToCart: number;
+  initiateCheckout: number;
+  videoViews: number;
+  reach: number;
 }
 
 export interface CampaignTypeMetrics {
@@ -702,7 +712,7 @@ export async function fetchCampaignSummaries(dateOptions?: DateRangeOptions): Pr
   try {
     const data = await metaFetch(`${adAccountId}/insights`, {
       params: {
-        fields: 'campaign_id,campaign_name,spend,impressions,clicks,ctr,actions,action_values',
+        fields: 'campaign_id,campaign_name,spend,impressions,clicks,ctr,actions,action_values,reach,unique_actions',
         level: 'campaign',
         limit: '100',
         ...buildDateParams(dateOptions),
@@ -714,13 +724,18 @@ export async function fetchCampaignSummaries(dateOptions?: DateRangeOptions): Pr
       const impressions = parseInt(campaign.impressions || '0', 10);
       const clicks = parseInt(campaign.clicks || '0', 10);
       const ctr = parseFloat(campaign.ctr || '0');
-      const purchases = parseInt(
-        campaign.actions?.find((a: any) => a.action_type === 'offsite_conversion.fb_pixel_purchase')?.value || '0',
-        10
-      );
-      const purchaseValue = parseFloat(
-        campaign.action_values?.find((a: any) => a.action_type === 'offsite_conversion.fb_pixel_purchase')?.value || '0'
-      );
+      const reach = parseInt(campaign.reach || '0', 10);
+
+      // Helper to extract a value from the actions array by action_type
+      const getAction = (actionType: string): number =>
+        parseInt(campaign.actions?.find((a: any) => a.action_type === actionType)?.value || '0', 10);
+      const getActionValue = (actionType: string): number =>
+        parseFloat(campaign.action_values?.find((a: any) => a.action_type === actionType)?.value || '0');
+      const getUniqueAction = (actionType: string): number =>
+        parseInt(campaign.unique_actions?.find((a: any) => a.action_type === actionType)?.value || '0', 10);
+
+      const purchases = getAction('offsite_conversion.fb_pixel_purchase');
+      const purchaseValue = getActionValue('offsite_conversion.fb_pixel_purchase');
       const roas = spend > 0 ? purchaseValue / spend : 0;
       const campaignName = campaign.campaign_name || 'Unknown';
 
@@ -735,11 +750,64 @@ export async function fetchCampaignSummaries(dateOptions?: DateRangeOptions): Pr
         impressions,
         clicks,
         ctr,
+        leads: getAction('lead'),
+        linkClicks: getAction('link_click'),
+        uniqueLinkClicks: getUniqueAction('link_click'),
+        postEngagements: getAction('post_engagement'),
+        landingPageViews: getAction('landing_page_view'),
+        addToCart: getAction('offsite_conversion.fb_pixel_add_to_cart'),
+        initiateCheckout: getAction('offsite_conversion.fb_pixel_initiate_checkout'),
+        videoViews: getAction('video_view'),
+        reach,
       };
     });
   } catch (error) {
     console.error('Error fetching campaign summaries:', error);
     return [];
+  }
+}
+
+/**
+ * Fetch account-level insights for unique-user metrics (reach, unique link clicks).
+ * These cannot be summed across campaigns without double-counting users,
+ * so we fetch them at account level where Meta deduplicates correctly.
+ */
+export interface AccountLevelInsights {
+  reach: number;
+  uniqueLinkClicks: number;
+}
+
+export async function fetchAccountLevelInsights(dateOptions?: DateRangeOptions): Promise<AccountLevelInsights> {
+  let adAccountId = getAdAccountId();
+  if (!adAccountId) {
+    await loadOrgMetaCredentials();
+    adAccountId = getAdAccountId();
+    if (!adAccountId) {
+      return { reach: 0, uniqueLinkClicks: 0 };
+    }
+  }
+
+  try {
+    const data = await metaFetch(`${adAccountId}/insights`, {
+      params: {
+        fields: 'reach,unique_actions',
+        ...buildDateParams(dateOptions),
+      },
+    });
+
+    const row = data.data?.[0];
+    if (!row) return { reach: 0, uniqueLinkClicks: 0 };
+
+    const reach = parseInt(row.reach || '0', 10);
+    const uniqueLinkClicks = parseInt(
+      row.unique_actions?.find((a: any) => a.action_type === 'link_click')?.value || '0',
+      10
+    );
+
+    return { reach, uniqueLinkClicks };
+  } catch (error: unknown) {
+    console.error('Error fetching account-level insights:', error);
+    return { reach: 0, uniqueLinkClicks: 0 };
   }
 }
 
