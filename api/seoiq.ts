@@ -1935,6 +1935,23 @@ async function handleFeedbackSubmit(req: VercelRequest, res: VercelResponse, aut
       return res.status(500).json({ error: 'Failed to submit feedback' });
     }
 
+    // Fire-and-forget email notification
+    const resendKey = process.env.RESEND_API_KEY;
+    if (resendKey) {
+      fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: 'Convertra <notifications@convertraiq.com>',
+          to: 'todd.hamam@gmail.com',
+          subject: `[${type === 'bug_report' ? 'Bug' : 'Feature'}] ${title.slice(0, 80)}`,
+          text: `New ${type === 'bug_report' ? 'bug report' : 'feature request'} submitted.\n\nTitle: ${title}\n\nDescription:\n${description}\n\nPage: ${page_url || 'N/A'}\nOrg: ${auth.organizationId}`,
+        }),
+      }).catch((emailErr: unknown) => {
+        console.error('Failed to send feedback notification email:', emailErr);
+      });
+    }
+
     return res.status(201).json({ feedback: data });
   } catch (err: unknown) {
     console.error('Feedback submit error:', err);

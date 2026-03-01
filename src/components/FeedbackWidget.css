@@ -3,12 +3,14 @@
   position: fixed;
   bottom: 24px;
   right: 24px;
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  border: none;
-  background: var(--gradient-dual-glow);
-  color: #ffffff;
+  border: 2px solid transparent;
+  background:
+    linear-gradient(#ffffff, #ffffff) padding-box,
+    var(--gradient-dual-glow) border-box;
+  color: var(--accent-violet);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -20,7 +22,7 @@
 
 .feedback-trigger:hover {
   transform: scale(1.08);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-lg), 0 0 12px var(--accent-violet-glow);
 }
 
 .feedback-trigger:focus-visible {
@@ -221,8 +223,8 @@
   .feedback-trigger {
     bottom: 16px;
     right: 16px;
-    width: 44px;
-    height: 44px;
+    width: 52px;
+    height: 52px;
   }
 
   .feedback-panel {
