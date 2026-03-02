@@ -5,6 +5,7 @@ import {
   isGeminiConfigured,
   generateAdPackage,
   generateCopyOptions,
+  regenerateSingleCopy,
   generateAdImage,
   generateAdVideoWithVeo,
   CONCEPT_ANGLES,
@@ -203,6 +204,7 @@ const AdGenerator = () => {
   // Loading and error states
   const [isGeneratingCopy, setIsGeneratingCopy] = useState(false);
   const [isGeneratingCreatives, setIsGeneratingCreatives] = useState(false);
+  const [regeneratingCopyId, setRegeneratingCopyId] = useState<string | null>(null);
   const [generationProgress, setGenerationProgress] = useState('');
   const [generatedAds, setGeneratedAds] = useState<GeneratedAdPackage[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -551,6 +553,91 @@ const AdGenerator = () => {
       prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
     );
   }, []);
+
+  // Regenerate a single copy item (headline, body text, or CTA)
+  const handleRegenerateCopy = useCallback(async (
+    copyType: 'headline' | 'bodyText' | 'callToAction',
+    copyId: string
+  ) => {
+    if (!copyOptions || regeneratingCopyId !== null) return;
+
+    const existingItems = copyType === 'headline'
+      ? copyOptions.headlines
+      : copyType === 'bodyText'
+      ? copyOptions.bodyTexts
+      : copyOptions.callToActions;
+
+    const wasSelected = copyType === 'headline'
+      ? selectedHeadlines.includes(copyId)
+      : copyType === 'bodyText'
+      ? selectedBodyTexts.includes(copyId)
+      : selectedCTAs.includes(copyId);
+
+    setRegeneratingCopyId(copyId);
+
+    try {
+      const activeInspirations = savedInspirations.filter(i => activeInspirationIds.includes(i.id));
+      const newItem = await regenerateSingleCopy({
+        copyType,
+        existingItems,
+        audienceType,
+        conceptType,
+        analysisData,
+        copyLength,
+        copyVariationLevel: copyVariationValue,
+        productContext: selectedProduct || undefined,
+        adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
+      });
+
+      // Replace the old item with the new one
+      setCopyOptions(prev => {
+        if (!prev) return prev;
+        const key = copyType === 'headline' ? 'headlines'
+          : copyType === 'bodyText' ? 'bodyTexts'
+          : 'callToActions';
+        return {
+          ...prev,
+          [key]: prev[key].map(item => item.id === copyId ? newItem : item),
+        };
+      });
+
+      // Preserve selection state
+      if (wasSelected) {
+        if (copyType === 'headline') {
+          setSelectedHeadlines(prev => prev.map(id => id === copyId ? newItem.id : id));
+        } else if (copyType === 'bodyText') {
+          setSelectedBodyTexts(prev => prev.map(id => id === copyId ? newItem.id : id));
+        } else {
+          setSelectedCTAs(prev => prev.map(id => id === copyId ? newItem.id : id));
+        }
+      }
+    } catch (err: unknown) {
+      console.error(`Failed to regenerate ${copyType}:`, err);
+      setError(err instanceof Error ? err.message : `Failed to regenerate. Please try again.`);
+    } finally {
+      setRegeneratingCopyId(null);
+    }
+  }, [
+    copyOptions, regeneratingCopyId, selectedHeadlines, selectedBodyTexts, selectedCTAs,
+    savedInspirations, activeInspirationIds, audienceType, conceptType, analysisData,
+    copyLength, copyVariationValue, selectedProduct,
+  ]);
+
+  // Stable callback wrappers for CopySelectionPanel memo
+  const handleRegenerateHeadline = useCallback(
+    (id: string) => handleRegenerateCopy('headline', id),
+    [handleRegenerateCopy]
+  );
+
+  const handleRegenerateBodyText = useCallback(
+    (id: string) => handleRegenerateCopy('bodyText', id),
+    [handleRegenerateCopy]
+  );
+
+  const handleRegenerateCTA = useCallback(
+    (id: string) => handleRegenerateCopy('callToAction', id),
+    [handleRegenerateCopy]
+  );
 
   // Generate copy options
   const handleGenerateCopyOptions = async () => {
@@ -1425,7 +1512,7 @@ const AdGenerator = () => {
       {currentStep === 'copy-selection' && copyOptions && (
         <section className="config-panel copy-selection-step">
           <div className="step-header">
-            <button className="back-btn" onClick={handleBackToConfig}>
+            <button className="back-btn" onClick={handleBackToConfig} disabled={regeneratingCopyId !== null}>
               ← Back
             </button>
             <h3 className="config-title">Step 2: Select Copy</h3>
@@ -1471,6 +1558,10 @@ const AdGenerator = () => {
             onHeadlineToggle={handleHeadlineToggle}
             onBodyTextToggle={handleBodyTextToggle}
             onCTAToggle={handleCTAToggle}
+            onRegenerateHeadline={copySource === 'generate' ? handleRegenerateHeadline : undefined}
+            onRegenerateBodyText={copySource === 'generate' ? handleRegenerateBodyText : undefined}
+            onRegenerateCTA={copySource === 'generate' ? handleRegenerateCTA : undefined}
+            regeneratingCopyId={regeneratingCopyId}
             minHeadlines={1}
             maxHeadlines={4}
             minBodyTexts={1}
@@ -1482,7 +1573,7 @@ const AdGenerator = () => {
           <button
             className="generate-btn step-btn"
             onClick={handleProceedToFinalConfig}
-            disabled={!canProceedToFinalConfig}
+            disabled={!canProceedToFinalConfig || regeneratingCopyId !== null}
           >
             <span className="generate-icon">→</span>
             Continue to Final Configuration

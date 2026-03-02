@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-03-02 — Add individual copy regeneration to CreativeIQ
+
+### Overview
+Added the ability to regenerate individual headlines, body texts, and CTAs in the copy selection step (Step 2) without regenerating the entire batch. Users can now iterate on specific copy items they don't like while keeping the ones they love, then mass-publish the full set to their Meta ad account.
+
+### Added
+- **`regenerateSingleCopy()` function** in `openaiApi.ts` — generates a single replacement copy item using the same prompt context (audience, concept, analysis data, variation level, product context, inspirations) with a "DO NOT DUPLICATE" list of existing items
+- **Regenerate button** (RefreshCw icon) on each headline, body copy, and CTA option in the CopySelectionPanel
+- **Loading overlay** with spinner on the specific item being regenerated
+- **Selection preservation** — if the regenerated item was selected, the new replacement stays selected
+- **Navigation blocking** — Back and Continue buttons disabled during regeneration to prevent stale async overwrites
+
+### Changed
+- `CopySelectionPanel.tsx` — added 4 new optional props (`onRegenerateHeadline`, `onRegenerateBodyText`, `onRegenerateCTA`, `regeneratingCopyId`), wrapped each option in a flex container with the regenerate button
+- `CopySelectionPanel.css` — added styles for `.copy-option-wrapper`, `.cta-option-wrapper`, `.copy-regenerate-btn`, `.copy-regenerating-overlay`, `.copy-regen-spinner`
+- `AdGenerator.tsx` — added `regeneratingCopyId` state, `handleRegenerateCopy` handler with stable callback wrappers, conditional prop passing (only for `copySource === 'generate'`)
+
+### Design Decisions
+- Regenerate buttons hidden in import and manual copy modes (only shown for AI-generated copy)
+- All regenerate buttons disabled while any item is regenerating (prevents concurrent API calls)
+- Uses `maxTokens: 500` (vs 3500 for full batch) since only one item is generated
+- Collision-proof IDs use `{prefix}{n}_{timestamp}` pattern (e.g., `h7_1709398765432`)
+
+### Files Modified
+- `src/services/openaiApi.ts` — Added `regenerateSingleCopy()` export
+- `src/components/CopySelectionPanel.tsx` — Added regenerate buttons, loading overlay, new props
+- `src/components/CopySelectionPanel.css` — Added wrapper, button, overlay, and spinner styles
+- `src/pages/AdGenerator.tsx` — Added state, handler, callbacks, prop wiring, navigation guards
+
+---
+
 ## 2026-03-02 — Hide cost estimates and model/provider names from UI
 
 ### Overview
