@@ -2271,22 +2271,36 @@ Explore fresh visual directions while maintaining professional quality.`,
   // Clear references from requestParts to allow GC of base64 data during fetch
   requestParts.length = 0;
 
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': GEMINI_API_KEY,
-    },
-    body: requestBodyStr,
-  });
+  // Retry logic for transient Gemini errors (503, 429, 500)
+  const GEMINI_MAX_RETRIES = 3;
+  const GEMINI_RETRY_DELAYS = [2000, 4000, 8000]; // exponential backoff
+  let response: Response | null = null;
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('❌ Gemini API Error:', errorText);
-    throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+  for (let attempt = 0; attempt <= GEMINI_MAX_RETRIES; attempt++) {
+    response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': GEMINI_API_KEY,
+      },
+      body: requestBodyStr,
+    });
+
+    if (response.ok) break;
+
+    const isTransient = [429, 500, 503].includes(response.status);
+    if (!isTransient || attempt === GEMINI_MAX_RETRIES) {
+      const errorText = await response.text();
+      console.error('❌ Gemini API Error:', errorText);
+      throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+    }
+
+    const delay = GEMINI_RETRY_DELAYS[attempt];
+    console.warn(`⚠️ Gemini returned ${response.status}, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${GEMINI_MAX_RETRIES})...`);
+    await new Promise(resolve => setTimeout(resolve, delay));
   }
 
-  const data = await response.json();
+  const data = await response!.json();
   console.log('📦 Gemini response received');
 
   // Extract the image from the response
@@ -3044,6 +3058,8 @@ export async function generateAdPackage(config: {
       const errorMessage = firstError?.message || String(firstError);
       if (errorMessage.includes('429') || errorMessage.includes('quota')) {
         imageError = 'Image generation quota exceeded. Please wait for the quota to reset or enable billing on your Gemini/OpenAI account.';
+      } else if (errorMessage.includes('503') || errorMessage.includes('500')) {
+        imageError = 'Gemini image generation service is temporarily unavailable. Please try again in a few minutes.';
       } else if (errorMessage.includes('RangeError') || errorMessage.includes('Invalid string length') || errorMessage.includes('out of memory')) {
         imageError = 'Image generation ran out of memory. Try reducing variation count or clearing reference images.';
       } else {
