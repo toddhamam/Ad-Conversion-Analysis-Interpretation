@@ -1806,6 +1806,10 @@ Return JSON only:
  * Regenerate a single copy item (headline, body text, or CTA) without regenerating the entire batch.
  * Uses the same prompt context as generateCopyOptions() but requests exactly one replacement,
  * listing existing items to avoid duplicates.
+ *
+ * NOTE: Always uses reasoning_effort 'low' regardless of the user's IQ selector setting.
+ * High reasoning effort makes GPT-5.2 too deterministic for single-item regeneration,
+ * causing it to return identical text. Low effort produces more creative variance.
  */
 export async function regenerateSingleCopy(config: {
   copyType: 'headline' | 'bodyText' | 'callToAction';
@@ -1814,7 +1818,6 @@ export async function regenerateSingleCopy(config: {
   audienceType: AudienceType;
   conceptType: ConceptType;
   analysisData: ChannelAnalysisResult | null;
-  reasoningEffort?: ReasoningEffort;
   copyLength?: CopyLength;
   copyVariationLevel?: number;
   productContext?: ProductContext;
@@ -2008,23 +2011,23 @@ Return JSON only:
       const prefix = config.copyType === 'headline' ? 'h' : config.copyType === 'bodyText' ? 'b' : 'c';
       parsed.id = `${prefix}${config.existingItems.length + 1}_${Date.now()}`;
 
-      // Dedup check: if the new text is identical to the rejected item, retry
-      if (config.itemToReplace && parsed.text) {
-        const oldNorm = config.itemToReplace.trim().toLowerCase();
-        const newNorm = parsed.text.trim().toLowerCase();
-        if (oldNorm === newNorm && attempt < MAX_REGEN_ATTEMPTS - 1) {
-          console.warn(`⚠️ Regeneration attempt ${attempt + 1} returned identical text, retrying...`);
+      // Dedup check: if the new text is identical to the rejected item or any existing item, retry or fail
+      const newNorm = parsed.text?.trim().toLowerCase() ?? '';
+      const isIdenticalToOld = config.itemToReplace
+        && newNorm === config.itemToReplace.trim().toLowerCase();
+      const isDuplicateOfExisting = config.existingItems.some(item =>
+        item.text.trim().toLowerCase() === newNorm
+      );
+
+      if (isIdenticalToOld || isDuplicateOfExisting) {
+        const reason = isIdenticalToOld ? 'identical to rejected item' : 'duplicated an existing item';
+        if (attempt < MAX_REGEN_ATTEMPTS - 1) {
+          console.warn(`⚠️ Regeneration attempt ${attempt + 1} ${reason}, retrying...`);
           continue;
         }
-      }
-
-      // Also check against existing items that will remain
-      const isDuplicate = config.existingItems.some(item =>
-        item.text.trim().toLowerCase() === parsed.text?.trim().toLowerCase()
-      );
-      if (isDuplicate && attempt < MAX_REGEN_ATTEMPTS - 1) {
-        console.warn(`⚠️ Regeneration attempt ${attempt + 1} duplicated an existing item, retrying...`);
-        continue;
+        // Final attempt still returned a duplicate — hard fail
+        console.error(`❌ All ${MAX_REGEN_ATTEMPTS} regeneration attempts returned duplicate text`);
+        throw new Error(`Failed to generate a unique ${typeLabel} after ${MAX_REGEN_ATTEMPTS} attempts. Please try again.`);
       }
 
       console.log(`✅ Single ${typeLabel} regenerated successfully (attempt ${attempt + 1})`);
