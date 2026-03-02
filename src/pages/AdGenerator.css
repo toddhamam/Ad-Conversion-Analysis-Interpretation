@@ -671,47 +671,6 @@
   font-weight: 400;
 }
 
-/* Cost Estimate */
-.cost-estimate {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 18px;
-  background: rgba(168, 85, 247, 0.08);
-  border: 1px solid rgba(168, 85, 247, 0.2);
-  border-radius: 10px;
-  margin-bottom: 24px;
-}
-
-.cost-icon {
-  font-size: 18px;
-}
-
-.cost-text {
-  font-size: 14px;
-  color: #a855f7;
-  font-weight: 500;
-}
-
-.cost-note {
-  font-size: 12px;
-  color: rgba(168, 85, 247, 0.7);
-  font-weight: 400;
-}
-
-.video-cost-estimate {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: rgba(168, 85, 247, 0.06);
-  border: 1px solid rgba(168, 85, 247, 0.15);
-  border-radius: 8px;
-  margin-top: 12px;
-  font-size: 13px;
-  color: var(--accent-violet);
-}
-
 /* Generate Button */
 .generate-btn {
   display: flex;
@@ -1516,12 +1475,6 @@
   .variation-btn {
     min-width: 44px;
     min-height: 44px;
-  }
-
-  .cost-estimate {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
   }
 
   .empty-state {

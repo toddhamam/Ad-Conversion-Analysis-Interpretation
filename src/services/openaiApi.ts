@@ -35,7 +35,7 @@ async function openaiProxy(
 
   // Dev fallback: direct call with VITE_ key
   if (!OPENAI_API_KEY_FALLBACK) {
-    throw new Error('OpenAI API not configured. Set OPENAI_API_KEY in Vercel or VITE_OPENAI_API_KEY for local dev.');
+    throw new Error('AI API not configured. Please contact support.');
   }
 
   const url = endpoint === 'chat' ? OPENAI_API_URL : OPENAI_IMAGES_URL;
@@ -203,7 +203,7 @@ export const VIDEO_RESOLUTION_OPTIONS: { id: VideoResolution; name: string; cost
 ];
 
 export const VIDEO_MODEL_OPTIONS: { id: VideoModel; name: string; description: string; costPerSec: number }[] = [
-  { id: 'standard', name: 'Veo 3.1', description: 'High quality with native audio', costPerSec: 0.40 },
+  { id: 'standard', name: 'Standard', description: 'High quality with native audio', costPerSec: 0.40 },
 ];
 
 export const DEFAULT_VIDEO_CONFIG: VideoConfig = {
@@ -233,13 +233,15 @@ export function isGeminiConfigured(): boolean {
   return !!GEMINI_API_KEY && GEMINI_API_KEY.length > 0;
 }
 
-console.log('🤖 Using models:', {
-  chat: DEFAULT_CHAT_MODEL,
-  vision: DEFAULT_VISION_MODEL,
-  image: USE_GEMINI_FOR_IMAGES ? `Gemini ${DEFAULT_IMAGE_MODEL}` : 'DALL-E 3',
-  video: USE_VEO_FOR_VIDEO ? `Veo ${VEO_MODEL}` : 'Storyboard only'
-});
-console.log('🎨 Gemini API Key:', GEMINI_API_KEY ? 'configured' : 'NOT CONFIGURED');
+if (import.meta.env.DEV) {
+  console.log('🤖 Using models:', {
+    chat: DEFAULT_CHAT_MODEL,
+    vision: DEFAULT_VISION_MODEL,
+    image: USE_GEMINI_FOR_IMAGES ? `Gemini ${DEFAULT_IMAGE_MODEL}` : 'DALL-E 3',
+    video: USE_VEO_FOR_VIDEO ? `Veo ${VEO_MODEL}` : 'Storyboard only'
+  });
+  console.log('🎨 Gemini API Key:', GEMINI_API_KEY ? 'configured' : 'NOT CONFIGURED');
+}
 
 // Check if OpenAI is configured (always true in production — key is server-side)
 export function isOpenAIConfigured(): boolean {
@@ -486,7 +488,7 @@ async function callOpenAI(
   } = {}
 ): Promise<string> {
   if (!isOpenAIConfigured()) {
-    throw new Error('OpenAI API key not configured. Please add your API key to the configuration.');
+    throw new Error('AI API not configured. Please contact support.');
   }
 
   const {
@@ -527,7 +529,7 @@ async function callOpenAI(
       }
     }
 
-    throw new Error(`OpenAI API error: ${errorMessage}`);
+    throw new Error(`AI service error: ${errorMessage}`);
   }
 
   const data = await response.json();
@@ -548,7 +550,7 @@ async function callOpenAIWithVision(
   } = {}
 ): Promise<string> {
   if (!isOpenAIConfigured()) {
-    throw new Error('OpenAI API key not configured. Please add your API key to the configuration.');
+    throw new Error('AI API not configured. Please contact support.');
   }
 
   // Use GPT-5.2 for vision - multimodal capabilities
@@ -590,7 +592,7 @@ async function callOpenAIWithVision(
       }
     }
 
-    throw new Error(`OpenAI Vision API error: ${errorMessage}`);
+    throw new Error(`AI vision service error: ${errorMessage}`);
   }
 
   const data = await response.json();
@@ -1384,7 +1386,7 @@ export async function generateCopyOptions(config: {
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
 }): Promise<CopyOptionsResult> {
   if (!isOpenAIConfigured()) {
-    throw new Error('OpenAI API key not configured');
+    throw new Error('AI API not configured. Please contact support.');
   }
 
   const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
@@ -2291,12 +2293,12 @@ Explore fresh visual directions while maintaining professional quality.`,
     const isTransient = [429, 500, 503].includes(response.status);
     if (!isTransient || attempt === GEMINI_MAX_RETRIES) {
       const errorText = await response.text();
-      console.error('❌ Gemini API Error:', errorText);
-      throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+      console.error('❌ Image generation API Error:', errorText);
+      throw new Error(`Image generation error: ${response.status} ${response.statusText}`);
     }
 
     const delay = GEMINI_RETRY_DELAYS[attempt];
-    console.warn(`⚠️ Gemini returned ${response.status}, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${GEMINI_MAX_RETRIES})...`);
+    console.warn(`⚠️ Image generation returned ${response.status}, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${GEMINI_MAX_RETRIES})...`);
     await new Promise(resolve => setTimeout(resolve, delay));
   }
 
@@ -2306,12 +2308,12 @@ Explore fresh visual directions while maintaining professional quality.`,
   // Extract the image from the response
   const candidates = data.candidates;
   if (!candidates || candidates.length === 0) {
-    throw new Error('Gemini returned no candidates');
+    throw new Error('Image generation returned no results');
   }
 
   const parts = candidates[0].content?.parts;
   if (!parts) {
-    throw new Error('Gemini response missing parts');
+    throw new Error('Image generation response incomplete');
   }
 
   // Find the image part in the response
@@ -2334,7 +2336,7 @@ Explore fresh visual directions while maintaining professional quality.`,
     const candidateCount = data.candidates?.length ?? 0;
     const partTypes = parts?.map((p: Record<string, unknown>) => Object.keys(p).join(',')).join('; ') ?? 'none';
     console.error(`❌ No image data in Gemini response. Candidates: ${candidateCount}, Part types: ${partTypes}, Text: ${textResponse?.substring(0, 200) || '(none)'}`);
-    throw new Error('Gemini did not return an image. Response: ' + (textResponse || 'No text response'));
+    throw new Error('Image generation did not return an image. Response: ' + (textResponse || 'No text response'));
   }
 
   // Convert base64 to data URL
@@ -2439,7 +2441,7 @@ async function generateAdImageWithDallE(config: {
   if (!response.ok) {
     const errorText = await response.text();
     console.error('❌ DALL-E API Error:', errorText);
-    throw new Error(`DALL-E API error: ${response.status} ${response.statusText}`);
+    throw new Error(`Image generation error: ${response.status} ${response.statusText}`);
   }
 
   const data = await response.json();
@@ -2460,7 +2462,7 @@ export async function generateAudienceAdCopy(config: {
   variationCount: number;
 }): Promise<GeneratedCopyResult> {
   if (!isOpenAIConfigured()) {
-    throw new Error('OpenAI API key not configured');
+    throw new Error('AI API not configured. Please contact support.');
   }
 
   console.log(`📝 Generating ad copy for ${config.audienceType} audience (${config.variationCount} variations)`);
@@ -2540,7 +2542,7 @@ export async function generateVideoStoryboard(config: {
   analysisData: ChannelAnalysisResult | null;
 }): Promise<VideoStoryboard> {
   if (!isOpenAIConfigured()) {
-    throw new Error('OpenAI API key not configured');
+    throw new Error('AI API not configured. Please contact support.');
   }
 
   console.log(`🎬 Generating video storyboard for ${config.audienceType} audience`);
@@ -2642,7 +2644,7 @@ export async function generateAdVideoWithVeo(config: {
   totalVariations?: number;
 }): Promise<GeneratedVideoResult> {
   if (!isGeminiConfigured()) {
-    throw new Error('Gemini API key not configured for Veo video generation');
+    throw new Error('Video generation API not configured. Please contact support.');
   }
 
   const videoConfig = config.videoConfig || DEFAULT_VIDEO_CONFIG;
@@ -2828,7 +2830,7 @@ export async function generateAdVideoWithVeo(config: {
   if (!submitResponse.ok) {
     const errorText = await submitResponse.text();
     console.error('❌ Veo submission failed:', errorText);
-    throw new Error(`Veo video generation failed: ${submitResponse.status} ${errorText}`);
+    throw new Error(`Video generation failed: ${submitResponse.status} ${errorText}`);
   }
 
   const operation = await submitResponse.json();
@@ -2858,7 +2860,7 @@ export async function generateAdVideoWithVeo(config: {
 
     if (status.done) {
       if (status.error) {
-        throw new Error(`Veo generation error: ${status.error.message}`);
+        throw new Error(`Video generation error: ${status.error.message}`);
       }
 
       // Veo 3.1 Gemini API response path: generateVideoResponse.generatedSamples
@@ -2872,7 +2874,7 @@ export async function generateAdVideoWithVeo(config: {
       const videoUri = generatedVideo.video?.uri || '';
 
       if (!videoUri) {
-        throw new Error('No video file reference in Veo response');
+        throw new Error('No video file reference in generation response');
       }
 
       // Extract file reference from URI, version-agnostic
@@ -2912,7 +2914,7 @@ export async function generateAdVideoWithVeo(config: {
     }
   }
 
-  throw new Error('Veo video generation timed out after 5 minutes');
+  throw new Error('Video generation timed out after 5 minutes');
 }
 
 /**
@@ -3057,9 +3059,9 @@ export async function generateAdPackage(config: {
       const firstError = failedResults[0].reason;
       const errorMessage = firstError?.message || String(firstError);
       if (errorMessage.includes('429') || errorMessage.includes('quota')) {
-        imageError = 'Image generation quota exceeded. Please wait for the quota to reset or enable billing on your Gemini/OpenAI account.';
+        imageError = 'Image generation quota exceeded. Please wait for the quota to reset or check your account billing settings.';
       } else if (errorMessage.includes('503') || errorMessage.includes('500')) {
-        imageError = 'Gemini image generation service is temporarily unavailable. Please try again in a few minutes.';
+        imageError = 'Image generation service is temporarily unavailable. Please try again in a few minutes.';
       } else if (errorMessage.includes('RangeError') || errorMessage.includes('Invalid string length') || errorMessage.includes('out of memory')) {
         imageError = 'Image generation ran out of memory. Try reducing variation count or clearing reference images.';
       } else {
@@ -3115,7 +3117,7 @@ export async function generateAdPackage(config: {
 
     const video = videos[0]; // Backwards compat
     if (videos.length > 0) {
-      whyItWorks = `This video ad was generated with Veo 3.1 (${videoConfig.model}) for ${config.audienceType} audiences with ${videos.length} variation(s). ${storyboard.conceptSummary}`;
+      whyItWorks = `This video ad was generated for ${config.audienceType} audiences with ${videos.length} variation(s). ${storyboard.conceptSummary}`;
     } else {
       whyItWorks = `This video ad storyboard is designed for ${config.audienceType} audiences. ${storyboard.conceptSummary}`;
     }

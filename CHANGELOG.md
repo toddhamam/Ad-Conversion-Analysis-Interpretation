@@ -1,16 +1,45 @@
 # Changelog
 
-## 2026-03-02 — Add retry logic for transient Gemini API errors
+## 2026-03-02 — Hide cost estimates and model/provider names from UI
 
 ### Overview
-Gemini image generation was failing immediately on transient 503 (Service Unavailable) errors with no retry. Unlike the Meta API which already had exponential backoff retry logic, a single temporary Gemini outage would surface as a hard failure to the user.
+Removed all user-visible estimated generation costs, model names (GPT, Gemini, Veo, DALL-E, OpenAI), and per-second pricing from the CreativeIQ ad generator and generated ad cards. Users should not see backend implementation details or cost information.
 
-### Fixed
-- **Retry with exponential backoff** for transient Gemini errors (429, 500, 503) — up to 3 retries with 2s, 4s, 8s delays before failing
-- **Friendlier error message** for 503/500 errors — users now see "Gemini image generation service is temporarily unavailable. Please try again in a few minutes." instead of the raw API status code
+### Removed
+- **Estimated cost display** (💰 section) before the generate button in AdGenerator
+- **Video cost estimate display** (🎬 per-second pricing) in video configuration
+- **Per-model cost/sec** line from video quality selector buttons
+- **Video model badge** ("Veo Fast" / "Veo Standard") and **estimated cost badge** from generated video cards
+- **`calculateCost` function** and `costEstimate` state variable (now unused)
+- **Dead CSS** for `.cost-estimate`, `.cost-icon`, `.cost-text`, `.cost-note`, `.video-cost-estimate` and their responsive overrides
+
+### Changed
+- **Video ad type button** text from "Generate with Veo 3.1" → "Generate AI video"
+- **Video quality option name** from "Veo 3.1" → "Standard"
+- **Progress message** from "generating video with Veo Standard..." → "generating video..."
+- **Video `whyItWorks` text** removed "with Veo 3.1 (standard)" mention
+- **17 error messages** in `openaiApi.ts` sanitized to remove model/provider names (e.g., "Gemini API error" → "Image generation error", "OpenAI API key not configured" → "AI API not configured")
+- **Startup console logs** that print model names now wrapped in `import.meta.env.DEV` guard so they only appear in local development, not in production
 
 ### Files Modified
-- `src/services/openaiApi.ts` — Added retry loop in `generateAdImageWithGemini()` and 503/500 error case in `generateAdPackage()` error handler
+- `src/pages/AdGenerator.tsx` — Removed cost UI, unused import, model name references in progress text
+- `src/pages/AdGenerator.css` — Removed dead CSS for cost estimate components
+- `src/components/GeneratedAdCard.tsx` — Removed video model and cost badges
+- `src/services/openaiApi.ts` — Sanitized all error messages, renamed model option, dev-gated startup logs, updated whyItWorks text
+
+---
+
+## 2026-03-02 — Add retry logic for transient image generation API errors
+
+### Overview
+Image generation was failing immediately on transient 503 (Service Unavailable) errors with no retry. Unlike the Meta API which already had exponential backoff retry logic, a single temporary outage would surface as a hard failure to the user.
+
+### Fixed
+- **Retry with exponential backoff** for transient errors (429, 500, 503) — up to 3 retries with 2s, 4s, 8s delays before failing
+- **Friendlier error message** for 503/500 errors — users now see "Image generation service is temporarily unavailable. Please try again in a few minutes." instead of the raw API status code
+
+### Files Modified
+- `src/services/openaiApi.ts` — Added retry loop in image generation and 503/500 error case in `generateAdPackage()` error handler
 
 ---
 

@@ -28,7 +28,6 @@ import {
   type VideoAspectRatio,
   type VideoDuration,
   type VideoModel,
-  type VideoResolution,
 } from '../services/openaiApi';
 import { getCacheStats as getImageCacheStats, uploadBrandImages, clearImageCache } from '../services/imageCache';
 import { fetchAdCreatives, type DatePreset } from '../services/metaApi';
@@ -136,58 +135,6 @@ function formatDate(isoString: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
-}
-
-function calculateCost(
-  adType: AdType,
-  variationCount: number,
-  includeCopyGeneration: boolean,
-  _videoModel?: VideoModel,
-  videoDuration?: VideoDuration,
-  videoResolution?: VideoResolution,
-): { min: number; max: number; note: string } {
-  const copyGenCost = includeCopyGeneration ? 0.02 : 0; // GPT-4o for copy generation
-  const usingGemini = isGeminiConfigured();
-
-  if (adType === 'image') {
-    if (usingGemini) {
-      // Gemini has generous free tier, minimal cost after
-      return {
-        min: copyGenCost,
-        max: copyGenCost + 0.01,
-        note: 'Gemini Nano Banana Pro (free tier)',
-      };
-    } else {
-      // DALL-E 3 HD quality: $0.08 per image
-      const imageCost = variationCount * 0.08;
-      return {
-        min: imageCost + copyGenCost,
-        max: imageCost + copyGenCost + 0.02,
-        note: 'DALL-E 3 HD',
-      };
-    }
-  } else {
-    // Video with Veo 3.1
-    if (usingGemini) {
-      const duration = videoDuration || 8;
-      const costPerSec = 0.40; // Single model: veo-3.1-generate-preview
-      // Enforce same 1080p→8s constraint as the API layer
-      const effectiveDuration = videoResolution !== '720p' ? 8 : duration;
-      const totalVideoCost = costPerSec * effectiveDuration * variationCount;
-      return {
-        min: totalVideoCost + copyGenCost,
-        max: totalVideoCost + copyGenCost + 0.02,
-        note: `Veo 3.1 (${effectiveDuration}s × ${variationCount})`,
-      };
-    } else {
-      // Storyboard only (text generation)
-      return {
-        min: copyGenCost + 0.01,
-        max: copyGenCost + 0.04,
-        note: 'GPT-4o text generation (storyboard only)',
-      };
-    }
-  }
 }
 
 type WorkflowStep = 'config' | 'copy-selection' | 'final-config';
@@ -686,7 +633,7 @@ const AdGenerator = () => {
     setGenerationProgress(adType === 'image'
       ? 'ConversionIQ™ generating images and finalizing copy...'
       : isGeminiConfigured()
-        ? `ConversionIQ™ generating video with Veo ${videoModel === 'fast' ? 'Fast' : 'Standard'}...`
+        ? 'ConversionIQ™ generating video...'
         : 'ConversionIQ™ creating video storyboard...');
 
     try {
@@ -944,7 +891,6 @@ const AdGenerator = () => {
     }
   }, [generatedAds, analysisData, videoAspectRatio, videoDuration, videoModel, selectedProduct]);
 
-  const costEstimate = calculateCost(adType, variationCount, currentStep === 'config', videoModel, videoDuration, '720p');
   const hasAnalysisData = !!analysisData;
   const isGenerating = isGeneratingCopy || isGeneratingCreatives;
 
@@ -1636,7 +1582,7 @@ const AdGenerator = () => {
               >
                 <span className="ad-type-icon">🎬</span>
                 <span className="ad-type-name">Video Ad</span>
-                <span className="ad-type-desc">{isGeminiConfigured() ? 'Generate with Veo 3.1' : 'Generate storyboard'}</span>
+                <span className="ad-type-desc">{isGeminiConfigured() ? 'Generate AI video' : 'Generate storyboard'}</span>
               </button>
             </div>
           </div>
@@ -1707,17 +1653,8 @@ const AdGenerator = () => {
                   >
                     <span className="ad-type-name">{option.name}</span>
                     <span className="ad-type-desc">{option.description}</span>
-                    <span className="ad-type-desc">${option.costPerSec.toFixed(2)}/sec</span>
                   </button>
                 ))}
-              </div>
-
-              <div className="video-cost-estimate">
-                <span className="cost-icon">🎬</span>
-                <span className="cost-text">
-                  ${(VIDEO_MODEL_OPTIONS.find(m => m.id === videoModel)?.costPerSec || 0.15) * videoDuration}
-                  /video ({videoDuration}s × ${(VIDEO_MODEL_OPTIONS.find(m => m.id === videoModel)?.costPerSec || 0.15).toFixed(2)})
-                </span>
               </div>
             </div>
           )}
@@ -1847,15 +1784,6 @@ const AdGenerator = () => {
               </div>
             </div>
           )}
-
-          {/* Cost Estimate */}
-          <div className="cost-estimate">
-            <span className="cost-icon">💰</span>
-            <span className="cost-text">
-              Estimated Cost: ${costEstimate.min.toFixed(2)} - ${costEstimate.max.toFixed(2)}
-              <span className="cost-note"> ({costEstimate.note})</span>
-            </span>
-          </div>
 
           {/* Generate Button */}
           <button
