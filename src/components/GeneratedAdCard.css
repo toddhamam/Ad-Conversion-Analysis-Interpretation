@@ -78,6 +78,12 @@
   margin-bottom: 0;
 }
 
+.images-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .toggle-images-btn {
   padding: 6px 14px;
   background: rgba(168, 85, 247, 0.15);
@@ -94,11 +100,45 @@
   background: rgba(168, 85, 247, 0.25);
 }
 
+.regenerate-all-btn {
+  font-size: 12px;
+  padding: 6px 14px;
+}
+
+.images-grid-wrapper {
+  position: relative;
+}
+
 .images-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
   contain: layout style;
+}
+
+.images-grid-dimmed {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.regenerating-all-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 10;
+}
+
+.regenerating-all-overlay span {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--accent-violet);
 }
 
 .image-card {
@@ -469,12 +509,21 @@
 .image-error-banner {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 12px;
   padding: 14px 18px;
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 10px;
   margin-bottom: 20px;
+}
+
+.image-error-banner .error-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
 }
 
 .image-error-banner .error-icon {
@@ -486,6 +535,11 @@
   font-size: 13px;
   color: #fca5a5;
   line-height: 1.5;
+}
+
+.retry-all-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* Video Error Banner */
@@ -618,6 +672,16 @@
   opacity: 0.7;
 }
 
+/* Spinning animation for Loader icons */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
 /* ==================== Additional Responsive Styles ==================== */
 
 /* Tablet breakpoint - 768px */
@@ -654,7 +718,29 @@
     gap: 8px;
   }
 
-  .toggle-images-btn {
+  .images-section-actions {
+    width: 100%;
+    flex-direction: row;
+  }
+
+  .images-section-actions .toggle-images-btn {
+    flex: 1;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .images-section-actions .regenerate-all-btn {
+    flex: 1;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .image-error-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .retry-all-btn {
     width: 100%;
     justify-content: center;
     min-height: 44px;

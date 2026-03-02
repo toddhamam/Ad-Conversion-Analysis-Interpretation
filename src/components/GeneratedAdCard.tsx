@@ -6,6 +6,7 @@ import './GeneratedAdCard.css';
 interface GeneratedAdCardProps {
   ad: GeneratedAdPackage;
   onRegenerateImage?: (adId: string, imageIndex: number) => Promise<void>;
+  onRegenerateAllImages?: (adId: string) => Promise<void>;
   onRegenerateVideo?: (adId: string, videoIndex: number) => Promise<void>;
 }
 
@@ -87,11 +88,12 @@ function LazyImage({ src, alt, onLoad }: { src: string; alt: string; onLoad?: ()
 
 // Memoized to prevent all cards re-rendering when one ad changes in the parent array.
 // Each card holds potentially large base64 images, so unnecessary re-renders are expensive.
-const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, onRegenerateVideo }: GeneratedAdCardProps) {
+const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, onRegenerateAllImages, onRegenerateVideo }: GeneratedAdCardProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [downloadingImage, setDownloadingImage] = useState<number | null>(null);
   const [downloadingVideo, setDownloadingVideo] = useState(false);
   const [regeneratingImage, setRegeneratingImage] = useState<number | null>(null);
+  const [regeneratingAllImages, setRegeneratingAllImages] = useState(false);
   const [regeneratingVideo, setRegeneratingVideo] = useState<number | null>(null);
   const [videoLoadErrors, setVideoLoadErrors] = useState<Set<number>>(new Set());
   // CRITICAL: Default to false to prevent Chrome crashes from rendering many large base64 images
@@ -114,7 +116,7 @@ const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, o
   }, []);
 
   const handleRegenerateImage = async (index: number) => {
-    if (!onRegenerateImage || regeneratingImage !== null) return;
+    if (!onRegenerateImage || regeneratingImage !== null || regeneratingAllImages) return;
 
     setRegeneratingImage(index);
     try {
@@ -123,6 +125,20 @@ const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, o
       console.error('Failed to regenerate image:', err);
     } finally {
       setRegeneratingImage(null);
+    }
+  };
+
+  const handleRegenerateAllImages = async () => {
+    if (!onRegenerateAllImages || regeneratingAllImages || regeneratingImage !== null) return;
+
+    setRegeneratingAllImages(true);
+    setShowImages(true);
+    try {
+      await onRegenerateAllImages(ad.id);
+    } catch (err) {
+      console.error('Failed to regenerate all images:', err);
+    } finally {
+      setRegeneratingAllImages(false);
     }
   };
 
@@ -236,8 +252,24 @@ const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, o
       {/* Image Error Message */}
       {ad.adType === 'image' && ad.imageError && (
         <div className="image-error-banner">
-          <span className="error-icon"><AlertTriangle size={16} strokeWidth={1.5} /></span>
-          <span className="error-message">{ad.imageError}</span>
+          <div className="error-content">
+            <span className="error-icon"><AlertTriangle size={16} strokeWidth={1.5} /></span>
+            <span className="error-message">{ad.imageError}</span>
+          </div>
+          {onRegenerateAllImages && imageCount === 0 && (
+            <button
+              className="action-btn regenerate-btn retry-all-btn"
+              onClick={handleRegenerateAllImages}
+              disabled={regeneratingAllImages}
+            >
+              {regeneratingAllImages ? (
+                <Loader size={14} strokeWidth={1.5} className="spinning" />
+              ) : (
+                <RefreshCw size={14} strokeWidth={1.5} />
+              )}
+              {regeneratingAllImages ? 'Regenerating...' : 'Retry All Images'}
+            </button>
+          )}
         </div>
       )}
 
@@ -334,56 +366,81 @@ const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, o
         <div className="ad-images-section">
           <div className="images-section-header">
             <h4 className="section-label">Generated Images ({imageCount})</h4>
-            <button
-              className="toggle-images-btn"
-              onClick={() => setShowImages(!showImages)}
-            >
-              {showImages ? '🔼 Hide Images' : '🔽 Show Images'}
-            </button>
+            <div className="images-section-actions">
+              {onRegenerateAllImages && (
+                <button
+                  className="action-btn regenerate-btn regenerate-all-btn"
+                  onClick={handleRegenerateAllImages}
+                  disabled={regeneratingAllImages || regeneratingImage !== null}
+                  title="Regenerate all images with fresh creatives"
+                >
+                  {regeneratingAllImages ? (
+                    <Loader size={14} strokeWidth={1.5} className="spinning" />
+                  ) : (
+                    <RefreshCw size={14} strokeWidth={1.5} />
+                  )}
+                  {regeneratingAllImages ? 'Regenerating...' : 'Regenerate All'}
+                </button>
+              )}
+              <button
+                className="toggle-images-btn"
+                onClick={() => setShowImages(!showImages)}
+              >
+                {showImages ? '🔼 Hide Images' : '🔽 Show Images'}
+              </button>
+            </div>
           </div>
 
           {showImages && (
-            <div className="images-grid">
-              {ad.images!.map((image, index) => (
-                <div key={index} className="image-card">
-                  <div className="image-container">
-                    {regeneratingImage === index && (
-                      <div className="regenerating-overlay">
-                        <Loader size={32} strokeWidth={1.5} className="spinning" />
-                        <span>Regenerating...</span>
-                      </div>
-                    )}
-                    <LazyImage
-                      src={image.imageUrl}
-                      alt={`Generated ad ${index + 1}`}
-                    />
-                  </div>
-                  <div className="image-actions">
-                    {onRegenerateImage && (
-                      <button
-                        className="action-btn regenerate-btn"
-                        onClick={() => handleRegenerateImage(index)}
-                        disabled={regeneratingImage !== null}
-                        title="Generate a new image for this variation"
-                      >
-                        {regeneratingImage === index ? (
-                          <Loader size={14} strokeWidth={1.5} className="spinning" />
-                        ) : (
-                          <RefreshCw size={14} strokeWidth={1.5} />
-                        )}
-                        {regeneratingImage === index ? 'Regenerating...' : 'Regenerate'}
-                      </button>
-                    )}
-                    <button
-                      className="action-btn download-btn"
-                      onClick={() => handleDownloadImage(image.imageUrl, index)}
-                      disabled={downloadingImage === index}
-                    >
-                      {downloadingImage === index ? '⏳' : '📥'} Download
-                    </button>
-                  </div>
+            <div className="images-grid-wrapper">
+              {regeneratingAllImages && (
+                <div className="regenerating-all-overlay">
+                  <Loader size={36} strokeWidth={1.5} className="spinning" />
+                  <span>Regenerating all images...</span>
                 </div>
-              ))}
+              )}
+              <div className={`images-grid${regeneratingAllImages ? ' images-grid-dimmed' : ''}`}>
+                {ad.images!.map((image, index) => (
+                  <div key={index} className="image-card">
+                    <div className="image-container">
+                      {regeneratingImage === index && (
+                        <div className="regenerating-overlay">
+                          <Loader size={32} strokeWidth={1.5} className="spinning" />
+                          <span>Regenerating...</span>
+                        </div>
+                      )}
+                      <LazyImage
+                        src={image.imageUrl}
+                        alt={`Generated ad ${index + 1}`}
+                      />
+                    </div>
+                    <div className="image-actions">
+                      {onRegenerateImage && (
+                        <button
+                          className="action-btn regenerate-btn"
+                          onClick={() => handleRegenerateImage(index)}
+                          disabled={regeneratingImage !== null || regeneratingAllImages}
+                          title="Generate a new image for this variation"
+                        >
+                          {regeneratingImage === index ? (
+                            <Loader size={14} strokeWidth={1.5} className="spinning" />
+                          ) : (
+                            <RefreshCw size={14} strokeWidth={1.5} />
+                          )}
+                          {regeneratingImage === index ? 'Regenerating...' : 'Regenerate'}
+                        </button>
+                      )}
+                      <button
+                        className="action-btn download-btn"
+                        onClick={() => handleDownloadImage(image.imageUrl, index)}
+                        disabled={downloadingImage === index || regeneratingAllImages}
+                      >
+                        {downloadingImage === index ? '⏳' : '📥'} Download
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

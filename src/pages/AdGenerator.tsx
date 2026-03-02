@@ -7,6 +7,7 @@ import {
   generateCopyOptions,
   regenerateSingleCopy,
   generateAdImage,
+  regenerateAllImages,
   generateAdVideoWithVeo,
   CONCEPT_ANGLES,
   IMAGE_SIZE_OPTIONS,
@@ -941,6 +942,72 @@ const AdGenerator = () => {
       throw new Error(err instanceof Error ? err.message : 'Failed to regenerate image');
     }
   }, [generatedAds, analysisData, similarityValue, imageSize, selectedProduct]);
+
+  // Regenerate ALL images for an ad package (keeps copy intact)
+  const handleRegenerateAllImages = useCallback(async (adId: string) => {
+    const adToUpdate = generatedAds.find(ad => ad.id === adId);
+    if (!adToUpdate) {
+      console.error('Cannot regenerate: ad not found');
+      return;
+    }
+
+    // Use the original variation count from generation, fall back to current image count or UI state
+    const count = adToUpdate.variationCount || adToUpdate.images?.length || variationCount;
+    console.log(`🔄 Regenerating all ${count} images for ad ${adId}`);
+
+    try {
+      const result = await regenerateAllImages({
+        audienceType: adToUpdate.audienceType,
+        analysisData,
+        variationCount: count,
+        similarityLevel: similarityValue,
+        imageSize,
+        productContext: selectedProduct || undefined,
+        imageHeadlines: adToUpdate.imageHeadlines,
+      });
+
+      // Use indexedResults for per-slot merging: keep existing image where new generation failed
+      const existingImages = adToUpdate.images || [];
+      const mergedImages: typeof existingImages = [];
+      for (let i = 0; i < result.indexedResults.length; i++) {
+        const newImg = result.indexedResults[i];
+        if (newImg) {
+          mergedImages.push(newImg);
+        } else if (existingImages[i]) {
+          mergedImages.push(existingImages[i]);
+        }
+      }
+
+      const updatedAds = generatedAds.map(ad => {
+        if (ad.id === adId) {
+          return {
+            ...ad,
+            images: mergedImages.length > 0 ? mergedImages : ad.images,
+            imageError: result.imageError,
+          };
+        }
+        return ad;
+      });
+
+      setGeneratedAds(updatedAds);
+      console.log(`✅ Regenerated ${result.images.length}/${count} images`);
+
+      if (result.images.length === 0) {
+        throw new Error(result.imageError || 'All images failed to generate');
+      }
+    } catch (err: unknown) {
+      // Ensure imageError is set on the ad even on total failure
+      const errorMessage = err instanceof Error ? err.message : 'Failed to regenerate images';
+      setGeneratedAds(prev => prev.map(ad => {
+        if (ad.id === adId) {
+          return { ...ad, imageError: errorMessage };
+        }
+        return ad;
+      }));
+      console.error('❌ Failed to regenerate all images:', err);
+      throw new Error(errorMessage);
+    }
+  }, [generatedAds, analysisData, similarityValue, imageSize, selectedProduct, variationCount]);
 
   // Regenerate a single video within an ad package
   const handleRegenerateVideo = useCallback(async (adId: string, videoIndex: number) => {
@@ -1954,6 +2021,7 @@ const AdGenerator = () => {
                 key={ad.id}
                 ad={ad}
                 onRegenerateImage={ad.adType === 'image' ? handleRegenerateImage : undefined}
+                onRegenerateAllImages={ad.adType === 'image' ? handleRegenerateAllImages : undefined}
                 onRegenerateVideo={ad.adType === 'video' ? handleRegenerateVideo : undefined}
               />
             ))}
