@@ -45,8 +45,20 @@
   gap: 10px;
 }
 
+/* Copy option wrapper for regenerate button layout */
+.copy-option-wrapper {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.copy-option-wrapper .copy-option {
+  flex: 1;
+}
+
 /* Individual Copy Option */
 .copy-option {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 14px;
@@ -247,4 +259,91 @@
   font-size: 11px;
   color: var(--text-secondary);
   line-height: 1.4;
+}
+
+/* CTA option wrapper for regenerate button layout */
+.cta-option-wrapper {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.cta-option-wrapper .cta-option {
+  flex: 1;
+}
+
+/* Regenerate button for individual copy items */
+.copy-regenerate-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-top: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.copy-regenerate-btn:hover:not(:disabled) {
+  color: var(--accent-violet);
+  border-color: var(--accent-violet);
+  background: rgba(168, 85, 247, 0.05);
+}
+
+.copy-regenerate-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.copy-regenerate-btn:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 2px;
+}
+
+/* Regenerating overlay on individual copy items */
+.copy-regenerating-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  z-index: 5;
+  border-radius: 12px;
+}
+
+.copy-regenerating-overlay span {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent-violet);
+}
+
+/* CTA overlay needs slightly smaller radius */
+.cta-option .copy-regenerating-overlay {
+  border-radius: 10px;
+}
+
+/* Spinner animation */
+@keyframes copy-regen-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.copy-regen-spinner {
+  animation: copy-regen-spin 1s linear infinite;
+  color: var(--accent-violet);
+}
+
+/* CTA option needs position relative for overlay */
+.cta-option {
+  position: relative;
 }

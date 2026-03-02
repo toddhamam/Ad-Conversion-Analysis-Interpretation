@@ -1803,6 +1803,184 @@ Return JSON only:
 }
 
 /**
+ * Regenerate a single copy item (headline, body text, or CTA) without regenerating the entire batch.
+ * Uses the same prompt context as generateCopyOptions() but requests exactly one replacement,
+ * listing existing items to avoid duplicates.
+ */
+export async function regenerateSingleCopy(config: {
+  copyType: 'headline' | 'bodyText' | 'callToAction';
+  existingItems: CopyOption[];
+  audienceType: AudienceType;
+  conceptType: ConceptType;
+  analysisData: ChannelAnalysisResult | null;
+  reasoningEffort?: ReasoningEffort;
+  copyLength?: CopyLength;
+  copyVariationLevel?: number;
+  productContext?: ProductContext;
+  adLibraryInspirations?: import('../types').AdLibraryInspiration[];
+}): Promise<CopyOption> {
+  if (!isOpenAIConfigured()) {
+    throw new Error('AI API not configured. Please contact support.');
+  }
+
+  const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
+  const copyLength = config.copyLength ?? DEFAULT_COPY_LENGTH;
+  const copyVariation = config.copyVariationLevel ?? 30;
+  const copyLengthConfig = COPY_LENGTH_OPTIONS.find(opt => opt.id === copyLength) ?? COPY_LENGTH_OPTIONS[0];
+  const typeLabel = config.copyType === 'headline' ? 'headline'
+    : config.copyType === 'bodyText' ? 'body copy'
+    : 'call-to-action';
+
+  console.log(`🔄 Regenerating single ${typeLabel} for ${config.audienceType} audience | Variation: ${copyVariation}%`);
+
+  const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
+  const conceptAngle = CONCEPT_ANGLES[config.conceptType];
+  const isAutoMode = config.conceptType === 'auto';
+  const analysis = config.analysisData;
+  const hasAnalysis = !!analysis;
+
+  // Build analysis context (same logic as generateCopyOptions)
+  let analysisContext = '';
+  if (hasAnalysis) {
+    analysisContext += `\n=== CHANNEL PERFORMANCE SUMMARY ===
+${analysis.executiveSummary}
+Overall Health Score: ${analysis.overallHealthScore}/10
+`;
+    if (analysis.topAds && analysis.topAds.length > 0) {
+      analysisContext += `\n=== YOUR TOP PERFORMING ADS ===\n`;
+      analysis.topAds.forEach((ad, i) => {
+        analysisContext += `TOP AD #${i + 1} (${(ad.conversionRate * 100).toFixed(2)}% CVR): "${ad.headline}" — ${ad.whyItWorks}\n`;
+      });
+    }
+    if (analysis.winningPatterns) {
+      analysisContext += `\n=== WINNING PATTERNS ===
+- Headlines: ${analysis.winningPatterns.headlines?.join(' | ') || 'N/A'}
+- Copy elements: ${analysis.winningPatterns.copyElements?.join(' | ') || 'N/A'}
+- Emotional triggers: ${analysis.winningPatterns.emotionalTriggers?.join(', ') || 'N/A'}
+- CTAs: ${analysis.winningPatterns.callToActions?.join(', ') || 'N/A'}
+`;
+    }
+    if (analysis.losingPatterns) {
+      analysisContext += `\n=== AVOID THESE ===
+- Headlines: ${analysis.losingPatterns.headlines?.join(' | ') || 'N/A'}
+- Issues: ${analysis.losingPatterns.issues?.join(', ') || 'N/A'}
+`;
+    }
+  }
+
+  // Build inspiration context
+  let inspirationContext = '';
+  if (config.adLibraryInspirations && config.adLibraryInspirations.length > 0) {
+    inspirationContext += `\n=== COMPETITOR INSPIRATION ===\n`;
+    config.adLibraryInspirations.forEach((insp, i) => {
+      inspirationContext += `#${i + 1} ${insp.pageName}: `;
+      if (insp.adCreativeLinkTitles.length > 0) {
+        inspirationContext += `Headlines: ${insp.adCreativeLinkTitles.join(' | ')} `;
+      }
+      if (insp.adCreativeBodies.length > 0) {
+        inspirationContext += `Body: ${insp.adCreativeBodies[0].substring(0, 200)}`;
+      }
+      inspirationContext += '\n';
+    });
+    inspirationContext += `Create ORIGINAL copy inspired by these — DO NOT copy verbatim.\n`;
+  }
+
+  // Build copy variation instructions (reuse the same tier logic)
+  const getCopyVariationLabel = (variation: number, hasData: boolean): string => {
+    if (hasData) {
+      if (variation <= 20) return 'PATTERN MATCH — replicate winning patterns faithfully';
+      if (variation <= 40) return 'FRESH WORDING — same playbook, different words';
+      if (variation <= 60) return 'BALANCED MIX — blend proven patterns with new angles';
+      if (variation <= 80) return 'NEW ANGLES — push beyond existing patterns';
+      return 'BOLD & DIFFERENT — radical departure from all patterns';
+    } else {
+      if (variation <= 20) return 'CONSERVATIVE — safe, proven direct-response copy';
+      if (variation <= 40) return 'SLIGHTLY CREATIVE — conventional with creative twists';
+      if (variation <= 60) return 'BALANCED — mix conventional and experimental';
+      if (variation <= 80) return 'CREATIVE — unconventional hooks, fresh angles';
+      return 'EXPERIMENTAL — break formulas entirely, contrarian approaches';
+    }
+  };
+
+  // Build system prompt (same structure as generateCopyOptions)
+  let systemPrompt: string;
+  if (isAutoMode && hasAnalysis) {
+    systemPrompt = `You are an elite direct-response copywriter with access to REAL PERFORMANCE DATA. Generate high-converting ad copy that REPLICATES and IMPROVES upon proven winning patterns.`;
+  } else if (hasAnalysis) {
+    systemPrompt = `You are an elite direct-response copywriter with REAL PERFORMANCE DATA. Generate ad copy using the ${conceptAngle.name} concept, INFORMED by actual performance data.`;
+  } else {
+    systemPrompt = `You are an expert direct-response copywriter specializing in high-converting Meta/Facebook ads. Generate compelling copy using the ${conceptAngle.name} approach.`;
+  }
+
+  if (config.adLibraryInspirations?.length) {
+    systemPrompt += ` You also have competitor/industry ads as creative inspiration. Study their patterns but create ORIGINAL copy.`;
+  }
+
+  systemPrompt += `\n\nCopy variation level: ${getCopyVariationLabel(copyVariation, hasAnalysis)}`;
+
+  // Build product context
+  let productSection = '';
+  if (config.productContext) {
+    const p = config.productContext;
+    productSection = `\nPRODUCT: "${p.name}" by ${p.author}. ${p.description}${p.landingPageUrl ? ` Landing page: ${p.landingPageUrl}` : ''}
+All copy MUST reference "${p.name}" by ${p.author} — no other product or brand names.\n`;
+  }
+
+  // Build existing items list for dedup
+  const existingList = config.existingItems
+    .map((item, i) => `${i + 1}. "${item.text}"`)
+    .join('\n');
+
+  // Type-specific constraints
+  let typeConstraints: string;
+  if (config.copyType === 'headline') {
+    typeConstraints = 'Max 40 characters. Punchy, scroll-stopping headline.';
+  } else if (config.copyType === 'bodyText') {
+    typeConstraints = `${copyLength === 'long' ? 'LONG-FORM' : 'SHORT-FORM'}, max ${copyLengthConfig.maxChars} characters.${copyLength === 'long' ? ' Use storytelling, line breaks, emotional depth.' : ' Punchy and concise.'}`;
+  } else {
+    typeConstraints = 'Short, action-oriented phrase. Creates urgency.';
+  }
+
+  const userPrompt = `Generate exactly 1 NEW ${typeLabel.toUpperCase()} for a ${config.audienceType.toUpperCase()} audience${isAutoMode ? ' using analysis-driven insights' : ` using the ${conceptAngle.name} concept`}.
+${productSection}
+AUDIENCE: Focus: ${audienceAngle.focus} | Tone: ${audienceAngle.tone} | Messaging: ${audienceAngle.messaging}
+${analysisContext}${inspirationContext}
+=== EXISTING ${typeLabel.toUpperCase()}S (DO NOT DUPLICATE ANY OF THESE) ===
+${existingList}
+
+=== YOUR TASK ===
+Generate exactly 1 new ${typeLabel} that is DIFFERENT from all existing ones above.
+${typeConstraints}
+
+Return JSON only:
+{"id": "x1", "text": "the ${typeLabel} text", "rationale": "why this works"}`;
+
+  const response = await callOpenAI([
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt },
+  ], { maxTokens: 500, reasoningEffort });
+
+  try {
+    let cleanedResponse = response.trim();
+    if (cleanedResponse.startsWith('```json')) cleanedResponse = cleanedResponse.slice(7);
+    if (cleanedResponse.startsWith('```')) cleanedResponse = cleanedResponse.slice(3);
+    if (cleanedResponse.endsWith('```')) cleanedResponse = cleanedResponse.slice(0, -3);
+
+    const parsed = JSON.parse(cleanedResponse.trim());
+
+    // Override ID with a unique one to avoid collisions
+    const prefix = config.copyType === 'headline' ? 'h' : config.copyType === 'bodyText' ? 'b' : 'c';
+    parsed.id = `${prefix}${config.existingItems.length + 1}_${Date.now()}`;
+
+    console.log(`✅ Single ${typeLabel} regenerated successfully`);
+    return parsed as CopyOption;
+  } catch (error: unknown) {
+    console.error(`❌ Failed to parse regenerated ${typeLabel}:`, error);
+    throw new Error(`Failed to regenerate ${typeLabel}`);
+  }
+}
+
+/**
  * Analyze reference images to extract specific visual characteristics
  * This enables precise style replication in generated images
  */
