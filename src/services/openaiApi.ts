@@ -2159,14 +2159,22 @@ Be EXTREMELY specific - your descriptions will be used to generate new images th
       const apiUrl = `${GEMINI_API_URL}/${model}:generateContent`;
       console.log(`🔍 Analyzing reference images with ${model}...`);
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': GEMINI_API_KEY,
-        },
-        body: analysisBody,
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout
+      let response: Response;
+      try {
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': GEMINI_API_KEY,
+          },
+          body: analysisBody,
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!response.ok) {
         console.warn(`⚠️ Reference image analysis failed with ${model} (${response.status})`);
@@ -2557,20 +2565,27 @@ Explore fresh visual directions while maintaining professional quality.`,
     console.log(`🎯 Trying image model: ${model}`);
 
     // Retry logic for transient Gemini errors (503, 429, 500)
-    const MAX_RETRIES = 4;
-    const RETRY_DELAYS = [2000, 4000, 8000, 15000]; // exponential backoff with longer final delay
+    const MAX_RETRIES = 2;
+    const RETRY_DELAYS = [2000, 5000]; // reduced backoff to avoid long stalls
     let response: Response | null = null;
 
     try {
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': GEMINI_API_KEY,
-          },
-          body: requestBodyStr,
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout per request
+        try {
+          response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': GEMINI_API_KEY,
+            },
+            body: requestBodyStr,
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
 
         if (response.ok) break;
 
@@ -2654,7 +2669,12 @@ Explore fresh visual directions while maintaining professional quality.`,
       if (err instanceof SafetyBlockError) {
         throw err;
       }
-      lastError = err instanceof Error ? err : new Error(String(err));
+      // Convert AbortError (timeout) to a descriptive message
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        lastError = new Error(`Image generation timed out after 60s (${model})`);
+      } else {
+        lastError = err instanceof Error ? err : new Error(String(err));
+      }
       const isFinalModel = model === modelsToTry[modelsToTry.length - 1];
       if (!isFinalModel) {
         console.warn(`⚠️ ${model} failed, trying fallback model...`, lastError.message);
@@ -3252,6 +3272,7 @@ export async function regenerateAllImages(config: {
   productContext?: ProductContext;
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
   imageHeadlines?: string[];
+  onProgress?: (message: string) => void;
 }): Promise<{ images: GeneratedImageResult[]; indexedResults: (GeneratedImageResult | null)[]; imageError?: string }> {
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
   console.log(`🖼️ Regenerating ${config.variationCount} image(s) for ${config.audienceType} audience`);
@@ -3278,6 +3299,7 @@ export async function regenerateAllImages(config: {
     }
 
     console.log(`📸 Pre-computing reference analysis for ${referenceImages.length} images (shared across ${config.variationCount} variations)`);
+    config.onProgress?.('ConversionIQ™ analyzing reference styles...');
     const refAnalysis = await analyzeReferenceImages(referenceImages);
     precomputedRefs = { referenceImages, refAnalysis };
   }
@@ -3288,6 +3310,7 @@ export async function regenerateAllImages(config: {
 
   for (let batch = 0; batch < config.variationCount; batch += MAX_CONCURRENT) {
     const batchEnd = Math.min(batch + MAX_CONCURRENT, config.variationCount);
+    config.onProgress?.(`ConversionIQ™ generating image ${batch + 1}${batchEnd > batch + 1 ? `-${batchEnd}` : ''} of ${config.variationCount}...`);
     const batchPromises = Array.from({ length: batchEnd - batch }, (_, i) => {
       const variationIndex = batch + i;
       const headlineText = config.imageHeadlines?.length
@@ -3379,6 +3402,8 @@ export async function generateAdPackage(config: {
   imageHeadlines?: string[];
   // Video generation configuration (aspect ratio, duration, resolution, model)
   videoConfig?: VideoConfig;
+  // Progress callback for UI updates during generation
+  onProgress?: (message: string) => void;
 }): Promise<GeneratedAdPackage> {
   const conceptName = config.conceptType ? CONCEPT_ANGLES[config.conceptType].name : 'general';
   const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
@@ -3424,6 +3449,7 @@ export async function generateAdPackage(config: {
       productContext: config.productContext,
       adLibraryInspirations: config.adLibraryInspirations,
       imageHeadlines: config.imageHeadlines,
+      onProgress: config.onProgress,
     });
     images = imageResult.images;
     imageError = imageResult.imageError;
