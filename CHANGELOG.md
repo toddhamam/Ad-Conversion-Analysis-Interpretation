@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-03-02 — Add retry logic for transient Gemini API errors
+
+### Overview
+Gemini image generation was failing immediately on transient 503 (Service Unavailable) errors with no retry. Unlike the Meta API which already had exponential backoff retry logic, a single temporary Gemini outage would surface as a hard failure to the user.
+
+### Fixed
+- **Retry with exponential backoff** for transient Gemini errors (429, 500, 503) — up to 3 retries with 2s, 4s, 8s delays before failing
+- **Friendlier error message** for 503/500 errors — users now see "Gemini image generation service is temporarily unavailable. Please try again in a few minutes." instead of the raw API status code
+
+### Files Modified
+- `src/services/openaiApi.ts` — Added retry loop in `generateAdImageWithGemini()` and 503/500 error case in `generateAdPackage()` error handler
+
+---
+
 ## 2026-03-02 — Add Copy Variation Level slider to CreativeIQ ad generator
 
 ### Overview
