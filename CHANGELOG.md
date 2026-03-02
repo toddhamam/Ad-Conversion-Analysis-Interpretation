@@ -17,17 +17,23 @@ Added the ability to regenerate individual headlines, body texts, and CTAs in th
 - `CopySelectionPanel.css` — added styles for `.copy-option-wrapper`, `.cta-option-wrapper`, `.copy-regenerate-btn`, `.copy-regenerating-overlay`, `.copy-regen-spinner`
 - `AdGenerator.tsx` — added `regeneratingCopyId` state, `handleRegenerateCopy` handler with stable callback wrappers, conditional prop passing (only for `copySource === 'generate'`)
 
+### Fixed
+- **Duplicate output bug** — Regeneration was passing all existing items (including the one being replaced) to the AI's "do not duplicate" list, over-constraining the prompt and causing it to return the same text. Fixed by filtering out the item being replaced and passing its text explicitly as context with instructions to use a completely different angle.
+- **Stale error banner** — Error messages from failed regeneration attempts now clear at the start of each new attempt instead of persisting after a subsequent success.
+
+
 ### Design Decisions
 - Regenerate buttons hidden in import and manual copy modes (only shown for AI-generated copy)
 - All regenerate buttons disabled while any item is regenerating (prevents concurrent API calls)
 - Uses `maxTokens: 500` (vs 3500 for full batch) since only one item is generated
 - Collision-proof IDs use `{prefix}{n}_{timestamp}` pattern (e.g., `h7_1709398765432`)
+- Old item's text passed as `itemToReplace` with strong instructions to generate a different angle/hook
 
 ### Files Modified
-- `src/services/openaiApi.ts` — Added `regenerateSingleCopy()` export
+- `src/services/openaiApi.ts` — Added `regenerateSingleCopy()` export with `itemToReplace` context
 - `src/components/CopySelectionPanel.tsx` — Added regenerate buttons, loading overlay, new props
 - `src/components/CopySelectionPanel.css` — Added wrapper, button, overlay, and spinner styles
-- `src/pages/AdGenerator.tsx` — Added state, handler, callbacks, prop wiring, navigation guards
+- `src/pages/AdGenerator.tsx` — Added state, handler, callbacks, prop wiring, navigation guards, error clearing
 
 ---
 

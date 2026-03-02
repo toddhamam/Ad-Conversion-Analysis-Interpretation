@@ -561,11 +561,22 @@ const AdGenerator = () => {
   ) => {
     if (!copyOptions || regeneratingCopyId !== null) return;
 
+    setError(null);
+
+    // Filter out the item being regenerated — the AI should only avoid the items that will REMAIN
     const existingItems = copyType === 'headline'
+      ? copyOptions.headlines.filter(item => item.id !== copyId)
+      : copyType === 'bodyText'
+      ? copyOptions.bodyTexts.filter(item => item.id !== copyId)
+      : copyOptions.callToActions.filter(item => item.id !== copyId);
+
+    // Find the text of the item being replaced so the AI knows what to avoid
+    const allItems = copyType === 'headline'
       ? copyOptions.headlines
       : copyType === 'bodyText'
       ? copyOptions.bodyTexts
       : copyOptions.callToActions;
+    const itemToReplace = allItems.find(item => item.id === copyId)?.text;
 
     const wasSelected = copyType === 'headline'
       ? selectedHeadlines.includes(copyId)
@@ -580,6 +591,7 @@ const AdGenerator = () => {
       const newItem = await regenerateSingleCopy({
         copyType,
         existingItems,
+        itemToReplace,
         audienceType,
         conceptType,
         analysisData,

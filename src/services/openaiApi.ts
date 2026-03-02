@@ -1809,7 +1809,8 @@ Return JSON only:
  */
 export async function regenerateSingleCopy(config: {
   copyType: 'headline' | 'bodyText' | 'callToAction';
-  existingItems: CopyOption[];
+  existingItems: CopyOption[];       // Items that will REMAIN (excludes the one being replaced)
+  itemToReplace?: string;            // Text of the item being replaced (for context)
   audienceType: AudienceType;
   conceptType: ConceptType;
   analysisData: ChannelAnalysisResult | null;
@@ -1941,19 +1942,25 @@ All copy MUST reference "${p.name}" by ${p.author} — no other product or brand
     typeConstraints = 'Short, action-oriented phrase. Creates urgency.';
   }
 
+  // Build the replacement context
+  const replacementContext = config.itemToReplace
+    ? `\nThe user is REPLACING this ${typeLabel} because they don't like it: "${config.itemToReplace}"
+You MUST generate something with a COMPLETELY DIFFERENT angle, hook, or approach. Do NOT rephrase or reword the above — write something fresh.\n`
+    : '';
+
   const userPrompt = `Generate exactly 1 NEW ${typeLabel.toUpperCase()} for a ${config.audienceType.toUpperCase()} audience${isAutoMode ? ' using analysis-driven insights' : ` using the ${conceptAngle.name} concept`}.
 ${productSection}
 AUDIENCE: Focus: ${audienceAngle.focus} | Tone: ${audienceAngle.tone} | Messaging: ${audienceAngle.messaging}
-${analysisContext}${inspirationContext}
-=== EXISTING ${typeLabel.toUpperCase()}S (DO NOT DUPLICATE ANY OF THESE) ===
+${analysisContext}${inspirationContext}${replacementContext}${existingList ? `=== OTHER ${typeLabel.toUpperCase()}S ALREADY IN USE (DO NOT DUPLICATE) ===
 ${existingList}
-
+` : ''}
 === YOUR TASK ===
-Generate exactly 1 new ${typeLabel} that is DIFFERENT from all existing ones above.
+Generate exactly 1 BRAND NEW ${typeLabel} that uses a DIFFERENT angle, hook, or emotional trigger than anything listed above.
 ${typeConstraints}
+CRITICAL: The text you generate MUST be completely new — not a rephrasing of any existing ${typeLabel}.
 
 Return JSON only:
-{"id": "x1", "text": "the ${typeLabel} text", "rationale": "why this works"}`;
+{"id": "x1", "text": "your new ${typeLabel} text here", "rationale": "why this works"}`;
 
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
