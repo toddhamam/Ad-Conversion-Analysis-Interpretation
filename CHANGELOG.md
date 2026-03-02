@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-03-02 — Add Gemini model fallback and improve image generation resilience
+
+### Overview
+Image generation was failing due to `gemini-3-pro-image-preview` experiencing high API failure rates (~45% during peak hours). Added automatic model fallback, separated text analysis from image models, and improved error classification to prevent unnecessary retries on safety-blocked prompts.
+
+### Added
+- **Fallback image model** (`gemini-3.1-flash-image-preview`) — automatically tried when the primary model fails with transient errors (429, 500, 503)
+- **`SafetyBlockError` class** — non-retryable error type for safety/policy blocks that fail fast without attempting fallback models
+- **Explicit safety finish reason classification** — `SAFETY`, `RECITATION`, `BLOCKLIST`, `PROHIBITED_CONTENT`, `SPII`, `IMAGE_SAFETY` fail fast; other unexpected finish reasons (e.g. `OTHER`, `LANGUAGE`) are treated as retryable
+- **Serialization error handling** in `analyzeReferenceImages` — catches `RangeError` from large base64 payloads and gracefully falls back to default analysis
+- **Diagnostic logging** — failure counts, per-image error messages, and model names logged for troubleshooting
+
+### Changed
+- **`analyzeReferenceImages`** now uses `gemini-2.5-flash` (text model) instead of the image model, with automatic fallback to `gemini-3-pro-image-preview` if the text model is unavailable
+- **`generateAdImageWithGemini`** rewritten with dual-model fallback loop (5 retries per model with exponential backoff up to 15s)
+- **Error messages in `generateAdPackage`** now categorize failures (overloaded, safety-blocked, quota, permissions, memory) with specific user-facing guidance
+
+### Files Modified
+- `src/services/openaiApi.ts` — Model constants, `SafetyBlockError` class, `analyzeReferenceImages` model fallback + serialization guard, `generateAdImageWithGemini` dual-model cascade, `generateAdPackage` error diagnostics
+
+---
+
 ## 2026-03-02 — Add individual copy regeneration to CreativeIQ
 
 ### Overview
