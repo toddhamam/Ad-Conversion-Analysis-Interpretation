@@ -1,5 +1,6 @@
 """Gmail SMTP sender with warmup enforcement."""
 
+import re
 import smtplib
 import time
 from datetime import datetime
@@ -38,6 +39,9 @@ def send_email(to, subject, body):
         full_body = body
         if signature and "STOP" not in body:
             full_body = body + signature
+        # Strip unreplaced {variable} placeholders to prevent template fields showing in emails
+        full_body = re.sub(r'(?<!\{)\{([a-zA-Z_][a-zA-Z0-9_]*)\}(?!\})', '', full_body)
+        full_body = re.sub(r'\n{3,}', '\n\n', full_body).strip()
 
         msg = MIMEText(full_body, "plain", "utf-8")
         msg["From"] = f"{from_name} <{gmail_address}>" if from_name else gmail_address
