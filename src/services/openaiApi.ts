@@ -474,6 +474,7 @@ export interface GeneratedAdPackage {
   imageError?: string; // Error message if image generation failed
   videoError?: string; // Error message if video generation failed
   imageHeadlines?: string[]; // Headlines rendered into images, indexed by variation
+  variationCount?: number; // Original requested variation count (for retry)
 }
 
 // Copy Options for multi-step generation
@@ -3237,6 +3238,121 @@ export async function generateAdVideoWithVeo(config: {
  * If selectedCopy is provided, uses pre-selected copy instead of generating new
  * @param config - Configuration including ad type, audience, variations, and reasoning effort
  */
+/**
+ * Regenerate all images for an ad package without regenerating copy.
+ * Handles reference pre-computation, batched generation, memory cleanup, and error categorization.
+ * Used by both generateAdPackage (initial generation) and the "Regenerate All Images" UI action.
+ */
+export async function regenerateAllImages(config: {
+  audienceType: AudienceType;
+  analysisData: ChannelAnalysisResult | null;
+  variationCount: number;
+  similarityLevel?: number;
+  imageSize?: ImageSize;
+  productContext?: ProductContext;
+  adLibraryInspirations?: import('../types').AdLibraryInspiration[];
+  imageHeadlines?: string[];
+}): Promise<{ images: GeneratedImageResult[]; indexedResults: (GeneratedImageResult | null)[]; imageError?: string }> {
+  const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
+  console.log(`🖼️ Regenerating ${config.variationCount} image(s) for ${config.audienceType} audience`);
+
+  // Pre-compute reference images and analysis ONCE before parallel generation
+  let precomputedRefs: {
+    referenceImages: Array<{ data: string; mimeType: string }>;
+    refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
+  } | undefined;
+
+  if (USE_GEMINI_FOR_IMAGES && isGeminiConfigured()) {
+    const MIN_QUALITY_SCORE = 60;
+    const cachedImages = getTopHighQualityCachedImages(3, MIN_QUALITY_SCORE);
+    const referenceImages: Array<{ data: string; mimeType: string }> = cachedImages.map(cached => ({
+      data: cached.base64Data,
+      mimeType: cached.mimeType
+    }));
+
+    if (config.productContext?.productImages?.length) {
+      const productImgs = config.productContext.productImages.slice(0, 3);
+      productImgs.forEach(img => {
+        referenceImages.push({ data: img.base64Data, mimeType: img.mimeType });
+      });
+    }
+
+    console.log(`📸 Pre-computing reference analysis for ${referenceImages.length} images (shared across ${config.variationCount} variations)`);
+    const refAnalysis = await analyzeReferenceImages(referenceImages);
+    precomputedRefs = { referenceImages, refAnalysis };
+  }
+
+  // Generate images with concurrency limit of 2 to prevent memory exhaustion
+  const MAX_CONCURRENT = 2;
+  const allResults: PromiseSettledResult<GeneratedImageResult>[] = [];
+
+  for (let batch = 0; batch < config.variationCount; batch += MAX_CONCURRENT) {
+    const batchEnd = Math.min(batch + MAX_CONCURRENT, config.variationCount);
+    const batchPromises = Array.from({ length: batchEnd - batch }, (_, i) => {
+      const variationIndex = batch + i;
+      const headlineText = config.imageHeadlines?.length
+        ? config.imageHeadlines[variationIndex % config.imageHeadlines.length]
+        : undefined;
+      return generateAdImage({
+        audienceType: config.audienceType,
+        analysisData: config.analysisData,
+        variationIndex,
+        totalVariations: config.variationCount,
+        similarityLevel: config.similarityLevel,
+        imageSize,
+        productContext: config.productContext,
+        precomputedRefs,
+        adLibraryInspirations: config.adLibraryInspirations,
+        headlineText,
+      });
+    });
+    const batchResults = await Promise.allSettled(batchPromises);
+    allResults.push(...batchResults);
+  }
+
+  // Free reference image memory now that all images are generated
+  if (precomputedRefs) {
+    precomputedRefs.referenceImages.length = 0;
+    precomputedRefs = undefined;
+  }
+
+  // Indexed results: preserves position — null for failed slots, image for successful ones
+  const indexedResults: (GeneratedImageResult | null)[] = allResults.map(r =>
+    r.status === 'fulfilled' ? r.value : null
+  );
+
+  const images = allResults
+    .filter((r): r is PromiseFulfilledResult<GeneratedImageResult> => r.status === 'fulfilled')
+    .map(r => r.value);
+
+  let imageError: string | undefined;
+  const failedResults = allResults.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+  if (failedResults.length > 0) {
+    console.warn(`⚠️ ${failedResults.length}/${allResults.length} image(s) failed to generate`);
+    failedResults.forEach((r, i) => {
+      const msg = r.reason?.message || String(r.reason);
+      console.error(`  Image failure ${i + 1}: ${msg.substring(0, 300)}`);
+    });
+    const firstError = failedResults[0].reason;
+    const errorMessage = firstError?.message || String(firstError);
+    if (errorMessage.includes('429') || errorMessage.includes('quota')) {
+      imageError = 'Image generation quota exceeded. Please wait a few minutes and try again, or check your billing settings.';
+    } else if (errorMessage.includes('503') || errorMessage.includes('overloaded') || errorMessage.includes('500')) {
+      imageError = 'Image generation service is temporarily overloaded. Both primary and fallback models were tried. Please try again in a few minutes.';
+    } else if (errorMessage.includes('blocked') || errorMessage.includes('SAFETY') || errorMessage.includes('safety')) {
+      imageError = 'Image generation was blocked by a safety filter. Try adjusting your prompt or product description.';
+    } else if (errorMessage.includes('RangeError') || errorMessage.includes('Invalid string length') || errorMessage.includes('out of memory')) {
+      imageError = 'Image generation ran out of memory. Try reducing variation count or clearing reference images.';
+    } else if (errorMessage.includes('403') || errorMessage.includes('billing') || errorMessage.includes('permission')) {
+      imageError = 'Image generation API access denied. Please verify your API key and billing are configured correctly.';
+    } else {
+      imageError = `Image generation failed: ${errorMessage}`;
+    }
+  }
+
+  return { images, indexedResults, imageError };
+}
+
 export async function generateAdPackage(config: {
   adType: AdType;
   audienceType: AudienceType;
@@ -3299,99 +3415,18 @@ export async function generateAdPackage(config: {
   let imageError: string | undefined;
 
   if (config.adType === 'image') {
-    // Pre-compute reference images and analysis ONCE before parallel generation
-    // This prevents each parallel call from redundantly fetching and analyzing references
-    // (Previously caused 5x redundant Gemini API calls + ~60-180MB of duplicate base64 data in memory)
-    let precomputedRefs: {
-      referenceImages: Array<{ data: string; mimeType: string }>;
-      refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
-    } | undefined;
-
-    if (USE_GEMINI_FOR_IMAGES && isGeminiConfigured()) {
-      const MIN_QUALITY_SCORE = 60;
-      const cachedImages = getTopHighQualityCachedImages(3, MIN_QUALITY_SCORE);
-      const referenceImages: Array<{ data: string; mimeType: string }> = cachedImages.map(cached => ({
-        data: cached.base64Data,
-        mimeType: cached.mimeType
-      }));
-
-      if (config.productContext?.productImages?.length) {
-        const productImgs = config.productContext.productImages.slice(0, 3);
-        productImgs.forEach(img => {
-          referenceImages.push({ data: img.base64Data, mimeType: img.mimeType });
-        });
-      }
-
-      console.log(`📸 Pre-computing reference analysis for ${referenceImages.length} images (shared across ${config.variationCount} variations)`);
-      const refAnalysis = await analyzeReferenceImages(referenceImages);
-      precomputedRefs = { referenceImages, refAnalysis };
-    }
-
-    // Generate images with concurrency limit of 2 to prevent memory exhaustion
-    // Each Gemini request carries large base64 payloads; too many in parallel crashes Chrome
-    const MAX_CONCURRENT = 2;
-    const allResults: PromiseSettledResult<GeneratedImageResult>[] = [];
-
-    for (let batch = 0; batch < config.variationCount; batch += MAX_CONCURRENT) {
-      const batchEnd = Math.min(batch + MAX_CONCURRENT, config.variationCount);
-      const batchPromises = Array.from({ length: batchEnd - batch }, (_, i) => {
-        const variationIndex = batch + i;
-        const headlineText = config.imageHeadlines?.length
-          ? config.imageHeadlines[variationIndex % config.imageHeadlines.length]
-          : undefined;
-        return generateAdImage({
-          audienceType: config.audienceType,
-          analysisData: config.analysisData,
-          variationIndex,
-          totalVariations: config.variationCount,
-          similarityLevel: config.similarityLevel,
-          imageSize: config.imageSize,
-          productContext: config.productContext,
-          precomputedRefs,
-          adLibraryInspirations: config.adLibraryInspirations,
-          headlineText,
-        });
-      });
-      const batchResults = await Promise.allSettled(batchPromises);
-      allResults.push(...batchResults);
-    }
-
-    // Free reference image memory now that all images are generated
-    if (precomputedRefs) {
-      precomputedRefs.referenceImages.length = 0;
-      precomputedRefs = undefined;
-    }
-
-    const imageResults = allResults;
-    images = imageResults
-      .filter((r): r is PromiseFulfilledResult<GeneratedImageResult> => r.status === 'fulfilled')
-      .map(r => r.value);
-
-    const failedResults = imageResults.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
-    if (failedResults.length > 0) {
-      console.warn(`⚠️ ${failedResults.length}/${imageResults.length} image(s) failed to generate`);
-      // Log all failure reasons for diagnostics
-      failedResults.forEach((r, i) => {
-        const msg = r.reason?.message || String(r.reason);
-        console.error(`  Image failure ${i + 1}: ${msg.substring(0, 300)}`);
-      });
-      // Extract error message from first failure
-      const firstError = failedResults[0].reason;
-      const errorMessage = firstError?.message || String(firstError);
-      if (errorMessage.includes('429') || errorMessage.includes('quota')) {
-        imageError = 'Image generation quota exceeded. Please wait a few minutes and try again, or check your billing settings.';
-      } else if (errorMessage.includes('503') || errorMessage.includes('overloaded') || errorMessage.includes('500')) {
-        imageError = 'Image generation service is temporarily overloaded. Both primary and fallback models were tried. Please try again in a few minutes.';
-      } else if (errorMessage.includes('blocked') || errorMessage.includes('SAFETY') || errorMessage.includes('safety')) {
-        imageError = 'Image generation was blocked by a safety filter. Try adjusting your prompt or product description.';
-      } else if (errorMessage.includes('RangeError') || errorMessage.includes('Invalid string length') || errorMessage.includes('out of memory')) {
-        imageError = 'Image generation ran out of memory. Try reducing variation count or clearing reference images.';
-      } else if (errorMessage.includes('403') || errorMessage.includes('billing') || errorMessage.includes('permission')) {
-        imageError = 'Image generation API access denied. Please verify your API key and billing are configured correctly.';
-      } else {
-        imageError = `Image generation failed: ${errorMessage}`;
-      }
-    }
+    const imageResult = await regenerateAllImages({
+      audienceType: config.audienceType,
+      analysisData: config.analysisData,
+      variationCount: config.variationCount,
+      similarityLevel: config.similarityLevel,
+      imageSize: config.imageSize,
+      productContext: config.productContext,
+      adLibraryInspirations: config.adLibraryInspirations,
+      imageHeadlines: config.imageHeadlines,
+    });
+    images = imageResult.images;
+    imageError = imageResult.imageError;
 
     whyItWorks = `This ad package uses ${config.audienceType} audience targeting with ${images.length} image variation(s). ${copy.rationale}`;
   } else {
@@ -3464,6 +3499,7 @@ export async function generateAdPackage(config: {
       imageError,
       videoError,
       imageHeadlines: config.imageHeadlines,
+      variationCount: config.variationCount,
     };
   }
 
@@ -3481,5 +3517,6 @@ export async function generateAdPackage(config: {
     whyItWorks,
     imageError,
     imageHeadlines: config.imageHeadlines,
+    variationCount: config.variationCount,
   };
 }

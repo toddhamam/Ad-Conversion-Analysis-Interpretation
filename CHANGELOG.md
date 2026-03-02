@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-03-02 — Add "Regenerate All Images" to CreativeIQ ad generator
+
+### Overview
+Added a bulk image regeneration feature that lets users regenerate the entire image set for an ad package without re-running copy generation. Two entry points: a "Regenerate All" button in the images section header, and a "Retry All Images" button in the error banner when all images fail.
+
+### Added
+- **`regenerateAllImages()` function** in `openaiApi.ts` — extracted from `generateAdPackage()` as a reusable export. Handles reference pre-computation, batched generation (MAX_CONCURRENT=2), memory cleanup, and error categorization
+- **`onRegenerateAllImages` prop** on `GeneratedAdCard` — triggers bulk regeneration with loading overlay and button guards
+- **"Regenerate All" button** in images section header, next to the Show/Hide Images toggle
+- **"Retry All Images" button** inside error banner when image count is zero (full failure scenario)
+- **Loading overlay** — dims the image grid and shows a centered spinner during bulk regeneration
+- **`.spinning` CSS keyframes** — fixes pre-existing bug where `<Loader className="spinning">` had no animation
+- **`variationCount` field** on `GeneratedAdPackage` — persists the original requested count so retries use the correct number
+- **`indexedResults` return field** — position-preserving `(GeneratedImageResult | null)[]` array for per-slot merging on partial failures
+
+### Fixed
+- **Partial failures no longer shrink the image array** — failed slots are filled with existing images instead of being dropped
+- **Retry count is deterministic** — uses `variationCount` from the original generation, not the UI slider or current image count
+- **Silent failures now surface in UI** — catch block explicitly sets `imageError` on the ad state before rethrowing, ensuring the error banner always appears
+
+### Files Modified
+- `src/services/openaiApi.ts` — `regenerateAllImages()` extraction, `generateAdPackage()` refactored to call it, `variationCount` added to `GeneratedAdPackage` interface and both return paths
+- `src/pages/AdGenerator.tsx` — `handleRegenerateAllImages` callback, wired `onRegenerateAllImages` prop
+- `src/components/GeneratedAdCard.tsx` — new prop, state, handler, button placements, overlay, guards
+- `src/components/GeneratedAdCard.css` — `.images-section-actions`, `.regenerate-all-btn`, `.images-grid-wrapper`, `.regenerating-all-overlay`, `.images-grid-dimmed`, `.retry-all-btn`, `.spinning` keyframes, responsive styles
+
+---
+
 ## 2026-03-02 — Add Gemini model fallback and improve image generation resilience
 
 ### Overview
