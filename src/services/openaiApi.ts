@@ -1824,7 +1824,9 @@ export async function regenerateSingleCopy(config: {
     throw new Error('AI API not configured. Please contact support.');
   }
 
-  const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
+  // Force low reasoning effort for regeneration — high effort is too deterministic and
+  // causes the model to converge on the same output given similar context
+  const reasoningEffort: ReasoningEffort = 'low';
   const copyLength = config.copyLength ?? DEFAULT_COPY_LENGTH;
   const copyVariation = config.copyVariationLevel ?? 30;
   const copyLengthConfig = COPY_LENGTH_OPTIONS.find(opt => opt.id === copyLength) ?? COPY_LENGTH_OPTIONS[0];
@@ -1832,7 +1834,7 @@ export async function regenerateSingleCopy(config: {
     : config.copyType === 'bodyText' ? 'body copy'
     : 'call-to-action';
 
-  console.log(`🔄 Regenerating single ${typeLabel} for ${config.audienceType} audience | Variation: ${copyVariation}%`);
+  console.log(`🔄 Regenerating single ${typeLabel} for ${config.audienceType} audience | Variation: ${copyVariation}% | Reasoning: ${reasoningEffort}`);
 
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
   const conceptAngle = CONCEPT_ANGLES[config.conceptType];
@@ -1942,16 +1944,43 @@ All copy MUST reference "${p.name}" by ${p.author} — no other product or brand
     typeConstraints = 'Short, action-oriented phrase. Creates urgency.';
   }
 
+  // Random creative directions to break model determinism — each call picks a different one
+  const creativeDirections = [
+    'Use a question that challenges the reader\'s assumptions',
+    'Lead with a specific, concrete number or statistic',
+    'Start with a bold, contrarian statement',
+    'Use a metaphor or analogy from everyday life',
+    'Appeal to the reader\'s identity or self-image',
+    'Create a vivid before/after mental picture',
+    'Use pattern interruption — say something unexpected',
+    'Lead with the emotional payoff, not the feature',
+    'Reference a common frustration and flip it',
+    'Use social proof or implied consensus',
+    'Create urgency through a time-sensitive insight',
+    'Address a hidden objection the reader is thinking',
+  ];
+
   // Build the replacement context
   const replacementContext = config.itemToReplace
-    ? `\nThe user is REPLACING this ${typeLabel} because they don't like it: "${config.itemToReplace}"
-You MUST generate something with a COMPLETELY DIFFERENT angle, hook, or approach. Do NOT rephrase or reword the above — write something fresh.\n`
+    ? `\n=== ITEM BEING REPLACED (USER REJECTED THIS) ===
+"${config.itemToReplace}"
+The user clicked "regenerate" because they DON'T LIKE the above. You MUST write something COMPLETELY DIFFERENT — different angle, different hook, different emotional trigger. Do NOT rephrase, reword, or restructure the rejected text.\n`
     : '';
 
-  const userPrompt = `Generate exactly 1 NEW ${typeLabel.toUpperCase()} for a ${config.audienceType.toUpperCase()} audience${isAutoMode ? ' using analysis-driven insights' : ` using the ${conceptAngle.name} concept`}.
+  const MAX_REGEN_ATTEMPTS = 3;
+  for (let attempt = 0; attempt < MAX_REGEN_ATTEMPTS; attempt++) {
+    // Pick a random creative direction (different each attempt)
+    const directionIndex = Math.floor(Math.random() * creativeDirections.length);
+    const creativeDirection = creativeDirections[directionIndex];
+
+    const attemptContext = attempt > 0
+      ? `\n⚠️ ATTEMPT ${attempt + 1}: Your previous attempt returned text too similar to the rejected item. You MUST take a RADICALLY DIFFERENT creative approach this time. Use this creative direction: "${creativeDirection}"\n`
+      : `\nCreative direction hint: ${creativeDirection}\n`;
+
+    const userPrompt = `Generate exactly 1 NEW ${typeLabel.toUpperCase()} for a ${config.audienceType.toUpperCase()} audience${isAutoMode ? ' using analysis-driven insights' : ` using the ${conceptAngle.name} concept`}.
 ${productSection}
 AUDIENCE: Focus: ${audienceAngle.focus} | Tone: ${audienceAngle.tone} | Messaging: ${audienceAngle.messaging}
-${analysisContext}${inspirationContext}${replacementContext}${existingList ? `=== OTHER ${typeLabel.toUpperCase()}S ALREADY IN USE (DO NOT DUPLICATE) ===
+${analysisContext}${inspirationContext}${replacementContext}${attemptContext}${existingList ? `=== OTHER ${typeLabel.toUpperCase()}S ALREADY IN USE (DO NOT DUPLICATE) ===
 ${existingList}
 ` : ''}
 === YOUR TASK ===
@@ -1962,29 +1991,53 @@ CRITICAL: The text you generate MUST be completely new — not a rephrasing of a
 Return JSON only:
 {"id": "x1", "text": "your new ${typeLabel} text here", "rationale": "why this works"}`;
 
-  const response = await callOpenAI([
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt },
-  ], { maxTokens: 500, reasoningEffort });
+    const response = await callOpenAI([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ], { maxTokens: 500, reasoningEffort });
 
-  try {
-    let cleanedResponse = response.trim();
-    if (cleanedResponse.startsWith('```json')) cleanedResponse = cleanedResponse.slice(7);
-    if (cleanedResponse.startsWith('```')) cleanedResponse = cleanedResponse.slice(3);
-    if (cleanedResponse.endsWith('```')) cleanedResponse = cleanedResponse.slice(0, -3);
+    try {
+      let cleanedResponse = response.trim();
+      if (cleanedResponse.startsWith('```json')) cleanedResponse = cleanedResponse.slice(7);
+      if (cleanedResponse.startsWith('```')) cleanedResponse = cleanedResponse.slice(3);
+      if (cleanedResponse.endsWith('```')) cleanedResponse = cleanedResponse.slice(0, -3);
 
-    const parsed = JSON.parse(cleanedResponse.trim());
+      const parsed = JSON.parse(cleanedResponse.trim());
 
-    // Override ID with a unique one to avoid collisions
-    const prefix = config.copyType === 'headline' ? 'h' : config.copyType === 'bodyText' ? 'b' : 'c';
-    parsed.id = `${prefix}${config.existingItems.length + 1}_${Date.now()}`;
+      // Override ID with a unique one to avoid collisions
+      const prefix = config.copyType === 'headline' ? 'h' : config.copyType === 'bodyText' ? 'b' : 'c';
+      parsed.id = `${prefix}${config.existingItems.length + 1}_${Date.now()}`;
 
-    console.log(`✅ Single ${typeLabel} regenerated successfully`);
-    return parsed as CopyOption;
-  } catch (error: unknown) {
-    console.error(`❌ Failed to parse regenerated ${typeLabel}:`, error);
-    throw new Error(`Failed to regenerate ${typeLabel}`);
+      // Dedup check: if the new text is identical to the rejected item, retry
+      if (config.itemToReplace && parsed.text) {
+        const oldNorm = config.itemToReplace.trim().toLowerCase();
+        const newNorm = parsed.text.trim().toLowerCase();
+        if (oldNorm === newNorm && attempt < MAX_REGEN_ATTEMPTS - 1) {
+          console.warn(`⚠️ Regeneration attempt ${attempt + 1} returned identical text, retrying...`);
+          continue;
+        }
+      }
+
+      // Also check against existing items that will remain
+      const isDuplicate = config.existingItems.some(item =>
+        item.text.trim().toLowerCase() === parsed.text?.trim().toLowerCase()
+      );
+      if (isDuplicate && attempt < MAX_REGEN_ATTEMPTS - 1) {
+        console.warn(`⚠️ Regeneration attempt ${attempt + 1} duplicated an existing item, retrying...`);
+        continue;
+      }
+
+      console.log(`✅ Single ${typeLabel} regenerated successfully (attempt ${attempt + 1})`);
+      return parsed as CopyOption;
+    } catch (error: unknown) {
+      // Parse errors are not retryable
+      console.error(`❌ Failed to parse regenerated ${typeLabel}:`, error);
+      throw new Error(`Failed to regenerate ${typeLabel}`);
+    }
   }
+
+  // Should not reach here, but fallback
+  throw new Error(`Failed to generate a unique ${typeLabel} after ${MAX_REGEN_ATTEMPTS} attempts`);
 }
 
 /**
