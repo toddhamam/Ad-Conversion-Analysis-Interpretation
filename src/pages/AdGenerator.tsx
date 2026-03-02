@@ -561,6 +561,8 @@ const AdGenerator = () => {
   ) => {
     if (!copyOptions || regeneratingCopyId !== null) return;
 
+    setError(null);
+
     // Filter out the item being regenerated — the AI should only avoid the items that will REMAIN
     const existingItems = copyType === 'headline'
       ? copyOptions.headlines.filter(item => item.id !== copyId)
