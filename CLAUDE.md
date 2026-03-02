@@ -1385,6 +1385,9 @@ The Ad Publisher (Step 3: Configure) provides these ad-level settings that are a
 - Don't use `transition: all` in CSS — causes browser crashes when base64 images render. Always list specific properties (e.g., `transition: background-color 0.2s ease, border-color 0.2s ease`). This has caused production crashes multiple times (#181, #182)
 - Don't hold large base64 data in memory after use — explicitly null out reference image arrays (`precomputedRefs`, `requestParts`) after they've been serialized. Gemini reference images can be 25-50MB and cause out-of-memory crashes if not freed for GC
 - Don't `JSON.stringify` full API responses in error logs — Gemini responses with base64 image data can be enormous. Log concise summaries (candidate count, part types, truncated text) instead
+- Don't make `fetch()` calls to Gemini (or any external AI API) without an `AbortController` timeout — without one, a hung connection blocks the UI for up to 5 minutes (browser default). Use 60s for image generation, 45s for text analysis. This caused perpetual loading in production (PR #271)
+- Don't increase `MAX_RETRIES` above 2 for Gemini image generation — higher values (previously 4) caused 58s+ of retry delays per image before errors surfaced, making the UI appear frozen. Keep retry delays short: `[2000, 5000]` ms
+- Don't show static loading messages for multi-step AI operations — use the `onProgress` callback pattern (see `regenerateAllImages`) to update the UI with step-by-step status. A single "Generating..." message for a 60-90s operation feels broken to users
 
 ---
 
@@ -1449,6 +1452,28 @@ Reference images sent to Gemini (cached ad images + product mockups) can total 2
 - **Concurrency limit**: `MAX_CONCURRENT = 2` for parallel Gemini calls. Do not increase this — each call holds ~10-15MB of base64 in flight
 - **Error logging**: Never `JSON.stringify` the full Gemini response in error handlers — it may contain base64 image data. Log concise summaries instead (candidate count, part types, truncated text)
 - **Memory error detection**: The error handler in `generateAdImageWithGemini` checks for `RangeError`, `Invalid string length`, and `out of memory` to surface a user-friendly message instead of a cryptic crash
+
+### Gemini Image Generation — Timeouts & Retry Policy (Critical)
+
+Gemini API calls for image generation can hang indefinitely or hit transient errors (429, 500, 503). Without bounded retries and fetch timeouts, a single stuck request blocks the entire generation pipeline and the UI appears to load forever.
+
+**Retry policy in `generateAdImageWithGemini`:**
+- `MAX_RETRIES = 2` with delays `[2000, 5000]` ms — worst-case 7s of retry waits per model
+- Two models are tried sequentially: `gemini-3-pro-image-preview` (primary), `gemini-3.1-flash-image-preview` (fallback)
+- Total worst-case retry overhead: ~14s across both models (previously was 58s with `MAX_RETRIES=4`)
+- **Do not increase** `MAX_RETRIES` above 2 — higher values caused the UI to appear hung for 1-2+ minutes before surfacing errors (PR #271)
+
+**AbortController timeouts:**
+- `generateAdImageWithGemini`: 60s timeout per `fetch()` call — prevents indefinite hangs
+- `analyzeReferenceImages`: 45s timeout per `fetch()` call
+- Abort errors are caught and converted to descriptive timeout messages
+- **Every Gemini `fetch()` must have an `AbortController` timeout** — the browser's default timeout is ~5 minutes, which is unacceptable for interactive UIs
+
+**Progress callback pattern:**
+- `regenerateAllImages` and `generateAdPackage` accept `onProgress?: (message: string) => void`
+- Reports step-by-step status: "Analyzing reference styles...", "Generating image 1 of N..."
+- `AdGenerator.tsx` passes `setGenerationProgress` as the callback so the loading indicator updates in real time
+- **All long-running generation functions should accept `onProgress`** — static loading messages make normal 30-90s waits feel like the app is frozen
 
 ### Product Context Architecture
 
