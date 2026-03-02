@@ -66,8 +66,13 @@ const DEFAULT_VISION_MODEL = 'gpt-5.2'; // GPT-5.2 has multimodal vision support
 type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'high';
 
-// Image Generation - Using Google Gemini Nano Banana Pro
-const DEFAULT_IMAGE_MODEL = 'gemini-3-pro-image-preview'; // Nano Banana Pro for professional ad assets
+// Image Generation - Gemini models with automatic fallback
+// Primary: gemini-3-pro-image-preview (highest quality)
+// Fallback: gemini-3.1-flash-image-preview (faster, more reliable during high demand)
+const DEFAULT_IMAGE_MODEL = 'gemini-3-pro-image-preview';
+const FALLBACK_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
+// Text-only model for reference analysis (image models are unreliable for text-only tasks)
+const TEXT_ANALYSIS_MODEL = 'gemini-2.5-flash';
 const USE_GEMINI_FOR_IMAGES = true; // Switch to use Gemini instead of DALL-E
 
 // Video Generation - Using Google Veo 3.1
@@ -75,6 +80,14 @@ const USE_GEMINI_FOR_IMAGES = true; // Switch to use Gemini instead of DALL-E
 const VEO_MODEL = 'veo-3.1-generate-preview';
 const USE_VEO_FOR_VIDEO = true; // Use Veo instead of storyboard-only
 const DALLE_MODEL = 'dall-e-3'; // DALL-E fallback for image generation
+
+// Non-retryable error for safety/policy blocks — should not fall through to fallback models
+class SafetyBlockError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SafetyBlockError';
+  }
+}
 
 // =============================================================================
 // IMAGE SIZE CONFIGURATION - Common Meta Ads formats
@@ -2094,7 +2107,8 @@ Respond in JSON format with these exact fields:
 
 Be EXTREMELY specific - your descriptions will be used to generate new images that match this exact style.`;
 
-  const apiUrl = `${GEMINI_API_URL}/${DEFAULT_IMAGE_MODEL}:generateContent`;
+  // Text-capable models for analysis, with fallback
+  const analysisModels = [TEXT_ANALYSIS_MODEL, DEFAULT_IMAGE_MODEL];
 
   const requestParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
 
@@ -2111,9 +2125,21 @@ Be EXTREMELY specific - your descriptions will be used to generate new images th
   // Add the analysis prompt
   requestParts.push({ text: analysisPrompt });
 
+  const defaultAnalysis = {
+    visualStyle: 'dark, moody professional photography with dramatic contrasts',
+    colorPalette: 'deep black backgrounds, warm amber/gold accents, clean white text',
+    composition: 'centered focal point with breathing room, text in lower or upper third',
+    keyElements: ['product mockup', 'atmospheric lighting', 'minimal distractions', 'strong contrast'],
+    mood: 'sophisticated, premium, transformational',
+    lighting: 'warm accent lighting with deep shadows, candlelit ambiance',
+    textOverlays: 'bold contrasting headlines, clean modern typography',
+    productPresentation: 'product prominently featured, often at slight angle with soft shadows',
+  };
+
+  // Outer try/catch: serialization of large base64 payloads can throw RangeError
+  let analysisBody: string;
   try {
-    // Stringify once then free requestParts to release base64 references during fetch
-    const analysisBody = JSON.stringify({
+    analysisBody = JSON.stringify({
       contents: [{ parts: requestParts }],
       generationConfig: {
         temperature: 0.3, // Lower temperature for more precise analysis
@@ -2121,53 +2147,62 @@ Be EXTREMELY specific - your descriptions will be used to generate new images th
       }
     });
     requestParts.length = 0; // Free base64 references for GC during fetch
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': GEMINI_API_KEY,
-      },
-      body: analysisBody,
-    });
-
-    if (!response.ok) {
-      console.warn('⚠️ Reference image analysis failed, using defaults');
-      throw new Error('Analysis request failed');
-    }
-
-    const data = await response.json();
-    const textPart = data.candidates?.[0]?.content?.parts?.find((p: { text?: string }) => p.text);
-
-    if (!textPart?.text) {
-      throw new Error('No text response from analysis');
-    }
-
-    // Parse the JSON response
-    let cleanedResponse = textPart.text.trim();
-    if (cleanedResponse.includes('```json')) {
-      cleanedResponse = cleanedResponse.split('```json')[1].split('```')[0];
-    } else if (cleanedResponse.includes('```')) {
-      cleanedResponse = cleanedResponse.split('```')[1].split('```')[0];
-    }
-
-    const analysis = JSON.parse(cleanedResponse.trim());
-    console.log('✅ Reference image analysis complete:', analysis);
-    return analysis;
-  } catch (error) {
-    console.warn('⚠️ Reference image analysis failed:', error);
-    // Return defaults that match common high-converting ad patterns
-    return {
-      visualStyle: 'dark, moody professional photography with dramatic contrasts',
-      colorPalette: 'deep black backgrounds, warm amber/gold accents, clean white text',
-      composition: 'centered focal point with breathing room, text in lower or upper third',
-      keyElements: ['product mockup', 'atmospheric lighting', 'minimal distractions', 'strong contrast'],
-      mood: 'sophisticated, premium, transformational',
-      lighting: 'warm accent lighting with deep shadows, candlelit ambiance',
-      textOverlays: 'bold contrasting headlines, clean modern typography',
-      productPresentation: 'product prominently featured, often at slight angle with soft shadows',
-    };
+  } catch (serializationError) {
+    console.warn('⚠️ Reference image analysis: serialization failed (payload too large), using defaults:', serializationError);
+    requestParts.length = 0;
+    return defaultAnalysis;
   }
+
+  for (const model of analysisModels) {
+    try {
+      const apiUrl = `${GEMINI_API_URL}/${model}:generateContent`;
+      console.log(`🔍 Analyzing reference images with ${model}...`);
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': GEMINI_API_KEY,
+        },
+        body: analysisBody,
+      });
+
+      if (!response.ok) {
+        console.warn(`⚠️ Reference image analysis failed with ${model} (${response.status})`);
+        continue;
+      }
+
+      const data = await response.json();
+      const textPart = data.candidates?.[0]?.content?.parts?.find((p: { text?: string }) => p.text);
+
+      if (!textPart?.text) {
+        console.warn(`⚠️ No text response from ${model} analysis`);
+        continue;
+      }
+
+      // Parse the JSON response
+      let cleanedResponse = textPart.text.trim();
+      if (cleanedResponse.includes('```json')) {
+        cleanedResponse = cleanedResponse.split('```json')[1].split('```')[0];
+      } else if (cleanedResponse.includes('```')) {
+        cleanedResponse = cleanedResponse.split('```')[1].split('```')[0];
+      }
+
+      const analysis = JSON.parse(cleanedResponse.trim());
+      console.log(`✅ Reference image analysis complete (model: ${model}):`, analysis);
+      return analysis;
+    } catch (error) {
+      const isFinal = model === analysisModels[analysisModels.length - 1];
+      console.warn(`⚠️ Reference image analysis failed with ${model}:`, error);
+      if (!isFinal) {
+        console.log(`🔄 Trying fallback analysis model...`);
+      }
+    }
+  }
+
+  // All models failed — return defaults
+  console.warn('⚠️ All analysis models failed, using generic defaults');
+  return defaultAnalysis;
 }
 
 /**
@@ -2476,8 +2511,6 @@ Explore fresh visual directions while maintaining professional quality.`,
   const prompt = promptParts.join('\n');
   console.log('📝 Gemini prompt:', prompt.substring(0, 300) + '...');
 
-  const apiUrl = `${GEMINI_API_URL}/${DEFAULT_IMAGE_MODEL}:generateContent`;
-
   // Build the request with reference images as inline data
   const requestParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
 
@@ -2514,81 +2547,122 @@ Explore fresh visual directions while maintaining professional quality.`,
   // Clear references from requestParts to allow GC of base64 data during fetch
   requestParts.length = 0;
 
-  // Retry logic for transient Gemini errors (503, 429, 500)
-  const GEMINI_MAX_RETRIES = 3;
-  const GEMINI_RETRY_DELAYS = [2000, 4000, 8000]; // exponential backoff
-  let response: Response | null = null;
+  // Try primary model, then fallback model if primary fails
+  const modelsToTry = [DEFAULT_IMAGE_MODEL, FALLBACK_IMAGE_MODEL];
+  let lastError: Error | null = null;
 
-  for (let attempt = 0; attempt <= GEMINI_MAX_RETRIES; attempt++) {
-    response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': GEMINI_API_KEY,
-      },
-      body: requestBodyStr,
-    });
+  for (const model of modelsToTry) {
+    const apiUrl = `${GEMINI_API_URL}/${model}:generateContent`;
+    console.log(`🎯 Trying image model: ${model}`);
 
-    if (response.ok) break;
+    // Retry logic for transient Gemini errors (503, 429, 500)
+    const MAX_RETRIES = 4;
+    const RETRY_DELAYS = [2000, 4000, 8000, 15000]; // exponential backoff with longer final delay
+    let response: Response | null = null;
 
-    const isTransient = [429, 500, 503].includes(response.status);
-    if (!isTransient || attempt === GEMINI_MAX_RETRIES) {
-      const errorText = await response.text();
-      console.error('❌ Image generation API Error:', errorText);
-      throw new Error(`Image generation error: ${response.status} ${response.statusText}`);
+    try {
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': GEMINI_API_KEY,
+          },
+          body: requestBodyStr,
+        });
+
+        if (response.ok) break;
+
+        const isTransient = [429, 500, 503].includes(response.status);
+        if (!isTransient || attempt === MAX_RETRIES) {
+          const errorText = await response.text();
+          console.error(`❌ Image generation API Error (${model}):`, response.status, errorText.substring(0, 500));
+          throw new Error(`Image generation error (${response.status}): ${errorText.substring(0, 200)}`);
+        }
+
+        const delay = RETRY_DELAYS[attempt];
+        console.warn(`⚠️ ${model} returned ${response.status}, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+
+      const data = await response!.json();
+      console.log(`📦 Response received from ${model}`);
+
+      // Check for safety/policy blocks — these are NOT retryable across models
+      const promptFeedback = data.promptFeedback;
+      if (promptFeedback?.blockReason) {
+        // Prompt itself was blocked — no model will accept it, fail fast
+        throw new SafetyBlockError(`Image generation blocked by safety filter: ${promptFeedback.blockReason}`);
+      }
+
+      const finishReason = data.candidates?.[0]?.finishReason;
+      // Explicit safety/policy finish reasons — not retryable across models
+      const SAFETY_FINISH_REASONS = ['SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII', 'IMAGE_SAFETY'];
+      if (finishReason && SAFETY_FINISH_REASONS.includes(finishReason)) {
+        console.warn(`⚠️ ${model} response blocked by safety: finishReason=${finishReason}`);
+        throw new SafetyBlockError(`Image generation blocked (${finishReason}). Try adjusting your prompt or product description.`);
+      }
+      // Other non-STOP/MAX_TOKENS reasons (e.g. OTHER, LANGUAGE) — retryable, may succeed on fallback model
+      if (finishReason && finishReason !== 'STOP' && finishReason !== 'MAX_TOKENS') {
+        console.warn(`⚠️ ${model} unexpected finishReason=${finishReason}, treating as retryable`);
+        throw new Error(`Image generation incomplete (${finishReason})`);
+      }
+
+      // Extract the image from the response
+      const candidates = data.candidates;
+      if (!candidates || candidates.length === 0) {
+        throw new Error('Image generation returned no results');
+      }
+
+      const parts = candidates[0].content?.parts;
+      if (!parts) {
+        throw new Error(`Image generation response incomplete (finishReason: ${finishReason || 'unknown'})`);
+      }
+
+      // Find the image part in the response
+      let imageData: string | null = null;
+      let mimeType: string = 'image/png';
+      let textResponse: string = '';
+
+      for (const part of parts) {
+        if (part.inlineData) {
+          imageData = part.inlineData.data;
+          mimeType = part.inlineData.mimeType || 'image/png';
+        }
+        if (part.text) {
+          textResponse = part.text;
+        }
+      }
+
+      if (!imageData) {
+        // Don't stringify the full response — it may contain large binary data that crashes the console
+        const candidateCount = data.candidates?.length ?? 0;
+        const partTypes = parts?.map((p: Record<string, unknown>) => Object.keys(p).join(',')).join('; ') ?? 'none';
+        console.error(`❌ No image data in ${model} response. Candidates: ${candidateCount}, Part types: ${partTypes}, Text: ${textResponse?.substring(0, 200) || '(none)'}`);
+        throw new Error('Image generation did not return an image. Response: ' + (textResponse || 'No text response'));
+      }
+
+      // Success — return the image
+      console.log(`✅ Image generated successfully with ${model}`);
+      return {
+        imageUrl: `data:${mimeType};base64,${imageData}`,
+        revisedPrompt: textResponse || prompt,
+      };
+    } catch (err: unknown) {
+      // Safety/policy blocks are not retryable — fail immediately
+      if (err instanceof SafetyBlockError) {
+        throw err;
+      }
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const isFinalModel = model === modelsToTry[modelsToTry.length - 1];
+      if (!isFinalModel) {
+        console.warn(`⚠️ ${model} failed, trying fallback model...`, lastError.message);
+      }
     }
-
-    const delay = GEMINI_RETRY_DELAYS[attempt];
-    console.warn(`⚠️ Image generation returned ${response.status}, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${GEMINI_MAX_RETRIES})...`);
-    await new Promise(resolve => setTimeout(resolve, delay));
   }
 
-  const data = await response!.json();
-  console.log('📦 Gemini response received');
-
-  // Extract the image from the response
-  const candidates = data.candidates;
-  if (!candidates || candidates.length === 0) {
-    throw new Error('Image generation returned no results');
-  }
-
-  const parts = candidates[0].content?.parts;
-  if (!parts) {
-    throw new Error('Image generation response incomplete');
-  }
-
-  // Find the image part in the response
-  let imageData: string | null = null;
-  let mimeType: string = 'image/png';
-  let textResponse: string = '';
-
-  for (const part of parts) {
-    if (part.inlineData) {
-      imageData = part.inlineData.data;
-      mimeType = part.inlineData.mimeType || 'image/png';
-    }
-    if (part.text) {
-      textResponse = part.text;
-    }
-  }
-
-  if (!imageData) {
-    // Don't stringify the full response — it may contain large binary data that crashes the console
-    const candidateCount = data.candidates?.length ?? 0;
-    const partTypes = parts?.map((p: Record<string, unknown>) => Object.keys(p).join(',')).join('; ') ?? 'none';
-    console.error(`❌ No image data in Gemini response. Candidates: ${candidateCount}, Part types: ${partTypes}, Text: ${textResponse?.substring(0, 200) || '(none)'}`);
-    throw new Error('Image generation did not return an image. Response: ' + (textResponse || 'No text response'));
-  }
-
-  // Convert base64 to data URL
-  const imageUrl = `data:${mimeType};base64,${imageData}`;
-
-  console.log('✅ Gemini image generated successfully');
-
-  return {
-    imageUrl,
-    revisedPrompt: textResponse || prompt,
-  };
+  // All models failed — throw the last error
+  throw lastError || new Error('Image generation failed: all models unavailable');
 }
 
 /**
@@ -3295,16 +3369,25 @@ export async function generateAdPackage(config: {
 
     const failedResults = imageResults.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
     if (failedResults.length > 0) {
-      console.warn(`⚠️ ${failedResults.length} image(s) failed to generate`);
+      console.warn(`⚠️ ${failedResults.length}/${imageResults.length} image(s) failed to generate`);
+      // Log all failure reasons for diagnostics
+      failedResults.forEach((r, i) => {
+        const msg = r.reason?.message || String(r.reason);
+        console.error(`  Image failure ${i + 1}: ${msg.substring(0, 300)}`);
+      });
       // Extract error message from first failure
       const firstError = failedResults[0].reason;
       const errorMessage = firstError?.message || String(firstError);
       if (errorMessage.includes('429') || errorMessage.includes('quota')) {
-        imageError = 'Image generation quota exceeded. Please wait for the quota to reset or check your account billing settings.';
-      } else if (errorMessage.includes('503') || errorMessage.includes('500')) {
-        imageError = 'Image generation service is temporarily unavailable. Please try again in a few minutes.';
+        imageError = 'Image generation quota exceeded. Please wait a few minutes and try again, or check your billing settings.';
+      } else if (errorMessage.includes('503') || errorMessage.includes('overloaded') || errorMessage.includes('500')) {
+        imageError = 'Image generation service is temporarily overloaded. Both primary and fallback models were tried. Please try again in a few minutes.';
+      } else if (errorMessage.includes('blocked') || errorMessage.includes('SAFETY') || errorMessage.includes('safety')) {
+        imageError = 'Image generation was blocked by a safety filter. Try adjusting your prompt or product description.';
       } else if (errorMessage.includes('RangeError') || errorMessage.includes('Invalid string length') || errorMessage.includes('out of memory')) {
         imageError = 'Image generation ran out of memory. Try reducing variation count or clearing reference images.';
+      } else if (errorMessage.includes('403') || errorMessage.includes('billing') || errorMessage.includes('permission')) {
+        imageError = 'Image generation API access denied. Please verify your API key and billing are configured correctly.';
       } else {
         imageError = `Image generation failed: ${errorMessage}`;
       }
