@@ -22,6 +22,21 @@ Image generation was failing due to `gemini-3-pro-image-preview` experiencing hi
 
 ---
 
+## 2026-03-02 — Fix copy regeneration returning identical text
+
+### Overview
+Fixed a critical bug where the copy regeneration feature returned identical text instead of new content. The root cause was GPT-5.2's high reasoning effort mode being too deterministic — given the same prompt context, the model converged on the same output every time.
+
+### Fixed
+- **Identical output on regeneration** — Forced `reasoning_effort: 'low'` for all regeneration calls (high effort caused deterministic convergence). Added random creative direction hints (12 different angles) injected into each prompt to break model determinism. Added dedup-with-retry loop (up to 3 attempts) that detects duplicate output and retries with stronger differentiation instructions.
+- **Silent duplicate acceptance** — Final retry attempt now hard-fails with a user-visible error if all attempts return duplicate text, instead of silently returning the same copy.
+- **Misleading API contract** — Removed unused `reasoningEffort` parameter from `regenerateSingleCopy()` config type since it's always forced to `'low'`. Added doc comment explaining the design decision.
+
+### Files Modified
+- `src/services/openaiApi.ts` — Rewrote `regenerateSingleCopy()` with low reasoning effort, random creative directions, and dedup retry loop
+
+---
+
 ## 2026-03-02 — Add individual copy regeneration to CreativeIQ
 
 ### Overview
