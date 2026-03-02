@@ -273,6 +273,9 @@ const AdGenerator = () => {
   // Creative variation control (0 = identical to references, 100 = completely different)
   const [similarityValue, setSimilarityValue] = useState(30); // Default: 30% variation (70% similar)
 
+  // Copy variation control (0 = replicate winners exactly, 100 = radically different angles)
+  const [copyVariationValue, setCopyVariationValue] = useState(30);
+
   // Headline in image control
   type HeadlineInImageMode = 'none' | 'from-copy' | 'custom';
   const [headlineInImageMode, setHeadlineInImageMode] = useState<HeadlineInImageMode>('none');
@@ -621,6 +624,7 @@ const AdGenerator = () => {
         conceptType,
         analysisData,
         copyLength,
+        copyVariationLevel: copyVariationValue,
         productContext: selectedProduct || undefined,
         adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
       });
@@ -1240,6 +1244,52 @@ const AdGenerator = () => {
             </div>
           )}
 
+          {/* Copy Variation Level — AI generation only */}
+          {copySource === 'generate' && (
+            <div className="config-section similarity-section">
+              <label className="config-label">
+                Copy Variation Level
+              </label>
+              <p className="config-hint">
+                {analysisData
+                  ? 'Control how closely the generated copy follows your winning ad patterns'
+                  : 'Control how creative vs. conventional the generated copy will be'}
+              </p>
+              <div className="similarity-slider-container">
+                <div className="similarity-labels">
+                  <span className="similarity-label-left">
+                    {analysisData ? 'Follow Winners' : 'Conservative'}
+                  </span>
+                  <span className="similarity-label-right">
+                    {analysisData ? 'New Angles' : 'Experimental'}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={copyVariationValue}
+                  onChange={(e) => setCopyVariationValue(parseInt(e.target.value))}
+                  className="similarity-slider"
+                />
+                <div className="similarity-value">
+                  {analysisData
+                    ? (copyVariationValue <= 20 ? '🎯 Pattern Match' :
+                       copyVariationValue <= 40 ? '✨ Fresh Wording' :
+                       copyVariationValue <= 60 ? '🔄 Balanced Mix' :
+                       copyVariationValue <= 80 ? '🎨 New Angles' :
+                       '🚀 Bold & Different')
+                    : (copyVariationValue <= 20 ? '🎯 Conservative' :
+                       copyVariationValue <= 40 ? '✨ Slightly Creative' :
+                       copyVariationValue <= 60 ? '🔄 Balanced' :
+                       copyVariationValue <= 80 ? '🎨 Creative' :
+                       '🚀 Experimental')}
+                  <span className="similarity-percent">{copyVariationValue}% variation</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Import from Ads: Date range + import button */}
           {copySource === 'import' && (
             <>
@@ -1527,6 +1577,22 @@ const AdGenerator = () => {
                   <div className="summary-card">
                     <span className="summary-card-label">Copy Length</span>
                     <span className="summary-card-value">{COPY_LENGTH_OPTIONS.find(c => c.id === copyLength)?.name}</span>
+                  </div>
+                  <div className="summary-card">
+                    <span className="summary-card-label">Copy Variation</span>
+                    <span className="summary-card-value">
+                      {analysisData
+                        ? (copyVariationValue <= 20 ? 'Pattern Match' :
+                           copyVariationValue <= 40 ? 'Fresh Wording' :
+                           copyVariationValue <= 60 ? 'Balanced Mix' :
+                           copyVariationValue <= 80 ? 'New Angles' :
+                           'Bold & Different')
+                        : (copyVariationValue <= 20 ? 'Conservative' :
+                           copyVariationValue <= 40 ? 'Slightly Creative' :
+                           copyVariationValue <= 60 ? 'Balanced' :
+                           copyVariationValue <= 80 ? 'Creative' :
+                           'Experimental')} ({copyVariationValue}%)
+                    </span>
                   </div>
                 </>
               ) : (

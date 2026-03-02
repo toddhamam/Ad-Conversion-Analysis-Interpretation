@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-03-02 — Add Copy Variation Level slider to CreativeIQ ad generator
+
+### Overview
+When generating ad copy, the output was consistently similar because the prompt heavily pushes the AI to replicate winning patterns from channel analysis. Users who want to test genuinely different copy angles had no way to control this. A new "Copy Variation Level" slider (matching the existing image "Creative Variation Level" slider) gives users control over how closely the AI follows existing winning patterns vs. explores new creative territory.
+
+### Added
+- **Copy Variation Level slider** in Step 1 of the ad generator (below Body Copy Length), visible when copy source is "Generate New"
+- **5-tier prompt instruction system** in `openaiApi.ts` that maps the 0-100 slider value to specific prompt blocks controlling AI copy behavior
+- **Context-aware labels**: With channel analysis data, tiers are "Pattern Match → Fresh Wording → Balanced Mix → New Angles → Bold & Different". Without analysis, tiers shift to "Conservative → Slightly Creative → Balanced → Creative → Experimental"
+- **Summary card** in Step 3 showing the selected copy variation tier and percentage
+- **Modulated task instructions**: The headline, body copy, and CTA generation instructions in the user prompt adapt based on variation level (low = mirror patterns, mid = blend with experiments, high = explore new territory)
+
+### Files Modified
+- `src/pages/AdGenerator.tsx` — Added `copyVariationValue` state, slider UI, API parameter passthrough, Step 3 summary card
+- `src/services/openaiApi.ts` — Added `copyVariationLevel` config parameter, `getCopyVariationInstructions()` function (10 prompt tiers: 5 with analysis × 5 without), injected into system prompt and modulated task section
+
+---
+
 ## 2026-03-02 — Fix unreplaced template variables leaking into outreach emails
 
 ### Overview

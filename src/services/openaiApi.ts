@@ -1379,6 +1379,7 @@ export async function generateCopyOptions(config: {
   analysisData: ChannelAnalysisResult | null;
   reasoningEffort?: ReasoningEffort;
   copyLength?: CopyLength;
+  copyVariationLevel?: number; // 0 = replicate winners exactly, 100 = completely different angles
   productContext?: ProductContext;
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
 }): Promise<CopyOptionsResult> {
@@ -1388,8 +1389,9 @@ export async function generateCopyOptions(config: {
 
   const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
   const copyLength = config.copyLength ?? DEFAULT_COPY_LENGTH;
+  const copyVariation = config.copyVariationLevel ?? 30;
   const copyLengthConfig = COPY_LENGTH_OPTIONS.find(opt => opt.id === copyLength) ?? COPY_LENGTH_OPTIONS[0];
-  console.log(`📝 Generating copy options for ${config.audienceType} audience with ${config.conceptType} concept | IQ Level: ${reasoningEffort} | Copy Length: ${copyLength}`);
+  console.log(`📝 Generating copy options for ${config.audienceType} audience with ${config.conceptType} concept | IQ Level: ${reasoningEffort} | Copy Length: ${copyLength} | Copy Variation: ${copyVariation}%`);
   console.log('📊 Analysis data available:', !!config.analysisData);
   console.log('📦 Product context:', config.productContext ? config.productContext.name : 'Not provided');
 
@@ -1512,6 +1514,120 @@ IMPORTANT: These are EXTERNAL inspiration sources. Your job is to:
 `;
   }
 
+  // Build copy variation instructions based on slider level
+  const getCopyVariationInstructions = (variation: number, hasAnalysisData: boolean): string => {
+    if (hasAnalysisData) {
+      if (variation <= 20) {
+        return `=== COPY VARIATION LEVEL: PATTERN MATCH (${variation}% variation) ===
+REPLICATE the winning patterns as faithfully as possible. Your copy should be nearly indistinguishable in style, structure, and tone from the top-performing ads.
+
+STRICT REQUIREMENTS:
+- Use the EXACT headline structures from top ads (e.g., if winners use question hooks, ALL headlines must be questions)
+- Mirror the SAME emotional triggers and psychological drivers identified in the analysis
+- Match the SAME sentence length, punctuation style, and formatting patterns
+- Use similar vocabulary and phrasing intensity
+- Replicate the exact CTA urgency level from winning CTAs
+- The only difference from existing winners should be the specific words — the underlying structure, rhythm, and emotional arc must be identical
+
+Think of this as creating "sibling" ads — they should look like they came from the same copywriter in the same session as the winners.`;
+      } else if (variation <= 40) {
+        return `=== COPY VARIATION LEVEL: FRESH WORDING (${variation}% variation) ===
+Follow the winning patterns closely but use fresh, original language. Same playbook, different words.
+
+REQUIREMENTS:
+- Maintain the SAME headline structures and hooks from top performers (question hooks stay questions, curiosity gaps stay curiosity gaps)
+- Use the SAME emotional triggers but express them with new phrasing
+- Keep the same tone and intensity level as the winners
+- You MAY introduce minor structural variations (e.g., reorder elements within a body copy) but the core approach must match
+- CTAs should use the same urgency/action level but can use different wording
+
+Think of this as writing fresh copy that fits perfectly within the existing winning campaign — a natural extension that feels familiar but not repetitive.`;
+      } else if (variation <= 60) {
+        return `=== COPY VARIATION LEVEL: BALANCED MIX (${variation}% variation) ===
+Blend proven winning patterns with new creative angles. About half your output should follow existing patterns, half should explore new territory.
+
+REQUIREMENTS:
+- 3 headlines should closely follow winning headline patterns; 3 should try new hook styles or angles
+- Body copy should incorporate winning emotional triggers but may use different narrative structures
+- You CAN introduce new psychological angles not seen in the winners, as long as they are grounded in the audience and product context
+- CTAs can range from proven patterns to fresh approaches
+- Maintain the overall quality standard and conversion-focused mindset from the winners, even when exploring new directions
+
+Think of this as an A/B test — give the user both safe bets (pattern-matched) and calculated experiments (new angles).`;
+      } else if (variation <= 80) {
+        return `=== COPY VARIATION LEVEL: NEW ANGLES (${variation}% variation) ===
+Use the winning patterns as loose inspiration but prioritize fresh, creative approaches. Push beyond what has been done before.
+
+REQUIREMENTS:
+- Reference winning patterns only as guardrails — understand WHAT emotions work, but explore completely different WAYS to trigger them
+- Try headline structures NOT seen in the top performers (if winners use questions, try bold statements or storytelling hooks)
+- Introduce new psychological angles, unexpected hooks, and different narrative frameworks
+- The audience insights from the analysis still apply — understand WHO you are talking to — but experiment with HOW you talk to them
+- Avoid patterns identified as losing, but otherwise prioritize novelty
+
+Think of this as a creative strategist who has studied the account data and is now deliberately pushing in new directions to discover untapped angles.`;
+      } else {
+        return `=== COPY VARIATION LEVEL: BOLD & DIFFERENT (${variation}% variation) ===
+Create radically different copy that breaks from all existing patterns. Use the analysis data only to understand the audience — ignore the copy patterns entirely.
+
+REQUIREMENTS:
+- Do NOT replicate any headline structures, hooks, or emotional patterns from the winning ads
+- Use completely different psychological frameworks, narrative styles, and tonal approaches
+- Challenge assumptions about what "should" work for this audience — surprise them
+- The ONLY thing to preserve from the analysis is the audience understanding (who they are, what they care about) — everything else should be fresh
+- Winning CTAs, headline formats, body copy structures — deliberately avoid all of them
+- Draw inspiration from adjacent industries, unconventional copywriting schools, or contrarian approaches
+
+Think of this as a creative reset — the user wants to discover if there are entirely new messaging territories that could outperform the current winners.`;
+      }
+    } else {
+      // Without analysis: controls general creativity/conventionality
+      if (variation <= 20) {
+        return `=== COPY VARIATION LEVEL: CONSERVATIVE (${variation}% variation) ===
+Generate safe, proven direct-response copy using established best practices. Prioritize reliability over novelty.
+
+REQUIREMENTS:
+- Use time-tested headline formulas (how-to, question hooks, number-based, benefit-first)
+- Stick to conventional direct-response body copy structure (problem-agitate-solve, feature-benefit)
+- Standard urgency and social proof patterns
+- Professional, polished tone — nothing experimental`;
+      } else if (variation <= 40) {
+        return `=== COPY VARIATION LEVEL: SLIGHTLY CREATIVE (${variation}% variation) ===
+Mostly conventional direct-response copy with slight creative twists.
+
+REQUIREMENTS:
+- Use proven headline formulas but add small unexpected elements
+- Standard copy structure with occasional fresh metaphors or angles
+- Conventional CTAs with slightly more personality`;
+      } else if (variation <= 60) {
+        return `=== COPY VARIATION LEVEL: BALANCED (${variation}% variation) ===
+Mix conventional direct-response patterns with creative experimentation.
+
+REQUIREMENTS:
+- Half the headlines should use proven formulas, half should try newer approaches
+- Body copy can blend traditional and contemporary styles
+- CTAs range from standard to creative`;
+      } else if (variation <= 80) {
+        return `=== COPY VARIATION LEVEL: CREATIVE (${variation}% variation) ===
+Push creative boundaries while staying grounded in direct-response principles.
+
+REQUIREMENTS:
+- Experiment with unconventional headline hooks (story fragments, bold claims, pattern interrupts)
+- Body copy can use narrative, humor, or unexpected angles
+- CTAs should feel fresh and distinctive`;
+      } else {
+        return `=== COPY VARIATION LEVEL: EXPERIMENTAL (${variation}% variation) ===
+Highly experimental copy that challenges conventions. Maximum creative risk.
+
+REQUIREMENTS:
+- Break from standard ad copy formulas entirely
+- Try unconventional hooks, unexpected tonal shifts, contrarian angles
+- Prioritize stopping power and memorability over safe conversion optimization
+- Draw from storytelling, journalism, or cultural commentary styles`;
+      }
+    }
+  };
+
   // Build the system prompt
   let systemPrompt: string;
   let conceptSection: string;
@@ -1565,6 +1681,10 @@ NOTE: No analysis data is available. Run Channel Analysis first for data-driven 
     systemPrompt += `\n\nYou also have COMPETITOR/INDUSTRY ADS from the Meta Ad Library that the user curated as creative inspiration. Long-running ads indicate profitability. Study their patterns but create ORIGINAL copy for the user's brand — never copy competitor text verbatim.`;
   }
 
+  // Inject copy variation level instructions
+  const copyVariationInstructions = getCopyVariationInstructions(copyVariation, hasAnalysis);
+  systemPrompt += `\n\n${copyVariationInstructions}`;
+
   // Build product context section
   let productSection = '';
   if (config.productContext) {
@@ -1593,28 +1713,38 @@ ${inspirationContext}
 
 === YOUR TASK ===
 
-${hasAnalysis ? `Based on the REAL PERFORMANCE DATA above, generate copy that:
+${hasAnalysis ? (copyVariation <= 40
+  ? `Based on the REAL PERFORMANCE DATA above, generate copy that:
 1. MIRRORS the patterns from top-performing ads
 2. Uses the SAME emotional triggers and psychological drivers
 3. Incorporates winning headline structures
-4. AVOIDS the patterns from losing ads
-
-` : ''}Generate OPTIONS for the user to choose from:
+4. AVOIDS the patterns from losing ads`
+  : copyVariation <= 60
+  ? `Based on the REAL PERFORMANCE DATA above, generate copy that:
+1. USES patterns from top-performing ads as a starting point
+2. BALANCES proven emotional triggers with new creative approaches
+3. Mixes winning structures with fresh experiments
+4. AVOIDS the patterns from losing ads`
+  : `Based on the REAL PERFORMANCE DATA above, generate copy that:
+1. UNDERSTANDS the audience from the analysis data
+2. EXPLORES new emotional angles and messaging approaches
+3. PUSHES beyond existing patterns to discover new territory
+4. Still AVOIDS the patterns identified as losing`) + '\n\n' : ''}Generate OPTIONS for the user to choose from:
 
 1. Generate 6 HEADLINE options (max 40 characters each)
-   - Each should ${hasAnalysis ? 'follow patterns from the top ads above' : 'be distinct and compelling'}
-   - ${hasAnalysis ? 'Reference specific winning elements from the analysis' : 'Use varied emotional angles'}
+   - Each should ${hasAnalysis ? (copyVariation <= 40 ? 'follow patterns from the top ads above' : copyVariation <= 60 ? 'blend winning patterns with new approaches' : 'explore fresh angles informed by audience insights') : 'be distinct and compelling'}
+   - ${hasAnalysis ? (copyVariation <= 40 ? 'Reference specific winning elements from the analysis' : copyVariation <= 60 ? 'Mix proven elements with creative experiments' : 'Prioritize novel hooks and unexpected angles') : 'Use varied emotional angles'}
 
 2. Generate 5 BODY COPY options (${copyLength === 'long' ? 'LONG-FORM' : 'SHORT-FORM'}, max ${copyLengthConfig.maxChars} characters each)
-   - Each should ${hasAnalysis ? 'incorporate winning copy elements from the analysis' : 'use different approaches'}
-   - ${hasAnalysis ? 'Use the emotional triggers that work for this account' : 'Mix direct and story-driven approaches'}${copyLength === 'long' ? `
+   - Each should ${hasAnalysis ? (copyVariation <= 40 ? 'incorporate winning copy elements from the analysis' : copyVariation <= 60 ? 'blend winning elements with new narrative approaches' : 'explore fresh messaging approaches informed by audience data') : 'use different approaches'}
+   - ${hasAnalysis ? (copyVariation <= 40 ? 'Use the emotional triggers that work for this account' : copyVariation <= 60 ? 'Balance proven triggers with experimental angles' : 'Try new emotional angles and narrative structures') : 'Mix direct and story-driven approaches'}${copyLength === 'long' ? `
    - LONG-FORM REQUIREMENTS: Paint the full emotional picture, address objections, build desire, include storytelling elements
    - Use line breaks for readability. Tell a mini-story that takes the reader on a journey.` : ''}
 
 3. Generate 4 CTA options
-   - ${hasAnalysis ? 'Based on CTAs that drive action for this account' : 'Varied action words and urgency levels'}
+   - ${hasAnalysis ? (copyVariation <= 40 ? 'Based on CTAs that drive action for this account' : copyVariation <= 60 ? 'Mix proven CTAs with fresh action-oriented approaches' : 'Try distinctive, unexpected calls to action') : 'Varied action words and urgency levels'}
 
-For EACH option, include a rationale that ${hasAnalysis ? 'references specific insights from the analysis data' : 'explains why it should work'}.
+For EACH option, include a rationale that ${hasAnalysis ? (copyVariation <= 60 ? 'references specific insights from the analysis data' : 'explains the creative strategy and how it connects to the audience') : 'explains why it should work'}.
 
 Return JSON only:
 {
