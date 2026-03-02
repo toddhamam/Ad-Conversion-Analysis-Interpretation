@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import time
 
 import requests
@@ -230,6 +231,25 @@ def pause_campaign(campaign_id):
 # ─── Leads ───────────────────────────────────────────────────────────
 
 
+def _strip_unreplaced_placeholders(text):
+    """Remove any unreplaced {variable} placeholders from email text.
+
+    Prevents template variables like {different_angle} from appearing
+    in sent emails when no replacement value was provided.
+    """
+    # Match {word} patterns that look like template variables (single braces only,
+    # not Instantly's {{double_brace}} variables)
+    return re.sub(r'(?<!\{)\{([a-zA-Z_][a-zA-Z0-9_]*)\}(?!\})', '', text)
+
+
+def _clean_email_body(text):
+    """Strip unreplaced placeholders and clean up resulting whitespace."""
+    cleaned = _strip_unreplaced_placeholders(text)
+    # Collapse 3+ consecutive newlines down to 2 (blank line)
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+    return cleaned.strip()
+
+
 def _build_followup_body(prospect):
     """Build follow-up 1 email body from template.
 
@@ -267,7 +287,7 @@ def _build_followup_body(prospect):
             f"{sender_name}"
         )
 
-    return body
+    return _clean_email_body(body)
 
 
 def push_leads(campaign_id, stage="ready_to_send", limit=100):
@@ -313,6 +333,7 @@ def push_leads(campaign_id, stage="ready_to_send", limit=100):
         body = draft["body"]
         if signature and "STOP" not in body:
             body = body + signature
+        body = _clean_email_body(body)
 
         # Build follow-up body (two-touch: 1 opener + 1 follow-up)
         followup_body = _build_followup_body(prospect)

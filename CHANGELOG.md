@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-03-02 — Fix unreplaced template variables leaking into outreach emails
+
+### Overview
+Follow-up emails sent via Instantly (and direct SMTP) were rendering raw template placeholders like `{different_angle}` as literal text to recipients. The `_build_followup_body()` function only replaced `{first_name}` and `{sender_first_name}`, so any other `{variable}` tokens in the template passed through to the final email.
+
+### Fixed
+- **Instantly push path** (`instantly.py`): Added `_clean_email_body()` safety net that strips any unreplaced `{variable}` placeholders and cleans up resulting whitespace before pushing email bodies to Instantly campaigns. Applied to both the initial email body and the follow-up body.
+- **SMTP send path** (`mailer.py`): Same placeholder stripping applied to the direct Gmail SMTP sender so no template variables leak regardless of send method.
+- The regex is careful to only match `{single_brace}` patterns (template variables) and not `{{double_brace}}` patterns (Instantly's own custom variables).
+
+### Files Modified
+- `ops/convertra-leads/modules/instantly.py` — Added `_strip_unreplaced_placeholders()`, `_clean_email_body()`, applied to `_build_followup_body()` and `push_leads()`
+- `ops/convertra-leads/modules/mailer.py` — Added placeholder stripping to `send_email()`
+
+---
+
 ## 2026-02-28 — Add Support links in sidebar and profile dropdown
 
 ### Overview
