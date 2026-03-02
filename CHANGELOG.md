@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-03-02 — Hide cost estimates and model/provider names from UI
+
+### Overview
+Removed all user-visible estimated generation costs, model names (GPT, Gemini, Veo, DALL-E, OpenAI), and per-second pricing from the CreativeIQ ad generator and generated ad cards. Users should not see backend implementation details or cost information.
+
+### Removed
+- **Estimated cost display** (💰 section) before the generate button in AdGenerator
+- **Video cost estimate display** (🎬 per-second pricing) in video configuration
+- **Per-model cost/sec** line from video quality selector buttons
+- **Video model badge** ("Veo Fast" / "Veo Standard") and **estimated cost badge** from generated video cards
+- **`calculateCost` function** and `costEstimate` state variable (now unused)
+- **Dead CSS** for `.cost-estimate`, `.cost-icon`, `.cost-text`, `.cost-note`, `.video-cost-estimate` and their responsive overrides
+
+### Changed
+- **Video ad type button** text from "Generate with Veo 3.1" → "Generate AI video"
+- **Video quality option name** from "Veo 3.1" → "Standard"
+- **Progress message** from "generating video with Veo Standard..." → "generating video..."
+- **Video `whyItWorks` text** removed "with Veo 3.1 (standard)" mention
+- **17 error messages** in `openaiApi.ts` sanitized to remove model/provider names (e.g., "Gemini API error" → "Image generation error", "OpenAI API key not configured" → "AI API not configured")
+- **Startup console logs** that print model names now wrapped in `import.meta.env.DEV` guard so they only appear in local development, not in production
+
+### Files Modified
+- `src/pages/AdGenerator.tsx` — Removed cost UI, unused import, model name references in progress text
+- `src/pages/AdGenerator.css` — Removed dead CSS for cost estimate components
+- `src/components/GeneratedAdCard.tsx` — Removed video model and cost badges
+- `src/services/openaiApi.ts` — Sanitized all error messages, renamed model option, dev-gated startup logs, updated whyItWorks text
+
+---
+
 ## 2026-03-02 — Add Copy Variation Level slider to CreativeIQ ad generator
 
 ### Overview

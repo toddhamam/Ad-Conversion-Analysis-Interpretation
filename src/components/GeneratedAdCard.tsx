@@ -300,8 +300,6 @@ const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, o
                       <span className="video-duration"><Timer size={14} strokeWidth={1.5} /> {video.duration}</span>
                       <span className="video-aspect"><Ruler size={14} strokeWidth={1.5} /> {video.aspectRatio}</span>
                       {video.resolution && <span className="video-badge">{video.resolution}</span>}
-                      {video.model && <span className="video-badge">{video.model === 'fast' ? 'Veo Fast' : 'Veo Standard'}</span>}
-                      {video.estimatedCost && <span className="video-badge">{video.estimatedCost}</span>}
                     </div>
                     <div className="video-actions">
                       {!hasExpiredBlob && !hasNoUrl && (
