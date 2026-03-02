@@ -760,6 +760,7 @@ const AdGenerator = () => {
           resolution: '720p' as const,
           model: videoModel,
         } : undefined,
+        onProgress: setGenerationProgress,
       });
 
       setGeneratedAds(prev => [result, ...prev]);
