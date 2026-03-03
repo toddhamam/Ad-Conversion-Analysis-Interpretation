@@ -163,6 +163,71 @@ export const COPY_LENGTH_OPTIONS: CopyLengthConfig[] = [
 export const DEFAULT_COPY_LENGTH: CopyLength = 'short';
 
 // =============================================================================
+// BANNED AI PHRASES — Single source of truth for prompt instructions + sanitizer
+// =============================================================================
+
+/** Phrases that are dead giveaways of AI-generated copy. Used in both prompt instructions and post-processing. */
+const BANNED_PHRASES = [
+  "You're not broken", "You're not the problem", "You were never broken",
+  "Here's the thing", "Here's the truth", "Here's what no one tells you",
+  "It's not your fault",
+  "What if I told you",
+  "In a world where",
+  "Stop the scroll",
+  "That actually works", "Like never before",
+  "Game-changer", "Take it to the next level", "Next-level",
+  "The secret nobody's talking about",
+  "Let that sink in",
+  "Read that again",
+  "This isn't just another",
+  "Are you tired of...?",
+  "Spoiler alert:", "Plot twist:",
+  "Your future self will thank you",
+  "You deserve better", "You deserve more", "You deserve this",
+] as const;
+
+/** Prompt-ready string listing all banned phrases for injection into system prompts. */
+const BANNED_PHRASES_PROMPT = `BANNED PHRASES — NEVER use: ${BANNED_PHRASES.map(p => `"${p}"`).join(', ')}.`;
+
+/** Regex patterns derived from BANNED_PHRASES for post-processing sanitization. */
+const BANNED_PHRASE_PATTERNS: RegExp[] = [
+  /you'?re not broken/gi, /you'?re not the problem/gi, /you were never broken/gi,
+  /here'?s the thing[.:,]?/gi, /here'?s the truth[.:,]?/gi, /here'?s what no one tells you/gi,
+  /it'?s not your fault/gi,
+  /what if i told you/gi,
+  /in a world where/gi,
+  /stop the scroll/gi,
+  /that actually works/gi, /like never before/gi,
+  /game[- ]?changer/gi, /take it to the next level/gi, /next[- ]?level/gi,
+  /the secret (?:nobody'?s|no one'?s) talking about/gi,
+  /let that sink in\.?/gi,
+  /read that again\.?/gi,
+  /this isn'?t just another/gi,
+  /are you tired of/gi,
+  /spoiler alert:?/gi, /plot twist:?/gi,
+  /your future self will thank you/gi,
+  /you deserve (?:better|more|this)/gi,
+];
+
+/**
+ * Sanitize generated copy text: strip em dashes, remove banned AI phrases, clean whitespace.
+ * Returns the original text if sanitization would produce degenerate output (empty or < 3 chars).
+ */
+function sanitizeCopyText(text: string): string {
+  let cleaned = text.replace(/—/g, ',');
+  for (const pattern of BANNED_PHRASE_PATTERNS) {
+    cleaned = cleaned.replace(pattern, '');
+  }
+  cleaned = cleaned.replace(/  +/g, ' ').trim();
+  // Guard against degenerate output — keep original if cleaning stripped too much
+  if (cleaned.length < 3 || !/[a-zA-Z]/.test(cleaned)) {
+    console.warn('⚠️ Copy sanitizer produced degenerate output, keeping original text');
+    return text.replace(/—/g, ',').trim();
+  }
+  return cleaned;
+}
+
+// =============================================================================
 // VIDEO CONFIGURATION - Veo 3.1 video generation options
 // =============================================================================
 export type VideoAspectRatio = '16:9' | '9:16';
@@ -787,73 +852,6 @@ Return ONLY the JSON object, no additional text.`;
   }
 }
 
-/**
- * Generate new ad copy based on winning elements
- */
-export async function generateAdCopy(
-  winningAds: AdCreativeData[],
-  options: {
-    style?: 'similar' | 'variation' | 'new-angle';
-    targetAudience?: string;
-    productDescription?: string;
-  } = {}
-): Promise<{
-  headlines: string[];
-  bodyTexts: string[];
-  callToActions: string[];
-}> {
-  const { style = 'variation', targetAudience, productDescription } = options;
-
-  const systemPrompt = `You are an expert copywriter specializing in high-converting Meta ad copy.
-Based on the winning ad patterns provided, generate new ad variations that maintain the successful elements
-while introducing fresh approaches to prevent ad fatigue.`;
-
-  const userPrompt = `Based on these winning ads, generate new ad copy variations:
-
-**Winning Ad Examples:**
-${winningAds.map((ad, i) => `
-${i + 1}. Headline: "${ad.headline}"
-   Body: "${ad.bodyText}"
-   Conversion Rate: ${ad.conversionRate.toFixed(2)}%
-`).join('')}
-
-${targetAudience ? `**Target Audience:** ${targetAudience}` : ''}
-${productDescription ? `**Product/Offer:** ${productDescription}` : ''}
-**Style:** ${style}
-
-Generate new ad copy in the following JSON format:
-{
-  "headlines": ["<headline 1>", "<headline 2>", "<headline 3>", "<headline 4>", "<headline 5>"],
-  "bodyTexts": ["<body text 1>", "<body text 2>", "<body text 3>"],
-  "callToActions": ["<CTA 1>", "<CTA 2>", "<CTA 3>"]
-}
-
-Return ONLY the JSON object, no additional text.`;
-
-  const response = await callOpenAI([
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt },
-  ], { maxTokens: 1500 });
-
-  try {
-    let cleanedResponse = response.trim();
-    if (cleanedResponse.startsWith('```json')) {
-      cleanedResponse = cleanedResponse.slice(7);
-    }
-    if (cleanedResponse.startsWith('```')) {
-      cleanedResponse = cleanedResponse.slice(3);
-    }
-    if (cleanedResponse.endsWith('```')) {
-      cleanedResponse = cleanedResponse.slice(0, -3);
-    }
-
-    return JSON.parse(cleanedResponse.trim());
-  } catch (error) {
-    console.error('❌ Failed to parse generated copy:', error);
-    throw new Error('Failed to generate ad copy');
-  }
-}
-
 // Channel-wide analysis types
 export interface ChannelAnalysisResult {
   channelName: string;
@@ -897,6 +895,16 @@ export interface ChannelAnalysisResult {
     keyDifferentiator: string; // What in the IMAGE made the difference
   }>;
 
+  // Brand Voice Profile (extracted from winning ads)
+  brandVoice?: {
+    tonality: string;           // e.g., "Confident and direct, with a coaching undertone"
+    sentenceStyle: string;      // e.g., "Short punchy fragments mixed with one longer build-up sentence"
+    pointOfView: string;        // e.g., "Second person (you/your), occasionally first person plural (we)"
+    vocabularyLevel: string;    // e.g., "Conversational, 8th-grade reading level, no jargon"
+    rhythmAndCadence: string;   // e.g., "Staccato openings, builds to a longer emotional middle, punchy close"
+    distinctiveTraits: string[];// e.g., ["Uses sentence fragments as hooks", "Ends with a question"]
+  };
+
   // Pattern Analysis
   winningPatterns: {
     headlines: string[];
@@ -933,6 +941,7 @@ export interface ChannelAnalysisResult {
   topAds: Array<{
     id: string;
     headline: string;
+    bodyText?: string; // Full body text from original ad data for voice/structure replication
     conversionRate: number;
     whyItWorks: string;
     imageAnalysis: string; // What's in the image that drives conversion
@@ -1173,6 +1182,14 @@ ${hasAccessibleImages ? 'Based on your VISUAL ANALYSIS of the ad images above' :
       "keyDifferentiator": "<${hasAccessibleImages ? 'SPECIFIC visual element' : 'key factor (targeting, creative variation, etc.)'} that made the difference>"
     }
   ],
+  "brandVoice": {
+    "tonality": "<the overall tone of the winning ads, e.g. 'Confident and direct with a coaching undertone' or 'Warm and empathetic but urgent'>",
+    "sentenceStyle": "<how sentences are structured in winners, e.g. 'Short punchy fragments mixed with one longer emotional sentence' or 'Full sentences, conversational rhythm'>",
+    "pointOfView": "<dominant POV in winning copy, e.g. 'Second person direct address (you/your)' or 'First person storytelling (I/my)'>",
+    "vocabularyLevel": "<reading level and word choices, e.g. 'Conversational, 8th-grade level, no jargon' or 'Sophisticated but accessible, uses industry terms sparingly'>",
+    "rhythmAndCadence": "<the pacing pattern of winning copy, e.g. 'Staccato opener. Builds tension with a longer middle. Punchy one-line close.' or 'Steady rhythm, each sentence roughly the same length'>",
+    "distinctiveTraits": ["<specific linguistic habit from winners, e.g. 'Uses sentence fragments as hooks'>", "<trait 2, e.g. 'Closes with a direct question'>", "<trait 3>"]
+  },
   "winningPatterns": {
     "headlines": ["<pattern 1>", "<pattern 2>"],
     "copyElements": ["<pattern 1>", "<pattern 2>"],
@@ -1280,22 +1297,28 @@ Return ONLY the JSON object, no additional text.`;
 
     const analysis = JSON.parse(cleanedResponse.trim());
 
-    // CRITICAL: Create a map of ad IDs to image URLs from the original data
-    // This allows us to attach actual image URLs to the topAds for visual reference generation
+    // CRITICAL: Create maps of ad IDs to original data (image URLs, body text)
+    // This allows us to attach actual data to the topAds for generation reference
     const adImageMap = new Map<string, string>();
+    const adBodyTextMap = new Map<string, string>();
     ads.forEach(ad => {
       if (ad.imageUrl) {
         adImageMap.set(ad.id, ad.imageUrl);
       }
+      if (ad.bodyText) {
+        adBodyTextMap.set(ad.id, ad.bodyText);
+      }
     });
 
-    // Augment topAds with actual image URLs
+    // Augment topAds with actual image URLs and full body text from original ad data
     if (analysis.topAds && Array.isArray(analysis.topAds)) {
       analysis.topAds = analysis.topAds.map((topAd: { id: string; [key: string]: unknown }) => ({
         ...topAd,
         imageUrl: adImageMap.get(topAd.id) || undefined,
+        bodyText: adBodyTextMap.get(topAd.id) || undefined,
       }));
       console.log(`📸 Attached image URLs to ${analysis.topAds.filter((a: { imageUrl?: string }) => a.imageUrl).length}/${analysis.topAds.length} top ads`);
+      console.log(`📝 Attached body text to ${analysis.topAds.filter((a: { bodyText?: string }) => a.bodyText).length}/${analysis.topAds.length} top ads`);
     }
 
     // Augment bottomAds with image URLs too
@@ -1439,11 +1462,31 @@ Avg Conversion Rate: ${(analysis.performanceBreakdown.avgConversionRate * 100).t
       analysis.topAds.forEach((ad, i) => {
         analysisContext += `
 TOP AD #${i + 1} (${(ad.conversionRate * 100).toFixed(2)}% conversion rate):
-- Headline: "${ad.headline}"
+- Headline: "${ad.headline}"${ad.bodyText ? `
+- Full Body Copy: "${ad.bodyText}"` : ''}
 - Why it converts: ${ad.whyItWorks}
 - Psychological drivers: ${ad.psychologicalDrivers?.join(', ') || 'N/A'}
 `;
       });
+      analysisContext += `
+IMPORTANT: Study the FULL BODY COPY of these winners. Notice their structure, pacing, opening hooks, how they build tension, and how they close. Your generated body copy should follow the same structural patterns and voice.
+`;
+    }
+
+    // BRAND VOICE PROFILE - How the winning ads sound (tone, cadence, style)
+    if (analysis.brandVoice) {
+      const bv = analysis.brandVoice;
+      analysisContext += `\n=== BRAND VOICE PROFILE (MATCH THIS VOICE) ===
+This is the voice that is ALREADY CONVERTING for this ad account. Your copy MUST sound like it came from the same copywriter.
+- Tonality: ${bv.tonality}
+- Sentence style: ${bv.sentenceStyle}
+- Point of view: ${bv.pointOfView}
+- Vocabulary level: ${bv.vocabularyLevel}
+- Rhythm & cadence: ${bv.rhythmAndCadence}
+${bv.distinctiveTraits?.length ? `- Distinctive traits:\n${bv.distinctiveTraits.map(t => `  * ${t}`).join('\n')}` : ''}
+
+CRITICAL: Do NOT override this voice with generic "ad copywriter" tone. The voice profile above is extracted from REAL winning ads. Match its specific characteristics, not a generic approximation of it.
+`;
     }
 
     // WINNING PATTERNS - Proven elements
@@ -1701,6 +1744,12 @@ NOTE: No analysis data is available. Run Channel Analysis first for data-driven 
   const copyVariationInstructions = getCopyVariationInstructions(copyVariation, hasAnalysis);
   systemPrompt += `\n\n${copyVariationInstructions}`;
 
+  // Copy quality rules: anti-AI patterns, specificity, formatting
+  systemPrompt += `\n\nCOPY QUALITY RULES (NON-NEGOTIABLE):
+1. ${BANNED_PHRASES_PROMPT} If you catch yourself writing any of these, delete it and write something original and specific instead.
+2. SPECIFICITY RULE: Generic claims kill conversions. Every headline and body text must contain at least one CONCRETE element: a number, a timeframe, a named outcome, or a specific mechanism. "Improve your results" is weak. "Cut your CPA 40% in 14 days" is strong.
+3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.`;
+
   // Build product context section
   let productSection = '';
   if (config.productContext) {
@@ -1750,15 +1799,19 @@ ${hasAnalysis ? (copyVariation <= 40
 1. Generate 6 HEADLINE options (max 40 characters each)
    - Each should ${hasAnalysis ? (copyVariation <= 40 ? 'follow patterns from the top ads above' : copyVariation <= 60 ? 'blend winning patterns with new approaches' : 'explore fresh angles informed by audience insights') : 'be distinct and compelling'}
    - ${hasAnalysis ? (copyVariation <= 40 ? 'Reference specific winning elements from the analysis' : copyVariation <= 60 ? 'Mix proven elements with creative experiments' : 'Prioritize novel hooks and unexpected angles') : 'Use varied emotional angles'}
+   - Each headline MUST use a DIFFERENT hook approach. Vary across: question hooks, bold claims, specific numbers/stats, metaphors, identity statements, before/after contrasts, pattern interrupts, and direct benefit statements. Do NOT generate 6 headlines that all use the same structure.
 
 2. Generate 5 BODY COPY options (${copyLength === 'long' ? 'LONG-FORM' : 'SHORT-FORM'}, max ${copyLengthConfig.maxChars} characters each)
    - Each should ${hasAnalysis ? (copyVariation <= 40 ? 'incorporate winning copy elements from the analysis' : copyVariation <= 60 ? 'blend winning elements with new narrative approaches' : 'explore fresh messaging approaches informed by audience data') : 'use different approaches'}
    - ${hasAnalysis ? (copyVariation <= 40 ? 'Use the emotional triggers that work for this account' : copyVariation <= 60 ? 'Balance proven triggers with experimental angles' : 'Try new emotional angles and narrative structures') : 'Mix direct and story-driven approaches'}${copyLength === 'long' ? `
-   - LONG-FORM REQUIREMENTS: Paint the full emotional picture, address objections, build desire, include storytelling elements
-   - Use line breaks for readability. Tell a mini-story that takes the reader on a journey.` : ''}
+   - LONG-FORM STRUCTURE: Follow a desire-building arc: (1) Hook that stops the scroll, (2) Amplify the pain or desire, (3) Introduce the solution/mechanism, (4) Add one proof element or specific detail, (5) Close with forward momentum toward the CTA.
+   - Use line breaks for readability. Tell a mini-story that takes the reader on a journey.` : `
+   - SHORT-FORM STRUCTURE: Lead with the single strongest desire-trigger or pain-point. One core idea, one emotion, one action. No throat-clearing or warm-up sentences.`}
 
 3. Generate 4 CTA options
    - ${hasAnalysis ? (copyVariation <= 40 ? 'Based on CTAs that drive action for this account' : copyVariation <= 60 ? 'Mix proven CTAs with fresh action-oriented approaches' : 'Try distinctive, unexpected calls to action') : 'Varied action words and urgency levels'}
+   - Include the product/offer name in at least 2 CTAs when possible (e.g., "Start The Protocol" not just "Get Started"). Product-specific CTAs outperform generic ones.
+   - Avoid dead-zone CTAs like "Learn More" or "Click Here". Each CTA should imply what happens next.
 
 For EACH option, include a rationale that ${hasAnalysis ? (copyVariation <= 60 ? 'references specific insights from the analysis data' : 'explains the creative strategy and how it connects to the audience') : 'explains why it should work'}.
 
@@ -1808,6 +1861,18 @@ Return JSON only:
     }
 
     const parsed = JSON.parse(cleanedResponse.trim());
+
+    // Post-processing: sanitize all generated copy text
+    if (parsed.headlines) {
+      for (const h of parsed.headlines) { if (h.text) h.text = sanitizeCopyText(h.text); }
+    }
+    if (parsed.bodyTexts) {
+      for (const b of parsed.bodyTexts) { if (b.text) b.text = sanitizeCopyText(b.text); }
+    }
+    if (parsed.callToActions) {
+      for (const c of parsed.callToActions) { if (c.text) c.text = sanitizeCopyText(c.text); }
+    }
+
     console.log('✅ Copy options generated successfully');
     return parsed;
   } catch (error) {
@@ -1869,8 +1934,16 @@ Overall Health Score: ${analysis.overallHealthScore}/10
     if (analysis.topAds && analysis.topAds.length > 0) {
       analysisContext += `\n=== YOUR TOP PERFORMING ADS ===\n`;
       analysis.topAds.forEach((ad, i) => {
-        analysisContext += `TOP AD #${i + 1} (${(ad.conversionRate * 100).toFixed(2)}% CVR): "${ad.headline}" — ${ad.whyItWorks}\n`;
+        analysisContext += `TOP AD #${i + 1} (${(ad.conversionRate * 100).toFixed(2)}% CVR): "${ad.headline}"${ad.bodyText ? ` | Body: "${ad.bodyText}"` : ''} | ${ad.whyItWorks}\n`;
       });
+    }
+    if (analysis.brandVoice) {
+      const bv = analysis.brandVoice;
+      analysisContext += `\n=== BRAND VOICE (MATCH THIS) ===
+Tone: ${bv.tonality} | Style: ${bv.sentenceStyle} | POV: ${bv.pointOfView} | Vocab: ${bv.vocabularyLevel}
+Cadence: ${bv.rhythmAndCadence}
+${bv.distinctiveTraits?.length ? `Traits: ${bv.distinctiveTraits.join('; ')}` : ''}
+`;
     }
     if (analysis.winningPatterns) {
       analysisContext += `\n=== WINNING PATTERNS ===
@@ -1938,6 +2011,12 @@ Overall Health Score: ${analysis.overallHealthScore}/10
 
   systemPrompt += `\n\nCopy variation level: ${getCopyVariationLabel(copyVariation, hasAnalysis)}`;
 
+  // Copy quality rules: anti-AI patterns, specificity, formatting
+  systemPrompt += `\n\nCOPY QUALITY RULES (NON-NEGOTIABLE):
+1. ${BANNED_PHRASES_PROMPT}
+2. SPECIFICITY: Include at least one concrete element per headline and body text (a number, timeframe, named outcome, or specific mechanism). No vague claims.
+3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.`;
+
   // Build product context
   let productSection = '';
   if (config.productContext) {
@@ -1969,7 +2048,7 @@ All copy MUST reference "${p.name}" by ${p.author} — no other product or brand
     'Use a metaphor or analogy from everyday life',
     'Appeal to the reader\'s identity or self-image',
     'Create a vivid before/after mental picture',
-    'Use pattern interruption — say something unexpected',
+    'Use pattern interruption: say something unexpected',
     'Lead with the emotional payoff, not the feature',
     'Reference a common frustration and flip it',
     'Use social proof or implied consensus',
@@ -2020,6 +2099,11 @@ Return JSON only:
       if (cleanedResponse.endsWith('```')) cleanedResponse = cleanedResponse.slice(0, -3);
 
       const parsed = JSON.parse(cleanedResponse.trim());
+
+      // Post-processing: sanitize generated copy text
+      if (parsed.text) {
+        parsed.text = sanitizeCopyText(parsed.text);
+      }
 
       // Override ID with a unique one to avoid collisions
       const prefix = config.copyType === 'headline' ? 'h' : config.copyType === 'bodyText' ? 'b' : 'c';
@@ -2807,9 +2891,21 @@ export async function generateAudienceAdCopy(config: {
   const audienceInsights = config.analysisData?.audienceInsights;
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
 
-  const systemPrompt = `You are an expert direct-response copywriter specializing in high-converting Meta/Facebook ads.
+  let systemPrompt = `You are an expert direct-response copywriter specializing in high-converting Meta/Facebook ads.
 Your copy should be emotionally compelling, benefit-focused, and tailored to the specific audience stage.
 Write copy that feels authentic, not corporate or overly salesy.`;
+
+  // Inject brand voice if available
+  if (config.analysisData?.brandVoice) {
+    const bv = config.analysisData.brandVoice;
+    systemPrompt += `\n\nBRAND VOICE (MATCH THIS): Tone: ${bv.tonality} | Style: ${bv.sentenceStyle} | POV: ${bv.pointOfView} | Vocab: ${bv.vocabularyLevel} | Cadence: ${bv.rhythmAndCadence}${bv.distinctiveTraits?.length ? ` | Traits: ${bv.distinctiveTraits.join('; ')}` : ''}`;
+  }
+
+  // Copy quality rules
+  systemPrompt += `\n\nCOPY QUALITY RULES (NON-NEGOTIABLE):
+1. ${BANNED_PHRASES_PROMPT}
+2. SPECIFICITY: Include at least one concrete element per headline and body text (a number, timeframe, named outcome, or specific mechanism). No vague claims.
+3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.`;
 
   const userPrompt = `Generate ad copy for a ${config.audienceType.toUpperCase()} audience.
 
@@ -2862,6 +2958,18 @@ Return JSON only:
     }
 
     const parsed = JSON.parse(cleanedResponse.trim());
+
+    // Post-processing: sanitize all generated copy text
+    if (parsed.headlines) {
+      parsed.headlines = parsed.headlines.map((h: string) => sanitizeCopyText(h));
+    }
+    if (parsed.bodyTexts) {
+      parsed.bodyTexts = parsed.bodyTexts.map((b: string) => sanitizeCopyText(b));
+    }
+    if (parsed.callToActions) {
+      parsed.callToActions = parsed.callToActions.map((c: string) => sanitizeCopyText(c));
+    }
+
     console.log('✅ Ad copy generated successfully');
     return parsed;
   } catch (error) {
