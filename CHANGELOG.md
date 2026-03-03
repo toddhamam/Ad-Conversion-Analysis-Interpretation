@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-03-03 — Audience-aware copy generation with Schwartz awareness model
+
+### Overview
+Overhauled the ad copy generation system so Prospecting, Retargeting, and Retention audiences produce genuinely distinct copy. Previously, the three audience types shared only 3 short phrases each (`focus`, `tone`, `messaging`), causing retargeting copy to read nearly identical to prospecting copy. Now each audience type carries a rich prompt context based on Eugene Schwartz's levels of awareness model — with distinct hook strategies, body copy arcs, CTA approaches, anti-patterns, and concept-type modifiers.
+
+### Added
+- **Schwartz awareness level mapping** — Each audience maps to specific awareness stages: Prospecting (Levels 1-2: Unaware/Problem-Aware), Retargeting (Levels 3-4: Solution/Product-Aware), Retention (Level 5: Most Aware)
+- **Rich `AUDIENCE_ANGLES` config** — Expanded from 3 fields to 13 fields per audience: `awarenessLevel`, `awarenessDescription`, `hookStrategy` (with example hooks), `bodyStructure` (step-by-step narrative arc for long-form), `bodyStructureShort` (condensed guidance for short-form), `ctaApproach`, `readerKnows[]`, `readerDoesNotKnow[]`, `antiPatterns[]`, `conceptShifts`
+- **`CONCEPT_AUDIENCE_MODIFIERS` matrix** — 8 concept types x 3 audience types = 24 entries telling the model how to adapt each psychological angle (social proof, fear elimination, urgency, authority, etc.) per audience stage
+- **Short-form body structure** — Separate `bodyStructureShort` field prevents conflicting instructions when generating max-125-char copy (the full 5-step narrative arc is only injected for long-form)
+- **Audience-aware image generation** — Gemini and DALL-E prompts now include visual implication per audience (curiosity-driven imagery for prospecting, credibility-driven for retargeting, premium/exclusive for retention)
+- **Audience-aware video generation** — Storyboard and Veo prompts include opening strategy per audience (lead with problem for cold, lead with product for warm, lead with VIP framing for customers)
+
+### Fixed
+- **Bracket placeholder leakage** — Replaced all `[product]`, `[Product Name]`, `[Y]`, `[reward]`, `[expert]`, `[Brand]` placeholders with natural language + "Use the actual product name from the product context" instructions to prevent literal bracket tokens from appearing in generated copy
+
+### Files Modified
+- `src/services/openaiApi.ts` — Expanded `AUDIENCE_ANGLES`, added `CONCEPT_AUDIENCE_MODIFIERS`, updated all 7 prompt injection sites (generateCopyOptions, regenerateSingleCopy, generateAudienceAdCopy, generateAdImageWithGemini, generateAdImageWithDallE, generateVideoStoryboard, generateAdVideoWithVeo)
+
+---
+
 ## 2026-03-03 — Copy generation quality overhaul: anti-AI patterns, brand voice, and specificity
 
 ### Overview

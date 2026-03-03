@@ -489,6 +489,50 @@ export const CONCEPT_ANGLES: Record<ConceptType, {
   }
 };
 
+// Audience-specific modifiers for each concept type (Schwartz awareness adaptation)
+const CONCEPT_AUDIENCE_MODIFIERS: Record<ConceptType, Record<AudienceType, string>> = {
+  auto: {
+    prospecting: 'Auto-select should lean toward curiosity and problem-awareness angles',
+    retargeting: 'Auto-select should lean toward mechanism-reveal and objection-handling angles',
+    retention: 'Auto-select should lean toward upgrade and loyalty angles',
+  },
+  cognitive_dissonance: {
+    prospecting: 'Frame the dissonance around the PROBLEM: "You know X is hurting you, but you keep doing Y." The reader does not know about your product yet -- the dissonance is between their current behavior and the outcome they want.',
+    retargeting: 'Frame the dissonance around the DECISION: "You\'ve seen this. You know it works. So why haven\'t you started?" The dissonance is between knowing the solution exists and not acting on it. Use the actual product name.',
+    retention: 'Frame the dissonance around the NEXT LEVEL: "You solved X already. But you\'re still leaving Y on the table." The dissonance is between their current results and what is possible with the upgrade. Use the actual product name.',
+  },
+  social_proof: {
+    prospecting: 'Use BROAD social proof: large numbers, relatable demographics, general outcomes. "Over 10,000 people have discovered..." The reader does not know the brand, so proof must feel universal, not niche.',
+    retargeting: 'Use SPECIFIC social proof: named testimonials, exact numbers, timeframes, before/after details. "Sarah went from X to Y in 3 weeks." The reader is weighing a decision -- they need detailed, credible evidence.',
+    retention: 'Use PEER social proof from other customers who UPGRADED: "87% of customers who added the next step saw a 2x improvement." The reader is already a customer -- proof should come from people like them who took the next step.',
+  },
+  fear_elimination: {
+    prospecting: 'Eliminate PROBLEM FEARS: the fear of the status quo, the cost of inaction, what happens if they do nothing. Do NOT address purchase fears -- they are not at that stage yet.',
+    retargeting: 'Eliminate PURCHASE FEARS: money-back guarantees, risk reversal, "what if it doesn\'t work for me" objections. They want the product -- they are afraid of making a bad decision.',
+    retention: 'Eliminate UPGRADE FEARS: "Is the next level worth it?", "Will I actually use it?", "Am I being upsold?" Address the natural skepticism of being asked to buy again from the same brand.',
+  },
+  product_benefits: {
+    prospecting: 'Lead with OUTCOME BENEFITS, not feature lists. The reader does not know the product -- features mean nothing without context. "Get [result] in [timeframe]" beats "Includes 12 modules and a workbook."',
+    retargeting: 'Lead with MECHANISM BENEFITS -- explain HOW the product delivers results. They know the outcome promise; now they need to understand the method. Features become relevant here because they support the mechanism.',
+    retention: 'Lead with INCREMENTAL BENEFITS -- what does the new offer add ON TOP of what they already have? "You got X from this. The next step adds Y and Z." Frame benefits as building blocks, not standalone value. Use the actual product name.',
+  },
+  transformation: {
+    prospecting: 'Paint the ASPIRATIONAL transformation: where they could be versus where they are now. The gap between their current state and the desired outcome. Make the transformation vivid and relatable.',
+    retargeting: 'Paint the SPECIFIC transformation with proof: show exact before/after journeys. "Day 1 you feel X. By week 3, you experience Y." The transformation should feel achievable and evidence-based, not just aspirational.',
+    retention: 'Paint the COMPOUNDING transformation: "You already achieved X. The next transformation is Y -- and it builds on what you\'ve already done." The transformation is about going from good to great, not bad to good.',
+  },
+  urgency_scarcity: {
+    prospecting: 'Use COST-OF-INACTION urgency, not offer scarcity. "Every day you wait, X gets worse" or "The gap between you and [desired state] grows wider." There is no established desire for the product yet, so deadlines feel manipulative.',
+    retargeting: 'Use OFFER-BASED urgency: deadlines, limited bonuses, price increases, enrollment windows. Desire is established -- now give them a reason to act TODAY instead of "someday." This is where traditional scarcity tactics are appropriate.',
+    retention: 'Use EXCLUSIVE-ACCESS urgency: member-only windows, loyalty pricing that expires, early access that precedes public launch. The urgency should feel like a privilege of being a customer, not a pressure tactic.',
+  },
+  authority: {
+    prospecting: 'Establish authority of the APPROACH/METHOD, not the brand. "Research from [institution] shows that X approach..." or "The method used by top performers." The reader does not know the brand, so brand authority means nothing yet.',
+    retargeting: 'Establish authority of the BRAND AND CREATOR. Reference the creator\'s credentials, expertise, or track record. Now that they know the product, brand-specific authority helps them trust the investment. Use the actual product name and author.',
+    retention: 'Reinforce authority as a TRUSTED PARTNER. "You already trust us with X. We applied the same methodology to create what comes next." The authority is relational -- they have direct experience with the brand.',
+  },
+};
+
 export interface GeneratedImageResult {
   imageUrl: string;
   revisedPrompt: string;
@@ -1387,21 +1431,179 @@ export async function testOpenAIConnection(): Promise<{ success: boolean; messag
 // AD GENERATOR FUNCTIONS
 // ============================================================================
 
-const AUDIENCE_ANGLES = {
+const AUDIENCE_ANGLES: Record<AudienceType, {
+  focus: string;
+  tone: string;
+  messaging: string;
+  awarenessLevel: string;
+  awarenessDescription: string;
+  hookStrategy: string;
+  bodyStructure: string;
+  bodyStructureShort: string;
+  ctaApproach: string;
+  readerKnows: string[];
+  readerDoesNotKnow: string[];
+  antiPatterns: string[];
+  conceptShifts: string;
+}> = {
   prospecting: {
     focus: 'awareness and curiosity',
     tone: 'intriguing, benefit-focused, introducing the solution',
     messaging: 'Create intrigue, highlight the main problem/pain point, introduce the solution without being salesy, build initial trust',
+
+    awarenessLevel: 'Unaware to Problem-Aware (Schwartz Levels 1-2)',
+    awarenessDescription: 'This person does NOT know the brand, has NOT seen the product, and may not even recognize they have the problem yet. They are scrolling cold. Your job is to make them stop, recognize a pain or desire they already feel, and become curious about a solution they have never heard of.',
+
+    hookStrategy: `Hooks must LEAD WITH THE PROBLEM or a relatable situation -- never the product. The reader does not care about the product yet. They care about their own pain, frustration, or desire. Effective cold hooks:
+- Pattern interrupts that name a specific frustration ("Still doing X the hard way?")
+- Curiosity gaps that make them need to read more ("The reason your X keeps failing isn't what you think")
+- Bold claims backed by a specific number ("How 3,247 people fixed X in 14 days")
+- Identity-based questions ("If you're a [type of person] who struggles with X...")
+- Contrarian statements that challenge conventional wisdom`,
+
+    bodyStructure: `Body copy must follow this arc for cold audiences:
+1. VALIDATE THE PROBLEM: Show you understand their world. Be specific -- name the exact frustration, not a vague pain point
+2. AGITATE: Make the problem feel urgent or costly to ignore. What happens if they keep doing nothing?
+3. TEASE THE MECHANISM: Introduce the solution concept (not the product name) as a new approach. Focus on the "what" and "why it works" at a high level
+4. BRIDGE TO CURIOSITY: End with forward momentum -- they should want to learn more, not feel sold to
+
+Do NOT dump product features. Do NOT use the product name in the first sentence. The body copy should feel like discovering something, not being pitched.`,
+
+    bodyStructureShort: 'Lead with ONE specific pain point or frustration the reader feels right now. Name the problem concretely, then hint at a new approach that solves it. End with forward momentum. Do NOT introduce the product by name first -- lead with the problem. Every word must earn its place.',
+
+    ctaApproach: 'CTAs should be low-commitment and curiosity-driven. "See how it works", "Watch the free breakdown", "Discover the method". Avoid high-commitment CTAs like "Buy now", "Start your trial", "Sign up today" -- these are too aggressive for someone who just learned about you.',
+
+    readerKnows: [
+      'Their own pain point or desire (even if they cannot articulate it yet)',
+      'That existing solutions have not fully worked for them',
+    ],
+    readerDoesNotKnow: [
+      'Your brand or product name',
+      'That your specific solution exists',
+      'Why your approach is different from others',
+      'Any social proof or results from your product',
+    ],
+
+    antiPatterns: [
+      'NEVER assume they know the brand -- no "As you know..." or "You\'ve seen our..."',
+      'NEVER lead with the product name or features -- they do not care yet',
+      'NEVER use urgency/scarcity tactics (limited time, selling out) -- there is no established desire to lose',
+      'NEVER reference a previous visit, email, or interaction -- they have had none',
+      'NEVER use insider language or jargon specific to your product',
+      'NEVER open with a testimonial -- they have no context for why the testimonial matters',
+    ],
+
+    conceptShifts: 'For cold audiences: social_proof should use broad, relatable numbers (not brand-specific testimonials). fear_elimination should focus on the fear of the PROBLEM, not the fear of buying. urgency_scarcity should be about the cost of INACTION, not a limited offer. authority should establish credibility of the APPROACH/method, not the brand.',
   },
   retargeting: {
     focus: 'consideration and conversion',
     tone: 'persuasive, reassuring, urgency-driven',
     messaging: 'Address common objections, show social proof and testimonials, highlight specific benefits, create urgency with limited-time offers',
+
+    awarenessLevel: 'Solution-Aware to Product-Aware (Schwartz Levels 3-4)',
+    awarenessDescription: 'This person HAS visited the site, HAS seen the product, and HAS seen your prospecting ads. They know the brand name. They know what the product claims to do. They are NOT yet convinced it will work for THEM. Your job is to push past their remaining hesitation by going deeper on the mechanism, addressing the specific objection they are sitting on, and giving them a reason to act NOW instead of later.',
+
+    hookStrategy: `Hooks must ACKNOWLEDGE they already know about the product -- then go DEEPER. Do NOT repeat the same introductory messaging they saw in prospecting ads. They already got the "what." Now they need the "why" and "how." Effective retargeting hooks:
+- Objection-first hooks ("You probably think X won't work because..." / "Still on the fence about X?")
+- Mechanism reveals ("Here's WHY this works when other approaches don't")
+- Social proof leads ("2,847 people started this month. Here's what they're saying")
+- Deeper benefit hooks ("The part nobody talks about")
+- Comparison hooks ("This vs. doing nothing -- here's the real math")
+- Curiosity about the next layer ("You saw what it does. Here's what happens in week 2")
+
+Use the actual product name from the product context. NEVER re-introduce the product as if they have never heard of it. They have. Speak to them as someone who is already partway through the decision.`,
+
+    bodyStructure: `Body copy must follow this arc for warm audiences:
+1. ACKNOWLEDGE FAMILIARITY: Show that you know they have already been exposed to the product. A subtle nod -- "You've seen this before" or "You're already considering this" -- signals this ad is for THEM, not a mass blast
+2. GO DEEPER ON THE MECHANISM: Explain WHY the solution works at a level of detail the prospecting ad did not cover. Name the specific methodology, the step-by-step, or the science behind it
+3. HANDLE THE #1 OBJECTION: Directly address the most common reason people stall at this stage -- "What if it doesn't work for me?", "Is it worth the price?", "I don't have time"
+4. PROVIDE PROOF: Specific testimonial, case study result, or before/after with numbers. This is where heavy social proof lives
+5. CREATE URGENCY: Give them a reason to act today, not next week. This can be scarcity, a bonus, a price change, or a cost-of-waiting argument
+
+The body should feel like a conversation with someone who is 70% convinced and needs the final push.`,
+
+    bodyStructureShort: 'They already know the product. Lead with the mechanism or a specific proof point that addresses their hesitation. Name the product directly. Hit the objection head-on, then give one concrete reason to act now. Use the actual product name.',
+
+    ctaApproach: 'CTAs should be action-oriented and name the product directly. "Start the product today", "Claim your spot", "Get it before the deadline", "Lock in the offer". These people know what the product is -- the CTA can name it directly and imply commitment. Use the actual product name from the product context.',
+
+    readerKnows: [
+      'The brand and product name',
+      'The core promise and what the product claims to do',
+      'That this is an ad -- they have seen your ads before',
+      'The general category of solution (course, supplement, tool, etc.)',
+    ],
+    readerDoesNotKnow: [
+      'Whether it will work for their specific situation',
+      'The detailed mechanism or methodology behind the results',
+      'What real customers actually experienced',
+      'Whether the investment is worth it compared to alternatives or doing nothing',
+    ],
+
+    antiPatterns: [
+      'NEVER re-introduce the product as if they are seeing it for the first time',
+      'NEVER use the same hooks that were in the prospecting ads -- they already saw those',
+      'NEVER be vague about the mechanism -- they need specifics now',
+      'NEVER skip social proof -- this audience needs third-party validation',
+      'NEVER use purely curiosity-driven CTAs ("Learn more") -- they have already learned, they need to ACT',
+      'NEVER ignore the price or investment -- address it head-on or frame value against cost',
+    ],
+
+    conceptShifts: 'For warm audiences: social_proof should use SPECIFIC testimonials with names, numbers, and timeframes (not broad claims). fear_elimination should focus on purchase-related fears (waste of money, doesn\'t work for me) not problem-related fears. urgency_scarcity CAN use deadlines, bonuses, and limited availability since desire is already established. authority should leverage brand-specific credentials and endorsements.',
   },
   retention: {
     focus: 'loyalty and expansion',
     tone: 'appreciative, exclusive, VIP treatment',
     messaging: 'Exclusive offers for existing customers, loyalty rewards, cross-sell/upsell opportunities, new feature announcements',
+
+    awarenessLevel: 'Most Aware (Schwartz Level 5)',
+    awarenessDescription: 'This person has ALREADY PURCHASED. They know the brand, the product, and the experience. They have used it. Your job is to deepen the relationship, make them feel like insiders, and present the next logical step -- whether that is an upsell, a complementary product, a renewal, or a referral opportunity. They do NOT need to be convinced the brand is legitimate. They need to feel valued and see a compelling reason to buy again.',
+
+    hookStrategy: `Hooks must SPEAK TO THEM AS AN INSIDER. They are not prospects -- they are customers. The hook should make them feel recognized and privileged. Use the actual product name. Effective retention hooks:
+- Insider/VIP hooks ("As a member, you get first access to...")
+- Results-based hooks ("Now that you've gotten results, here's the next step")
+- Exclusive access hooks ("This is only for existing customers")
+- Upgrade/expansion hooks ("Love the product? This takes it further")
+- Anniversary/milestone hooks ("You've been with us for X -- here's something special")
+- Referral hooks ("Know someone who needs what you got?")
+
+NEVER talk to them like they are strangers. NEVER re-sell them on the original product. NEVER use fear-based messaging about the original problem they already solved.`,
+
+    bodyStructure: `Body copy must follow this arc for existing customers:
+1. ACKNOWLEDGE THE RELATIONSHIP: Reference the fact that they are a customer. Mention the product they bought or the result they achieved. Make them feel SEEN
+2. BRIDGE TO THE NEXT OFFER: Connect their existing purchase to the new opportunity. "Because you already took this step, you are perfectly positioned for what comes next"
+3. EXCLUSIVE VALUE: Frame the new offer as something unavailable to non-customers -- a VIP price, early access, a bundle, or insider content
+4. SOCIAL PROOF FROM PEERS: Testimonials from other customers who took this next step. "Other members who added this saw..."
+5. EASY ACTION: The CTA should feel effortless since trust is already established
+
+The body should feel like a note from a trusted advisor, not a sales pitch.`,
+
+    bodyStructureShort: 'Acknowledge them as a customer in the first line. Name the next offer or upgrade as something exclusive to them. One proof point from peers who took this step. Make it feel like a VIP note, not a pitch. Use the actual product name.',
+
+    ctaApproach: 'CTAs should feel exclusive and effortless. "Unlock your VIP upgrade", "Add this to your account", "Claim your member-only offer", "Refer a friend, earn a reward". High-commitment CTAs are fine here -- they already trust the brand. Use the actual product name from the product context.',
+
+    readerKnows: [
+      'The brand, the product, and the team behind it',
+      'What the product does and whether it delivered on its promise',
+      'The quality and experience of being a customer',
+      'Their own results or progress from the original purchase',
+    ],
+    readerDoesNotKnow: [
+      'That a new offer, upgrade, or complementary product exists',
+      'Why this next step is relevant to them specifically',
+      'What other customers like them have done after the initial purchase',
+      'Any special pricing or access they qualify for as existing customers',
+    ],
+
+    antiPatterns: [
+      'NEVER re-sell the original product -- they already bought it',
+      'NEVER use fear-based problem agitation about the issue they already solved',
+      'NEVER talk to them like a stranger -- no "Have you ever struggled with...?"',
+      'NEVER use generic prospecting language -- they are past that stage',
+      'NEVER forget to acknowledge their existing relationship with the brand',
+      'NEVER use scarcity tactics about the original product -- focus scarcity on the NEW offer',
+    ],
+
+    conceptShifts: 'For existing customers: social_proof should come from OTHER CUSTOMERS WHO UPGRADED (not first-time buyers). fear_elimination should address "Is the upgrade worth it?" not "Is the brand trustworthy?". urgency_scarcity should be about exclusive member-only windows or limited loyalty rewards. authority should position the brand as a trusted partner they already have a relationship with. transformation should focus on the NEXT transformation, building on what they already achieved.',
   },
 };
 
@@ -1765,12 +1967,34 @@ CRITICAL: All copy MUST be about "${p.name}" by ${p.author}. NEVER reference any
 `;
   }
 
+  const conceptModifier = CONCEPT_AUDIENCE_MODIFIERS[config.conceptType]?.[config.audienceType] || '';
+
   const userPrompt = `Generate copy OPTIONS for a ${config.audienceType.toUpperCase()} audience${isAutoMode ? ' using analysis-driven insights' : ` using the ${conceptAngle.name} concept`}.
 ${productSection}
-AUDIENCE CONTEXT:
-- Focus: ${audienceAngle.focus}
-- Tone: ${audienceAngle.tone}
-- Messaging approach: ${audienceAngle.messaging}
+=== AUDIENCE STAGE: ${config.audienceType.toUpperCase()} ===
+
+AWARENESS LEVEL: ${audienceAngle.awarenessLevel}
+${audienceAngle.awarenessDescription}
+
+WHAT THE READER ALREADY KNOWS:
+${audienceAngle.readerKnows.map((k: string) => `- ${k}`).join('\n')}
+
+WHAT THE READER DOES NOT KNOW:
+${audienceAngle.readerDoesNotKnow.map((k: string) => `- ${k}`).join('\n')}
+
+HOOK STRATEGY FOR THIS AUDIENCE:
+${audienceAngle.hookStrategy}
+
+BODY COPY STRUCTURE FOR THIS AUDIENCE (${copyLength === 'long' ? 'LONG-FORM' : 'SHORT-FORM'}):
+${copyLength === 'long' ? audienceAngle.bodyStructure : audienceAngle.bodyStructureShort}
+
+CTA APPROACH FOR THIS AUDIENCE:
+${audienceAngle.ctaApproach}
+
+CRITICAL -- DO NOT DO ANY OF THESE:
+${audienceAngle.antiPatterns.map((p: string) => `- ${p}`).join('\n')}
+
+${conceptModifier ? `CONCEPT ADAPTATION FOR ${config.audienceType.toUpperCase()} AUDIENCE:\n${conceptModifier}` : ''}
 
 ${conceptSection}
 ${analysisContext}
@@ -2075,7 +2299,14 @@ The user clicked "regenerate" because they DON'T LIKE the above. You MUST write 
 
     const userPrompt = `Generate exactly 1 NEW ${typeLabel.toUpperCase()} for a ${config.audienceType.toUpperCase()} audience${isAutoMode ? ' using analysis-driven insights' : ` using the ${conceptAngle.name} concept`}.
 ${productSection}
-AUDIENCE: Focus: ${audienceAngle.focus} | Tone: ${audienceAngle.tone} | Messaging: ${audienceAngle.messaging}
+AUDIENCE STAGE: ${config.audienceType.toUpperCase()} (${audienceAngle.awarenessLevel})
+${audienceAngle.awarenessDescription}
+
+HOOK STRATEGY: ${audienceAngle.hookStrategy.split('\n')[0]}
+CTA APPROACH: ${audienceAngle.ctaApproach.split('.')[0]}.
+
+DO NOT: ${audienceAngle.antiPatterns.slice(0, 3).join(' | ')}
+${CONCEPT_AUDIENCE_MODIFIERS[config.conceptType]?.[config.audienceType] ? `\nCONCEPT ADAPTATION: ${CONCEPT_AUDIENCE_MODIFIERS[config.conceptType][config.audienceType]}` : ''}
 ${analysisContext}${inspirationContext}${replacementContext}${attemptContext}${existingList ? `=== OTHER ${typeLabel.toUpperCase()}S ALREADY IN USE (DO NOT DUPLICATE) ===
 ${existingList}
 ` : ''}
@@ -2512,9 +2743,14 @@ Explore fresh visual directions while maintaining professional quality.`,
   }
 
   promptParts.push(
-    `TARGET AUDIENCE: ${config.audienceType.toUpperCase()}`,
+    `TARGET AUDIENCE: ${config.audienceType.toUpperCase()} (${audienceAngle.awarenessLevel})`,
     `- Focus: ${audienceAngle.focus}`,
     `- Tone: ${audienceAngle.tone}`,
+    `- Visual implication: ${config.audienceType === 'prospecting'
+      ? 'Image should evoke curiosity and problem recognition -- NOT product showcase'
+      : config.audienceType === 'retargeting'
+      ? 'Image should reinforce product credibility and mechanism -- can feature the product prominently'
+      : 'Image should feel exclusive and premium -- VIP treatment, insider access'}`,
     ''
   );
 
@@ -2810,8 +3046,13 @@ async function generateAdImageWithDallE(config: {
   }
 
   promptParts.push(
-    `Target Audience: ${config.audienceType.toUpperCase()} - ${audienceAngle.focus}`,
+    `Target Audience: ${config.audienceType.toUpperCase()} (${audienceAngle.awarenessLevel}) - ${audienceAngle.focus}`,
     `Tone: ${audienceAngle.tone}`,
+    `Visual approach: ${config.audienceType === 'prospecting'
+      ? 'Evoke the problem/desire -- curiosity-driven imagery'
+      : config.audienceType === 'retargeting'
+      ? 'Feature the product and mechanism -- credibility-driven imagery'
+      : 'Premium, exclusive feel -- loyalty-driven imagery'}`,
     '',
   );
 
@@ -2909,10 +3150,28 @@ Write copy that feels authentic, not corporate or overly salesy.`;
 
   const userPrompt = `Generate ad copy for a ${config.audienceType.toUpperCase()} audience.
 
-AUDIENCE CONTEXT:
-- Focus: ${audienceAngle.focus}
-- Tone: ${audienceAngle.tone}
-- Messaging approach: ${audienceAngle.messaging}
+=== AUDIENCE STAGE: ${config.audienceType.toUpperCase()} ===
+
+AWARENESS LEVEL: ${audienceAngle.awarenessLevel}
+${audienceAngle.awarenessDescription}
+
+WHAT THE READER ALREADY KNOWS:
+${audienceAngle.readerKnows.map((k: string) => `- ${k}`).join('\n')}
+
+WHAT THE READER DOES NOT KNOW:
+${audienceAngle.readerDoesNotKnow.map((k: string) => `- ${k}`).join('\n')}
+
+HOOK STRATEGY FOR THIS AUDIENCE:
+${audienceAngle.hookStrategy}
+
+BODY COPY STRUCTURE FOR THIS AUDIENCE (SHORT-FORM):
+${audienceAngle.bodyStructureShort}
+
+CTA APPROACH FOR THIS AUDIENCE:
+${audienceAngle.ctaApproach}
+
+CRITICAL -- DO NOT DO ANY OF THESE:
+${audienceAngle.antiPatterns.map((p: string) => `- ${p}`).join('\n')}
 
 ${winningPatterns ? `WINNING PATTERNS FROM ANALYSIS:
 - Headlines that work: ${winningPatterns.headlines?.slice(0, 3).join('; ') || 'benefit-driven, curiosity-inducing'}
@@ -3001,10 +3260,15 @@ Your storyboards should be production-ready with clear visual direction.`;
 
   const userPrompt = `Create a 15-second video ad storyboard for a ${config.audienceType.toUpperCase()} audience.
 
-AUDIENCE CONTEXT:
+AUDIENCE CONTEXT (${audienceAngle.awarenessLevel}):
 - Focus: ${audienceAngle.focus}
 - Tone: ${audienceAngle.tone}
 - Messaging: ${audienceAngle.messaging}
+- ${config.audienceType === 'prospecting'
+  ? 'Video should lead with the PROBLEM -- do not mention the product in the first 3 seconds'
+  : config.audienceType === 'retargeting'
+  ? 'Video can open with the product/brand -- the viewer recognizes it. Go deeper on mechanism and proof'
+  : 'Video should open with customer recognition -- VIP framing, insider content'}
 
 ${visualAnalysis ? `VISUAL GUIDANCE:
 - Winning visual elements: ${visualAnalysis.winningVisualElements?.slice(0, 3).join(', ') || 'transformation imagery'}
@@ -3144,9 +3408,14 @@ export async function generateAdVideoWithVeo(config: {
 
   // Target audience
   promptParts.push(
-    `TARGET AUDIENCE: ${config.audienceType.toUpperCase()}`,
+    `TARGET AUDIENCE: ${config.audienceType.toUpperCase()} (${audienceAngle.awarenessLevel})`,
     `- Focus: ${audienceAngle.focus}`,
     `- Tone: ${audienceAngle.tone}`,
+    `- ${config.audienceType === 'prospecting'
+      ? 'Open with the problem/desire -- build curiosity before revealing the product'
+      : config.audienceType === 'retargeting'
+      ? 'Product can appear immediately -- focus on mechanism and social proof'
+      : 'Treat the viewer as an insider -- VIP reveal, exclusive access framing'}`,
     ''
   );
 
