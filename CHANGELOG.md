@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-03-03 — Copy generation quality overhaul: anti-AI patterns, brand voice, and specificity
+
+### Overview
+Comprehensive overhaul of the AI copy generation prompts and post-processing to eliminate AI-sounding output, enforce brand voice matching from the user's ad account, and improve copy specificity. Changes span all three copy generation paths (generateCopyOptions, regenerateSingleCopyItem, generateAudienceAdCopy).
+
+### Added
+- **Banned AI phrase system** — Single source of truth (`BANNED_PHRASES`, `BANNED_PHRASES_PROMPT`, `BANNED_PHRASE_PATTERNS`) for 25+ cliche phrases that signal AI-written copy (e.g., "You're not broken", "Here's the thing", "Game-changer", "Plot twist:", "Your future self will thank you"). Used in both prompt instructions and post-processing sanitizer
+- **`sanitizeCopyText()` function** — Shared post-processing sanitizer that strips em dashes, removes banned phrases, and validates output isn't degenerate (falls back to original text if cleaning strips too much)
+- **Brand voice extraction** — New `brandVoice` field on `ChannelAnalysisResult` capturing tonality, sentence style, point of view, vocabulary level, rhythm/cadence, and distinctive traits from winning ads
+- **Brand voice injection** — Full voice profile injected into copy generation context as "BRAND VOICE PROFILE (MATCH THIS VOICE)" with instruction to replicate the winning voice, not a generic ad copywriter tone
+- **Winning body text preservation** — `topAds` now includes full `bodyText` from original ad data (attached during analysis post-processing alongside imageUrl). Copy generation prompt shows the complete body copy of top performers
+- **Specificity rule** — Every headline and body text must include at least one concrete element (number, timeframe, named outcome, or mechanism)
+- **Body copy structural framework** — Long-form follows a 5-step desire arc (hook, amplify, solution, proof, close); short-form leads with single strongest trigger
+- **CTA specificity guidance** — Product name required in at least 2 CTAs; dead-zone CTAs like "Learn More" explicitly banned
+- **Headline hook diversity** — Each of 6 headlines must use a different hook approach (questions, bold claims, numbers, metaphors, identity, before/after, pattern interrupts, direct benefits)
+- **Exclamation mark limits** — Max 1 per body text, zero in headlines
+
+### Fixed
+- **Enforcement gap** — Prompt banned phrases and post-processing regex now use the same shared source of truth (previously the regex missed several phrases from the prompt list)
+- **Degenerate output guard** — `sanitizeCopyText()` validates cleaned text has >= 3 chars and contains letters; falls back to original if sanitization would produce empty/broken output
+- **`generateAudienceAdCopy` missing quality rules** — This actively-used function had zero banned phrase filtering, no brand voice, no post-processing. Now has full parity
+- **Stale JSDoc comment** — Removed orphaned `/** Generate new ad copy based on winning elements */` left after function deletion
+
+### Removed
+- **`generateAdCopy()` function** — Dead code (exported but never imported anywhere in the repo). Had none of the quality rules and was a risk for accidental future use
+
+### Files Modified
+- `src/services/openaiApi.ts` — All changes in this single file: shared constants, sanitizer, type additions, prompt rewrites, post-processing consolidation, dead code removal
+
+---
+
 ## 2026-03-02 — Add "Regenerate All Images" to CreativeIQ ad generator
 
 ### Overview
