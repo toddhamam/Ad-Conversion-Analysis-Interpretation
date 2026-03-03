@@ -78,9 +78,9 @@ INSERT INTO organization_ad_accounts (
 SELECT
   oc.organization_id,
   oc.ad_account_id,
-  (oc.metadata->>'selected_account_name'),
+  NULL,  -- Will be populated from Meta API on next status fetch
   oc.page_id,
-  oc.pixel_id,
+  NULL,  -- pixel_id will be populated from Meta API on next status fetch
   true,
   'USD'  -- Default currency; will be updated on next status fetch
 FROM organization_credentials oc
