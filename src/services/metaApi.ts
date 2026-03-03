@@ -33,6 +33,18 @@ interface AvailablePage {
   name: string;
 }
 
+/** Info about an activated ad account (from organization_ad_accounts table) */
+export interface AdAccountInfo {
+  id: string;              // UUID from organization_ad_accounts
+  ad_account_id: string;   // "act_XXXXXXXXX"
+  ad_account_name: string | null;
+  page_id: string | null;
+  pixel_id: string | null;
+  is_active: boolean;
+  account_status: number | null;
+  currency: string | null;
+}
+
 export interface OrgMetaIds {
   adAccountId: string;
   pageId: string;
@@ -44,9 +56,35 @@ export interface OrgMetaIds {
   availableAccounts: AvailableAdAccount[];
   availablePages: AvailablePage[];
   needsConfiguration: boolean;
+  /** Activated ad accounts for multi-account orgs */
+  adAccounts: AdAccountInfo[];
 }
 
 let _orgMeta: OrgMetaIds | null = null;
+
+/** The currently selected ad account for multi-account orgs */
+let _currentAdAccount: AdAccountInfo | null = null;
+
+/** Version counter that increments each time org meta credentials are loaded/cleared.
+ *  Used by AdAccountContext to know when to re-read cached meta state. */
+let _orgMetaVersion = 0;
+const _orgMetaListeners = new Set<() => void>();
+
+/** Subscribe to meta credential load events. Returns unsubscribe function. */
+export function onOrgMetaChange(listener: () => void): () => void {
+  _orgMetaListeners.add(listener);
+  return () => { _orgMetaListeners.delete(listener); };
+}
+
+function notifyOrgMetaChange() {
+  _orgMetaVersion++;
+  _orgMetaListeners.forEach(fn => fn());
+}
+
+/** Get the current meta version counter (for use as a React dependency). */
+export function getOrgMetaVersion(): number {
+  return _orgMetaVersion;
+}
 
 /**
  * Load the current org's Meta credential IDs from the backend.
@@ -67,7 +105,9 @@ export async function loadOrgMetaCredentials(): Promise<OrgMetaIds | null> {
       availableAccounts: [],
       availablePages: [],
       needsConfiguration: false,
+      adAccounts: [],
     };
+    notifyOrgMetaChange();
     return _orgMeta;
   }
 
@@ -91,7 +131,9 @@ export async function loadOrgMetaCredentials(): Promise<OrgMetaIds | null> {
       availableAccounts: data.availableAccounts || [],
       availablePages: data.availablePages || [],
       needsConfiguration: data.needsConfiguration || false,
+      adAccounts: data.adAccounts || [],
     };
+    notifyOrgMetaChange();
     return _orgMeta;
   } catch (err) {
     console.warn('Failed to load Meta credentials:', err);
@@ -112,6 +154,25 @@ export function getOrgMetaIds(): OrgMetaIds | null {
  */
 export function clearOrgMetaCache(): void {
   _orgMeta = null;
+  _currentAdAccount = null;
+  notifyOrgMetaChange();
+}
+
+/**
+ * Set the currently active ad account (for multi-account orgs).
+ * Called by AdAccountContext when the user switches accounts.
+ * Updates the internal getters so getAdAccountId()/getPageId()/getPixelId()
+ * return values for the selected account.
+ */
+export function setCurrentAdAccount(account: AdAccountInfo | null): void {
+  _currentAdAccount = account;
+}
+
+/**
+ * Get the currently active ad account info (for multi-account orgs).
+ */
+export function getCurrentAdAccount(): AdAccountInfo | null {
+  return _currentAdAccount;
 }
 
 /**
@@ -263,6 +324,8 @@ async function metaFetch(
           params: options?.params,
           body: options?.body,
           formEncoded: options?.formEncoded,
+          // Multi-account: tell the backend which ad account to use
+          adAccountId: _currentAdAccount?.ad_account_id || undefined,
         }),
       });
 
@@ -357,7 +420,11 @@ async function metaUpload(adAccountId: string, imageBase64: string): Promise<any
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify({ imageBase64 }),
+      body: JSON.stringify({
+        imageBase64,
+        // Multi-account: tell the backend which ad account to upload to
+        adAccountId: _currentAdAccount?.ad_account_id || undefined,
+      }),
     });
 
     const data = await res.json();
@@ -384,23 +451,30 @@ async function metaUpload(adAccountId: string, imageBase64: string): Promise<any
 }
 
 /**
- * Get the current ad account ID (from org credentials or env var fallback)
+ * Get the current ad account ID.
+ * In multi-account mode, returns the selected account's ID.
+ * Falls back to the default credential row or env var.
  */
 function getAdAccountId(): string {
+  if (_currentAdAccount) return _currentAdAccount.ad_account_id;
   return _orgMeta?.adAccountId || FALLBACK_AD_ACCOUNT_ID;
 }
 
 /**
- * Get the current page ID (from org credentials or env var fallback)
+ * Get the current page ID.
+ * In multi-account mode, returns the selected account's page ID.
  */
 function getPageId(): string {
+  if (_currentAdAccount?.page_id) return _currentAdAccount.page_id;
   return _orgMeta?.pageId || FALLBACK_PAGE_ID;
 }
 
 /**
- * Get the current pixel ID (from org credentials or env var fallback)
+ * Get the current pixel ID.
+ * In multi-account mode, returns the selected account's pixel ID.
  */
 export function getPixelId(): string {
+  if (_currentAdAccount?.pixel_id) return _currentAdAccount.pixel_id;
   return _orgMeta?.pixelId || import.meta.env.VITE_META_PIXEL_ID || '';
 }
 
@@ -1858,5 +1932,102 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
     result.error = (error instanceof Error ? error.message : 'Unknown error') + diagText;
     result.details = error instanceof Error ? error.stack : undefined;
     return result;
+  }
+}
+
+// ─── Ad Account Management (multi-account) ────────────────────────────────────
+
+export interface AdAccountListResponse {
+  accounts: AdAccountInfo[];
+  seats: number;
+  seatsUsed: number;
+  maxAccounts: number;
+}
+
+/** Fetch activated ad accounts and seat info for the current org */
+export async function fetchAdAccounts(): Promise<AdAccountListResponse> {
+  const token = await getAuthToken();
+  const res = await fetch('/api/meta/ad-accounts', {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to fetch ad accounts (${res.status})`);
+  }
+  return res.json();
+}
+
+/** Activate a new ad account (uses a seat) */
+export async function activateAdAccount(adAccountId: string, config?: {
+  pageId?: string;
+  pixelId?: string;
+}): Promise<AdAccountInfo> {
+  const token = await getAuthToken();
+  const res = await fetch('/api/meta/ad-accounts', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      action: 'activate',
+      adAccountId,
+      pageId: config?.pageId,
+      pixelId: config?.pixelId,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to activate ad account (${res.status})`);
+  }
+  return res.json();
+}
+
+/** Deactivate an ad account (frees a seat) */
+export async function deactivateAdAccount(adAccountId: string): Promise<void> {
+  const token = await getAuthToken();
+  const res = await fetch('/api/meta/ad-accounts', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      action: 'deactivate',
+      adAccountId,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to deactivate ad account (${res.status})`);
+  }
+}
+
+/** Update configuration (page_id, pixel_id) for an activated ad account */
+export async function configureAdAccount(adAccountId: string, config: {
+  pageId?: string | null;
+  pixelId?: string | null;
+}): Promise<void> {
+  const token = await getAuthToken();
+  const res = await fetch('/api/meta/ad-accounts', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      action: 'configure',
+      adAccountId,
+      pageId: config.pageId,
+      pixelId: config.pixelId,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to configure ad account (${res.status})`);
   }
 }

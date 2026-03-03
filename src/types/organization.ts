@@ -1,6 +1,6 @@
 // Multi-Tenant Organization Types
 
-export type PlanTier = 'free' | 'starter' | 'pro' | 'enterprise' | 'velocity_partner';
+export type PlanTier = 'free' | 'starter' | 'pro' | 'agency' | 'enterprise' | 'velocity_partner';
 export type BillingInterval = 'monthly' | 'yearly';
 export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'trialing' | 'incomplete';
 export type UserRole = 'owner' | 'admin' | 'member' | 'viewer';
@@ -28,6 +28,10 @@ export interface Organization {
   subscription_id: string | null;
   current_period_start: string | null;
   current_period_end: string | null;
+
+  // Ad Account Seats (multi-account support)
+  ad_account_seats?: number;
+  ad_account_seats_used?: number;
 
   // Setup
   setup_mode: SetupMode;
@@ -131,6 +135,21 @@ export interface AuditLogEntry {
   created_at: string;
 }
 
+// Organization Ad Account (multi-account support)
+export interface OrganizationAdAccount {
+  id: string;
+  organization_id: string;
+  ad_account_id: string;       // "act_XXXXXXXXX"
+  ad_account_name: string | null;
+  page_id: string | null;
+  pixel_id: string | null;
+  is_active: boolean;
+  account_status: number | null;
+  currency: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Plan Limits
 export interface PlanLimits {
   creativesLimit: number;  // -1 for unlimited
@@ -141,6 +160,8 @@ export interface PlanLimits {
   hasCustomBranding: boolean;
   hasApiAccess: boolean;
   hasDedicatedManager: boolean;
+  adAccountsIncluded: number;  // How many ad accounts are included in the plan
+  maxAdAccounts: number;       // Maximum ad accounts allowed (-1 for unlimited)
 }
 
 export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
@@ -153,6 +174,8 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     hasCustomBranding: false,
     hasApiAccess: false,
     hasDedicatedManager: false,
+    adAccountsIncluded: 1,
+    maxAdAccounts: 1,
   },
   starter: {
     creativesLimit: 100,
@@ -163,6 +186,8 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     hasCustomBranding: false,
     hasApiAccess: false,
     hasDedicatedManager: false,
+    adAccountsIncluded: 1,
+    maxAdAccounts: 1,
   },
   pro: {
     creativesLimit: 250,
@@ -173,6 +198,20 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     hasCustomBranding: false,
     hasApiAccess: true,
     hasDedicatedManager: false,
+    adAccountsIncluded: 1,
+    maxAdAccounts: 3,  // Can add up to 2 extra seats at $49/mo
+  },
+  agency: {
+    creativesLimit: 500,   // Per ad account
+    analysesLimit: 200,    // Per ad account
+    channelsLimit: -1,     // Unlimited
+    teamMembersLimit: 25,
+    hasPrioritySupport: true,
+    hasCustomBranding: false,
+    hasApiAccess: true,
+    hasDedicatedManager: false,
+    adAccountsIncluded: 3,
+    maxAdAccounts: 25,     // Extra seats at $59/mo
   },
   enterprise: {
     creativesLimit: -1,  // Unlimited
@@ -183,6 +222,8 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     hasCustomBranding: true,
     hasApiAccess: true,
     hasDedicatedManager: true,
+    adAccountsIncluded: 10,
+    maxAdAccounts: -1,   // Unlimited, extra seats at $99/mo
   },
   velocity_partner: {
     creativesLimit: -1,  // Unlimited
@@ -193,6 +234,8 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     hasCustomBranding: true,
     hasApiAccess: true,
     hasDedicatedManager: true,
+    adAccountsIncluded: -1, // Unlimited
+    maxAdAccounts: -1,      // Unlimited
   },
 };
 

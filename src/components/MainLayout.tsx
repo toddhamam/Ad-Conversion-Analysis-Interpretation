@@ -5,7 +5,9 @@ import UserProfileDropdown from './UserProfileDropdown';
 import TrialBanner from './TrialBanner';
 import SubscriptionGate from './SubscriptionGate';
 import FeedbackWidget from './FeedbackWidget';
+import Loading from './Loading';
 import { useOrganization } from '../contexts/OrganizationContext';
+import { useAdAccount } from '../contexts/AdAccountContext';
 import './MainLayout.css';
 
 const MainLayout = () => {
@@ -13,6 +15,7 @@ const MainLayout = () => {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
   const { organization } = useOrganization();
+  const { isSwitching, currentAccount } = useAdAccount();
 
   // Close mobile nav on route change
   useEffect(() => {
@@ -67,8 +70,16 @@ const MainLayout = () => {
         </header>
         <TrialBanner />
         <main className="main-content">
+          {isSwitching && (
+            <div className="account-switching-overlay">
+              <Loading
+                size="medium"
+                message={`ConversionIQ™ switching to ${currentAccount?.ad_account_name || 'account'}...`}
+              />
+            </div>
+          )}
           <SubscriptionGate>
-            <Outlet />
+            <Outlet key={currentAccount?.ad_account_id || 'default'} />
           </SubscriptionGate>
         </main>
       </div>

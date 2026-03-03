@@ -27,6 +27,7 @@ import {
   type PublishPreset,
 } from '../services/metaApi';
 import { getPublishData } from '../services/publishStore';
+import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
 import './AdPublisher.css';
 
 // Debug flag - set to true to enable verbose logging
@@ -206,7 +207,7 @@ function loadPackages(): any[] {
 
   // FALLBACK: Read from localStorage (handles page refresh)
   try {
-    const stored = localStorage.getItem(GENERATED_ADS_STORAGE_KEY);
+    const stored = getScopedItem(GENERATED_ADS_STORAGE_KEY);
     if (!stored) {
       console.log('[AdPublisher] No data in localStorage');
       return [];
@@ -394,7 +395,7 @@ const AdPublisher = () => {
   const [availablePixels, setAvailablePixels] = useState<PixelRef[]>([]);
   const [pixelsLoading, setPixelsLoading] = useState(false);
   const [pixelId, setPixelId] = useState(() => {
-    const saved = localStorage.getItem(PIXEL_ID_STORAGE_KEY);
+    const saved = getScopedItem(PIXEL_ID_STORAGE_KEY);
     return saved || import.meta.env.VITE_META_PIXEL_ID || '';
   });
 
@@ -432,7 +433,7 @@ const AdPublisher = () => {
   // Presets
   const [presets, setPresets] = useState<PublishPreset[]>(() => {
     try {
-      const saved = localStorage.getItem(PRESETS_STORAGE_KEY);
+      const saved = getScopedItem(PRESETS_STORAGE_KEY);
       return saved ? JSON.parse(saved) : [];
     } catch { return []; }
   });
@@ -605,7 +606,7 @@ const AdPublisher = () => {
       // Auto-select first pixel if none saved
       if (!pixelId && pixels.length > 0) {
         setPixelId(pixels[0].id);
-        localStorage.setItem(PIXEL_ID_STORAGE_KEY, pixels[0].id);
+        setScopedItem(PIXEL_ID_STORAGE_KEY, pixels[0].id);
       }
     } catch (err) {
       console.warn('Could not fetch pixels:', err);
@@ -694,7 +695,7 @@ const AdPublisher = () => {
 
     const updated = [...presets, newPreset];
     setPresets(updated);
-    localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(updated));
+    setScopedItem(PRESETS_STORAGE_KEY, JSON.stringify(updated));
     setSelectedPresetId(newPreset.id);
     setPresetName('');
     setShowSavePreset(false);
@@ -733,7 +734,7 @@ const AdPublisher = () => {
   const deletePreset = useCallback((presetId: string) => {
     const updated = presets.filter(p => p.id !== presetId);
     setPresets(updated);
-    localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(updated));
+    setScopedItem(PRESETS_STORAGE_KEY, JSON.stringify(updated));
     if (selectedPresetId === presetId) setSelectedPresetId('');
   }, [presets, selectedPresetId]);
 
@@ -880,7 +881,7 @@ const AdPublisher = () => {
       setPublishResult(result);
       if (result?.success) {
         // Clear generated ads from localStorage after successful publish to Meta
-        localStorage.removeItem(GENERATED_ADS_STORAGE_KEY);
+        removeScopedItem(GENERATED_ADS_STORAGE_KEY);
       } else {
         setError(result?.error || 'Failed to publish');
       }
@@ -1281,7 +1282,7 @@ const AdPublisher = () => {
                           onChange={e => {
                             const val = e.target.value;
                             setPixelId(val);
-                            localStorage.setItem(PIXEL_ID_STORAGE_KEY, val);
+                            setScopedItem(PIXEL_ID_STORAGE_KEY, val);
                           }}
                           className="form-select"
                         >
@@ -1299,7 +1300,7 @@ const AdPublisher = () => {
                           onChange={e => {
                             const val = e.target.value;
                             setPixelId(val);
-                            localStorage.setItem(PIXEL_ID_STORAGE_KEY, val);
+                            setScopedItem(PIXEL_ID_STORAGE_KEY, val);
                           }}
                           className="form-input"
                           placeholder="Enter your Pixel ID"

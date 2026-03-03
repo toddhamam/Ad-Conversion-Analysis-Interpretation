@@ -15,6 +15,7 @@ const PLAN_LIMITS: Record<string, { creativesLimit: number; analysesLimit: numbe
   free: { creativesLimit: 10, analysesLimit: 5 },
   starter: { creativesLimit: 100, analysesLimit: 50 },
   pro: { creativesLimit: 250, analysesLimit: 100 },
+  agency: { creativesLimit: 500, analysesLimit: 200 },
   enterprise: { creativesLimit: -1, analysesLimit: -1 },
   velocity_partner: { creativesLimit: -1, analysesLimit: -1 },
 };
@@ -84,7 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Determine plan tier from subscription metadata or price
-    const planTier = (subscription?.metadata?.planTier || 'starter') as 'free' | 'starter' | 'pro' | 'enterprise' | 'velocity_partner';
+    const planTier = (subscription?.metadata?.planTier || 'starter') as 'free' | 'starter' | 'pro' | 'agency' | 'enterprise' | 'velocity_partner';
     const limits = PLAN_LIMITS[planTier] || PLAN_LIMITS.starter;
 
     // Determine billing interval

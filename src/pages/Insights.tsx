@@ -19,6 +19,7 @@ import {
   Construction
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { getScopedItem, setScopedItem } from '../lib/scopedStorage';
 import './Insights.css';
 
 type Channel = 'meta' | 'google' | 'tiktok' | 'email';
@@ -57,12 +58,12 @@ function convertToAdCreativeData(creative: AdCreative): AdCreativeData {
   };
 }
 
-// Local storage key for caching analysis
+// Local storage key for caching analysis (scoped per ad account)
 const CACHE_KEY = 'channel_analysis_cache';
 
 function getCachedAnalysis(channel: Channel): ChannelAnalysisResult | null {
   try {
-    const cache = localStorage.getItem(CACHE_KEY);
+    const cache = getScopedItem(CACHE_KEY);
     if (cache) {
       const parsed = JSON.parse(cache);
       return parsed[channel] || null;
@@ -75,10 +76,10 @@ function getCachedAnalysis(channel: Channel): ChannelAnalysisResult | null {
 
 function setCachedAnalysis(channel: Channel, analysis: ChannelAnalysisResult): void {
   try {
-    const cache = localStorage.getItem(CACHE_KEY);
+    const cache = getScopedItem(CACHE_KEY);
     const parsed = cache ? JSON.parse(cache) : {};
     parsed[channel] = analysis;
-    localStorage.setItem(CACHE_KEY, JSON.stringify(parsed));
+    setScopedItem(CACHE_KEY, JSON.stringify(parsed));
   } catch {
     // Ignore cache errors
   }

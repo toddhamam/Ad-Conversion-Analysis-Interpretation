@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useOrganization } from '../contexts/OrganizationContext';
 import {
   loadOrgMetaCredentials,
@@ -8,8 +8,15 @@ import {
   saveMetaSelection,
   fetchAvailablePixels,
   clearOrgMetaCache,
+  fetchAdAccounts,
+  activateAdAccount,
+  deactivateAdAccount,
+  configureAdAccount,
   type OrgMetaIds,
+  type AdAccountInfo,
+  type AdAccountListResponse,
 } from '../services/metaApi';
+import { PLAN_LIMITS } from '../types/organization';
 import SEO from '../components/SEO';
 import Loading from '../components/Loading';
 import './Integrations.css';
@@ -29,6 +36,19 @@ function Integrations() {
   const [selectedPixelId, setSelectedPixelId] = useState('');
   const [availablePixels, setAvailablePixels] = useState<Array<{ id: string; name: string }>>([]);
 
+  // Multi-account management state
+  const [adAccountData, setAdAccountData] = useState<AdAccountListResponse | null>(null);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [activatingAccount, setActivatingAccount] = useState<string | null>(null);
+  const [configuringAccount, setConfiguringAccount] = useState<string | null>(null);
+  const [configPageId, setConfigPageId] = useState('');
+  const [configPixelId, setConfigPixelId] = useState('');
+
+  // Determine if org supports multi-account
+  const planTier = organization?.plan_tier || 'free';
+  const planLimits = PLAN_LIMITS[planTier] || PLAN_LIMITS.free;
+  const supportsMultiAccount = planLimits.maxAdAccounts > 1;
+
   const refreshStatus = useCallback(async () => {
     clearOrgMetaCache();
     const status = await loadOrgMetaCredentials();
@@ -41,14 +61,28 @@ function Integrations() {
     return status;
   }, []);
 
+  const loadAdAccounts = useCallback(async () => {
+    if (!supportsMultiAccount) return;
+    setAccountsLoading(true);
+    try {
+      const data = await fetchAdAccounts();
+      setAdAccountData(data);
+    } catch (err) {
+      console.warn('Failed to load ad accounts:', err);
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, [supportsMultiAccount]);
+
   // Load status on mount
   useEffect(() => {
     const init = async () => {
       await refreshStatus();
+      await loadAdAccounts();
       setLoading(false);
     };
     init();
-  }, [refreshStatus]);
+  }, [refreshStatus, loadAdAccounts]);
 
   // Handle OAuth redirect callback
   useEffect(() => {
@@ -57,6 +91,7 @@ function Integrations() {
       searchParams.delete('meta_connected');
       setSearchParams(searchParams, { replace: true });
       refreshStatus();
+      loadAdAccounts();
     }
     if (searchParams.get('error')) {
       const errorMsg = searchParams.get('message') || 'Failed to connect Meta account.';
@@ -65,7 +100,7 @@ function Integrations() {
       searchParams.delete('message');
       setSearchParams(searchParams, { replace: true });
     }
-  }, [searchParams, setSearchParams, refreshStatus]);
+  }, [searchParams, setSearchParams, refreshStatus, loadAdAccounts]);
 
   // Fetch pixels when ad account changes
   useEffect(() => {
@@ -96,6 +131,7 @@ function Integrations() {
       setSelectedPageId('');
       setSelectedPixelId('');
       setAvailablePixels([]);
+      setAdAccountData(null);
       setMessage({ type: 'success', text: 'Meta Ads account disconnected.' });
     } catch (error: unknown) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to disconnect.' });
@@ -124,6 +160,57 @@ function Integrations() {
     }
   };
 
+  const handleActivateAccount = async (adAccountId: string) => {
+    setActivatingAccount(adAccountId);
+    setMessage(null);
+    try {
+      await activateAdAccount(adAccountId);
+      await loadAdAccounts();
+      await refreshStatus();
+      setMessage({ type: 'success', text: 'Ad account activated.' });
+    } catch (error: unknown) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to activate account.' });
+    } finally {
+      setActivatingAccount(null);
+    }
+  };
+
+  const handleDeactivateAccount = async (adAccountId: string, accountName: string | null) => {
+    if (!confirm(`Are you sure you want to deactivate ${accountName || adAccountId}? Data will be preserved.`)) return;
+    setMessage(null);
+    try {
+      await deactivateAdAccount(adAccountId);
+      await loadAdAccounts();
+      await refreshStatus();
+      setMessage({ type: 'success', text: 'Ad account deactivated. Seat freed.' });
+    } catch (error: unknown) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to deactivate account.' });
+    }
+  };
+
+  const handleStartConfigure = (account: AdAccountInfo) => {
+    setConfiguringAccount(account.ad_account_id);
+    setConfigPageId(account.page_id || '');
+    setConfigPixelId(account.pixel_id || '');
+  };
+
+  const handleSaveAccountConfig = async () => {
+    if (!configuringAccount) return;
+    setMessage(null);
+    try {
+      await configureAdAccount(configuringAccount, {
+        pageId: configPageId || null,
+        pixelId: configPixelId || null,
+      });
+      setConfiguringAccount(null);
+      await loadAdAccounts();
+      await refreshStatus();
+      setMessage({ type: 'success', text: 'Account configuration saved.' });
+    } catch (error: unknown) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to save configuration.' });
+    }
+  };
+
   const isConnected = metaStatus?.connected === true;
   const isExpired = metaStatus?.status === 'expired';
   const statusLabel = isConnected ? 'Connected' : isExpired ? 'Token Expired' : 'Not Connected';
@@ -135,6 +222,15 @@ function Integrations() {
     selectedPageId !== (metaStatus?.pageId || '') ||
     selectedPixelId !== (metaStatus?.pixelId || '')
   );
+
+  // Build list of available (not yet activated) accounts
+  const activatedAccountIds = new Set(
+    (adAccountData?.accounts || []).map(a => a.ad_account_id)
+  );
+  const availableForActivation = (metaStatus?.availableAccounts || []).filter(
+    acct => !activatedAccountIds.has(acct.id)
+  );
+  const seatsRemaining = (adAccountData?.seats || 1) - (adAccountData?.seatsUsed || 0);
 
   if (loading) {
     return <Loading size="large" message="ConversionIQ™ syncing channels..." />;
@@ -188,8 +284,8 @@ function Integrations() {
             </div>
           </div>
 
-          {/* Configuration Dropdowns */}
-          {isConnected && (
+          {/* Configuration Dropdowns (single-account mode only) */}
+          {isConnected && !supportsMultiAccount && (
             <div className="integration-config">
               {metaStatus?.availableAccounts && metaStatus.availableAccounts.length > 0 && (
                 <div className="config-form">
@@ -290,6 +386,170 @@ function Integrations() {
             )}
           </div>
         </div>
+
+        {/* ── Ad Accounts (multi-account management) ──────────────────────────── */}
+        {supportsMultiAccount && isConnected && (
+          <div className="integration-card">
+            <div className="integration-card-header">
+              <div className="integration-icon ad-accounts">
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                  <path d="M16 3h-8l-2 4h12l-2-4z" />
+                </svg>
+              </div>
+              <div className="integration-title-row">
+                <h3>
+                  Ad Accounts
+                  {adAccountData && (
+                    <span className="seat-badge">
+                      {adAccountData.seatsUsed} of {adAccountData.seats} seats
+                    </span>
+                  )}
+                </h3>
+                <p>Manage which ad accounts are active in your workspace</p>
+              </div>
+            </div>
+
+            {accountsLoading ? (
+              <Loading size="small" message="ConversionIQ™ syncing accounts..." />
+            ) : (
+              <>
+                {/* Activated accounts */}
+                {adAccountData && adAccountData.accounts.length > 0 && (
+                  <div className="ad-accounts-list">
+                    {adAccountData.accounts.map((account) => (
+                      <div key={account.ad_account_id} className="ad-account-row">
+                        <div className="ad-account-row-main">
+                          <span
+                            className="ad-account-dot"
+                            style={{
+                              background: account.page_id ? '#22c55e' : '#f59e0b',
+                            }}
+                          />
+                          <div className="ad-account-row-info">
+                            <span className="ad-account-row-name">
+                              {account.ad_account_name || account.ad_account_id}
+                            </span>
+                            <span className="ad-account-row-detail">
+                              {account.ad_account_id}
+                              {account.currency ? ` · ${account.currency}` : ''}
+                              {account.page_id ? '' : ' · Needs page setup'}
+                            </span>
+                          </div>
+                          <div className="ad-account-row-actions">
+                            <button
+                              className="ad-account-config-btn"
+                              onClick={() => handleStartConfigure(account)}
+                            >
+                              Configure
+                            </button>
+                            <button
+                              className="ad-account-deactivate-btn"
+                              onClick={() => handleDeactivateAccount(account.ad_account_id, account.ad_account_name)}
+                            >
+                              Deactivate
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Inline configure panel */}
+                        {configuringAccount === account.ad_account_id && (
+                          <div className="ad-account-configure-panel">
+                            {metaStatus?.availablePages && metaStatus.availablePages.length > 0 && (
+                              <div className="config-group">
+                                <label>Facebook Page</label>
+                                <select
+                                  value={configPageId}
+                                  onChange={(e) => setConfigPageId(e.target.value)}
+                                >
+                                  <option value="">-- Select page --</option>
+                                  {metaStatus.availablePages.map((page) => (
+                                    <option key={page.id} value={page.id}>
+                                      {page.name} ({page.id})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                            <div className="config-group">
+                              <label>Pixel ID</label>
+                              <input
+                                type="text"
+                                value={configPixelId}
+                                onChange={(e) => setConfigPixelId(e.target.value)}
+                                placeholder="Enter Pixel ID (optional)"
+                                className="config-input"
+                              />
+                            </div>
+                            <div className="ad-account-configure-actions">
+                              <button
+                                className="save-config-button"
+                                onClick={handleSaveAccountConfig}
+                              >
+                                Save
+                              </button>
+                              <button
+                                className="cancel-config-button"
+                                onClick={() => setConfiguringAccount(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Available accounts (not yet activated) */}
+                {availableForActivation.length > 0 && (
+                  <div className="ad-accounts-available">
+                    <div className="ad-accounts-available-header">Available Accounts</div>
+                    {availableForActivation.map((acct) => (
+                      <div key={acct.id} className="ad-account-row available">
+                        <div className="ad-account-row-main">
+                          <span className="ad-account-dot" style={{ background: '#94a3b8' }} />
+                          <div className="ad-account-row-info">
+                            <span className="ad-account-row-name">{acct.name}</span>
+                            <span className="ad-account-row-detail">
+                              {acct.id} · {acct.currency}
+                            </span>
+                          </div>
+                          <div className="ad-account-row-actions">
+                            {seatsRemaining > 0 ? (
+                              <button
+                                className="ad-account-activate-btn"
+                                onClick={() => handleActivateAccount(acct.id)}
+                                disabled={activatingAccount === acct.id}
+                              >
+                                {activatingAccount === acct.id ? (
+                                  <><span className="btn-spinner" /> Activating...</>
+                                ) : (
+                                  'Activate'
+                                )}
+                              </button>
+                            ) : (
+                              <span className="ad-account-seats-full">No seats available</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Seat limit notice */}
+                {seatsRemaining <= 0 && availableForActivation.length > 0 && (
+                  <div className="ad-accounts-upgrade-prompt">
+                    <span>Need more seats?</span>
+                    <Link to="/billing" className="upgrade-link">Upgrade your plan</Link>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         {/* Google Ads — Coming Soon */}
         <div className="integration-card coming-soon">

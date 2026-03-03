@@ -135,6 +135,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
           }
 
+          // Determine ad account seats based on plan tier
+          const seatsByPlan: Record<string, number> = {
+            starter: 1, pro: 3, agency: 3,
+            enterprise: 10, velocity_partner: 999,
+          };
+          const adAccountSeats = seatsByPlan[planTier || 'starter'] || 1;
+
           const { error: updateError } = await supabase
             .from('organizations')
             .update({
@@ -143,6 +150,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               ...(subscriptionStatus ? { subscription_status: subscriptionStatus } : {}),
               plan_tier: planTier || 'starter',
               billing_interval: billingInterval || 'monthly',
+              ad_account_seats: adAccountSeats,
               ...(currentPeriodStart ? { current_period_start: currentPeriodStart } : {}),
               ...(currentPeriodEnd ? { current_period_end: currentPeriodEnd } : {}),
               updated_at: new Date().toISOString(),
