@@ -155,7 +155,10 @@ export function getOrgMetaIds(): OrgMetaIds | null {
 export function clearOrgMetaCache(): void {
   _orgMeta = null;
   _currentAdAccount = null;
-  notifyOrgMetaChange();
+  // Do NOT call notifyOrgMetaChange() here — nulling the cache triggers
+  // AdAccountContext to set currentAccount=null, which changes the Outlet key,
+  // remounts the page, re-runs refreshStatus() → infinite loop.
+  // The notification fires in loadOrgMetaCredentials() after fresh data arrives.
 }
 
 /**
