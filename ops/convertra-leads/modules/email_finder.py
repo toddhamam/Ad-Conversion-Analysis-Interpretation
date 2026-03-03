@@ -27,20 +27,21 @@ def find_email(full_name, domain):
 
     candidates = _generate_candidates(first_name, last_name, domain)
 
-    # Try Hunter.io first (if API key configured and we have first+last name)
+    # Try enrichment API first (Apollo primary, Hunter fallback)
     if first_name and last_name:
         try:
-            from modules.enrichment import enrich_person
-            hunter_result = enrich_person(first_name, last_name, domain)
-            if hunter_result["status"] == "matched" and hunter_result.get("email"):
+            from modules.enrichment import enrich_person as _enrich
+            result = _enrich(first_name=first_name, last_name=last_name, domain=domain)
+            if result["status"] == "matched" and result.get("email"):
+                source = result["person"].get("email_status", "enrichment")
                 return {
                     "candidates": candidates,
-                    "best_match": hunter_result["email"],
+                    "best_match": result["email"],
                     "mx_valid": True,
                     "mx_records": [],
-                    "method": "hunter",
-                    "email_verified": hunter_result["email_verified"],
-                    "hunter_person": hunter_result.get("person"),
+                    "method": "apollo" if os.environ.get("APOLLO_API_KEY") else "hunter",
+                    "email_verified": result["email_verified"],
+                    "enrichment_person": result.get("person"),
                 }
         except Exception:
             pass  # Fall through to existing logic
@@ -107,27 +108,28 @@ def batch_find_emails(stage="researched", score_min=None):
     Uses Hunter.io enrichment first (if configured), then falls back
     to pattern guessing for prospects Hunter missed.
     """
-    # Phase 1: Try Hunter.io enrichment
-    hunter_emails = 0
-    api_key = os.environ.get("HUNTER_API_KEY", "")
-    if api_key:
+    # Phase 1: Try enrichment API (Apollo primary, Hunter fallback)
+    enrichment_emails = 0
+    has_enrichment = bool(os.environ.get("APOLLO_API_KEY", "") or os.environ.get("HUNTER_API_KEY", ""))
+    if has_enrichment:
         try:
             from modules.enrichment import batch_enrich
-            hunter_stats = batch_enrich(stage=stage, score_min=score_min)
-            hunter_emails = hunter_stats.get("emails_found", 0)
+            enrich_stats = batch_enrich(stage=stage, score_min=score_min)
+            enrichment_emails = enrich_stats.get("emails_found", 0)
+            provider = enrich_stats.get("provider", "unknown")
             log.info(
-                f"Hunter enrichment: {hunter_stats.get('enriched', 0)} enriched, "
-                f"{hunter_emails} emails found, "
-                f"{hunter_stats.get('credits_used', 0)} credits used"
+                f"{provider.title()} enrichment: {enrich_stats.get('enriched', 0)} enriched, "
+                f"{enrichment_emails} emails found, "
+                f"{enrich_stats.get('credits_used', 0)} credits used"
             )
         except Exception as e:
-            log.warning(f"Hunter enrichment failed: {e}")
+            log.warning(f"Enrichment failed: {e}")
 
     # Phase 2: Pattern-guess fallback for prospects still without email
     # Re-load pipeline since Hunter may have updated it
     data = load_pipeline()
     processed = 0
-    found = hunter_emails
+    found = enrichment_emails
     not_found = 0
     results = []
 
@@ -139,8 +141,8 @@ def batch_find_emails(stage="researched", score_min=None):
         # Skip if already has a verified email (including Hunter-enriched)
         if prospect.get("email") and prospect.get("email_verified"):
             continue
-        # Skip if Hunter already found an email (even unverified)
-        if prospect.get("email") and prospect.get("email_source") == "hunter":
+        # Skip if enrichment already found an email (even unverified)
+        if prospect.get("email") and prospect.get("email_source") in ("apollo", "apollo_search", "hunter", "hunter_domain"):
             continue
 
         name = prospect.get("name", "")
@@ -158,7 +160,7 @@ def batch_find_emails(stage="researched", score_min=None):
             update_prospect(prospect["id"], {
                 "email": result["best_match"],
                 "email_source": result["method"],
-                "email_verified": result.get("method") in ("web_search", "hunter"),
+                "email_verified": result.get("method") in ("web_search", "hunter", "apollo"),
             })
             found += 1
             results.append({"id": prospect["id"], "email": result["best_match"], "method": result["method"]})
@@ -166,7 +168,7 @@ def batch_find_emails(stage="researched", score_min=None):
             not_found += 1
             results.append({"id": prospect["id"], "status": "not_found", "reason": result.get("message", "No valid email found")})
 
-    return {"processed": processed, "found": found, "not_found": not_found, "hunter_emails": hunter_emails, "results": results}
+    return {"processed": processed, "found": found, "not_found": not_found, "enrichment_emails": enrichment_emails, "results": results}
 
 
 def search_email_web(name, company):
