@@ -40,6 +40,7 @@ import InspirationSelector from '../components/InspirationSelector';
 import SEO from '../components/SEO';
 import { setPublishData } from '../services/publishStore';
 import type { AdLibraryInspiration } from '../types';
+import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
 import './AdGenerator.css';
 
 const CACHE_KEY = 'channel_analysis_cache';
@@ -103,7 +104,7 @@ const CONCEPT_OPTIONS = Object.entries(CONCEPT_ANGLES).map(([id, config]) => ({
 
 function getCachedAnalysis(): ChannelAnalysisResult | null {
   try {
-    const cache = localStorage.getItem(CACHE_KEY);
+    const cache = getScopedItem(CACHE_KEY);
     if (cache) {
       const parsed = JSON.parse(cache);
       const analysis = parsed['meta'] || null;
@@ -266,7 +267,7 @@ const AdGenerator = () => {
   // Load products from localStorage on mount
   useEffect(() => {
     try {
-      const storedProducts = localStorage.getItem(PRODUCTS_STORAGE_KEY);
+      const storedProducts = getScopedItem(PRODUCTS_STORAGE_KEY);
       if (storedProducts) {
         const parsed: ProductContext[] = JSON.parse(storedProducts);
         setProducts(parsed);
@@ -283,7 +284,7 @@ const AdGenerator = () => {
   // Load saved Ad Library inspirations from localStorage
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(INSPIRATIONS_STORAGE_KEY);
+      const stored = getScopedItem(INSPIRATIONS_STORAGE_KEY);
       if (stored) {
         const parsed: AdLibraryInspiration[] = JSON.parse(stored);
         setSavedInspirations(parsed.slice(0, MAX_SAVED_INSPIRATIONS));
@@ -298,7 +299,7 @@ const AdGenerator = () => {
     setSavedInspirations(prev => {
       if (prev.some(i => i.id === inspiration.id)) return prev;
       const updated = [inspiration, ...prev].slice(0, MAX_SAVED_INSPIRATIONS);
-      localStorage.setItem(INSPIRATIONS_STORAGE_KEY, JSON.stringify(updated));
+      setScopedItem(INSPIRATIONS_STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
   }, []);
@@ -306,7 +307,7 @@ const AdGenerator = () => {
   const handleRemoveInspiration = useCallback((id: string) => {
     setSavedInspirations(prev => {
       const updated = prev.filter(i => i.id !== id);
-      localStorage.setItem(INSPIRATIONS_STORAGE_KEY, JSON.stringify(updated));
+      setScopedItem(INSPIRATIONS_STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
     setActiveInspirationIds(prev => prev.filter(aid => aid !== id));
@@ -337,7 +338,7 @@ const AdGenerator = () => {
     const loadTimerId = scheduleDeferredWork(() => {
       debugLog('Starting ads load (deferred)');
       try {
-        const storedAds = localStorage.getItem(GENERATED_ADS_STORAGE_KEY);
+        const storedAds = getScopedItem(GENERATED_ADS_STORAGE_KEY);
         if (!storedAds) {
           debugLog('No stored ads found');
           setIsLoadingAds(false);
@@ -432,7 +433,7 @@ const AdGenerator = () => {
           return;
         }
 
-        localStorage.setItem(GENERATED_ADS_STORAGE_KEY, json);
+        setScopedItem(GENERATED_ADS_STORAGE_KEY, json);
 
         // Warn if approaching problematic size, clear only if previously warned
         if (sizeInMB > MAX_DATA_SIZE_MB) {
@@ -455,7 +456,7 @@ const AdGenerator = () => {
               }
               return ad;
             });
-            localStorage.setItem(GENERATED_ADS_STORAGE_KEY, JSON.stringify(fallback));
+            setScopedItem(GENERATED_ADS_STORAGE_KEY, JSON.stringify(fallback));
             setStorageWarning(null);
             debugLog('Saved ads after clearing image cache');
           } catch {
@@ -493,11 +494,11 @@ const AdGenerator = () => {
       const sizeInMB = json.length / (1024 * 1024);
       if (sizeInMB <= 5) {
         try {
-          localStorage.setItem(GENERATED_ADS_STORAGE_KEY, json);
+          setScopedItem(GENERATED_ADS_STORAGE_KEY, json);
         } catch {
           // If quota exceeded, clear image cache and retry
           clearImageCache();
-          localStorage.setItem(GENERATED_ADS_STORAGE_KEY, json);
+          setScopedItem(GENERATED_ADS_STORAGE_KEY, json);
         }
       } else {
         // Data too large for localStorage — strip ALL images and save metadata-only
@@ -508,10 +509,10 @@ const AdGenerator = () => {
           images: ad.images?.map(img => ({ ...img, imageUrl: '' })),
         }));
         try {
-          localStorage.setItem(GENERATED_ADS_STORAGE_KEY, JSON.stringify(metadataOnly));
+          setScopedItem(GENERATED_ADS_STORAGE_KEY, JSON.stringify(metadataOnly));
         } catch {
           clearImageCache();
-          try { localStorage.setItem(GENERATED_ADS_STORAGE_KEY, JSON.stringify(metadataOnly)); } catch { /* exhausted */ }
+          try { setScopedItem(GENERATED_ADS_STORAGE_KEY, JSON.stringify(metadataOnly)); } catch { /* exhausted */ }
         }
       }
     } catch (e: unknown) {
@@ -524,7 +525,7 @@ const AdGenerator = () => {
   const handleClearAllAds = useCallback(() => {
     if (window.confirm('Are you sure you want to delete all generated ads? This cannot be undone.')) {
       setGeneratedAds([]);
-      localStorage.removeItem(GENERATED_ADS_STORAGE_KEY);
+      removeScopedItem(GENERATED_ADS_STORAGE_KEY);
       clearImageCache(); // Also clear reference image cache to free storage space
       setStorageWarning(null);
       setVisibleAdsCount(ADS_PER_PAGE);

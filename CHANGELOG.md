@@ -1,5 +1,69 @@
 # Changelog
 
+## 2026-03-03 — Agency multi-ad-account support
+
+### Overview
+Adds full multi-ad-account support for agencies managing multiple client ad accounts under a single Meta Business Manager. One OAuth token powers all accounts; each account gets its own page/pixel config, isolated localStorage data, and seamless switching UX. Includes a new Agency billing tier ($249/mo base, 3 included accounts, $59/mo per extra seat, max 25 accounts).
+
+### Added
+- **`organization_ad_accounts` table** — Per-account page_id, pixel_id, status, and currency with RLS policies (`supabase/migrations/008_agency_multi_account.sql`)
+- **Ad account seat tracking** — `ad_account_seats` and `ad_account_seats_used` columns on organizations, with plan-tier-based backfill in migration
+- **Backend ad-accounts routes** — GET/POST `ad-accounts` in `api/meta.ts` for listing, activating, deactivating, and configuring accounts with seat limit enforcement
+- **`AdAccountContext`** — React context (`src/contexts/AdAccountContext.tsx`) tracking current account, switch function, multi-account flag; subscribes to async meta load events via pub/sub
+- **`scopedStorage`** — localStorage helper (`src/lib/scopedStorage.ts`) that appends ad account ID to keys for per-account data isolation, with lazy migration for single-to-multi upgrade
+- **`AccountSwitcher`** — Sidebar dropdown (`src/components/AccountSwitcher.tsx`) between logo and nav for switching accounts; hidden for single-account orgs; supports collapsed/expanded sidebar modes
+- **Switching overlay** — Semi-transparent overlay on main content during account switch with branded loading message
+- **Multi-account Integrations UI** — Ad account activation/deactivation table, inline page/pixel configuration, seat badge, upgrade prompt when at capacity
+- **Agency billing tier** — $249/mo (3 included accounts), added to `stripeApi.ts`, `billing.ts` types, `checkout.ts` price IDs, `webhook.ts` seat assignment, and `subscription.ts` limits
+- **Account context indicators** — Dashboard and MetaAds page subtitles show current account name when multi-account is active
+- **Meta credential change notifications** — `onOrgMetaChange` pub/sub in `metaApi.ts` so AdAccountContext reacts to async meta load completion
+
+### Fixed
+- **Conditional hook violation** — Moved early return in AccountSwitcher below useEffect to comply with Rules of Hooks
+- **Frontend/backend contract mismatch** — Flattened `seats` response from nested object to flat `seats`/`seatsUsed`/`maxAccounts` fields
+- **Organization type errors** — Made `ad_account_seats`/`ad_account_seats_used` optional on Organization interface to avoid breaking existing mock objects
+- **Account switch data staleness** — Keyed `<Outlet>` by current account ID to force child route remount and data re-fetch on switch
+- **Invalid ad account fallback** — `loadCredentials()` now throws when a requested ad account is not found/active instead of silently falling back
+- **Deactivated accounts in list** — Backend filters ad accounts by `is_active = true`
+- **Activation without validation** — Backend rejects activation of ad accounts not found in OAuth-provided available_accounts
+- **Agency checkout blocked** — Added `agency` to plan tier validation whitelist in checkout.ts
+- **Agency subscription limits** — Added `agency` to PLAN_LIMITS and tier typing in subscription.ts
+- **Stale AdAccountContext** — Context now subscribes to meta credential load events instead of only reading synchronously on org ID change
+- **Seat backfill gap** — Migration backfills `ad_account_seats` based on existing plan_tier so paid orgs aren't capped at 1
+
+### Files Added
+- `supabase/migrations/008_agency_multi_account.sql`
+- `src/contexts/AdAccountContext.tsx`
+- `src/lib/scopedStorage.ts`
+- `src/components/AccountSwitcher.tsx`
+- `src/components/AccountSwitcher.css`
+
+### Files Modified
+- `api/meta.ts` — ad-accounts routes, loadCredentials multi-account lookup, validation guards
+- `api/billing/checkout.ts` — agency price IDs and tier whitelist
+- `api/billing/webhook.ts` — seat count assignment by plan tier
+- `api/billing/subscription.ts` — agency plan limits and tier type
+- `src/App.tsx` — AdAccountProvider wrapping
+- `src/components/MainLayout.tsx` — switching overlay, Outlet keyed by account
+- `src/components/MainLayout.css` — overlay styles
+- `src/components/Sidebar.tsx` — AccountSwitcher integration
+- `src/pages/Integrations.tsx` — multi-account management UI
+- `src/pages/Integrations.css` — ad account row, configure panel, upgrade prompt styles
+- `src/pages/Dashboard.tsx` — account context indicator in subtitle
+- `src/pages/MetaAds.tsx` — account context indicator in subtitle
+- `src/pages/AdGenerator.tsx` — scoped localStorage
+- `src/pages/AdPublisher.tsx` — scoped localStorage
+- `src/pages/Insights.tsx` — scoped localStorage
+- `src/pages/Products.tsx` — scoped localStorage
+- `src/pages/SeoIQ.tsx` — scoped localStorage
+- `src/services/metaApi.ts` — ad account CRUD functions, meta change notifications
+- `src/services/imageCache.ts` — scoped localStorage
+- `src/services/stripeApi.ts` — agency plan, tier ordering
+- `src/types/organization.ts` — agency plan limits, OrganizationAdAccount type, optional seat fields
+- `src/types/billing.ts` — agency PlanTier
+
+---
+
 ## 2026-03-03 — Audience-aware copy generation with Schwartz awareness model
 
 ### Overview

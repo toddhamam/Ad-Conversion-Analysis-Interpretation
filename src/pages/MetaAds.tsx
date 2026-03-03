@@ -9,6 +9,7 @@ import {
   type DateRangeOptions,
   type CampaignTypeMetrics
 } from '../services/metaApi';
+import { useAdAccount } from '../contexts/AdAccountContext';
 import { type AdCreativeData } from '../services/openaiApi';
 import Badge from '../components/Badge';
 import DateRangePicker from '../components/DateRangePicker';
@@ -104,6 +105,7 @@ function convertToAdCreativeData(creative: AdCreative): AdCreativeData {
 
 const MetaAds = () => {
   // Meta Ads page with logo
+  const { currentAccount, isMultiAccount } = useAdAccount();
   const [creatives, setCreatives] = useState<AdCreative[]>([]);
   const [campaignMetrics, setCampaignMetrics] = useState<CampaignTypeMetrics[]>([]);
   const [loading, setLoading] = useState(true);
@@ -346,7 +348,7 @@ const MetaAds = () => {
             {usingMockData ? (
               <><AlertTriangle size={14} strokeWidth={1.5} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Sample data (Meta API unavailable)</>
             ) : (
-              <><Check size={14} strokeWidth={1.5} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Live data from your Meta account</>
+              <><Check size={14} strokeWidth={1.5} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Live data{isMultiAccount && currentAccount?.ad_account_name ? ` · ${currentAccount.ad_account_name}` : ''}</>
             )}
           </p>
         </div>

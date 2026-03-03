@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Plus, Pencil, Trash2, ImageIcon, X, Save, ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react';
 import type { ProductContext } from '../services/openaiApi';
 import SEO from '../components/SEO';
+import { getScopedItem, setScopedItem } from '../lib/scopedStorage';
 import './Products.css';
 
 const STORAGE_KEY = 'convertra_products';
@@ -11,7 +12,7 @@ const MAX_IMAGE_DIMENSION = 1024; // Resize images to fit within this to stay un
 
 function loadProducts(): ProductContext[] {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = getScopedItem(STORAGE_KEY);
     return stored ? JSON.parse(stored) : [];
   } catch {
     return [];
@@ -23,7 +24,7 @@ function saveProducts(products: ProductContext[]): { success: boolean; error?: s
     const json = JSON.stringify(products);
     const sizeKB = (json.length / 1024).toFixed(0);
     console.log(`[Products] Saving ${products.length} product(s) (${sizeKB}KB)`);
-    localStorage.setItem(STORAGE_KEY, json);
+    setScopedItem(STORAGE_KEY, json);
     return { success: true };
   } catch (err) {
     console.error('[Products] Failed to save:', err);

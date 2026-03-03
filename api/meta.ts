@@ -61,7 +61,10 @@ function getLastCredentialDiagnostics(): CredentialDiagnostics | null {
   return _lastCredDiag;
 }
 
-async function loadCredentials(organizationId: string): Promise<MetaCredentials | null> {
+async function loadCredentials(
+  organizationId: string,
+  requestedAdAccountId?: string
+): Promise<MetaCredentials | null> {
   const { data: cred, error: credError } = await supabase
     .from('organization_credentials')
     .select('access_token_encrypted, ad_account_id, page_id, pixel_id, status, token_expires_at, updated_at')
@@ -109,8 +112,16 @@ async function loadCredentials(organizationId: string): Promise<MetaCredentials 
             .single();
 
           if (refreshedCred) {
+            const refreshedToken = decrypt(refreshedCred.access_token_encrypted);
+            // If a specific ad account was requested, resolve its config
+            if (requestedAdAccountId) {
+              const accountConfig = await resolveAdAccountConfig(organizationId, requestedAdAccountId);
+              if (accountConfig) {
+                return { accessToken: refreshedToken, ...accountConfig };
+              }
+            }
             return {
-              accessToken: decrypt(refreshedCred.access_token_encrypted),
+              accessToken: refreshedToken,
               adAccountId: refreshedCred.ad_account_id,
               pageId: refreshedCred.page_id,
               pixelId: refreshedCred.pixel_id,
@@ -127,11 +138,42 @@ async function loadCredentials(organizationId: string): Promise<MetaCredentials 
 
   const accessToken = decrypt(cred.access_token_encrypted);
 
+  // If a specific ad account was requested, look up its config from organization_ad_accounts
+  if (requestedAdAccountId) {
+    const accountConfig = await resolveAdAccountConfig(organizationId, requestedAdAccountId);
+    if (accountConfig) {
+      return { accessToken, ...accountConfig };
+    }
+    // Requested account not found or inactive — throw instead of silently falling back
+    throw new Error(`Ad account ${requestedAdAccountId} is not active or not found for this organization.`);
+  }
+
   return {
     accessToken,
     adAccountId: cred.ad_account_id,
     pageId: cred.page_id,
     pixelId: cred.pixel_id,
+  };
+}
+
+// ── Helper: Resolve per-account config from organization_ad_accounts ──
+async function resolveAdAccountConfig(
+  organizationId: string,
+  adAccountId: string
+): Promise<{ adAccountId: string; pageId: string | null; pixelId: string | null } | null> {
+  const { data: account } = await supabase
+    .from('organization_ad_accounts')
+    .select('ad_account_id, page_id, pixel_id, is_active')
+    .eq('organization_id', organizationId)
+    .eq('ad_account_id', adAccountId)
+    .single();
+
+  if (!account || !account.is_active) return null;
+
+  return {
+    adAccountId: account.ad_account_id,
+    pageId: account.page_id,
+    pixelId: account.pixel_id,
   };
 }
 
@@ -176,6 +218,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleAIImages(req, res);
       case 'video-upload':
         return handleVideoUpload(req, res);
+      case 'ad-accounts':
+        return handleAdAccounts(req, res);
       default:
         return res.status(400).json({ error: `Unknown route: ${route}` });
     }
@@ -203,7 +247,17 @@ async function handleProxy(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const creds = await loadCredentials(auth.organizationId);
+  const {
+    method = 'GET',
+    endpoint,
+    params = {},
+    body,
+    formEncoded = false,
+    adAccountId: requestedAdAccountId,
+  } = req.body || {};
+
+  // Load credentials, optionally scoped to a specific ad account (multi-account support)
+  const creds = await loadCredentials(auth.organizationId, requestedAdAccountId || undefined);
   if (!creds) {
     const diag = getLastCredentialDiagnostics();
     return res.status(404).json({
@@ -212,14 +266,6 @@ async function handleProxy(req: VercelRequest, res: VercelResponse) {
       diagnostics: diag ? `${diag.reason} (orgId: ${auth.organizationId.slice(0, 8)}...)` : 'Unknown',
     });
   }
-
-  const {
-    method = 'GET',
-    endpoint,
-    params = {},
-    body,
-    formEncoded = false,
-  } = req.body || {};
 
   if (!endpoint || typeof endpoint !== 'string') {
     return res.status(400).json({ error: 'endpoint is required' });
@@ -314,11 +360,20 @@ async function handleStatus(req: VercelRequest, res: VercelResponse) {
       availableAccounts: [],
       availablePages: [],
       needsConfiguration: false,
+      adAccounts: [],
     });
   }
 
   const isExpired = cred.token_expires_at && new Date(cred.token_expires_at) < new Date();
   const isActive = cred.status === 'active' && !isExpired;
+
+  // Load activated ad accounts from organization_ad_accounts table
+  const { data: adAccounts } = await supabase
+    .from('organization_ad_accounts')
+    .select('id, ad_account_id, ad_account_name, page_id, pixel_id, is_active, account_status, currency')
+    .eq('organization_id', auth.organizationId)
+    .eq('is_active', true)
+    .order('ad_account_name', { ascending: true });
 
   return res.status(200).json({
     connected: isActive,
@@ -331,6 +386,7 @@ async function handleStatus(req: VercelRequest, res: VercelResponse) {
     availableAccounts: cred.metadata?.available_accounts || [],
     availablePages: cred.metadata?.available_pages || [],
     needsConfiguration: isActive && (!cred.ad_account_id || !cred.page_id),
+    adAccounts: adAccounts || [],
   });
 }
 
@@ -347,7 +403,10 @@ async function handleUpload(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const creds = await loadCredentials(auth.organizationId);
+  const { imageBase64, filename, adAccountId: requestedAdAccountId } = req.body || {};
+
+  // Load credentials, optionally scoped to a specific ad account (multi-account support)
+  const creds = await loadCredentials(auth.organizationId, requestedAdAccountId || undefined);
   if (!creds) {
     return res.status(404).json({ error: 'Meta credentials not found' });
   }
@@ -355,8 +414,6 @@ async function handleUpload(req: VercelRequest, res: VercelResponse) {
   if (!creds.adAccountId) {
     return res.status(400).json({ error: 'No ad account configured' });
   }
-
-  const { imageBase64, filename } = req.body || {};
 
   if (!imageBase64) {
     return res.status(400).json({ error: 'imageBase64 is required' });
@@ -615,6 +672,24 @@ async function handleUpdateSelection(req: VercelRequest, res: VercelResponse) {
     captureError(dbError, { route: 'meta/update-selection', organizationId: auth.organizationId });
     await flushSentry();
     return res.status(500).json({ error: 'Failed to save configuration' });
+  }
+
+  // Also sync to organization_ad_accounts table (multi-account support)
+  if (adAccountId) {
+    await supabase
+      .from('organization_ad_accounts')
+      .upsert({
+        organization_id: auth.organizationId,
+        ad_account_id: adAccountId,
+        ad_account_name: selectedAccount?.name || null,
+        page_id: pageId || null,
+        pixel_id: pixelId || null,
+        is_active: true,
+        account_status: selectedAccount?.account_status || null,
+        currency: selectedAccount?.currency || null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'organization_id,ad_account_id' });
+    await updateSeatCount(auth.organizationId);
   }
 
   return res.status(200).json({ success: true });
@@ -1495,4 +1570,201 @@ async function handleVideoUpload(req: VercelRequest, res: VercelResponse) {
       message: err instanceof Error ? err.message : 'Unknown error',
     });
   }
+}
+
+// ─── Route: ad-accounts ──────────────────────────────────────────────────────
+// Manage multiple Meta ad accounts per organization (agency multi-account).
+// GET: List activated ad accounts for the org.
+// POST: Activate, deactivate, or configure ad accounts.
+
+async function handleAdAccounts(req: VercelRequest, res: VercelResponse) {
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (req.method === 'GET') {
+    return handleAdAccountsList(req, res, auth);
+  }
+  if (req.method === 'POST') {
+    return handleAdAccountsWrite(req, res, auth);
+  }
+  return res.status(405).json({ error: 'Method not allowed' });
+}
+
+async function handleAdAccountsList(
+  _req: VercelRequest,
+  res: VercelResponse,
+  auth: AuthContext
+) {
+  const { data: accounts, error } = await supabase
+    .from('organization_ad_accounts')
+    .select('*')
+    .eq('organization_id', auth.organizationId)
+    .eq('is_active', true)
+    .order('ad_account_name', { ascending: true });
+
+  if (error) {
+    captureError(error, { route: 'meta/ad-accounts', organizationId: auth.organizationId });
+    await flushSentry();
+    return res.status(500).json({ error: 'Failed to load ad accounts' });
+  }
+
+  // Also load the org's seat limits
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('ad_account_seats, ad_account_seats_used, plan_tier')
+    .eq('id', auth.organizationId)
+    .single();
+
+  const planTier = org?.plan_tier || 'free';
+  const maxByPlan: Record<string, number> = {
+    free: 1, starter: 1, pro: 3, agency: 25, enterprise: -1, velocity_partner: -1,
+  };
+
+  return res.status(200).json({
+    accounts: accounts || [],
+    seats: org?.ad_account_seats || 1,
+    seatsUsed: org?.ad_account_seats_used || 0,
+    maxAccounts: maxByPlan[planTier] ?? 1,
+  });
+}
+
+async function handleAdAccountsWrite(
+  req: VercelRequest,
+  res: VercelResponse,
+  auth: AuthContext
+) {
+  const { action, adAccountId, adAccountName, pageId, pixelId, currency } = req.body || {};
+
+  if (!action || !adAccountId) {
+    return res.status(400).json({ error: 'action and adAccountId are required' });
+  }
+
+  // ── Activate an ad account ──
+  if (action === 'activate') {
+    // Check seat limit
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('ad_account_seats, plan_tier')
+      .eq('id', auth.organizationId)
+      .single();
+
+    const { count } = await supabase
+      .from('organization_ad_accounts')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', auth.organizationId)
+      .eq('is_active', true);
+
+    const seatLimit = org?.ad_account_seats || 1;
+    if (count !== null && count >= seatLimit) {
+      return res.status(403).json({
+        error: 'Ad account seat limit reached',
+        message: `You have ${count} of ${seatLimit} seats in use. Upgrade your plan to add more accounts.`,
+        seatsUsed: count,
+        seatsTotal: seatLimit,
+      });
+    }
+
+    // Validate the ad account exists in the org's available accounts (from OAuth)
+    const { data: cred } = await supabase
+      .from('organization_credentials')
+      .select('metadata')
+      .eq('organization_id', auth.organizationId)
+      .eq('provider', 'meta')
+      .single();
+
+    if (!cred) {
+      return res.status(404).json({ error: 'No Meta credentials found. Please connect your Meta account first.' });
+    }
+
+    const availableAccounts = cred.metadata?.available_accounts || [];
+    const metaAccount = availableAccounts.find((acc: { id: string }) => acc.id === adAccountId);
+
+    if (!metaAccount) {
+      return res.status(400).json({
+        error: 'Ad account not found in your connected Meta Business Manager.',
+        message: `The account ${adAccountId} is not accessible via your current Meta credentials.`,
+      });
+    }
+
+    // Upsert into organization_ad_accounts
+    const { error: upsertError } = await supabase
+      .from('organization_ad_accounts')
+      .upsert({
+        organization_id: auth.organizationId,
+        ad_account_id: adAccountId,
+        ad_account_name: adAccountName || metaAccount?.name || null,
+        page_id: pageId || null,
+        pixel_id: pixelId || null,
+        is_active: true,
+        account_status: metaAccount?.account_status || null,
+        currency: currency || metaAccount?.currency || null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'organization_id,ad_account_id' });
+
+    if (upsertError) {
+      captureError(upsertError, { route: 'meta/ad-accounts/activate', organizationId: auth.organizationId });
+      await flushSentry();
+      return res.status(500).json({ error: 'Failed to activate ad account' });
+    }
+
+    await updateSeatCount(auth.organizationId);
+    return res.status(200).json({ success: true });
+  }
+
+  // ── Deactivate an ad account ──
+  if (action === 'deactivate') {
+    const { error: updateError } = await supabase
+      .from('organization_ad_accounts')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('organization_id', auth.organizationId)
+      .eq('ad_account_id', adAccountId);
+
+    if (updateError) {
+      captureError(updateError, { route: 'meta/ad-accounts/deactivate', organizationId: auth.organizationId });
+      await flushSentry();
+      return res.status(500).json({ error: 'Failed to deactivate ad account' });
+    }
+
+    await updateSeatCount(auth.organizationId);
+    return res.status(200).json({ success: true });
+  }
+
+  // ── Configure an ad account (update page_id, pixel_id) ──
+  if (action === 'configure') {
+    const { error: updateError } = await supabase
+      .from('organization_ad_accounts')
+      .update({
+        page_id: pageId !== undefined ? (pageId || null) : undefined,
+        pixel_id: pixelId !== undefined ? (pixelId || null) : undefined,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('organization_id', auth.organizationId)
+      .eq('ad_account_id', adAccountId);
+
+    if (updateError) {
+      captureError(updateError, { route: 'meta/ad-accounts/configure', organizationId: auth.organizationId });
+      await flushSentry();
+      return res.status(500).json({ error: 'Failed to configure ad account' });
+    }
+
+    return res.status(200).json({ success: true });
+  }
+
+  return res.status(400).json({ error: `Unknown action: ${action}` });
+}
+
+// ── Helper: Update denormalized seat count ──
+async function updateSeatCount(organizationId: string) {
+  const { count } = await supabase
+    .from('organization_ad_accounts')
+    .select('*', { count: 'exact', head: true })
+    .eq('organization_id', organizationId)
+    .eq('is_active', true);
+
+  await supabase
+    .from('organizations')
+    .update({ ad_account_seats_used: count || 0, updated_at: new Date().toISOString() })
+    .eq('id', organizationId);
 }

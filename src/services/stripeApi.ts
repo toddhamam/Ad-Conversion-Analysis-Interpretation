@@ -47,6 +47,23 @@ export const PRICING_PLANS: PricingPlan[] = [
     },
   },
   {
+    id: 'agency',
+    name: 'Agency',
+    description: 'For agencies managing multiple client accounts',
+    monthlyPrice: 249,
+    yearlyPrice: 199,
+    features: {
+      creativesPerMonth: 500,
+      analysesPerMonth: 200,
+      channels: 5,
+      teamMembers: 25,
+      prioritySupport: true,
+      customBranding: false,
+      apiAccess: true,
+      dedicatedAccount: false,
+    },
+  },
+  {
     id: 'enterprise',
     name: 'Enterprise Self-Service',
     description: 'White-glove setup + ongoing support',
@@ -258,7 +275,7 @@ export function isStripeConfigured(): boolean {
 
 // Helper: Get tier order for comparison
 export function getTierOrder(tier: PlanTier): number {
-  const order: Record<PlanTier, number> = { free: 0, starter: 1, pro: 2, enterprise: 3, velocity_partner: 4 };
+  const order: Record<PlanTier, number> = { free: 0, starter: 1, pro: 2, agency: 3, enterprise: 4, velocity_partner: 5 };
   return order[tier];
 }
 

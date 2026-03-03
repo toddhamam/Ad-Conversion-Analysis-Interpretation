@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { OrganizationProvider } from './contexts/OrganizationContext';
 import MainLayout from './components/MainLayout';
+import { AdAccountProvider } from './contexts/AdAccountContext';
 import AdminLayout from './components/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import SuperAdminRoute from './components/SuperAdminRoute';
@@ -63,7 +64,9 @@ function AppWrapper() {
   return (
     <ProtectedRoute>
       <OrganizationProvider>
-        <MainLayout />
+        <AdAccountProvider>
+          <MainLayout />
+        </AdAccountProvider>
       </OrganizationProvider>
     </ProtectedRoute>
   );

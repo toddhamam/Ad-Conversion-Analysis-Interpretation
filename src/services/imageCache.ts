@@ -6,6 +6,8 @@
  * we capture them client-side when they're displayed in the browser.
  */
 
+import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
+
 const IMAGE_CACHE_KEY = 'conversion_intelligence_image_cache';
 
 export interface CachedImage {
@@ -44,7 +46,7 @@ interface ImageCache {
  */
 function getCache(): ImageCache {
   try {
-    const cached = localStorage.getItem(IMAGE_CACHE_KEY);
+    const cached = getScopedItem(IMAGE_CACHE_KEY);
     if (cached) {
       return JSON.parse(cached);
     }
@@ -75,7 +77,7 @@ function saveCache(cache: ImageCache): void {
     }
 
     cache.lastUpdated = Date.now();
-    localStorage.setItem(IMAGE_CACHE_KEY, JSON.stringify(cache));
+    setScopedItem(IMAGE_CACHE_KEY, JSON.stringify(cache));
   } catch (e) {
     console.warn('Failed to save image cache:', e);
   }
@@ -196,7 +198,7 @@ export function getTopHighQualityCachedImages(
  */
 export function clearImageCache(): void {
   try {
-    localStorage.removeItem(IMAGE_CACHE_KEY);
+    removeScopedItem(IMAGE_CACHE_KEY);
     console.log('🗑️ Image cache cleared');
   } catch (e) {
     console.warn('Failed to clear image cache:', e);

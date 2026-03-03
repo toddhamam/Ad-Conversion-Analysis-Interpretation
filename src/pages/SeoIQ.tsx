@@ -32,6 +32,7 @@ import type {
   AutopilotConfig,
   ScheduledRun,
 } from '../types/seoiq';
+import { getScopedItem } from '../lib/scopedStorage';
 import './SeoIQ.css';
 
 export default function SeoIQ() {
@@ -351,7 +352,7 @@ export default function SeoIQ() {
       // Step 2: Extract seeds from product context
       const productSeeds: string[] = [];
       try {
-        const stored = localStorage.getItem('convertra_products');
+        const stored = getScopedItem('convertra_products');
         if (stored) {
           const products = JSON.parse(stored) as Array<{ name: string; description: string }>;
           for (const p of products) {

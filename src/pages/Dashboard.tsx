@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { DashboardMetrics } from '../types/funnel';
 import { fetchCampaignSummaries, fetchAccountLevelInsights, type CampaignSummary, type AccountLevelInsights, type DatePreset, loadOrgMetaCredentials, clearOrgMetaCache } from '../services/metaApi';
+import { useAdAccount } from '../contexts/AdAccountContext';
 import { getAuthToken } from '../lib/authToken';
 import Loading from '../components/Loading';
 import SEO from '../components/SEO';
@@ -471,6 +472,7 @@ function formatDateForApi(date: Date): string {
 
 const Dashboard = () => {
   const { isTrialing, trialDaysRemaining, isSuperAdmin } = useOrganization();
+  const { currentAccount, isMultiAccount } = useAdAccount();
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [metaData, setMetaData] = useState<{
     totalSpend: number;
@@ -886,7 +888,9 @@ const Dashboard = () => {
       <div className="dashboard-header">
         <div className="dashboard-header-left">
           <h1 className="dashboard-title">Dashboard</h1>
-          <p className="dashboard-subtitle">Your ad performance at a glance</p>
+          <p className="dashboard-subtitle">
+            Your ad performance at a glance{isMultiAccount && currentAccount?.ad_account_name ? ` · ${currentAccount.ad_account_name}` : ''}
+          </p>
         </div>
         <div className="dashboard-header-right">
           <DateRangePicker
