@@ -5,7 +5,11 @@ import {
   setCurrentAdAccount as setMetaCurrentAccount,
   onOrgMetaChange,
   fetchAdAccounts,
+  activateAdAccount as apiActivateAdAccount,
+  clearOrgMetaCache,
+  loadOrgMetaCredentials,
   type AdAccountInfo,
+  type AvailableAdAccount,
 } from '../services/metaApi';
 import { setScopedAccountId, migrateToScoped } from '../lib/scopedStorage';
 
@@ -20,6 +24,12 @@ const SCOPED_KEYS = [
   'ci_publish_pixel_id',
 ];
 
+export interface SeatInfo {
+  seats: number;
+  seatsUsed: number;
+  maxAccounts: number;
+}
+
 export interface AdAccountContextValue {
   /** All activated ad accounts for the org */
   accounts: AdAccountInfo[];
@@ -31,6 +41,14 @@ export interface AdAccountContextValue {
   isMultiAccount: boolean;
   /** Whether we're in the process of switching accounts */
   isSwitching: boolean;
+  /** All available accounts from Meta Business Manager (includes non-activated) */
+  availableAccounts: AvailableAdAccount[];
+  /** Seat usage info for the org */
+  seatInfo: SeatInfo | null;
+  /** Activate an available account inline (returns after refresh + auto-switch) */
+  activateAccount: (adAccountId: string) => Promise<void>;
+  /** The ad account ID currently being activated (loading state) */
+  activatingAccountId: string | null;
 }
 
 const AdAccountContext = createContext<AdAccountContextValue | undefined>(undefined);
@@ -41,6 +59,9 @@ export function AdAccountProvider({ children }: { children: React.ReactNode }) {
   const [currentAccount, setCurrentAccount] = useState<AdAccountInfo | null>(null);
   const [isSwitching, setIsSwitching] = useState(false);
   const [metaVersion, setMetaVersion] = useState(0);
+  const [availableAccounts, setAvailableAccounts] = useState<AvailableAdAccount[]>([]);
+  const [seatInfo, setSeatInfo] = useState<SeatInfo | null>(null);
+  const [activatingAccountId, setActivatingAccountId] = useState<string | null>(null);
 
   // Subscribe to meta credential load/clear events so we re-read after async load
   useEffect(() => {
@@ -57,6 +78,8 @@ export function AdAccountProvider({ children }: { children: React.ReactNode }) {
       setCurrentAccount(null);
       setMetaCurrentAccount(null);
       setScopedAccountId(null);
+      setAvailableAccounts([]);
+      setSeatInfo(null);
       return;
     }
 
@@ -66,8 +89,13 @@ export function AdAccountProvider({ children }: { children: React.ReactNode }) {
       setCurrentAccount(null);
       setMetaCurrentAccount(null);
       setScopedAccountId(null);
+      setAvailableAccounts([]);
+      setSeatInfo(null);
       return;
     }
+
+    // Populate available accounts from cached status
+    setAvailableAccounts(orgMeta.availableAccounts || []);
 
     // Helper to apply an account list (shared by fast path and fresh fetch)
     const orgId = organization?.id || '';
@@ -128,6 +156,7 @@ export function AdAccountProvider({ children }: { children: React.ReactNode }) {
       .then((data) => {
         if (cancelled) return;
         const freshAccounts = (data.accounts || []).filter(a => a.is_active);
+        setSeatInfo({ seats: data.seats, seatsUsed: data.seatsUsed, maxAccounts: data.maxAccounts });
         // Build a fingerprint that captures both the account list and key config fields
         const fingerprint = (accts: AdAccountInfo[]) =>
           accts.map(a => `${a.ad_account_id}:${a.page_id || ''}:${a.pixel_id || ''}`).sort().join(',');
@@ -168,11 +197,61 @@ export function AdAccountProvider({ children }: { children: React.ReactNode }) {
     }, 400);
   }, [accounts, currentAccount, organization?.id]);
 
+  const activateAccount = useCallback(async (adAccountId: string) => {
+    setActivatingAccountId(adAccountId);
+    try {
+      // 1. Activate the account via API
+      await apiActivateAdAccount(adAccountId);
+
+      // 2. Refresh org meta so availableAccounts is current
+      clearOrgMetaCache();
+      const freshMeta = await loadOrgMetaCredentials();
+      if (freshMeta) {
+        setAvailableAccounts(freshMeta.availableAccounts || []);
+      }
+
+      // 3. Reload activated accounts from dedicated endpoint
+      const freshData = await fetchAdAccounts();
+      const freshAccounts = (freshData.accounts || []).filter(a => a.is_active);
+      setAccounts(freshAccounts);
+      setSeatInfo({ seats: freshData.seats, seatsUsed: freshData.seatsUsed, maxAccounts: freshData.maxAccounts });
+
+      // 4. Auto-switch to the newly activated account
+      const newAccount = freshAccounts.find(a => a.ad_account_id === adAccountId);
+      if (newAccount) {
+        setCurrentAccount(newAccount);
+        setScopedAccountId(newAccount.ad_account_id);
+        setMetaCurrentAccount(newAccount);
+
+        const orgId = organization?.id || '';
+        if (orgId) {
+          localStorage.setItem(`ci_current_ad_account_${orgId}`, newAccount.ad_account_id);
+        }
+
+        for (const key of SCOPED_KEYS) {
+          migrateToScoped(key, newAccount.ad_account_id);
+        }
+      }
+    } finally {
+      setActivatingAccountId(null);
+    }
+  }, [organization?.id]);
+
   const isMultiAccount = accounts.length > 1;
 
   return (
     <AdAccountContext.Provider
-      value={{ accounts, currentAccount, switchAccount, isMultiAccount, isSwitching }}
+      value={{
+        accounts,
+        currentAccount,
+        switchAccount,
+        isMultiAccount,
+        isSwitching,
+        availableAccounts,
+        seatInfo,
+        activateAccount,
+        activatingAccountId,
+      }}
     >
       {children}
     </AdAccountContext.Provider>

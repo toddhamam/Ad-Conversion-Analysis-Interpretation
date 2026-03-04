@@ -20,7 +20,7 @@ if (import.meta.env.DEV) {
 
 // ─── Per-org credential state ────────────────────────────────────────────────
 
-interface AvailableAdAccount {
+export interface AvailableAdAccount {
   id: string;
   name: string;
   account_id: string;
@@ -1994,7 +1994,7 @@ export async function fetchAdAccounts(): Promise<AdAccountListResponse> {
 export async function activateAdAccount(adAccountId: string, config?: {
   pageId?: string;
   pixelId?: string;
-}): Promise<AdAccountInfo> {
+}): Promise<{ success: boolean }> {
   const token = await getAuthToken();
   const res = await fetch('/api/meta/ad-accounts', {
     method: 'POST',

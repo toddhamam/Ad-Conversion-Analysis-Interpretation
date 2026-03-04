@@ -1,24 +1,24 @@
-/* ── Account Switcher (Sidebar) ─────────────────────────────────────────────── */
+/* ── Account Switcher (Top Bar) ─────────────────────────────────────────────── */
 
-.account-switcher {
-  padding: 0 12px;
-  margin-bottom: 8px;
+.account-switcher-topbar {
+  position: relative;
 }
 
 .account-switcher-trigger {
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 12px;
+  gap: 8px;
+  padding: 6px 14px;
+  height: 38px;
+  max-width: 280px;
+  border-radius: 10px;
   border: 1px solid var(--border-primary);
-  background: var(--bg-secondary);
+  background: var(--bg-card);
   cursor: pointer;
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
-.account-switcher-trigger:hover {
+.account-switcher-trigger:hover:not(.static) {
   border-color: var(--border-violet);
   background: var(--bg-card-hover);
 }
@@ -28,6 +28,15 @@
   background: var(--bg-card-hover);
 }
 
+.account-switcher-trigger.static {
+  border-color: var(--border-secondary);
+}
+
+.account-switcher-trigger:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 2px;
+}
+
 .account-dot {
   width: 8px;
   height: 8px;
@@ -35,14 +44,7 @@
   flex-shrink: 0;
 }
 
-.account-trigger-text {
-  flex: 1;
-  min-width: 0;
-  text-align: left;
-}
-
 .account-trigger-name {
-  display: block;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
@@ -64,71 +66,21 @@
   transform: rotate(180deg);
 }
 
-/* ── Collapsed Mode ──────────────────────────────────────────────────────────── */
-
-.account-switcher-collapsed {
-  display: flex;
-  justify-content: center;
-  padding: 0 8px;
-  margin-bottom: 8px;
-  position: relative;
-}
-
-.account-switcher-icon-btn {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  border: 1px solid var(--border-primary);
-  background: var(--bg-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
-}
-
-.account-switcher-icon-btn:hover {
-  border-color: var(--border-violet);
-  background: var(--bg-card-hover);
-}
-
-.account-switcher-icon-btn .account-dot {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 6px;
-  height: 6px;
-}
-
-.account-initial {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
 /* ── Dropdown ────────────────────────────────────────────────────────────────── */
 
 .account-switcher-dropdown {
   position: absolute;
   top: calc(100% + 6px);
-  left: 12px;
-  right: 12px;
-  min-width: 240px;
+  left: 0;
+  min-width: 300px;
+  max-height: 420px;
+  overflow-y: auto;
   background: var(--bg-card);
   border: 1px solid var(--border-primary);
   border-radius: 12px;
   box-shadow: var(--shadow-lg);
   z-index: 1001;
   animation: accountDropdownIn 0.15s ease;
-  overflow: hidden;
-}
-
-.account-switcher-dropdown.floating {
-  left: calc(100% + 8px);
-  top: 0;
-  right: auto;
-  min-width: 260px;
 }
 
 @keyframes accountDropdownIn {
@@ -142,14 +94,24 @@
   }
 }
 
-.dropdown-header {
-  padding: 12px 16px 8px;
+/* ── Section Headers ─────────────────────────────────────────────────────────── */
+
+.dropdown-section-header {
+  padding: 10px 16px 6px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
 }
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--border-primary);
+  margin: 4px 0;
+}
+
+/* ── Account Items ───────────────────────────────────────────────────────────── */
 
 .dropdown-accounts {
   padding: 4px 0;
@@ -166,7 +128,7 @@
   background: none;
   cursor: pointer;
   transition: background-color 0.1s ease;
-  min-height: 52px;
+  min-height: 48px;
 }
 
 .dropdown-account-item:hover {
@@ -175,6 +137,11 @@
 
 .dropdown-account-item.current {
   background: rgba(212, 225, 87, 0.12);
+}
+
+.dropdown-account-item:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: -2px;
 }
 
 .dropdown-account-info {
@@ -199,6 +166,10 @@
   font-weight: 600;
 }
 
+.dropdown-account-name.available {
+  color: var(--text-secondary);
+}
+
 .check-icon {
   width: 14px;
   height: 14px;
@@ -211,6 +182,88 @@
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 2px;
+}
+
+/* ── Available Account Row ───────────────────────────────────────────────────── */
+
+.dropdown-available-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  min-height: 48px;
+}
+
+.dropdown-activate-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  min-width: 72px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--accent-primary);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.dropdown-activate-btn:hover:not(:disabled) {
+  background: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.dropdown-activate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dropdown-activate-btn:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 2px;
+}
+
+.activate-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border-primary);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: activateSpin 0.6s linear infinite;
+}
+
+@keyframes activateSpin {
+  to { transform: rotate(360deg); }
+}
+
+.dropdown-upgrade-link {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-violet);
+  text-decoration: none;
+  padding: 4px 12px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease;
+}
+
+.dropdown-upgrade-link:hover {
+  background: rgba(168, 85, 247, 0.08);
+}
+
+/* ── Error ────────────────────────────────────────────────────────────────────── */
+
+.dropdown-error {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.06);
+  border-top: 1px solid rgba(220, 38, 38, 0.1);
 }
 
 /* ── Footer ──────────────────────────────────────────────────────────────────── */
@@ -253,10 +306,29 @@
   color: var(--text-muted);
 }
 
+/* ── Mobile Variant ──────────────────────────────────────────────────────────── */
+
+.account-switcher-topbar.mobile .account-switcher-trigger {
+  max-width: 160px;
+  height: 34px;
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+
+.account-switcher-topbar.mobile .account-trigger-name {
+  font-size: 12px;
+}
+
+.account-switcher-topbar.mobile .account-trigger-chevron {
+  width: 12px;
+  height: 12px;
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
-  .account-switcher-dropdown {
+  .account-switcher-dropdown,
+  .account-switcher-dropdown.mobile-sheet {
     position: fixed;
     bottom: 0;
     left: 0;
@@ -266,13 +338,6 @@
     max-height: 60vh;
     overflow-y: auto;
     animation: accountBottomSheetIn 0.2s ease;
-  }
-
-  .account-switcher-dropdown.floating {
-    left: 0;
-    right: 0;
-    top: auto;
-    bottom: 0;
   }
 
   @keyframes accountBottomSheetIn {
@@ -287,6 +352,11 @@
   }
 
   .dropdown-account-item {
+    min-height: 56px;
+    padding: 12px 20px;
+  }
+
+  .dropdown-available-item {
     min-height: 56px;
     padding: 12px 20px;
   }
