@@ -196,6 +196,55 @@
   color: var(--text-muted);
 }
 
+.fee-rate-editor {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fee-rate-input {
+  width: 48px;
+  padding: 1px 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  text-align: right;
+  -moz-appearance: textfield;
+}
+
+.fee-rate-input::-webkit-outer-spin-button,
+.fee-rate-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.fee-rate-input:focus {
+  outline: none;
+  border-color: var(--accent-violet);
+}
+
+.cogs-mode-select {
+  padding: 1px 2px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  min-width: 28px;
+  text-align: center;
+}
+
+.cogs-mode-select:focus {
+  outline: none;
+  border-color: var(--accent-violet);
+}
+
 /* Editable Stat Card */
 .stat-card-editable {
   border-color: var(--accent-violet-glow);

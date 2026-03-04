@@ -5,6 +5,7 @@ import type { DashboardMetrics } from '../types/funnel';
 import { fetchCampaignSummaries, fetchAccountLevelInsights, type CampaignSummary, type AccountLevelInsights, type DatePreset, loadOrgMetaCredentials, clearOrgMetaCache } from '../services/metaApi';
 import { useAdAccount } from '../contexts/AdAccountContext';
 import { getAuthToken } from '../lib/authToken';
+import { getScopedItem, setScopedItem } from '../lib/scopedStorage';
 import Loading from '../components/Loading';
 import SEO from '../components/SEO';
 import DateRangePicker from '../components/DateRangePicker';
@@ -54,13 +55,63 @@ import {
   ExternalLink,
   Play,
   UserCheck,
+  Package,
 } from 'lucide-react';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import { useOrganization } from '../contexts/OrganizationContext';
 import './Dashboard.css';
 
-// Stripe transaction fee rate (percentage of revenue)
-const TRANSACTION_FEE_RATE = 0.062; // 6.2%
+// Default transaction fee rate (percentage of revenue)
+// Configurable per-user via localStorage — common rates:
+// Stripe US: ~2.9%, Stripe international: ~3.9%, Stripe + platform fee: ~6.2%
+const DEFAULT_TRANSACTION_FEE_RATE = 0.029; // 2.9%
+
+function loadTransactionFeeRate(): number {
+  try {
+    const saved = getScopedItem('dashboard_transaction_fee_rate');
+    if (saved) {
+      const rate = parseFloat(saved);
+      if (Number.isFinite(rate) && rate >= 0 && rate <= 1) return rate;
+    }
+  } catch { /* fall through */ }
+  return DEFAULT_TRANSACTION_FEE_RATE;
+}
+
+function saveTransactionFeeRate(rate: number) {
+  setScopedItem('dashboard_transaction_fee_rate', rate.toString());
+}
+
+// COGS (Cost of Goods Sold) configuration
+// Supports two modes: fixed $ per conversion, or % of revenue
+interface CogsConfig {
+  mode: 'per_unit' | 'percent';
+  value: number;
+}
+
+const DEFAULT_COGS_CONFIG: CogsConfig = { mode: 'per_unit', value: 0 };
+
+function loadCogsConfig(): CogsConfig {
+  try {
+    const saved = getScopedItem('dashboard_cogs_config');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (
+        parsed &&
+        (parsed.mode === 'per_unit' || parsed.mode === 'percent') &&
+        typeof parsed.value === 'number' &&
+        Number.isFinite(parsed.value) &&
+        parsed.value >= 0
+      ) {
+        return parsed;
+      }
+    }
+  } catch { /* fall through */ }
+  return DEFAULT_COGS_CONFIG;
+}
+
+function saveCogsConfig(config: CogsConfig) {
+  setScopedItem('dashboard_cogs_config', JSON.stringify(config));
+}
 
 interface DashboardStats {
   totalRevenue: number;
@@ -73,6 +124,8 @@ interface DashboardStats {
   roas: number;
   cac: number;
   transactionFees: number;
+  cogs: number;
+  grossProfit: number;
   netProfit: number;
   // Lead metrics
   leads: number;
@@ -113,12 +166,14 @@ const DEFAULT_METRICS: MetricConfig[] = [
   { id: 'totalPurchases', label: 'Total Conversions', visible: true },
   { id: 'conversionRate', label: 'Conversion Rate', visible: true },
   { id: 'aov', label: 'Avg. Order Value', visible: true },
-  { id: 'uniqueCustomers', label: 'Unique Customers', visible: true },
+  { id: 'uniqueCustomers', label: 'Unique Customers', visible: false },
   { id: 'sessions', label: 'Sessions', visible: false },
   { id: 'adSpend', label: 'Ad Spend', visible: true },
   { id: 'roas', label: 'ROAS', visible: true },
-  { id: 'cac', label: 'CAC', visible: false },
+  { id: 'cac', label: 'CPA', visible: true },
   { id: 'transactionFees', label: 'Transaction Fees', visible: true },
+  { id: 'cogs', label: 'COGS', visible: true },
+  { id: 'grossProfit', label: 'Gross Profit', visible: true },
   { id: 'netProfit', label: 'Net Profit', visible: true },
   // Lead metrics
   { id: 'leads', label: 'Leads', visible: false },
@@ -163,6 +218,8 @@ const METRIC_ICONS: Record<string, ReactNode> = {
   roas: <Target size={24} strokeWidth={1.5} />,
   cac: <Calculator size={24} strokeWidth={1.5} />,
   transactionFees: <CreditCard size={24} strokeWidth={1.5} />,
+  cogs: <Package size={24} strokeWidth={1.5} />,
+  grossProfit: <TrendingUp size={24} strokeWidth={1.5} />,
   netProfit: <Wallet size={24} strokeWidth={1.5} />,
   // Lead metrics
   leads: <UserCheck size={24} strokeWidth={1.5} />,
@@ -205,8 +262,10 @@ const METRIC_LABELS: Record<string, string> = {
   sessions: 'Sessions',
   adSpend: 'Ad Spend',
   roas: 'ROAS',
-  cac: 'CAC',
+  cac: 'CPA',
   transactionFees: 'Transaction Fees',
+  cogs: 'COGS',
+  grossProfit: 'Gross Profit',
   netProfit: 'Net Profit',
   leads: 'Leads',
   costPerLead: 'Cost Per Lead',
@@ -237,20 +296,22 @@ const METRIC_LABELS: Record<string, string> = {
 // Metric periods - some are dynamic based on date range
 const STATIC_PERIODS: Record<string, string> = {
   totalPurchases: 'Conversions',
-  conversionRate: 'Sessions to purchase',
-  aov: 'Per customer',
+  conversionRate: 'LPV to purchase',
+  aov: 'Revenue ÷ conversions',
   sessions: 'Unique visitors',
   roas: 'Return on ad spend',
-  cac: 'Cost per customer',
-  transactionFees: 'Stripe fees (6.2%)',
-  netProfit: 'Revenue − spend − fees',
+  cac: 'Spend ÷ conversions',
+  transactionFees: 'Payment processing fees',
+  cogs: 'Cost of goods sold',
+  grossProfit: 'Revenue − COGS',
+  netProfit: 'Revenue − all expenses',
   costPerLead: 'Spend ÷ leads',
   leadRate: 'Leads ÷ link clicks',
   cpc: 'Spend ÷ all clicks',
   costPerLinkClick: 'Spend ÷ link clicks',
   costPerUniqueLinkClick: 'Spend ÷ unique link clicks',
   linkCtr: 'Link clicks ÷ impressions',
-  uniqueLinkCtr: 'Unique link clicks ÷ impressions',
+  uniqueLinkCtr: 'Unique link clicks ÷ reach',
   cpm: 'Cost per 1,000 impressions',
   frequency: 'Impressions ÷ reach',
   cpe: 'Spend ÷ engagements',
@@ -262,13 +323,15 @@ const STATIC_PERIODS: Record<string, string> = {
 
 // Metrics that should show the date range (raw counts and totals)
 const DATE_RANGE_METRICS = [
-  'totalRevenue', 'uniqueCustomers', 'adSpend', 'transactionFees', 'netProfit',
+  'totalRevenue', 'uniqueCustomers', 'adSpend', 'transactionFees', 'cogs', 'grossProfit', 'netProfit',
   'leads', 'linkClicks', 'uniqueLinkClicks', 'impressions', 'reach',
   'postEngagements', 'landingPageViews', 'addToCart', 'initiateCheckout', 'videoViews',
 ];
 
 // Funnel-only metrics — hidden for non-super-admins (requires Supabase funnel data)
-const FUNNEL_ONLY_METRICS = ['uniqueCustomers', 'aov', 'sessions', 'cac'];
+// Only uniqueCustomers and sessions genuinely require funnel tracking;
+// AOV and CPA are now derived from Meta API data and available to all users.
+const FUNNEL_ONLY_METRICS = ['uniqueCustomers', 'sessions'];
 
 // Load metrics config from localStorage
 function loadMetricsConfig(): MetricConfig[] {
@@ -308,6 +371,10 @@ interface SortableStatCardProps {
   formatCurrency: (value: number) => string;
   formatCurrencyPrecise: (value: number) => string;
   formatNumber: (value: number) => string;
+  transactionFeeRate?: number;
+  onTransactionFeeRateChange?: (rate: number) => void;
+  cogsConfig?: CogsConfig;
+  onCogsConfigChange?: (config: CogsConfig) => void;
 }
 
 function SortableStatCard({
@@ -317,6 +384,10 @@ function SortableStatCard({
   formatCurrency,
   formatCurrencyPrecise,
   formatNumber,
+  transactionFeeRate,
+  onTransactionFeeRateChange,
+  cogsConfig,
+  onCogsConfigChange,
 }: SortableStatCardProps) {
   const {
     attributes,
@@ -358,8 +429,12 @@ function SortableStatCard({
         return stats.cac > 0 ? formatCurrency(stats.cac) : '—';
       case 'transactionFees':
         return stats.transactionFees > 0 ? formatCurrency(stats.transactionFees) : '—';
+      case 'cogs':
+        return formatCurrency(stats.cogs);
+      case 'grossProfit':
+        return formatCurrency(stats.grossProfit);
       case 'netProfit':
-        return stats.netProfit !== 0 ? formatCurrency(stats.netProfit) : '—';
+        return formatCurrency(stats.netProfit);
       // Currency metrics (cost-per) — use precise formatter for sub-dollar values
       case 'costPerLead':
       case 'cpc':
@@ -410,7 +485,66 @@ function SortableStatCard({
         <div className="stat-label">{METRIC_LABELS[id]}</div>
         <div className="stat-value">{formatValue()}</div>
         <div className="stat-period">
-          {DATE_RANGE_METRICS.includes(id) ? dateRangeLabel : STATIC_PERIODS[id]}
+          {id === 'transactionFees' && transactionFeeRate !== undefined && onTransactionFeeRateChange ? (
+            <span className="fee-rate-editor">
+              <input
+                type="number"
+                className="fee-rate-input"
+                value={parseFloat((transactionFeeRate * 100).toFixed(1))}
+                min={0}
+                max={100}
+                step={0.1}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  if (!isNaN(val) && val >= 0 && val <= 100) {
+                    const rate = val / 100;
+                    onTransactionFeeRateChange(rate);
+                    saveTransactionFeeRate(rate);
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+              <span>% of revenue</span>
+            </span>
+          ) : id === 'cogs' && cogsConfig && onCogsConfigChange ? (
+            <span className="fee-rate-editor">
+              <select
+                className="cogs-mode-select"
+                value={cogsConfig.mode}
+                onChange={(e) => {
+                  const newConfig = { ...cogsConfig, mode: e.target.value as 'per_unit' | 'percent' };
+                  onCogsConfigChange(newConfig);
+                  saveCogsConfig(newConfig);
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <option value="per_unit">$</option>
+                <option value="percent">%</option>
+              </select>
+              <input
+                type="number"
+                className="fee-rate-input"
+                value={cogsConfig.value}
+                min={0}
+                step={cogsConfig.mode === 'per_unit' ? 1 : 0.1}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  if (!isNaN(val) && val >= 0) {
+                    const newConfig = { ...cogsConfig, value: val };
+                    onCogsConfigChange(newConfig);
+                    saveCogsConfig(newConfig);
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+              <span>{cogsConfig.mode === 'per_unit' ? '/unit' : '% rev'}</span>
+            </span>
+          ) : (
+            DATE_RANGE_METRICS.includes(id) ? dateRangeLabel : STATIC_PERIODS[id]
+          )}
         </div>
       </div>
     </div>
@@ -496,6 +630,8 @@ const Dashboard = () => {
   const [funnelWarning, setFunnelWarning] = useState<string | null>(null);
   const [metaWarning, setMetaWarning] = useState<string | null>(null);
   const [metricsConfig, setMetricsConfig] = useState<MetricConfig[]>(loadMetricsConfig);
+  const [transactionFeeRate, setTransactionFeeRate] = useState(loadTransactionFeeRate);
+  const [cogsConfig, setCogsConfig] = useState<CogsConfig>(loadCogsConfig);
   const [searchParams, setSearchParams] = useSearchParams();
   const [metaNotification, setMetaNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -696,45 +832,51 @@ const Dashboard = () => {
     }
   };
 
-  // Calculate stats from funnel metrics (Supabase) and Meta API data
+  // Calculate stats from Meta API data (primary source for all users)
   //
   // Data source strategy:
-  // - Ad Spend, ROAS: From Meta API (ad platform metrics)
-  // - Total Revenue, Total Purchases (conversions): From Meta API for ad attribution
-  // - Unique Customers, AOV, CAC, Conversion Rate: From Supabase funnel data (per-customer metrics)
-  //   This is important because Meta counts every pixel fire as a purchase, which would
-  //   inflate numbers if upsells/downsells fire separate purchase events.
-  //   Supabase tracks unique funnel_session_id to count actual unique buyers.
+  // ALL core metrics derive from Meta API so they work for any ad account:
+  // - Ad Spend, ROAS, Revenue, Conversions, AOV, CPA, Conversion Rate
+  // Funnel-only metrics (Unique Customers, Sessions) require Supabase funnel
+  // tracking and are only shown to super admins who have that data configured.
 
   const adSpend = metaData?.totalSpend || 0;
 
-  // For ad attribution metrics, use Meta data
-  const totalPurchases = metaData?.totalPurchases || metrics?.summary.purchases || 0;
-  const totalRevenue = metaData?.totalPurchaseValue || metrics?.summary.totalRevenue || 0;
+  // Core ad attribution metrics — all from Meta API
+  const totalPurchases = metaData?.totalPurchases || 0;
+  const totalRevenue = metaData?.totalPurchaseValue || 0;
   const totalClicks = metaData?.totalClicks || 0;
 
-  // For per-customer metrics, use Supabase funnel data only (tracks unique buyers)
-  // Meta totalPurchases counts pixel fires, not unique customers — don't use as fallback
+  // AOV: Average purchase value from Meta (revenue / conversions)
+  const aov = totalPurchases > 0 ? totalRevenue / totalPurchases : 0;
+
+  // CPA: Cost Per Acquisition from Meta (spend / conversions)
+  const cac = totalPurchases > 0 && adSpend > 0 ? adSpend / totalPurchases : 0;
+
+  // Conversion Rate: Landing page views to purchase
+  // Uses Landing Page Views (not link clicks) — LPV only fires after the page
+  // actually loads and the Meta pixel initializes, filtering out accidental taps and bot clicks.
+  const totalLPV = metaData?.totalLandingPageViews || 0;
+  const conversionRate = totalLPV > 0 && totalPurchases > 0
+    ? (totalPurchases / totalLPV) * 100
+    : 0;
+
+  // Funnel-only metrics (super admin only, requires Supabase funnel tracking)
   const uniqueCustomers = metrics?.summary.uniqueCustomers || 0;
 
-  // AOV: Use funnel data (total revenue / unique customers) for accurate per-customer value
-  // The funnel API already calculates this correctly including upsells/downsells
-  const aov = metrics?.summary.aovPerCustomer ||
-    (uniqueCustomers > 0 ? totalRevenue / uniqueCustomers : 0);
+  // Transaction fees: configurable rate (default 2.9%)
+  const transactionFees = totalRevenue * transactionFeeRate;
 
-  // CAC: Ad Spend / Unique Customers (not total purchase events)
-  const cac = uniqueCustomers > 0 && adSpend > 0 ? adSpend / uniqueCustomers : 0;
+  // COGS: configurable — either $ per conversion or % of revenue
+  const cogs = cogsConfig.mode === 'per_unit'
+    ? cogsConfig.value * totalPurchases
+    : totalRevenue * (cogsConfig.value / 100);
 
-  // Conversion Rate: Use funnel data (sessions to purchase) for accurate funnel conversion
-  // Fall back to clicks-to-purchase from Meta if funnel data unavailable
-  const conversionRate = metrics?.summary.conversionRate ||
-    (totalClicks > 0 && totalPurchases > 0 ? (totalPurchases / totalClicks) * 100 : 0);
+  // Gross Profit: Revenue − COGS (standard accounting)
+  const grossProfit = totalRevenue - cogs;
 
-  // Transaction fees: Stripe takes 6.2% of total revenue
-  const transactionFees = totalRevenue * TRANSACTION_FEE_RATE;
-
-  // Net profit: Revenue minus ad spend minus transaction fees
-  const netProfit = totalRevenue - adSpend - transactionFees;
+  // Net Profit: Revenue − COGS − Ad Spend − Transaction Fees
+  const netProfit = totalRevenue - cogs - adSpend - transactionFees;
 
   // Extended Facebook Ads metrics — raw counts from Meta API
   const totalImpressions = metaData?.totalImpressions || 0;
@@ -757,7 +899,9 @@ const Dashboard = () => {
   const costPerLinkClick = totalLinkClicks > 0 && adSpend > 0 ? adSpend / totalLinkClicks : 0;
   const costPerUniqueLinkClick = totalUniqueLinkClicks > 0 && adSpend > 0 ? adSpend / totalUniqueLinkClicks : 0;
   const linkCtr = totalImpressions > 0 && totalLinkClicks > 0 ? (totalLinkClicks / totalImpressions) * 100 : 0;
-  const uniqueLinkCtr = totalImpressions > 0 && totalUniqueLinkClicks > 0 ? (totalUniqueLinkClicks / totalImpressions) * 100 : 0;
+  // Unique Link CTR: unique link clicks / reach (not impressions)
+  // Meta defines this as unique clickers / unique people reached
+  const uniqueLinkCtr = totalReach > 0 && totalUniqueLinkClicks > 0 ? (totalUniqueLinkClicks / totalReach) * 100 : 0;
   const cpmVal = totalImpressions > 0 && adSpend > 0 ? (adSpend / totalImpressions) * 1000 : 0;
   const frequencyVal = totalReach > 0 && totalImpressions > 0 ? totalImpressions / totalReach : 0;
   const cpeVal = totalPostEngagements > 0 && adSpend > 0 ? adSpend / totalPostEngagements : 0;
@@ -777,6 +921,8 @@ const Dashboard = () => {
     roas: metaData?.roas || 0,
     cac,
     transactionFees,
+    cogs,
+    grossProfit,
     netProfit,
     // Extended Facebook Ads metrics
     leads: totalLeads,
@@ -956,6 +1102,10 @@ const Dashboard = () => {
                     formatCurrency={formatCurrency}
                     formatCurrencyPrecise={formatCurrencyPrecise}
                     formatNumber={formatNumber}
+                    transactionFeeRate={transactionFeeRate}
+                    onTransactionFeeRateChange={setTransactionFeeRate}
+                    cogsConfig={cogsConfig}
+                    onCogsConfigChange={setCogsConfig}
                   />
                 ))}
               </div>

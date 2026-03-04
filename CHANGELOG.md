@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-03-04 — Fix dashboard metric accuracy, add COGS & Net Profit P&L
+
+### Overview
+Dashboard metrics were inaccurate for agencies managing multiple ad accounts because several key metrics (Unique Customers, AOV, CAC, Conversion Rate) depended on a Supabase `funnel_events` table specific to one user's funnel setup. Agencies don't have this data. All core metrics are now derived from Meta API data so any user/agency can build reports with confidence. Also adds a proper P&L breakdown with configurable COGS.
+
+### Fixed
+- **AOV** — Changed from funnel-based (unique customers) to Meta-based (`purchaseValue / purchases`)
+- **CAC → CPA** — Changed from `adSpend / funnel uniqueCustomers` to `adSpend / Meta purchases`; renamed label to "CPA" (Cost Per Acquisition)
+- **Conversion Rate** — Changed from funnel sessions to `purchases / landingPageViews` (Meta LPV metric, most accurate denominator)
+- **Unique Link CTR** — Fixed from `uniqueLinkClicks / impressions` to `uniqueLinkClicks / reach` (Meta's actual definition)
+- **Fee rate validation** — `loadTransactionFeeRate()` now validates localStorage values with `Number.isFinite` and range checks (0-1), preventing NaN/Infinity propagation
+- **Per-account scoping** — Transaction fee rate and COGS config now use `scopedStorage` for per-ad-account isolation
+
+### Added
+- **COGS card** — Configurable Cost of Goods Sold with inline editor: toggle between $/unit and % of revenue modes
+- **Gross Profit card** — Revenue minus COGS (standard accounting definition)
+- **Net Profit card** — Revenue minus COGS minus Ad Spend minus Transaction Fees (true bottom line)
+- **Transaction fee editor** — Inline configurable fee rate on the Transaction Fees card (default 2.9%)
+- **Export support** — COGS and Gross Profit included in CSV/PDF exports
+
+### Changed
+- **"Net Profit" renamed to "Gross Profit"** then re-added as true Net Profit with correct formula
+- **Unique Customers** hidden by default (funnel-only metric)
+- **CPA** visible by default (replaces CAC, now Meta-derived)
+- **FUNNEL_ONLY_METRICS** reduced from 4 to 2 (`uniqueCustomers`, `sessions`)
+
+### Files Modified
+- `src/pages/Dashboard.tsx` — Core metric calculations, COGS config helpers, inline editors, scoped storage, P&L card structure
+- `src/pages/Dashboard.css` — Styles for `.fee-rate-editor`, `.fee-rate-input`, `.cogs-mode-select` inline editors
+- `src/components/ExportMenu.tsx` — Added `cogs` and `grossProfit` format entries
+
 ## 2026-03-04 — Show only active ad accounts in switcher dropdown
 
 ### Changed
