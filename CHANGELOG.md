@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-03-04 — Move ad account switcher to top bar with inline activation
+
+### Overview
+Relocated the ad account switcher from the sidebar to the global top bar so it's visible and accessible on every page. The dropdown now shows both active and available (not-yet-activated) accounts, allowing users to activate new ad accounts inline without navigating to the Integrations page. Data persistence, per-account scoping, and page-level re-fetches continue to work as before.
+
+### Changed
+- **Switcher moved to top bar** — Renders in the desktop header (left of profile dropdown) and mobile header (between hamburger and profile). Removed from sidebar.
+- **Two-section dropdown** — "Active Accounts" (click to switch) and "Available Accounts" (click to activate inline). Seat limits are enforced; shows "Upgrade" link when at plan capacity.
+- **Inline activation flow** — Activating an account calls the API, refreshes org meta credentials and account list, then auto-switches to the newly activated account.
+- **Static label for single account** — When only one account is active and none are available, the switcher renders as a non-interactive label (no chevron or dropdown).
+- **Fixed `activateAdAccount` return type** — Corrected from `Promise<AdAccountInfo>` to `Promise<{ success: boolean }>` to match the backend response.
+
+### Files Modified
+- `src/components/AccountSwitcher.tsx` — Rewritten for top-bar layout with active + available account sections and inline activation
+- `src/components/AccountSwitcher.css` — Restyled for top-bar trigger, dropdown with available account rows, mobile bottom-sheet
+- `src/components/MainLayout.tsx` — Added AccountSwitcher to desktop top-bar and mobile header
+- `src/components/MainLayout.css` — Added gap to top-bar flex layout
+- `src/components/Sidebar.tsx` — Removed AccountSwitcher import and rendering
+- `src/contexts/AdAccountContext.tsx` — Extended with `availableAccounts`, `seatInfo`, `activateAccount()`, and `activatingAccountId`
+- `src/services/metaApi.ts` — Exported `AvailableAdAccount` type; fixed `activateAdAccount` return type
+
 ## 2026-03-04 — Fix ad account switcher showing stale/incomplete data
 
 ### Overview

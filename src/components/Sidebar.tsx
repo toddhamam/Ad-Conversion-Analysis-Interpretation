@@ -2,7 +2,6 @@ import { NavLink, Link } from 'react-router-dom';
 import { useState } from 'react';
 import { getOrgMetaIds } from '../services/metaApi';
 import { useOrganization } from '../contexts/OrganizationContext';
-import AccountSwitcher from './AccountSwitcher';
 import './Sidebar.css';
 
 interface SidebarProps {
@@ -67,9 +66,6 @@ const Sidebar = ({
           </svg>
         </button>
       </div>
-
-      {/* Multi-account switcher — only visible when org has >1 activated account */}
-      <AccountSwitcher collapsed={collapsed} onCloseMobile={onCloseMobile} />
 
       <nav className="sidebar-nav">
         <NavLink to="/dashboard" className="nav-item" end title="Dashboard" onClick={onCloseMobile}>

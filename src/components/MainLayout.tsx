@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useLocation, Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import UserProfileDropdown from './UserProfileDropdown';
+import AccountSwitcher from './AccountSwitcher';
 import TrialBanner from './TrialBanner';
 import SubscriptionGate from './SubscriptionGate';
 import FeedbackWidget from './FeedbackWidget';
@@ -51,7 +52,7 @@ const MainLayout = () => {
           <span className="hamburger-line"></span>
           <span className="hamburger-line"></span>
         </button>
-        <img src={logoUrl} alt={logoAlt} className="mobile-logo" />
+        <AccountSwitcher variant="mobile" onCloseMobile={() => setMobileNavOpen(false)} />
         <UserProfileDropdown />
       </header>
 
@@ -65,6 +66,7 @@ const MainLayout = () => {
       />
       <div className="main-area">
         <header className="top-bar">
+          <AccountSwitcher variant="desktop" />
           <div className="top-bar-spacer"></div>
           <UserProfileDropdown />
         </header>
