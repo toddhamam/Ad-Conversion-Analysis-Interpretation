@@ -407,12 +407,17 @@ async function handleStatus(req: VercelRequest, res: VercelResponse) {
   }
 
   // Load activated ad accounts from organization_ad_accounts table
-  const { data: adAccounts } = await supabase
+  const { data: adAccounts, error: adAccountsError } = await supabase
     .from('organization_ad_accounts')
     .select('id, ad_account_id, ad_account_name, page_id, pixel_id, is_active, account_status, currency')
     .eq('organization_id', auth.organizationId)
     .eq('is_active', true)
     .order('ad_account_name', { ascending: true });
+
+  if (adAccountsError) {
+    captureError(adAccountsError, { route: 'meta/status', organizationId: auth.organizationId });
+    // Don't fail the whole status response — return empty adAccounts so frontend can fallback
+  }
 
   return res.status(200).json({
     connected: isActive,

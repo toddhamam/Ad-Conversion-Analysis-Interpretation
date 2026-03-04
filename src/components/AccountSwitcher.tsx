@@ -39,8 +39,8 @@ export default function AccountSwitcher({ collapsed = false, onCloseMobile }: Ac
 
   const getStatusColor = (account: AdAccountInfo | null) => {
     if (!account) return 'var(--text-muted)';
-    if (!account.page_id || !account.pixel_id) return '#f59e0b'; // amber — needs config
-    return '#22c55e'; // green — fully configured
+    if (!account.page_id) return '#f59e0b'; // amber — needs page setup
+    return '#22c55e'; // green — configured
   };
 
   const handleSwitch = (adAccountId: string) => {
