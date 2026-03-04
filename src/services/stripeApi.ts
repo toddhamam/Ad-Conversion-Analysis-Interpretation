@@ -35,6 +35,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     description: 'For growing marketing teams',
     monthlyPrice: 149,
     yearlyPrice: 119,
+    extraSeatPrice: 49,
     features: {
       creativesPerMonth: 250,
       analysesPerMonth: 100,
@@ -52,6 +53,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     description: 'For agencies managing multiple client accounts',
     monthlyPrice: 249,
     yearlyPrice: 199,
+    extraSeatPrice: 59,
     features: {
       creativesPerMonth: 500,
       analysesPerMonth: 200,
@@ -70,6 +72,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     monthlyPrice: 1500,
     yearlyPrice: 1250,
     setupFee: 2500,
+    extraSeatPrice: 99,
     features: {
       creativesPerMonth: -1,  // Unlimited
       analysesPerMonth: -1,   // Unlimited

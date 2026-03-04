@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import Loading from '../components/Loading';
 import { useOrganization } from '../contexts/OrganizationContext';
 import {
@@ -11,6 +11,7 @@ import {
   isStripeConfigured,
   getTierOrder,
 } from '../services/stripeApi';
+import { PLAN_LIMITS } from '../types/organization';
 import type { BillingData, PricingPlan, PlanTier, BillingInterval } from '../types/billing';
 import {
   CreditCard,
@@ -26,11 +27,15 @@ import {
   Building2,
   Clock,
   Zap,
+  Briefcase,
+  Monitor,
+  Settings,
 } from 'lucide-react';
 import './Billing.css';
 
 const Billing = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { organization, isTrialing, isSubscriptionValid, trialDaysRemaining } = useOrganization();
   const [billingData, setBillingData] = useState<BillingData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -106,10 +111,14 @@ const Billing = () => {
 
   const getTierIcon = (tier: PlanTier) => {
     switch (tier) {
+      case 'free':
+        return <Sparkles size={20} strokeWidth={1.5} />;
       case 'starter':
         return <Sparkles size={20} strokeWidth={1.5} />;
       case 'pro':
         return <Crown size={20} strokeWidth={1.5} />;
+      case 'agency':
+        return <Briefcase size={20} strokeWidth={1.5} />;
       case 'enterprise':
         return <Building2 size={20} strokeWidth={1.5} />;
       case 'velocity_partner':
@@ -121,18 +130,37 @@ const Billing = () => {
 
   const getTierBadgeClass = (tier: PlanTier) => {
     switch (tier) {
+      case 'free':
+        return 'tier-badge-free';
       case 'starter':
         return 'tier-badge-starter';
       case 'pro':
         return 'tier-badge-pro';
+      case 'agency':
+        return 'tier-badge-agency';
       case 'enterprise':
         return 'tier-badge-enterprise';
       case 'velocity_partner':
         return 'tier-badge-velocity-partner';
       default:
-        return 'tier-badge-starter';
+        return 'tier-badge-free';
     }
   };
+
+  // Seat management data
+  const seats = organization?.ad_account_seats ?? 0;
+  const seatsUsed = organization?.ad_account_seats_used ?? 0;
+  const currentPlanData = PRICING_PLANS.find((p) => p.id === currentPlanTier);
+  const currentPlanLimits = PLAN_LIMITS[currentPlanTier];
+  const includedSeats = currentPlanLimits?.adAccountsIncluded ?? 0;
+  const isUnlimitedTier = currentPlanLimits?.maxAdAccounts === -1;
+  // Hide seat management for: unlimited tiers (VP/Enterprise with -1), single-seat orgs, undefined seats
+  // Backend uses 999 for velocity_partner, so also check PLAN_LIMITS for the true unlimited flag
+  const showSeatManagement = seats > 1 && !isUnlimitedTier;
+  // Extra seat cost is based on paid seats (ad_account_seats), not active seats (ad_account_seats_used)
+  // If you pay for 5 seats but only activate 3, you're still charged for 5
+  const extraSeatsPaid = includedSeats === -1 ? 0 : Math.max(0, seats - includedSeats);
+  const seatProgressPercent = seats > 0 ? Math.min(100, (seatsUsed / seats) * 100) : 0;
 
   if (loading) {
     return <Loading size="large" message="ConversionIQ™ syncing billing..." />;
@@ -380,6 +408,27 @@ const Billing = () => {
             );
           })()}
 
+          {/* Agency Card (standalone, no tabs) */}
+          {(() => {
+            const agencyPlan = PRICING_PLANS.find((p) => p.id === 'agency');
+            if (!agencyPlan) return null;
+            const isCurrentAgency = currentPlanTier === 'agency' && organization?.subscription_status === 'active';
+            return (
+              <div className={`agency-standalone-card glass ${isCurrentAgency ? 'plan-current' : ''}`}>
+                <div className="agency-label">For Agencies</div>
+                <PlanCard
+                  plan={agencyPlan}
+                  billingInterval={billingInterval}
+                  isCurrentPlan={isCurrentAgency}
+                  onUpgrade={() => handleUpgrade('agency')}
+                  upgrading={upgrading === 'agency'}
+                  currentTier={currentPlanTier}
+                  embedded
+                />
+              </div>
+            );
+          })()}
+
           {/* Enterprise Card with Tabs */}
           {(() => {
             const enterprisePlan = PRICING_PLANS.find((p) => p.id === enterpriseTab);
@@ -419,6 +468,63 @@ const Billing = () => {
           })()}
         </div>
       </div>
+
+      {/* Seat Management Card */}
+      {showSeatManagement && (
+        <div className="seat-management-section">
+          <h3 className="section-title">Ad Account Seats</h3>
+          <div className="seat-management-card glass">
+            <div className="seat-progress">
+              <div className="seat-progress-header">
+                <span className="seat-progress-label">
+                  <strong>{seatsUsed}</strong> of <strong>{seats}</strong> seats used
+                </span>
+                {seatsUsed > seats && (
+                  <span className="seat-over-limit">Over limit</span>
+                )}
+              </div>
+              <div className="seat-progress-bar">
+                <div
+                  className={`seat-progress-fill ${seatsUsed > seats ? 'seat-progress-over' : ''}`}
+                  style={{ width: `${seatProgressPercent}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="seat-details">
+              <p className="seat-detail-line">
+                {includedSeats === -1
+                  ? 'Unlimited seats'
+                  : `${includedSeats} included with ${currentPlanData?.name || 'your'} plan`}
+              </p>
+              {extraSeatsPaid > 0 && currentPlanData?.extraSeatPrice != null && (
+                <p className="seat-detail-line seat-detail-extra">
+                  {extraSeatsPaid} additional {extraSeatsPaid === 1 ? 'seat' : 'seats'} &times; ${currentPlanData.extraSeatPrice}/mo = ${extraSeatsPaid * currentPlanData.extraSeatPrice}/mo
+                </p>
+              )}
+            </div>
+
+            <div className="seat-actions">
+              <button
+                className="seat-action-btn seat-action-manage"
+                onClick={() => navigate('/integrations')}
+              >
+                <Settings size={16} strokeWidth={1.5} />
+                Manage Accounts
+              </button>
+              {billingData?.subscription && (
+                <button
+                  className="seat-action-btn seat-action-stripe"
+                  onClick={handleManagePayment}
+                >
+                  <ExternalLink size={14} strokeWidth={1.5} />
+                  Manage in Stripe
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Billing History */}
       {billingData?.invoices && billingData.invoices.length > 0 && (
@@ -487,6 +593,7 @@ const PlanCard = ({
   const hasEarlyBird = showEarlyBird && plan.earlyBirdPrice && billingInterval === 'monthly';
   const displayPrice = hasEarlyBird ? plan.earlyBirdPrice! : regularPrice;
   const isDowngrade = getTierOrder(plan.id) < getTierOrder(currentTier);
+  const planLimits = PLAN_LIMITS[plan.id];
 
   return (
     <div
@@ -537,6 +644,17 @@ const PlanCard = ({
           <span>
             {plan.features.teamMembers === -1 ? 'Unlimited' : plan.features.teamMembers} team
             members
+          </span>
+        </li>
+        <li>
+          <Monitor size={16} strokeWidth={1.5} />
+          <span>
+            {planLimits.adAccountsIncluded === -1
+              ? 'Unlimited ad accounts'
+              : planLimits.adAccountsIncluded === 1
+              ? '1 ad account'
+              : `${planLimits.adAccountsIncluded} ad accounts included`}
+            {plan.extraSeatPrice != null && ` (+$${plan.extraSeatPrice}/mo each)`}
           </span>
         </li>
         <li className={plan.features.prioritySupport ? '' : 'feature-unavailable'}>
