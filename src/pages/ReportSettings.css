@@ -1,0 +1,696 @@
+.report-settings {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+/* ─── Header ────────────────────────────────────────────────────────────── */
+
+.report-settings-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
+}
+
+.report-settings-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.report-settings-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 4px 0 0;
+}
+
+/* ─── Buttons ───────────────────────────────────────────────────────────── */
+
+.report-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+
+.report-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.report-btn-primary {
+  background: var(--accent-primary);
+  color: #1e293b;
+}
+
+.report-btn-primary:hover:not(:disabled) {
+  background: var(--accent-secondary);
+}
+
+.report-btn-secondary {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-primary);
+}
+
+.report-btn-secondary:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+}
+
+.report-btn-sm {
+  padding: 4px 10px;
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.report-btn-sm:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+}
+
+.report-btn-sm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.report-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.report-btn-icon:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.report-btn-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.report-btn-danger:hover:not(:disabled) {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+/* ─── Alerts ────────────────────────────────────────────────────────────── */
+
+.report-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.report-alert-error {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.report-alert-success {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+.report-alert-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.6;
+}
+
+.report-alert-close:hover {
+  opacity: 1;
+}
+
+/* ─── Section ───────────────────────────────────────────────────────────── */
+
+.report-section {
+  margin-bottom: 24px;
+}
+
+.report-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 12px;
+}
+
+.report-section-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.report-section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 12px;
+  color: var(--text-muted);
+}
+
+.report-section-toggle:hover {
+  color: var(--text-secondary);
+}
+
+.report-section-toggle .report-section-title {
+  margin: 0;
+}
+
+/* ─── Empty state ───────────────────────────────────────────────────────── */
+
+.report-empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 24px;
+  background: var(--bg-card);
+  border: 1px dashed var(--border-primary);
+  border-radius: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.report-empty-card p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.report-empty-hint {
+  font-size: 12px !important;
+  color: var(--text-muted);
+}
+
+.report-settings-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 80px 24px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.report-settings-empty h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.report-settings-empty p {
+  font-size: 14px;
+  margin: 0;
+}
+
+/* ─── Schedule Cards ────────────────────────────────────────────────────── */
+
+.report-schedule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.report-schedule-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 10px;
+  padding: 16px;
+  transition: border-color 0.2s ease;
+}
+
+.report-schedule-card:hover {
+  border-color: var(--accent-violet);
+}
+
+.report-schedule-card.inactive {
+  opacity: 0.6;
+}
+
+.report-schedule-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.report-schedule-info h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+}
+
+.report-schedule-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.report-schedule-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.report-schedule-next {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 4px 0 0;
+}
+
+.report-schedule-error {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #dc2626;
+  margin: 4px 0 0;
+}
+
+.report-schedule-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ─── Toggle (active/comparison) ────────────────────────────────────────── */
+
+.report-active-toggle,
+.report-toggle-label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.report-active-toggle input,
+.report-toggle-label input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.report-toggle-slider {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: var(--border-primary);
+  border-radius: 10px;
+  transition: background-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.report-toggle-slider::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+}
+
+.report-active-toggle input:checked + .report-toggle-slider,
+.report-toggle-label input:checked + .report-toggle-slider {
+  background: var(--accent-violet);
+}
+
+.report-active-toggle input:checked + .report-toggle-slider::after,
+.report-toggle-label input:checked + .report-toggle-slider::after {
+  transform: translateX(16px);
+}
+
+/* ─── Form Card ─────────────────────────────────────────────────────────── */
+
+.report-form-card {
+  background: var(--bg-card);
+  border: 1px solid var(--accent-violet);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-md);
+}
+
+.report-form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.report-form-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.report-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.report-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.report-form-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.report-form-field input[type="text"],
+.report-form-field input[type="email"],
+.report-form-field select {
+  padding: 8px 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  transition: border-color 0.2s ease;
+}
+
+.report-form-field input:focus,
+.report-form-field select:focus {
+  outline: none;
+  border-color: var(--accent-violet);
+}
+
+.report-form-field-full {
+  grid-column: 1 / -1;
+}
+
+.report-form-field-inline {
+  grid-column: 1 / -1;
+}
+
+.report-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-secondary);
+}
+
+/* ─── Radio pills ───────────────────────────────────────────────────────── */
+
+.report-radio-group {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.report-radio-pill {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  border-right: 1px solid var(--border-primary);
+}
+
+.report-radio-pill:last-child {
+  border-right: none;
+}
+
+.report-radio-pill input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.report-radio-pill.active {
+  background: var(--accent-violet);
+  color: #fff;
+}
+
+/* ─── Metrics selector ──────────────────────────────────────────────────── */
+
+.report-metrics-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: var(--text-secondary);
+}
+
+.report-metrics-toggle label {
+  cursor: pointer;
+}
+
+.report-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border-secondary);
+}
+
+.report-metrics-category {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.report-metrics-category-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.report-metric-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.report-metric-checkbox input {
+  accent-color: var(--accent-violet);
+}
+
+/* ─── Recipients ────────────────────────────────────────────────────────── */
+
+.report-recipients {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.report-recipient-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.report-recipient-chip button {
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0;
+}
+
+.report-recipient-chip button:hover {
+  color: #dc2626;
+}
+
+.report-recipient-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.report-recipient-input-wrap input {
+  padding: 4px 8px;
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  width: 180px;
+}
+
+.report-recipient-input-wrap input:focus {
+  outline: none;
+  border-color: var(--accent-violet);
+}
+
+/* ─── History Table ─────────────────────────────────────────────────────── */
+
+.report-history-table-wrap {
+  overflow-x: auto;
+}
+
+.report-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.report-history-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.report-history-table td {
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-secondary);
+}
+
+.report-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.report-status-badge.sent {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.report-status-badge.failed {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.report-history-error {
+  color: #dc2626;
+  margin-left: 4px;
+  cursor: help;
+}
+
+/* ─── Responsive ────────────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .report-settings {
+    padding: 20px 16px;
+  }
+
+  .report-settings-header {
+    flex-direction: column;
+  }
+
+  .report-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-schedule-card-header {
+    flex-direction: column;
+  }
+
+  .report-schedule-actions {
+    align-self: flex-end;
+  }
+
+  .report-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}

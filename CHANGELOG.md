@@ -1,5 +1,52 @@
 # Changelog
 
+## 2026-03-04 — Dashboard export & scheduled email reports
+
+### Overview
+Adds dashboard data export (CSV/PDF) and automated scheduled email reports. Agency owners and admins can now export their customized dashboard metrics on demand or configure recurring email reports at daily/weekly/monthly frequency — replacing the need for a VA to manually check every ad account. Includes cross-account breakdown reports for multi-account agencies. Addresses two rounds of Codex review findings (16 issues total).
+
+### Added
+- **ExportMenu component** — Dropdown on dashboard header with "Export CSV" and "Export PDF" options. Respects visible metrics, date range, and account selection. PDF uses html2canvas + jspdf (dynamically imported) with branded Convertra header.
+- **Report Settings page** (`/reports`) — Full schedule management UI with create/edit form, frequency radio pills, day-of-week/month pickers, delivery time (user's timezone), metric selector (grouped by category, funnel-only metrics excluded), recipient email chips (max 10), comparison toggle, active/paused toggle, send test email, and report history table. Admin-only (hidden for member/viewer roles).
+- **Backend report handlers** (`api/_lib/report-handlers.ts`) — 5 route handlers dispatched from `api/meta.ts`: schedule CRUD, server-side CSV export, manual/test email send, hourly cron, and history retrieval. All admin-gated with JWT auth.
+- **Shared metrics module** (`api/_lib/metrics.ts`) — Server-side metric computation mirroring Dashboard.tsx, with paginated Meta API fetching (`paging.next`), date range helpers, CSV generation, and format utilities.
+- **Database migration** (`supabase/migrations/010_report_schedules.sql`) — `report_schedules` and `report_history` tables with RLS policies, check constraints, unique constraint on (user_id, ad_account_id, frequency), and indexes for cron queries.
+- **Hourly cron** — `vercel.json` entry for `/api/meta/report-cron` running every hour. Uses atomic `send_lock_until` lease for idempotency.
+- **Branded HTML email template** — Inline-CSS email with Convertra header, metrics table with optional change column (green/red deltas), per-account breakdown for cross-account reports, and `List-Unsubscribe` header.
+- **DST-safe timezone handling** — Stores `delivery_hour` in user's local timezone + IANA `timezone` string; computes `next_run_at` (UTC) using Intl API after each send.
+- **Sidebar nav item** — "Reports" link with FileText icon, visible only to owner/admin roles.
+- **Frontend types and API service** (`src/types/reports.ts`, `src/services/reportApi.ts`) — TypeScript interfaces and fetchJson-based API calls with JWT auth.
+
+### Fixed (Codex review findings)
+- **Request key mismatch** — Frontend now sends `id` for PUT/DELETE and `schedule_id` for test send, matching backend expectations
+- **PUT recompute crash** — Schedule ownership query now selects all fields needed for `next_run_at` recomputation (frequency, delivery_hour, timezone, day_of_week, day_of_month)
+- **Cross-account metric corruption** — Aggregation now uses raw `RawMetaData` fields instead of derived stats (was adding `cpc` rate to `totalClicks` count)
+- **`last_3d` preset gap** — Added full support in `buildDateParamsForPreset`, `getPresetLabel`, and `getPreviousPeriodDates`
+- **Unguarded GET endpoints** — Added `requireAdmin` check on GET schedule and GET history routes
+- **Inaccurate history dates** — History records now store actual date range from preset via new `getPresetDateRange()` helper instead of today's date
+
+### New Dependencies
+- `html2canvas` — Client-side DOM-to-canvas for PDF export
+- `jspdf` — PDF generation
+- `resend` — Email delivery for scheduled reports (requires `RESEND_API_KEY` env var)
+
+### Files Created
+- `src/components/ExportMenu.tsx` + `ExportMenu.css`
+- `src/pages/ReportSettings.tsx` + `ReportSettings.css`
+- `src/types/reports.ts`
+- `src/services/reportApi.ts`
+- `api/_lib/metrics.ts`
+- `api/_lib/report-handlers.ts`
+- `supabase/migrations/010_report_schedules.sql`
+
+### Files Modified
+- `src/pages/Dashboard.tsx` — Added ExportMenu to header
+- `src/App.tsx` — Added `/reports` route
+- `src/components/Sidebar.tsx` — Added Reports nav item (admin-only)
+- `api/meta.ts` — Added 5 report route dispatches
+- `vercel.json` — Added hourly report-cron entry
+- `package.json` — Added html2canvas, jspdf, resend dependencies
+
 ## 2026-03-04 — Fix unlimited ad account seats for Enterprise/VP tiers
 
 ### Overview

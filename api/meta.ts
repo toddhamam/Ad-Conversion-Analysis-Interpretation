@@ -3,6 +3,13 @@ import { createClient } from '@supabase/supabase-js';
 import { decrypt, encrypt, isEncryptionConfigured } from './_lib/encryption.js';
 import { initSentry, captureError, flushSentry } from './_lib/sentry.js';
 import { refreshMetaToken, isWithinRefreshWindow, isTokenExpired } from './_lib/meta-token.js';
+import {
+  handleReportSchedules,
+  handleReportExport,
+  handleReportSend,
+  handleReportCron,
+  handleReportHistory,
+} from './_lib/report-handlers.js';
 
 initSentry();
 
@@ -220,6 +227,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleVideoUpload(req, res);
       case 'ad-accounts':
         return handleAdAccounts(req, res);
+      case 'report-schedules':
+        return handleReportSchedules(req, res);
+      case 'report-export':
+        return handleReportExport(req, res);
+      case 'report-send':
+        return handleReportSend(req, res);
+      case 'report-cron':
+        return handleReportCron(req, res);
+      case 'report-history':
+        return handleReportHistory(req, res);
       default:
         return res.status(400).json({ error: `Unknown route: ${route}` });
     }

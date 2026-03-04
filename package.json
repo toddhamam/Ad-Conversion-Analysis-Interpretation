@@ -21,12 +21,15 @@
     "@sentry/react": "^10.38.0",
     "@stripe/stripe-js": "^8.6.4",
     "@supabase/supabase-js": "^2.91.1",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.0",
     "lucide-react": "^0.563.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-helmet-async": "^2.0.5",
     "react-router-dom": "^6.28.0",
     "remotion": "^4.0.419",
+    "resend": "^6.9.3",
     "stripe": "^20.2.0"
   },
   "devDependencies": {
