@@ -19,6 +19,7 @@ import SeoIQ from './pages/SeoIQ';
 import Billing from './pages/Billing';
 import AccountSettings from './pages/AccountSettings';
 import Integrations from './pages/Integrations';
+import ReportSettings from './pages/ReportSettings';
 import SalesLanding from './pages/SalesLanding';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -120,6 +121,7 @@ function App() {
             <Route path="/billing" element={<Billing />} />
             <Route path="/account" element={<AccountSettings />} />
             <Route path="/integrations" element={<Integrations />} />
+            <Route path="/reports" element={<ReportSettings />} />
           </Route>
 
           {/* Catch-all 404 */}

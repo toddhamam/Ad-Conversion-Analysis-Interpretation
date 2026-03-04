@@ -10,6 +10,7 @@ import SEO from '../components/SEO';
 import DateRangePicker from '../components/DateRangePicker';
 import DashboardCustomizer from '../components/DashboardCustomizer';
 import type { MetricConfig } from '../components/DashboardCustomizer';
+import ExportMenu from '../components/ExportMenu';
 import {
   DndContext,
   closestCenter,
@@ -896,6 +897,12 @@ const Dashboard = () => {
           <DateRangePicker
             value={dateRange}
             onChange={handleDateRangeChange}
+          />
+          <ExportMenu
+            stats={stats as unknown as Record<string, number>}
+            visibleMetrics={visibleMetrics.map((m) => ({ id: m.id, label: METRIC_LABELS[m.id] || m.label }))}
+            dateRangeLabel={dateRangeLabel}
+            accountName={isMultiAccount && currentAccount?.ad_account_name ? currentAccount.ad_account_name : undefined}
           />
           <DashboardCustomizer
             metrics={isSuperAdmin ? metricsConfig : metricsConfig.filter((m) => !FUNNEL_ONLY_METRICS.includes(m.id))}
