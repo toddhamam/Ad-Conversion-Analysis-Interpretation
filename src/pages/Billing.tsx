@@ -159,8 +159,8 @@ const Billing = () => {
   const showSeatManagement = seats > 1 && !isUnlimitedTier;
   // Extra seat cost is based on paid seats (ad_account_seats), not active seats (ad_account_seats_used)
   // If you pay for 5 seats but only activate 3, you're still charged for 5
-  const extraSeatsPaid = includedSeats === -1 ? 0 : Math.max(0, seats - includedSeats);
-  const seatProgressPercent = seats > 0 ? Math.min(100, (seatsUsed / seats) * 100) : 0;
+  const extraSeatsPaid = (includedSeats === -1 || seats === -1) ? 0 : Math.max(0, seats - includedSeats);
+  const seatProgressPercent = (seats <= 0 || seats === -1) ? 0 : Math.min(100, (seatsUsed / seats) * 100);
 
   if (loading) {
     return <Loading size="large" message="ConversionIQ™ syncing billing..." />;

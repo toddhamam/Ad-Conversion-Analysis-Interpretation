@@ -96,8 +96,8 @@ SET ad_account_seats = CASE plan_tier
   WHEN 'starter' THEN 1
   WHEN 'pro' THEN 3
   WHEN 'agency' THEN 3
-  WHEN 'enterprise' THEN 10
-  WHEN 'velocity_partner' THEN 999
+  WHEN 'enterprise' THEN -1
+  WHEN 'velocity_partner' THEN -1
   ELSE 1
 END;
 

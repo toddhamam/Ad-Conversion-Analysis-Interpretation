@@ -47,7 +47,7 @@ function Integrations() {
   // Determine if org supports multi-account
   const planTier = organization?.plan_tier || 'free';
   const planLimits = PLAN_LIMITS[planTier] || PLAN_LIMITS.free;
-  const supportsMultiAccount = planLimits.maxAdAccounts > 1;
+  const supportsMultiAccount = planLimits.maxAdAccounts > 1 || planLimits.maxAdAccounts === -1;
 
   const refreshStatus = useCallback(async () => {
     clearOrgMetaCache();
@@ -230,7 +230,8 @@ function Integrations() {
   const availableForActivation = (metaStatus?.availableAccounts || []).filter(
     acct => !activatedAccountIds.has(acct.id)
   );
-  const seatsRemaining = (adAccountData?.seats || 1) - (adAccountData?.seatsUsed || 0);
+  const isUnlimitedSeats = (adAccountData?.seats ?? 1) === -1;
+  const seatsRemaining = isUnlimitedSeats ? Infinity : (adAccountData?.seats || 1) - (adAccountData?.seatsUsed || 0);
 
   if (loading) {
     return <Loading size="large" message="ConversionIQ™ syncing channels..." />;
@@ -402,7 +403,9 @@ function Integrations() {
                   Ad Accounts
                   {adAccountData && (
                     <span className="seat-badge">
-                      {adAccountData.seatsUsed} of {adAccountData.seats} seats
+                      {adAccountData.seats === -1
+                        ? `${adAccountData.seatsUsed} seats · Unlimited`
+                        : `${adAccountData.seatsUsed} of ${adAccountData.seats} seats`}
                     </span>
                   )}
                 </h3>
