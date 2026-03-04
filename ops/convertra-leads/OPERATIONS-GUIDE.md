@@ -807,3 +807,33 @@ python3 cli.py followup resume --id p_042
 │   └── backup.log           ← Backup cron output
 └── crontab.example          ← Cron schedule to install
 ```
+
+---
+
+## Changelog
+
+### 2026-03-04 — Fix Lead Pipeline Yield (~6% → ~30%+ conversion)
+
+The `fill --target 25` pipeline was completing all 25 rounds but only producing ~15 ready-to-send prospects. Five structural bottlenecks were identified and fixed:
+
+**1. Stop double enrichment** (`email_finder.py`, `orchestrator.py`)
+- `batch_find_emails()` internally called `batch_enrich()`, but callers (`_run_enrichment_pass`, `run_campaign`) had already called it — burning Apollo credits twice per round.
+- Added `skip_enrichment` parameter; all orchestrator call sites now pass `skip_enrichment=True`.
+
+**2. Domain Search fallback when People Match fails** (`apollo_enrichment.py`)
+- When Apollo People Match returned `no_match` for a named prospect, the code gave up entirely.
+- Now tries `search_domain_contacts(domain)` as a fallback to find any contact at the company with a verified email.
+
+**3. Retryable enrichment** (`apollo_enrichment.py`, `enrichment.py`)
+- `enrichment_status="no_match"` permanently blocked prospects from ever being retried.
+- Replaced with `enrichment_attempts` counter — prospects get 2 attempts before being skipped.
+
+**4. Low-yield niche detection + sub-niche injection** (`orchestrator.py`)
+- Niches were only marked exhausted when returning exactly 0 results. A niche returning 1-2 duplicates kept getting picked.
+- Threshold lowered to < 3 new results. Sub-niches are immediately injected into the queue when a parent niche exhausts.
+
+**5. More LinkedIn People rounds in source rotation** (`orchestrator.py`)
+- LinkedIn People (the only source producing named contacts) ran ~4/25 rounds.
+- Doubled to ~8/25 rounds by assigning positions 1 and 4 in the 6-round cycle.
+
+**Files changed:** `modules/apollo_enrichment.py`, `modules/email_finder.py`, `modules/enrichment.py`, `orchestrator.py`
