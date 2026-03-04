@@ -21,7 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { organizationId, returnUrl } = req.query;
+  const { organizationId, returnUrl, reauth } = req.query;
   const fallbackUrl = typeof returnUrl === 'string'
     ? returnUrl
     : (typeof organizationId === 'string' ? `/admin/organizations/${organizationId}` : '/admin');
@@ -67,6 +67,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('override_default_response_type', 'true');
   authUrl.searchParams.set('state', state);
+
+  // When re-authorizing, force the consent screen so the user can re-select
+  // which pages and ad accounts the app can access
+  if (reauth === 'true') {
+    authUrl.searchParams.set('auth_type', 'rerequest');
+  }
 
   // Redirect to Facebook login
   return res.redirect(302, authUrl.toString());

@@ -12,6 +12,7 @@ import {
   activateAdAccount,
   deactivateAdAccount,
   configureAdAccount,
+  refreshAvailableData,
   type OrgMetaIds,
   type AdAccountInfo,
   type AdAccountListResponse,
@@ -43,6 +44,7 @@ function Integrations() {
   const [configuringAccount, setConfiguringAccount] = useState<string | null>(null);
   const [configPageId, setConfigPageId] = useState('');
   const [configPixelId, setConfigPixelId] = useState('');
+  const [refreshingAvailable, setRefreshingAvailable] = useState(false);
 
   // Determine if org supports multi-account
   const planTier = organization?.plan_tier || 'free';
@@ -117,6 +119,34 @@ function Integrations() {
       return;
     }
     window.location.href = `/api/auth/meta/connect?organizationId=${organization.id}&returnUrl=/integrations`;
+  };
+
+  const handleReauthorize = () => {
+    if (!organization?.id) {
+      setMessage({ type: 'error', text: 'Organization not loaded. Please refresh and try again.' });
+      return;
+    }
+    // Force the consent screen so the user can re-select pages/accounts
+    window.location.href = `/api/auth/meta/connect?organizationId=${organization.id}&returnUrl=/integrations&reauth=true`;
+  };
+
+  const handleRefreshAvailable = async () => {
+    setRefreshingAvailable(true);
+    setMessage(null);
+    try {
+      const result = await refreshAvailableData();
+      await refreshStatus();
+      await loadAdAccounts();
+      if (result.selectionsCleared) {
+        setMessage({ type: 'success', text: 'Available accounts and pages refreshed. Some previously selected items were cleared because they are no longer accessible.' });
+      } else {
+        setMessage({ type: 'success', text: 'Available accounts and pages refreshed.' });
+      }
+    } catch (error: unknown) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to refresh available data.' });
+    } finally {
+      setRefreshingAvailable(false);
+    }
   };
 
   const handleDisconnect = async () => {
@@ -375,6 +405,17 @@ function Integrations() {
                 Reconnect
               </button>
             )}
+            {isConnected && (
+              <button className="reauthorize-button" onClick={handleReauthorize}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 2v6h-6"/>
+                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+                  <path d="M3 22v-6h6"/>
+                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+                </svg>
+                Update Permissions
+              </button>
+            )}
             {(isConnected || isExpired) && (
               <button
                 className="disconnect-button"
@@ -386,6 +427,11 @@ function Integrations() {
               </button>
             )}
           </div>
+          {isConnected && (
+            <p className="integration-hint">
+              Don't see all your pages or ad accounts? Click <strong>Update Permissions</strong> to re-authorize and grant access to additional assets.
+            </p>
+          )}
         </div>
 
         {/* ── Ad Accounts (multi-account management) ──────────────────────────── */}
@@ -458,9 +504,29 @@ function Integrations() {
                         {/* Inline configure panel */}
                         {configuringAccount === account.ad_account_id && (
                           <div className="ad-account-configure-panel">
-                            {metaStatus?.availablePages && metaStatus.availablePages.length > 0 && (
-                              <div className="config-group">
+                            <div className="config-group">
+                              <div className="config-label-row">
                                 <label>Facebook Page</label>
+                                <button
+                                  className="config-refresh-btn"
+                                  onClick={handleRefreshAvailable}
+                                  disabled={refreshingAvailable}
+                                  title="Refresh available pages from Meta"
+                                >
+                                  {refreshingAvailable ? (
+                                    <span className="btn-spinner" />
+                                  ) : (
+                                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M14 2v4h-4"/>
+                                      <path d="M2 8a6 6 0 0 1 10.3-4.2L14 6"/>
+                                      <path d="M2 14v-4h4"/>
+                                      <path d="M14 8a6 6 0 0 1-10.3 4.2L2 10"/>
+                                    </svg>
+                                  )}
+                                  Refresh
+                                </button>
+                              </div>
+                              {metaStatus?.availablePages && metaStatus.availablePages.length > 0 ? (
                                 <select
                                   value={configPageId}
                                   onChange={(e) => setConfigPageId(e.target.value)}
@@ -472,8 +538,12 @@ function Integrations() {
                                     </option>
                                   ))}
                                 </select>
-                              </div>
-                            )}
+                              ) : (
+                                <p className="config-empty-hint">
+                                  No pages available. Click <strong>Refresh</strong> or <strong>Update Permissions</strong> above to grant access to your Facebook Pages.
+                                </p>
+                              )}
+                            </div>
                             <div className="config-group">
                               <label>Pixel ID</label>
                               <input

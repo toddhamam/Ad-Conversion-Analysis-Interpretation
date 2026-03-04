@@ -26,21 +26,41 @@ interface TokenResponse {
   expires_in?: number;
 }
 
-interface AdAccountResponse {
-  data: Array<{
-    account_id: string;
-    id: string;
-    name: string;
-    account_status: number;
-    currency: string;
-  }>;
+interface AdAccount {
+  account_id: string;
+  id: string;
+  name: string;
+  account_status: number;
+  currency: string;
 }
 
-interface PageResponse {
-  data: Array<{
-    id: string;
-    name: string;
-  }>;
+interface Page {
+  id: string;
+  name: string;
+}
+
+interface PaginatedResponse<T> {
+  data: T[];
+  paging?: { cursors?: { after?: string }; next?: string };
+}
+
+/**
+ * Paginate through all results of a Graph API list endpoint.
+ * Follows cursor-based pagination until no more pages remain.
+ */
+async function fetchAllPages<T>(initialUrl: string): Promise<T[]> {
+  const all: T[] = [];
+  let url: string | null = initialUrl;
+
+  while (url) {
+    const response = await fetch(url);
+    if (!response.ok) break;
+    const data: PaginatedResponse<T> = await response.json();
+    if (data.data) all.push(...data.data);
+    url = data.paging?.next || null;
+  }
+
+  return all;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -117,24 +137,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const accessToken = longTokenData.access_token || tokenData.access_token;
     const expiresIn = longTokenData.expires_in || tokenData.expires_in || 5184000; // Default 60 days
 
-    // Fetch available ad accounts
+    // Fetch all available ad accounts (paginated — large business managers may have many)
     const adAccountsUrl = new URL('https://graph.facebook.com/v21.0/me/adaccounts');
     adAccountsUrl.searchParams.set('access_token', accessToken);
     adAccountsUrl.searchParams.set('fields', 'account_id,id,name,account_status,currency');
+    adAccountsUrl.searchParams.set('limit', '100');
 
-    const adAccountsResponse = await fetch(adAccountsUrl.toString());
-    const adAccountsData: AdAccountResponse = await adAccountsResponse.json();
+    const allAdAccounts = await fetchAllPages<AdAccount>(adAccountsUrl.toString());
 
-    // Fetch available Facebook Pages
-    let availablePages: PageResponse['data'] = [];
+    // Fetch all available Facebook Pages (paginated)
+    let availablePages: Page[] = [];
     try {
       const pagesUrl = new URL('https://graph.facebook.com/v21.0/me/accounts');
       pagesUrl.searchParams.set('access_token', accessToken);
       pagesUrl.searchParams.set('fields', 'id,name');
+      pagesUrl.searchParams.set('limit', '100');
 
-      const pagesResponse = await fetch(pagesUrl.toString());
-      const pagesData: PageResponse = await pagesResponse.json();
-      availablePages = pagesData.data || [];
+      availablePages = await fetchAllPages<Page>(pagesUrl.toString());
     } catch (pageErr) {
       console.warn('Failed to fetch pages during OAuth callback:', pageErr);
     }
@@ -159,7 +178,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .eq('provider', 'meta')
       .single();
 
-    const newAccounts = adAccountsData.data || [];
+    const newAccounts = allAdAccounts;
     const newPages = availablePages;
 
     // Preserve existing selections if they're still valid in the new token's scope

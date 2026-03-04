@@ -1947,6 +1947,32 @@ export interface AdAccountListResponse {
   maxAccounts: number;
 }
 
+/**
+ * Refresh the available ad accounts and pages from the Meta Graph API
+ * using the stored token. Does not require re-authorization — just re-fetches
+ * the list from Meta and updates the cached metadata.
+ * Returns the updated lists and whether any stale selections were cleared.
+ */
+export async function refreshAvailableData(): Promise<{
+  availableAccounts: AvailableAdAccount[];
+  availablePages: AvailablePage[];
+  selectionsCleared: boolean;
+}> {
+  const token = await getAuthToken();
+  const res = await fetch('/api/meta/refresh-available', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to refresh available data (${res.status})`);
+  }
+  return res.json();
+}
+
 /** Fetch activated ad accounts and seat info for the current org */
 export async function fetchAdAccounts(): Promise<AdAccountListResponse> {
   const token = await getAuthToken();
