@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-03-04 — Show only active ad accounts in switcher dropdown
+
+### Changed
+- **Removed "Available Accounts" section** — The ad account switcher dropdown now only shows activated ad accounts, not all available accounts from Meta Business Manager
+- **Removed inline activation** — Users activate accounts via the Integrations page instead of inline in the dropdown. The "Manage Accounts" footer link remains for easy navigation
+- **Simplified dropdown logic** — Dropdown only appears when 2+ active accounts exist; cleaned up unused activation state, error handling, and the `AvailableAccountRow` component
+
+### Files Modified
+- `src/components/AccountSwitcher.tsx` — Removed available accounts section, `AvailableAccountRow` component, activation logic, and unused imports
+
 ## 2026-03-04 — Rename billing section and remove promo code toggle
 
 ### Changed
