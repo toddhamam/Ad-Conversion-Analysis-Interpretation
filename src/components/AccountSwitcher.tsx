@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAdAccount } from '../contexts/AdAccountContext';
-import type { AdAccountInfo, AvailableAdAccount } from '../services/metaApi';
+import type { AdAccountInfo } from '../services/metaApi';
 import './AccountSwitcher.css';
 
 interface AccountSwitcherProps {
@@ -14,13 +14,9 @@ export default function AccountSwitcher({ variant = 'desktop', onCloseMobile }: 
     accounts,
     currentAccount,
     switchAccount,
-    availableAccounts,
     seatInfo,
-    activateAccount,
-    activatingAccountId,
   } = useAdAccount();
   const [isOpen, setIsOpen] = useState(false);
-  const [activationError, setActivationError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -43,13 +39,6 @@ export default function AccountSwitcher({ variant = 'desktop', onCloseMobile }: 
     };
   }, [isOpen]);
 
-  // Clear activation error after 5 seconds
-  useEffect(() => {
-    if (!activationError) return;
-    const timer = setTimeout(() => setActivationError(null), 5000);
-    return () => clearTimeout(timer);
-  }, [activationError]);
-
   if (!currentAccount) return null;
 
   const getStatusColor = (account: AdAccountInfo | null) => {
@@ -62,16 +51,6 @@ export default function AccountSwitcher({ variant = 'desktop', onCloseMobile }: 
     switchAccount(adAccountId);
     setIsOpen(false);
     onCloseMobile?.();
-  };
-
-  const handleActivate = async (adAccountId: string) => {
-    setActivationError(null);
-    try {
-      await activateAccount(adAccountId);
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : 'Failed to activate account';
-      setActivationError(msg);
-    }
   };
 
   const handleManage = () => {
@@ -89,20 +68,10 @@ export default function AccountSwitcher({ variant = 'desktop', onCloseMobile }: 
     ? activeAccounts
     : [currentAccount, ...activeAccounts];
 
-  // Available but not yet activated accounts
-  const activatedIds = new Set(accounts.map(a => a.ad_account_id));
-  const availableForActivation = availableAccounts.filter(
-    a => !activatedIds.has(a.id)
-  );
-
-  // Seat math
   const isUnlimitedSeats = (seatInfo?.maxAccounts ?? 1) === -1;
-  const seatsRemaining = isUnlimitedSeats
-    ? Infinity
-    : (seatInfo?.maxAccounts || 1) - (seatInfo?.seatsUsed || 0);
 
-  // If only 1 active account and nothing available to activate, show static label
-  const hasDropdown = displayActiveAccounts.length > 1 || availableForActivation.length > 0;
+  // Show dropdown if more than 1 active account (user can always manage via footer link)
+  const hasDropdown = displayActiveAccounts.length > 1;
 
   const isMobile = variant === 'mobile';
 
@@ -176,33 +145,6 @@ export default function AccountSwitcher({ variant = 'desktop', onCloseMobile }: 
             })}
           </div>
 
-          {/* Available Accounts (not yet activated) */}
-          {availableForActivation.length > 0 && (
-            <>
-              <div className="dropdown-divider" />
-              <div className="dropdown-section-header">Available Accounts</div>
-              <div className="dropdown-accounts">
-                {availableForActivation.map(account => (
-                  <AvailableAccountRow
-                    key={account.id}
-                    account={account}
-                    seatsRemaining={seatsRemaining}
-                    isActivating={activatingAccountId === account.id}
-                    isAnyActivating={activatingAccountId !== null}
-                    onActivate={handleActivate}
-                  />
-                ))}
-              </div>
-            </>
-          )}
-
-          {/* Activation error */}
-          {activationError && (
-            <div className="dropdown-error">
-              {activationError}
-            </div>
-          )}
-
           {/* Footer */}
           <div className="dropdown-footer">
             <button className="dropdown-manage-btn" onClick={handleManage}>
@@ -221,58 +163,6 @@ export default function AccountSwitcher({ variant = 'desktop', onCloseMobile }: 
             </span>
           </div>
         </div>
-      )}
-    </div>
-  );
-}
-
-// ── Available account row with activate button ──
-
-function AvailableAccountRow({
-  account,
-  seatsRemaining,
-  isActivating,
-  isAnyActivating,
-  onActivate,
-}: {
-  account: AvailableAdAccount;
-  seatsRemaining: number;
-  isActivating: boolean;
-  isAnyActivating: boolean;
-  onActivate: (adAccountId: string) => void;
-}) {
-  const atLimit = seatsRemaining <= 0;
-
-  return (
-    <div className="dropdown-available-item">
-      <div className="dropdown-account-info">
-        <span className="dropdown-account-name available">
-          {account.name || account.account_id}
-        </span>
-        <span className="dropdown-account-detail">
-          {account.currency || 'Meta Ad Account'}
-        </span>
-      </div>
-      {atLimit ? (
-        <Link
-          to="/billing"
-          className="dropdown-upgrade-link"
-          onClick={(e) => e.stopPropagation()}
-        >
-          Upgrade
-        </Link>
-      ) : (
-        <button
-          className="dropdown-activate-btn"
-          onClick={() => onActivate(account.id)}
-          disabled={isActivating || isAnyActivating}
-        >
-          {isActivating ? (
-            <span className="activate-spinner" />
-          ) : (
-            'Activate'
-          )}
-        </button>
       )}
     </div>
   );
