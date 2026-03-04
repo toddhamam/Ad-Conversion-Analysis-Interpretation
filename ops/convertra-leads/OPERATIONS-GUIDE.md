@@ -40,9 +40,9 @@ OPENAI_API_KEY=sk-...               # GPT-5.2 for email drafting (~500 tokens/em
 TELEGRAM_BOT_TOKEN=...              # From @BotFather
 TELEGRAM_CHAT_ID=...                # Your chat ID
 
-# Enrichment
-HUNTER_API_KEY=...                   # hunter.io → API (25/mo free)
-APOLLO_API_KEY=...                   # apollo.io (backup enrichment)
+# Enrichment (Apollo primary — 10K credits/month free)
+APOLLO_API_KEY=...                   # apollo.io → Settings → API Keys (PRIMARY — 10K/mo free)
+HUNTER_API_KEY=...                   # hunter.io → API (FALLBACK — 25/mo free)
 
 # Instantly (cold email sending)
 INSTANTLY_API_KEY=...                # app.instantly.ai → Settings → Integrations → API
@@ -52,7 +52,8 @@ INSTANTLY_API_KEY=...                # app.instantly.ai → Settings → Integra
 - `OPENAI_API_KEY` — From https://platform.openai.com/api-keys
 - `TELEGRAM_BOT_TOKEN` — Already exists in your OpenClaw config (`/home/ubuntu/.openclaw/openclaw.json`), or from @BotFather
 - `TELEGRAM_CHAT_ID` — Send a message to your bot, then visit `https://api.telegram.org/bot<TOKEN>/getUpdates` and look for `chat.id`
-- `HUNTER_API_KEY` — From Hunter.io → API → Copy your API key. Free plan: 25 searches/month, all endpoints accessible
+- `APOLLO_API_KEY` — From app.apollo.io → Settings → API Keys. Free plan: 10,000 credits/month. Primary enrichment source
+- `HUNTER_API_KEY` — From Hunter.io → API → Copy your API key. Free plan: 25 searches/month. Fallback enrichment
 - `INSTANTLY_API_KEY` — From app.instantly.ai → Settings → Integrations → API. Base64-encoded key used for campaign management and lead push
 
 **Important:** Both `.env` files (local `ops/convertra-leads/.env` and VPS `/home/ubuntu/convertra-leads/.env`) must stay in sync. The local copy is gitignored and persists across branches.
@@ -409,7 +410,7 @@ python3 cli.py pipeline backup
 ### Discovery (find new prospects)
 
 ```bash
-# Search by niche
+# Search by niche (DuckDuckGo)
 python3 cli.py discover search --niche supplements --limit 30
 
 # Search by custom keywords
@@ -418,11 +419,71 @@ python3 cli.py discover search --keywords "DTC brand,performance marketing"
 # Search across all niches
 python3 cli.py discover batch --niches "supplements,skincare,fitness"
 
-# Find companies hiring media buyers (NEW)
+# Find companies hiring media buyers
 python3 cli.py discover jobs --keywords "media buyer,paid social manager"
 
-# Search LinkedIn profiles
+# Search LinkedIn profiles (legacy)
 python3 cli.py discover linkedin --query "CMO DTC brand"
+```
+
+### LinkedIn Discovery (NEW — highest quality B2B leads)
+
+```bash
+# List available personas
+python3 cli.py discover linkedin-personas
+
+# Find agency owners/founders on LinkedIn
+python3 cli.py discover linkedin-people --persona agency_owners --limit 30
+
+# Find enterprise marketing leaders (CMOs, VPs)
+python3 cli.py discover linkedin-people --persona enterprise_marketing --limit 30
+
+# Find senior media buyers
+python3 cli.py discover linkedin-people --persona media_buyers --limit 30
+
+# Find SaaS founders running ads
+python3 cli.py discover linkedin-people --persona saas_founders --limit 30
+
+# Find agency companies on LinkedIn
+python3 cli.py discover linkedin-companies --persona agency_owners --limit 30
+
+# Search + add to pipeline in one step
+python3 cli.py discover linkedin-people --persona agency_owners --add --campaign "linkedin-mar-2026"
+```
+
+### Shopify Store Discovery (NEW — DTC brands)
+
+```bash
+# Find Shopify stores by niche (verifies via /products.json)
+python3 cli.py discover shopify --niche supplements --limit 30
+
+# Custom keyword search
+python3 cli.py discover shopify --keywords "organic skincare,natural beauty" --limit 20
+
+# Skip verification (faster, less accurate)
+python3 cli.py discover shopify --niche fitness --no-verify --limit 50
+
+# Search + add to pipeline
+python3 cli.py discover shopify --niche supplements --add --campaign "shopify-mar-2026"
+```
+
+### Agency Discovery (NEW — Google Business / directories)
+
+```bash
+# Find agencies by location
+python3 cli.py discover agencies --location "new york" --limit 30
+
+# Search all top cities in a country
+python3 cli.py discover agencies --country us --limit 50
+
+# Specific agency type
+python3 cli.py discover agencies --location "london" --type ecommerce_agency
+
+# Search agency directories (Clutch, DesignRush, etc.)
+python3 cli.py discover directories --limit 30
+
+# Search + add to pipeline
+python3 cli.py discover agencies --country us --add --campaign "agencies-mar-2026"
 ```
 
 ### Ad Library scraping
@@ -451,11 +512,17 @@ python3 cli.py score prospect --id p_042
 python3 cli.py score batch --stage researched
 ```
 
-### Hunter.io enrichment
+### Enrichment (Apollo primary, Hunter fallback)
 
 ```bash
-# Enrich a single person (uses 1 search credit)
+# Check which enrichment provider is active
+python3 cli.py enrich status
+
+# Enrich a single person (uses 1 credit)
 python3 cli.py enrich person --name "Jane Smith" --domain example.com
+
+# Enrich by LinkedIn URL (Apollo only — great for LinkedIn-sourced leads)
+python3 cli.py enrich person --name "Jane Smith" --domain example.com --linkedin "https://linkedin.com/in/janesmith"
 
 # Enrich a pipeline prospect by ID
 python3 cli.py enrich prospect --id p_042
@@ -464,7 +531,11 @@ python3 cli.py enrich prospect --id p_042
 python3 cli.py enrich batch --stage researched --score-min 5
 ```
 
-Hunter.io finds verified emails via the Email Finder API, then enriches with job titles, LinkedIn URLs, seniority, and location via the People Enrichment API. All of this feeds into more personalized cold email drafts. If `HUNTER_API_KEY` is not set, enrichment is silently skipped and email finding falls back to pattern guessing.
+**Apollo.io** (primary) finds verified emails + enriches with title, seniority, department, phone, company size, and industry — all in a single API call. 10,000 credits/month on free tier.
+
+**Hunter.io** (fallback) activates when Apollo misses a match, or when only `HUNTER_API_KEY` is set. 25 credits/month free.
+
+Provider priority: Apollo (if `APOLLO_API_KEY` set) → Hunter (if `HUNTER_API_KEY` set) → pattern guessing.
 
 ### Email finding
 
@@ -498,15 +569,21 @@ Every cold email follows a strict 4-part structure. Two variants: SaaS/DTC found
 **SaaS/DTC Founder Formula:**
 ```
 1. GREETING:     Hi {first_name},
-2. OPENING:      Just [specific observation — ad count, hiring, growth signal].
-   BRIDGE:       At that volume, the biggest challenge is usually keeping enough
-                 fresh variations flowing into testing.
-3. VALUE OFFER:  I mocked up 2 fresh ad variations based on what's already winning
-                 in your account. Want me to send them over?
+2. OPENING:      Just [specific observation — ad activity, hiring, ecommerce growth,
+                 or what they're building]. Uses strongest available signal.
+   BRIDGE:       Dynamic based on data:
+                 - With ad count: "At that volume, the biggest challenge is usually..."
+                 - Without:       "The biggest challenge for brands scaling Meta ads is usually..."
+3. VIDEO CTA:   I recorded a quick video for you showing how we're helping businesses
+                 just like {company} transform their full Meta ad creative generation
+                 and testing process from days into just minutes, (literally, under 3
+                 minutes)... No designers. No briefs. No agencies. No waiting...
+                 Want me to send it over?
 4. SIGN-OFF:     {sender_name}
 ```
 - No product name in the email. Convertra is introduced on the reply.
-- CTA offers a tangible free deliverable, not a video pitch.
+- CTA offers a personalized video showing time-saving benefit with {company} name.
+- "No designers. No briefs. No agencies. No waiting." eliminates objections in-line.
 
 **Agency Owner Formula:**
 ```
@@ -529,7 +606,7 @@ Every cold email follows a strict 4-part structure. Two variants: SaaS/DTC found
 - Under 80 words, plain text only, no links, no "Reply STOP to opt out"
 
 **Follow-up sequence — two-touch rule (based on 2026 cold email research):**
-- Follow-up 1 (day 3): Short bump — "Just floating this back up. The ad variations are ready whenever you want them."
+- Follow-up 1 (day 3): Social proof + personalized CTA — "Our users are launching high-converting Meta ad creatives ready to test in under 3 minutes. No designers. No briefs. No agencies. No waiting. I've still got that video ready for you if you want to see how it would work for {company}?"
 - That's it. No follow-up 2, no breakup email.
 - Non-responders after 2 emails are recycled into a new campaign with a different Tier 1 subject line and a different opening angle.
 
@@ -708,14 +785,18 @@ python3 cli.py followup resume --id p_042
 │   ├── research.py          ← Website scraping
 │   ├── scorer.py            ← 17-point lead scoring
 │   ├── email_finder.py      ← Email discovery + DNS verify
-│   ├── enrichment.py        ← Hunter.io Email Finder + People Enrichment (NEW)
+│   ├── enrichment.py        ← Provider router: Apollo (primary) → Hunter (fallback)
+│   ├── apollo_enrichment.py ← Apollo.io People Match API (10K credits/mo free)
+│   ├── linkedin_discovery.py← LinkedIn x-ray search via DuckDuckGo
+│   ├── shopify_discovery.py ← Shopify store discovery via /products.json
+│   ├── google_business.py   ← Google Business + agency directory discovery
 │   ├── mailer.py            ← Gmail SMTP + warmup
 │   ├── inbox.py             ← Gmail IMAP reader
 │   ├── followup.py          ← Sequence scheduling
 │   ├── reporter.py          ← Pipeline metrics
-│   ├── drafter.py           ← GPT-5.2 email drafting (NEW)
-│   ├── job_scraper.py       ← Job listing scraper (NEW)
-│   └── notifier.py          ← Telegram notifications (NEW)
+│   ├── drafter.py           ← GPT-5.2 email drafting + video CTA
+│   ├── job_scraper.py       ← Job listing scraper
+│   └── notifier.py          ← Telegram notifications
 ├── data/
 │   ├── pipeline.json        ← All prospect records
 │   ├── config.json          ← Warmup state, email settings

@@ -255,32 +255,34 @@ def run_campaign(niches, include_jobs=False, campaign_name=None):
         )
 
         # Phase 4: Enrich + Find emails (warm+ leads, score >= 5)
-        log.info("Phase 4: Hunter enrichment + email finding...")
+        log.info("Phase 4: Enrichment + email finding...")
 
-        # Step 4a: Hunter.io enrichment (also finds emails)
-        hunter_stats = {"enriched": 0, "emails_found": 0, "credits_used": 0}
-        api_key = os.environ.get("HUNTER_API_KEY", "")
-        if api_key:
+        # Step 4a: Enrichment (Apollo primary, Hunter fallback — also finds emails)
+        enrich_stats = {"enriched": 0, "emails_found": 0, "credits_used": 0}
+        has_enrichment = bool(os.environ.get("APOLLO_API_KEY", "") or os.environ.get("HUNTER_API_KEY", ""))
+        if has_enrichment:
             try:
                 from modules.enrichment import batch_enrich
-                hunter_stats = batch_enrich(stage="researched", score_min=5, max_credits=25)
+                enrich_stats = batch_enrich(stage="researched", score_min=5, max_credits=100)
+                provider = enrich_stats.get("provider", "unknown")
                 log.info(
-                    f"  Hunter: {hunter_stats.get('enriched', 0)} enriched, "
-                    f"{hunter_stats.get('emails_found', 0)} emails found, "
-                    f"{hunter_stats.get('credits_used', 0)} credits used"
+                    f"  {provider.title()}: {enrich_stats.get('enriched', 0)} enriched, "
+                    f"{enrich_stats.get('emails_found', 0)} emails found, "
+                    f"{enrich_stats.get('credits_used', 0)} credits used"
                 )
             except Exception as e:
-                log.error(f"  Hunter enrichment failed: {e}")
+                log.error(f"  Enrichment failed: {e}")
         else:
-            log.info("  Hunter not configured — skipping enrichment.")
+            log.info("  No enrichment API configured — skipping.")
 
-        # Step 4b: Pattern-guess fallback for prospects Hunter missed
+        # Step 4b: Pattern-guess fallback for prospects enrichment missed
         from modules.email_finder import batch_find_emails
         email_result = batch_find_emails(stage="researched", score_min=5)
         results["enrichment"] = {
-            "enriched": hunter_stats.get("enriched", 0),
-            "emails_found": hunter_stats.get("emails_found", 0),
-            "credits_used": hunter_stats.get("credits_used", 0),
+            "enriched": enrich_stats.get("enriched", 0),
+            "emails_found": enrich_stats.get("emails_found", 0),
+            "credits_used": enrich_stats.get("credits_used", 0),
+            "provider": enrich_stats.get("provider", "none"),
         }
         results["email_finding"] = {
             "found": email_result.get("found", 0),
@@ -652,17 +654,97 @@ def _auto_pause_sequences():
     return paused
 
 
-def _run_discovery(niches, include_jobs, campaign_name):
+def _run_discovery(niches, include_jobs, campaign_name, source_type="niche"):
     """Phase 1: Multi-source discovery.
 
+    Supports original sources (DDG, Ad Library, Jobs) and new sources
+    (LinkedIn, Shopify, Agencies).
+
+    Args:
+        niches: list of niche/keyword strings for DDG + Ad Library.
+        include_jobs: whether to search job listings.
+        campaign_name: campaign tag for pipeline.
+        source_type: "niche" (DDG+AdLib), "jobs", "linkedin_people",
+                     "linkedin_companies", "shopify", "agencies".
+
     Returns:
-        dict with keys: ddg_found, adlib_found, jobs_found, total_added
+        dict with keys: ddg_found, adlib_found, jobs_found, linkedin_found,
+                        shopify_found, agencies_found, total_added
     """
-    from modules.discovery import batch_discover
-    from modules.scraper import search_ad_library
     from modules.pipeline import add_prospect
 
-    stats = {"ddg_found": 0, "adlib_found": 0, "jobs_found": 0, "total_added": 0}
+    stats = {
+        "ddg_found": 0, "adlib_found": 0, "jobs_found": 0,
+        "linkedin_found": 0, "shopify_found": 0, "agencies_found": 0,
+        "total_added": 0,
+    }
+
+    # ── LinkedIn people discovery ──
+    if source_type == "linkedin_people":
+        try:
+            from modules.linkedin_discovery import search_linkedin_people, batch_add_linkedin_people
+            # Rotate through personas based on niche hint
+            persona = _niche_to_linkedin_persona(niches[0] if niches else "")
+            result = search_linkedin_people(persona=persona, limit=20)
+            added = batch_add_linkedin_people(
+                result.get("results", []), campaign=campaign_name, persona=persona
+            )
+            stats["linkedin_found"] = added.get("added", 0)
+            stats["total_added"] += stats["linkedin_found"]
+            log.info(f"  LinkedIn people ({persona}): {stats['linkedin_found']} added")
+        except Exception as e:
+            log.error(f"  LinkedIn people discovery failed: {e}")
+        return stats
+
+    # ── LinkedIn company discovery ──
+    if source_type == "linkedin_companies":
+        try:
+            from modules.linkedin_discovery import search_linkedin_companies, batch_add_linkedin_companies
+            persona = _niche_to_linkedin_persona(niches[0] if niches else "")
+            result = search_linkedin_companies(persona=persona, limit=20)
+            added = batch_add_linkedin_companies(
+                result.get("results", []), campaign=campaign_name, persona=persona
+            )
+            stats["linkedin_found"] = added.get("added", 0)
+            stats["total_added"] += stats["linkedin_found"]
+            log.info(f"  LinkedIn companies ({persona}): {stats['linkedin_found']} added")
+        except Exception as e:
+            log.error(f"  LinkedIn company discovery failed: {e}")
+        return stats
+
+    # ── Shopify store discovery ──
+    if source_type == "shopify":
+        try:
+            from modules.shopify_discovery import search_shopify_stores, batch_add_shopify_stores
+            niche = niches[0] if niches else "supplements"
+            result = search_shopify_stores(niche=niche, limit=20, verify=True)
+            added = batch_add_shopify_stores(result.get("results", []), campaign=campaign_name)
+            stats["shopify_found"] = added.get("added", 0)
+            stats["total_added"] += stats["shopify_found"]
+            log.info(f"  Shopify stores ({niche}): {stats['shopify_found']} added")
+        except Exception as e:
+            log.error(f"  Shopify discovery failed: {e}")
+        return stats
+
+    # ── Agency directory discovery ──
+    if source_type == "agencies":
+        try:
+            from modules.google_business import search_agencies, batch_add_agencies
+            # Use niche hint as location or default to US cities
+            location = niches[0] if niches else None
+            result = search_agencies(location=location, limit=20)
+            added = batch_add_agencies(result.get("results", []), campaign=campaign_name)
+            stats["agencies_found"] = added.get("added", 0)
+            stats["total_added"] += stats["agencies_found"]
+            log.info(f"  Agencies: {stats['agencies_found']} added")
+        except Exception as e:
+            log.error(f"  Agency discovery failed: {e}")
+        return stats
+
+    # ── Original sources: DDG + Ad Library + Jobs ──
+
+    from modules.discovery import batch_discover
+    from modules.scraper import search_ad_library
 
     # DuckDuckGo discovery
     try:
@@ -698,7 +780,6 @@ def _run_discovery(niches, include_jobs, campaign_name):
                         "platforms": page.get("platforms", []),
                     },
                 }
-                # Try to avoid duplicates by checking existing pipeline
                 add_prospect(prospect_data)
                 stats["adlib_found"] += 1
                 stats["total_added"] += 1
@@ -717,6 +798,30 @@ def _run_discovery(niches, include_jobs, campaign_name):
             log.error(f"  Job listing discovery failed: {e}")
 
     return stats
+
+
+def _niche_to_linkedin_persona(niche_hint):
+    """Map a niche hint to the best LinkedIn persona.
+
+    Used by the orchestrator to pick a relevant persona when LinkedIn
+    is selected as a discovery source.
+    """
+    niche_lower = (niche_hint or "").lower()
+
+    if any(kw in niche_lower for kw in ["agency", "performance", "media"]):
+        return "agency_owners"
+    if any(kw in niche_lower for kw in ["saas", "software", "b2b"]):
+        return "saas_founders"
+    if any(kw in niche_lower for kw in ["enterprise", "cmo", "vp"]):
+        return "enterprise_marketing"
+    if any(kw in niche_lower for kw in ["buyer", "paid", "growth"]):
+        return "media_buyers"
+
+    # Default rotation based on day of week
+    from datetime import datetime
+    day = datetime.now().weekday()
+    personas = ["agency_owners", "enterprise_marketing", "media_buyers", "saas_founders"]
+    return personas[day % len(personas)]
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -803,9 +908,10 @@ def run_prospect_hunt(target=20, niches=None, include_jobs=True, max_rounds=10,
 
         # Phase 1: Discovery (single source)
         discovery = _run_discovery(
-            niches=[source] if source_type != "jobs" else [],
+            niches=[source] if source_type not in ("jobs", "linkedin_people", "linkedin_companies", "agencies") else [],
             include_jobs=(source_type == "jobs"),
             campaign_name=campaign_name,
+            source_type=source_type,
         )
         discovered = discovery["total_added"]
         log.info(f"  Discovered: {discovered} new prospects")
@@ -930,26 +1036,28 @@ def _count_hot_ready(threshold):
 
 
 def _run_enrichment_pass(email_score_min):
-    """Run Hunter enrichment + pattern-guess email finding + AI drafting.
+    """Run enrichment + pattern-guess email finding + AI drafting.
 
+    Uses Apollo (primary) or Hunter (fallback) for enrichment.
     Processes all researched prospects with score >= email_score_min.
     Skips prospects already marked as enrichment dead ends.
     Advances successful prospects to ready_to_send.
     """
-    api_key = os.environ.get("HUNTER_API_KEY", "")
-    if api_key:
+    has_enrichment = bool(os.environ.get("APOLLO_API_KEY", "") or os.environ.get("HUNTER_API_KEY", ""))
+    if has_enrichment:
         try:
             from modules.enrichment import batch_enrich
-            hunter_stats = batch_enrich(
-                stage="researched", score_min=email_score_min, max_credits=10
+            enrich_stats = batch_enrich(
+                stage="researched", score_min=email_score_min, max_credits=50
             )
+            provider = enrich_stats.get("provider", "unknown")
             log.info(
-                f"    Hunter: {hunter_stats.get('enriched', 0)} enriched, "
-                f"{hunter_stats.get('emails_found', 0)} emails, "
-                f"{hunter_stats.get('credits_used', 0)} credits"
+                f"    {provider.title()}: {enrich_stats.get('enriched', 0)} enriched, "
+                f"{enrich_stats.get('emails_found', 0)} emails, "
+                f"{enrich_stats.get('credits_used', 0)} credits"
             )
         except Exception as e:
-            log.error(f"    Hunter enrichment failed: {e}")
+            log.error(f"    Enrichment failed: {e}")
 
     from modules.email_finder import batch_find_emails
     from modules.drafter import batch_draft
@@ -969,16 +1077,47 @@ def _run_enrichment_pass(email_score_min):
 
 
 def _pick_next_source(niche_queue, exhausted, round_num, include_jobs, jobs_used):
-    """Pick the next discovery source, rotating through niches.
+    """Pick the next discovery source, rotating through all available sources.
+
+    Source rotation schedule:
+    - Round 1: niche (DDG + Ad Library)
+    - Round 2: linkedin_people (agency owners, enterprise, etc.)
+    - Round 3: jobs OR shopify
+    - Round 4: niche
+    - Round 5: linkedin_companies
+    - Round 6: agencies
+    - Round 7+: repeat cycle
 
     Returns:
         tuple: (source_name, source_type) or (None, None) if all exhausted.
     """
-    # Every 3rd round, use job listings if available
-    if include_jobs and not jobs_used and round_num % 3 == 0:
-        return ("job_listings", "jobs")
+    cycle_position = (round_num - 1) % 6
 
-    # Try niches from queue
+    # LinkedIn people (rounds 2, 8, 14, ...)
+    if cycle_position == 1:
+        return ("linkedin_people", "linkedin_people")
+
+    # LinkedIn companies (rounds 5, 11, 17, ...)
+    if cycle_position == 4:
+        return ("linkedin_companies", "linkedin_companies")
+
+    # Shopify or Jobs (rounds 3, 9, 15, ...)
+    if cycle_position == 2:
+        if include_jobs and not jobs_used:
+            return ("job_listings", "jobs")
+        # Pick a Shopify niche from the queue
+        shopify_niches = ["supplements", "skincare", "fitness", "fashion", "beauty",
+                          "pets", "home", "food_beverage"]
+        for sn in shopify_niches:
+            if f"shopify_{sn}" not in exhausted:
+                return (sn, "shopify")
+        return ("supplements", "shopify")
+
+    # Agencies (rounds 6, 12, 18, ...)
+    if cycle_position == 5:
+        return ("agencies", "agencies")
+
+    # Default: niche-based DDG + Ad Library (rounds 1, 4, 7, 10, ...)
     tried = 0
     while niche_queue and tried < len(niche_queue):
         niche = niche_queue.popleft()
@@ -987,11 +1126,12 @@ def _pick_next_source(niche_queue, exhausted, round_num, include_jobs, jobs_used
             return (niche, "niche")
         tried += 1
 
-    # All niches exhausted, try jobs as fallback
+    # All standard niches exhausted — try jobs as fallback
     if include_jobs and not jobs_used:
         return ("job_listings", "jobs")
 
-    return (None, None)
+    # Fall back to LinkedIn (always has fresh results)
+    return ("linkedin_people", "linkedin_people")
 
 
 def _expand_keywords(all_niches, exhausted):
@@ -1000,10 +1140,12 @@ def _expand_keywords(all_niches, exhausted):
     Strategy (in priority order):
     1. Sub-niche product categories (e.g. "collagen supplement" instead of "supplements")
        — these yield completely different DDG results
-    2. Location/business-type modifiers as a final fallback
+    2. LinkedIn persona variants (always fresh — LinkedIn profiles are vast)
+    3. Shopify niche variants
+    4. Location/business-type modifiers as a final fallback
 
     Returns:
-        list of str: new keywords to try (up to 20).
+        list of str: new keywords to try (up to 30).
     """
     from modules.discovery import SUB_NICHES
 
@@ -1015,7 +1157,7 @@ def _expand_keywords(all_niches, exhausted):
         for sub in sub_list:
             if sub not in exhausted:
                 expanded.append(sub)
-                if len(expanded) >= 20:
+                if len(expanded) >= 30:
                     return expanded
 
     # Priority 2: Modifier variants (fallback)
@@ -1028,7 +1170,7 @@ def _expand_keywords(all_niches, exhausted):
             key = f"{niche} {mod}"
             if key not in exhausted:
                 expanded.append(key)
-                if len(expanded) >= 20:
+                if len(expanded) >= 30:
                     return expanded
 
     return expanded
@@ -1074,16 +1216,20 @@ def run_fill(target=25, campaign_id=None, niches=None, max_rounds=25,
     cid = campaign_id or DEFAULT_INSTANTLY_CAMPAIGN
     campaign_tag = f"fill-{datetime.now().strftime('%Y-%m-%d')}"
 
-    # Check enrichment capability
+    # Check enrichment capability (Apollo primary, Hunter fallback)
+    apollo_configured = bool(os.environ.get("APOLLO_API_KEY", ""))
     hunter_configured = bool(os.environ.get("HUNTER_API_KEY", ""))
-    log.info(f"  Hunter.io API: {'configured' if hunter_configured else 'NOT configured (enrichment will be skipped)'}")
+    enrichment_provider = "apollo" if apollo_configured else ("hunter" if hunter_configured else "none")
+    log.info(f"  Enrichment: {enrichment_provider}" + (
+        "" if enrichment_provider != "none" else " (NOT configured — enrichment will be skipped)"
+    ))
 
     results = {
         "timestamp": datetime.now().isoformat(),
         "mode": "fill",
         "target": target,
         "campaign_id": cid,
-        "hunter_configured": hunter_configured,
+        "enrichment_provider": enrichment_provider,
     }
 
     # Step 1: Check existing ready_to_send pipeline
@@ -1212,7 +1358,7 @@ def main():
     prospect.add_argument("--score-threshold", type=int, default=8, dest="score_threshold", help="Hot lead score (default: 8)")
     prospect.add_argument("--campaign", type=str, dest="campaign_name")
 
-    fill = sub.add_parser("fill", help="Daily fill: hunt leads + push to Instantly")
+    fill = sub.add_parser("fill", help="Daily fill: hunt leads + push to Instantly (multi-source)")
     fill.add_argument("--target", type=int, default=25, help="Leads to prepare (default: 25)")
     fill.add_argument("--campaign-id", type=str, dest="campaign_id", help="Instantly campaign UUID")
     fill.add_argument("--niches", type=str, help="Comma-separated niches (default: all)")
@@ -1220,6 +1366,8 @@ def main():
     fill.add_argument("--score-threshold", type=int, default=5, dest="score_threshold", help="Min fit score (default: 5 = warm+)")
     fill.add_argument("--include-jobs", action="store_true", default=True, dest="fill_include_jobs")
     fill.add_argument("--no-jobs", action="store_false", dest="fill_include_jobs")
+    fill.add_argument("--verified-only", action="store_true", dest="verified_only",
+                      help="Only push leads with verified emails (Apollo or Hunter)")
 
     args = parser.parse_args()
 

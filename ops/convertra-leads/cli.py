@@ -336,6 +336,20 @@ def cmd_orchestrate_prospect(args):
     output(result)
 
 
+def cmd_orchestrate_fill(args):
+    from orchestrator import run_fill
+    niches = [n.strip() for n in args.niches.split(",")] if args.niches else None
+    result = run_fill(
+        target=args.target,
+        campaign_id=args.campaign,
+        niches=niches,
+        max_rounds=args.max_rounds,
+        score_threshold=args.score_threshold,
+        include_jobs=args.include_jobs,
+    )
+    output(result)
+
+
 # ─── Enrich commands ─────────────────────────────────────────────────
 
 def cmd_enrich_person(args):
@@ -344,7 +358,7 @@ def cmd_enrich_person(args):
     first = parts[0] if parts else ""
     last = parts[-1] if len(parts) > 1 else ""
     result = enrich_person(
-        first, last, args.domain,
+        first_name=first, last_name=last, domain=args.domain,
         organization_name=args.company or "",
         linkedin_url=args.linkedin or "",
     )
@@ -352,7 +366,7 @@ def cmd_enrich_person(args):
 
 
 def cmd_enrich_prospect(args):
-    from modules.enrichment import enrich_person, map_hunter_to_prospect
+    from modules.enrichment import enrich_person, map_to_prospect
     from modules.pipeline import get_prospect, update_prospect
     from modules.email_finder import _domain_from_url
 
@@ -369,13 +383,13 @@ def cmd_enrich_prospect(args):
         error(f"Prospect {args.id} has no company_url")
 
     result = enrich_person(
-        parts[0], parts[-1], domain,
+        first_name=parts[0], last_name=parts[-1], domain=domain,
         organization_name=prospect.get("company", ""),
         linkedin_url=prospect.get("linkedin_url", ""),
     )
 
     if result["status"] == "matched" and result.get("person"):
-        updates = map_hunter_to_prospect(result["person"], prospect)
+        updates = map_to_prospect(result["person"], prospect)
         if updates:
             update_prospect(args.id, updates)
             result["updates_applied"] = list(updates.keys())
@@ -387,6 +401,25 @@ def cmd_enrich_batch(args):
     from modules.enrichment import batch_enrich
     result = batch_enrich(stage=args.stage, score_min=args.score_min)
     output(result)
+
+
+def cmd_enrich_status(args):
+    """Show which enrichment provider is active and credit info."""
+    import os
+    apollo = bool(os.environ.get("APOLLO_API_KEY", ""))
+    hunter = bool(os.environ.get("HUNTER_API_KEY", ""))
+    output({
+        "active_provider": "apollo" if apollo else ("hunter" if hunter else "none"),
+        "apollo_configured": apollo,
+        "hunter_configured": hunter,
+        "note": (
+            "Apollo is primary (10K credits/month). Hunter is fallback."
+            if apollo and hunter else
+            "Apollo active (10K credits/month)." if apollo else
+            "Hunter active (25 credits/month). Set APOLLO_API_KEY to upgrade." if hunter else
+            "No enrichment API configured. Set APOLLO_API_KEY in .env"
+        ),
+    })
 
 
 # ─── Draft commands ──────────────────────────────────────────────────
@@ -417,6 +450,81 @@ def cmd_discover_jobs(args):
     results = search_job_listings(keywords=keywords, limit=args.limit)
     added = batch_add_job_prospects(results.get("results", []))
     output({**results, "pipeline_additions": added})
+
+
+# ─── LinkedIn discovery commands ────────────────────────────────────
+
+def cmd_discover_linkedin_people(args):
+    from modules.linkedin_discovery import search_linkedin_people, batch_add_linkedin_people
+    results = search_linkedin_people(persona=args.persona, limit=args.limit)
+    if args.add:
+        added = batch_add_linkedin_people(
+            results.get("results", []),
+            campaign=args.campaign,
+            persona=args.persona,
+        )
+        results["pipeline_additions"] = added
+    output(results)
+
+
+def cmd_discover_linkedin_companies(args):
+    from modules.linkedin_discovery import search_linkedin_companies, batch_add_linkedin_companies
+    results = search_linkedin_companies(persona=args.persona, limit=args.limit)
+    if args.add:
+        added = batch_add_linkedin_companies(
+            results.get("results", []),
+            campaign=args.campaign,
+            persona=args.persona,
+        )
+        results["pipeline_additions"] = added
+    output(results)
+
+
+def cmd_discover_linkedin_personas(args):
+    from modules.linkedin_discovery import PERSONAS
+    personas = {k: {"label": v["label"], "description": v["description"]} for k, v in PERSONAS.items()}
+    output({"personas": personas})
+
+
+# ─── Shopify discovery commands ─────────────────────────────────────
+
+def cmd_discover_shopify(args):
+    from modules.shopify_discovery import search_shopify_stores, batch_add_shopify_stores
+    results = search_shopify_stores(
+        niche=args.niche,
+        keywords=[k.strip() for k in args.keywords.split(",")] if args.keywords else None,
+        limit=args.limit,
+        verify=not args.no_verify,
+    )
+    if args.add:
+        added = batch_add_shopify_stores(results.get("results", []), campaign=args.campaign)
+        results["pipeline_additions"] = added
+    output(results)
+
+
+# ─── Agency / Google Business discovery commands ────────────────────
+
+def cmd_discover_agencies(args):
+    from modules.google_business import search_agencies, batch_add_agencies
+    results = search_agencies(
+        location=args.location,
+        country=args.country,
+        agency_type=args.type,
+        limit=args.limit,
+    )
+    if args.add:
+        added = batch_add_agencies(results.get("results", []), campaign=args.campaign)
+        results["pipeline_additions"] = added
+    output(results)
+
+
+def cmd_discover_directories(args):
+    from modules.google_business import search_directories, batch_add_agencies
+    results = search_directories(limit=args.limit)
+    if args.add:
+        added = batch_add_agencies(results.get("results", []), campaign=args.campaign)
+        results["pipeline_additions"] = added
+    output(results)
 
 
 # ─── Notify commands ─────────────────────────────────────────────────
@@ -623,6 +731,57 @@ def build_parser():
     d_jobs.add_argument("--limit", type=int, default=30)
     d_jobs.set_defaults(func=cmd_discover_jobs)
 
+    # LinkedIn people discovery
+    d_li_people = discover_sub.add_parser("linkedin-people", help="Find decision makers on LinkedIn")
+    d_li_people.add_argument("--persona", type=str, default="agency_owners",
+                             help="Target persona: agency_owners, enterprise_marketing, media_buyers, saas_founders")
+    d_li_people.add_argument("--limit", type=int, default=30)
+    d_li_people.add_argument("--add", action="store_true", help="Add results to pipeline")
+    d_li_people.add_argument("--campaign", type=str, default="", help="Campaign tag")
+    d_li_people.set_defaults(func=cmd_discover_linkedin_people)
+
+    # LinkedIn company discovery
+    d_li_companies = discover_sub.add_parser("linkedin-companies", help="Find companies on LinkedIn")
+    d_li_companies.add_argument("--persona", type=str, default="agency_owners",
+                                help="Target persona: agency_owners, enterprise_marketing, saas_founders")
+    d_li_companies.add_argument("--limit", type=int, default=30)
+    d_li_companies.add_argument("--add", action="store_true", help="Add results to pipeline")
+    d_li_companies.add_argument("--campaign", type=str, default="", help="Campaign tag")
+    d_li_companies.set_defaults(func=cmd_discover_linkedin_companies)
+
+    # LinkedIn personas list
+    d_li_personas = discover_sub.add_parser("linkedin-personas", help="List available LinkedIn personas")
+    d_li_personas.set_defaults(func=cmd_discover_linkedin_personas)
+
+    # Shopify store discovery
+    d_shopify = discover_sub.add_parser("shopify", help="Find Shopify stores by niche")
+    d_shopify.add_argument("--niche", type=str, help="Niche: supplements, skincare, fitness, fashion, etc.")
+    d_shopify.add_argument("--keywords", type=str, help="Custom keywords (comma-separated)")
+    d_shopify.add_argument("--limit", type=int, default=30)
+    d_shopify.add_argument("--no-verify", action="store_true", dest="no_verify",
+                           help="Skip Shopify store verification")
+    d_shopify.add_argument("--add", action="store_true", help="Add results to pipeline")
+    d_shopify.add_argument("--campaign", type=str, default="", help="Campaign tag")
+    d_shopify.set_defaults(func=cmd_discover_shopify)
+
+    # Agency / Google Business discovery
+    d_agencies = discover_sub.add_parser("agencies", help="Find marketing agencies by location")
+    d_agencies.add_argument("--location", type=str, help="City name (e.g., 'new york')")
+    d_agencies.add_argument("--country", type=str, default="us", help="Country: us, uk, au, ca")
+    d_agencies.add_argument("--type", type=str, default="performance_marketing",
+                            help="Agency type: performance_marketing, digital_marketing, creative_agency, ecommerce_agency")
+    d_agencies.add_argument("--limit", type=int, default=30)
+    d_agencies.add_argument("--add", action="store_true", help="Add results to pipeline")
+    d_agencies.add_argument("--campaign", type=str, default="", help="Campaign tag")
+    d_agencies.set_defaults(func=cmd_discover_agencies)
+
+    # Agency directory discovery
+    d_directories = discover_sub.add_parser("directories", help="Search agency directories (Clutch, etc.)")
+    d_directories.add_argument("--limit", type=int, default=30)
+    d_directories.add_argument("--add", action="store_true", help="Add results to pipeline")
+    d_directories.add_argument("--campaign", type=str, default="", help="Campaign tag")
+    d_directories.set_defaults(func=cmd_discover_directories)
+
     # ── scrape ──
     scrape_parser = subparsers.add_parser("scrape", help="Ad Library scraping")
     scrape_sub = scrape_parser.add_subparsers(dest="action")
@@ -694,6 +853,9 @@ def build_parser():
     en_batch.add_argument("--score-min", type=int, dest="score_min")
     en_batch.set_defaults(func=cmd_enrich_batch)
 
+    en_status = enrich_sub.add_parser("status", help="Show active enrichment provider")
+    en_status.set_defaults(func=cmd_enrich_status)
+
     # ── report ──
     report_parser = subparsers.add_parser("report", help="Campaign reports")
     report_sub = report_parser.add_subparsers(dest="action")
@@ -732,6 +894,17 @@ def build_parser():
     o_prospect.add_argument("--max-rounds", type=int, default=10, dest="max_rounds", help="Max rounds (default: 10)")
     o_prospect.add_argument("--campaign", type=str, dest="campaign_name")
     o_prospect.set_defaults(func=cmd_orchestrate_prospect)
+
+    o_fill = orch_sub.add_parser("fill", help="Discover, enrich, draft, and push leads to Instantly")
+    o_fill.add_argument("--target", type=int, default=25, help="Target leads to prepare (default: 25)")
+    o_fill.add_argument("--campaign", type=str, help="Instantly campaign UUID")
+    o_fill.add_argument("--niches", type=str, help="Comma-separated niches (default: all)")
+    o_fill.add_argument("--max-rounds", type=int, default=25, dest="max_rounds", help="Max discovery rounds (default: 25)")
+    o_fill.add_argument("--score-threshold", type=int, default=5, dest="score_threshold", help="Min fit score (default: 5)")
+    o_fill.add_argument("--include-jobs", action="store_true", default=True, dest="include_jobs")
+    o_fill.add_argument("--no-jobs", action="store_false", dest="include_jobs")
+    o_fill.add_argument("--verified-only", action="store_true", default=False, dest="verified_only", help="Only push Apollo/Hunter verified emails")
+    o_fill.set_defaults(func=cmd_orchestrate_fill)
 
     # ── draft ──
     draft_parser = subparsers.add_parser("draft", help="AI email drafting")

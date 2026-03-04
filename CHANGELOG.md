@@ -10,7 +10,7 @@ Adds dashboard data export (CSV/PDF) and automated scheduled email reports. Agen
 - **Report Settings page** (`/reports`) — Full schedule management UI with create/edit form, frequency radio pills, day-of-week/month pickers, delivery time (user's timezone), metric selector (grouped by category, funnel-only metrics excluded), recipient email chips (max 10), comparison toggle, active/paused toggle, send test email, and report history table. Admin-only (hidden for member/viewer roles).
 - **Backend report handlers** (`api/_lib/report-handlers.ts`) — 5 route handlers dispatched from `api/meta.ts`: schedule CRUD, server-side CSV export, manual/test email send, hourly cron, and history retrieval. All admin-gated with JWT auth.
 - **Shared metrics module** (`api/_lib/metrics.ts`) — Server-side metric computation mirroring Dashboard.tsx, with paginated Meta API fetching (`paging.next`), date range helpers, CSV generation, and format utilities.
-- **Database migration** (`supabase/migrations/009_report_schedules.sql`) — `report_schedules` and `report_history` tables with RLS policies, check constraints, unique constraint on (user_id, ad_account_id, frequency), and indexes for cron queries.
+- **Database migration** (`supabase/migrations/010_report_schedules.sql`) — `report_schedules` and `report_history` tables with RLS policies, check constraints, unique constraint on (user_id, ad_account_id, frequency), and indexes for cron queries.
 - **Hourly cron** — `vercel.json` entry for `/api/meta/report-cron` running every hour. Uses atomic `send_lock_until` lease for idempotency.
 - **Branded HTML email template** — Inline-CSS email with Convertra header, metrics table with optional change column (green/red deltas), per-account breakdown for cross-account reports, and `List-Unsubscribe` header.
 - **DST-safe timezone handling** — Stores `delivery_hour` in user's local timezone + IANA `timezone` string; computes `next_run_at` (UTC) using Intl API after each send.
@@ -37,7 +37,7 @@ Adds dashboard data export (CSV/PDF) and automated scheduled email reports. Agen
 - `src/services/reportApi.ts`
 - `api/_lib/metrics.ts`
 - `api/_lib/report-handlers.ts`
-- `supabase/migrations/009_report_schedules.sql`
+- `supabase/migrations/010_report_schedules.sql`
 
 ### Files Modified
 - `src/pages/Dashboard.tsx` — Added ExportMenu to header
@@ -46,6 +46,32 @@ Adds dashboard data export (CSV/PDF) and automated scheduled email reports. Agen
 - `api/meta.ts` — Added 5 report route dispatches
 - `vercel.json` — Added hourly report-cron entry
 - `package.json` — Added html2canvas, jspdf, resend dependencies
+
+## 2026-03-04 — Fix unlimited ad account seats for Enterprise/VP tiers
+
+### Overview
+The `-1` sentinel value for unlimited ad account seats was broken across the entire multi-account feature. Enterprise and Velocity Partner tiers could not activate additional accounts, saw broken seat counts in the UI, and the multi-account card was hidden on the Integrations page.
+
+### Fixed
+- **Integrations multi-account gating** — `maxAdAccounts > 1` excluded `-1` (unlimited); now checks `> 1 || === -1`
+- **Seat remaining calculation** — `seats - seatsUsed` produced negative values for `-1`; now returns `Infinity` for unlimited
+- **Seat badge display** — Showed "2 of -1 seats"; now shows "2 seats · Unlimited"
+- **Backend activation blocker** — `count >= seatLimit` was always true when `seatLimit = -1`; now skips check entirely for unlimited
+- **Backend count query skip** — Unlimited tiers no longer run the unnecessary `SELECT COUNT(*)` query on every activation
+- **Webhook seat values** — Enterprise was `10`, VP was `999`; both now `-1` to match frontend convention
+- **Billing seat math** — `extraSeatsPaid` and `seatProgressPercent` calculations now guard against `seats === -1`
+- **Migration 008 backfill** — Changed enterprise from `10` to `-1` and velocity_partner from `999` to `-1`
+
+### Added
+- **Migration 009** — One-time fix to set `ad_account_seats = -1` for existing enterprise/velocity_partner orgs stuck at legacy values
+
+### Files Modified
+- `src/pages/Integrations.tsx` — Multi-account gating, seat remaining calc, seat badge display
+- `src/pages/Billing.tsx` — Extra seat and progress percent calculations
+- `api/meta.ts` — Activation seat limit check with query skip for unlimited
+- `api/billing/webhook.ts` — Consistent `-1` for unlimited tiers
+- `supabase/migrations/008_agency_multi_account.sql` — Backfill values corrected
+- `supabase/migrations/009_fix_unlimited_seats.sql` — New migration for existing orgs
 
 ## 2026-03-04 — Agency billing tier UI
 

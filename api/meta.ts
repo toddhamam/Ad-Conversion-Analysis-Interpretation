@@ -1667,20 +1667,24 @@ async function handleAdAccountsWrite(
       .eq('id', auth.organizationId)
       .single();
 
-    const { count } = await supabase
-      .from('organization_ad_accounts')
-      .select('*', { count: 'exact', head: true })
-      .eq('organization_id', auth.organizationId)
-      .eq('is_active', true);
-
     const seatLimit = org?.ad_account_seats || 1;
-    if (count !== null && count >= seatLimit) {
-      return res.status(403).json({
-        error: 'Ad account seat limit reached',
-        message: `You have ${count} of ${seatLimit} seats in use. Upgrade your plan to add more accounts.`,
-        seatsUsed: count,
-        seatsTotal: seatLimit,
-      });
+
+    // -1 means unlimited seats — skip the count query and limit check entirely
+    if (seatLimit !== -1) {
+      const { count } = await supabase
+        .from('organization_ad_accounts')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', auth.organizationId)
+        .eq('is_active', true);
+
+      if (count !== null && count >= seatLimit) {
+        return res.status(403).json({
+          error: 'Ad account seat limit reached',
+          message: `You have ${count} of ${seatLimit} seats in use. Upgrade your plan to add more accounts.`,
+          seatsUsed: count,
+          seatsTotal: seatLimit,
+        });
+      }
     }
 
     // Validate the ad account exists in the org's available accounts (from OAuth)
