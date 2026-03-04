@@ -660,7 +660,7 @@ const Dashboard = () => {
       }
     };
     loadData();
-  }, [dateRange]);
+  }, [dateRange, currentAccount?.ad_account_id]);
 
   // Handle date range change
   const handleDateRangeChange = (newDateRange: { preset?: DatePreset; startDate: Date; endDate: Date }) => {

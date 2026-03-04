@@ -367,6 +367,23 @@ async function handleStatus(req: VercelRequest, res: VercelResponse) {
   const isExpired = cred.token_expires_at && new Date(cred.token_expires_at) < new Date();
   const isActive = cred.status === 'active' && !isExpired;
 
+  // Ensure the primary credential's ad account exists in organization_ad_accounts.
+  // This handles orgs that were set up before the multi-account migration — their first
+  // account lives only in organization_credentials and won't appear in the switcher otherwise.
+  if (cred.ad_account_id) {
+    await supabase
+      .from('organization_ad_accounts')
+      .upsert({
+        organization_id: auth.organizationId,
+        ad_account_id: cred.ad_account_id,
+        ad_account_name: cred.metadata?.selected_account_name || null,
+        page_id: cred.page_id,
+        pixel_id: cred.pixel_id,
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'organization_id,ad_account_id', ignoreDuplicates: true });
+  }
+
   // Load activated ad accounts from organization_ad_accounts table
   const { data: adAccounts } = await supabase
     .from('organization_ad_accounts')

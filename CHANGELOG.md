@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-03-04 — Fix multi-ad-account switcher, data scoping, and UI cleanup
+
+### Overview
+Fixed three critical issues with the multi-ad-account feature: the account switcher dropdown was missing the original ad account, Dashboard/MetaAds pages didn't re-fetch data when switching accounts, and the switcher displayed raw account IDs.
+
+### Fixed
+- **Missing first account in switcher** — The primary ad account (from `organization_credentials`) wasn't always present in `organization_ad_accounts`, so it didn't appear in the dropdown. Backend status endpoint now auto-ensures it exists via upsert before querying.
+- **Dashboard data bleeding between accounts** — `useEffect` dependency array was missing `currentAccount`, so switching accounts didn't trigger a data re-fetch. Fixed in both `Dashboard.tsx` and `MetaAds.tsx`.
+- **Account ID visible in switcher** — Removed `act_XXXX` from the trigger button and dropdown items. Trigger now shows just account name; dropdown shows name + currency.
+
+### Files Modified
+- `api/meta.ts` — Auto-ensure primary credential's ad account exists in `organization_ad_accounts` on status fetch
+- `src/pages/Dashboard.tsx` — Added `currentAccount?.ad_account_id` to data-loading useEffect dependency
+- `src/pages/MetaAds.tsx` — Same useEffect dependency fix
+- `src/components/AccountSwitcher.tsx` — Removed account ID display, cleaned up `truncateId` usage
+- `src/components/AccountSwitcher.css` — Removed unused `.account-trigger-id` styles
+
 ## 2026-03-04 — Fix unlimited ad account seats for Enterprise/VP tiers
 
 ### Overview
