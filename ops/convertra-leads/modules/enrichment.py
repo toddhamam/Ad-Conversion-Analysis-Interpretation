@@ -398,7 +398,8 @@ def _hunter_batch_enrich(stage="researched", score_min=None, max_credits=None):
             stats["skipped"] += 1
             continue
 
-        if prospect.get("enrichment_status") in ("no_match", "no_useful_data"):
+        attempts = prospect.get("enrichment_attempts", 0)
+        if attempts >= 2:
             stats["skipped"] += 1
             continue
 
@@ -431,7 +432,7 @@ def _hunter_batch_enrich(stage="researched", score_min=None, max_credits=None):
                     stats["emails_found"] += 1
                     continue
             else:
-                update_prospect(prospect["id"], {"enrichment_status": "no_match"})
+                update_prospect(prospect["id"], {"enrichment_attempts": attempts + 1})
                 stats["skipped"] += 1
                 continue
 
@@ -454,10 +455,10 @@ def _hunter_batch_enrich(stage="researched", score_min=None, max_credits=None):
                     "email": result.get("email"),
                 })
             else:
-                update_prospect(pid, {"enrichment_status": "no_useful_data"})
+                update_prospect(pid, {"enrichment_attempts": attempts + 1})
                 stats["no_match"] += 1
         elif result["status"] == "no_match":
-            update_prospect(pid, {"enrichment_status": "no_match"})
+            update_prospect(pid, {"enrichment_attempts": attempts + 1})
             stats["no_match"] += 1
         else:
             stats["errors"] += 1

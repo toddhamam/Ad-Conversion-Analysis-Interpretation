@@ -277,7 +277,7 @@ def run_campaign(niches, include_jobs=False, campaign_name=None):
 
         # Step 4b: Pattern-guess fallback for prospects enrichment missed
         from modules.email_finder import batch_find_emails
-        email_result = batch_find_emails(stage="researched", score_min=5)
+        email_result = batch_find_emails(stage="researched", score_min=5, skip_enrichment=True)
         results["enrichment"] = {
             "enriched": enrich_stats.get("enriched", 0),
             "emails_found": enrich_stats.get("emails_found", 0),
@@ -916,10 +916,25 @@ def run_prospect_hunt(target=20, niches=None, include_jobs=True, max_rounds=10,
         discovered = discovery["total_added"]
         log.info(f"  Discovered: {discovered} new prospects")
 
-        if discovered == 0:
+        if discovered < 3:
             exhausted_niches.add(source)
-            log.info(f"  Niche '{source}' exhausted (0 new) — will skip in future rounds.")
-        else:
+            if discovered == 0:
+                log.info(f"  Niche '{source}' exhausted (0 new) — will skip in future rounds.")
+            else:
+                log.info(f"  Niche '{source}' low-yield ({discovered} new) — marking exhausted.")
+            # Inject sub-niches for the exhausted niche into the queue immediately
+            from modules.discovery import SUB_NICHES
+            sub_list = SUB_NICHES.get(source, [])
+            injected = 0
+            for sub in sub_list:
+                if sub not in exhausted_niches:
+                    niche_queue.append(sub)
+                    injected += 1
+                    if injected >= 5:  # Inject up to 5 sub-niches per exhausted parent
+                        break
+            if injected > 0:
+                log.info(f"  Injected {injected} sub-niches for '{source}' into queue.")
+        if discovered > 0:
             # Phase 2: Research
             log.info(f"  Researching...")
             from modules.research import batch_research
@@ -1062,7 +1077,7 @@ def _run_enrichment_pass(email_score_min):
     from modules.email_finder import batch_find_emails
     from modules.drafter import batch_draft
 
-    email_result = batch_find_emails(stage="researched", score_min=email_score_min)
+    email_result = batch_find_emails(stage="researched", score_min=email_score_min, skip_enrichment=True)
     log.info(
         f"    Emails: {email_result.get('found', 0)} found, "
         f"{email_result.get('not_found', 0)} not found"
@@ -1079,30 +1094,30 @@ def _run_enrichment_pass(email_score_min):
 def _pick_next_source(niche_queue, exhausted, round_num, include_jobs, jobs_used):
     """Pick the next discovery source, rotating through all available sources.
 
-    Source rotation schedule:
+    Source rotation schedule (6-round cycle, LinkedIn People runs 2x):
     - Round 1: niche (DDG + Ad Library)
     - Round 2: linkedin_people (agency owners, enterprise, etc.)
-    - Round 3: jobs OR shopify
-    - Round 4: niche
-    - Round 5: linkedin_companies
-    - Round 6: agencies
+    - Round 3: niche (DDG — different niche from round 1)
+    - Round 4: jobs OR shopify
+    - Round 5: linkedin_people (different persona from round 2)
+    - Round 6: agencies OR linkedin_companies
     - Round 7+: repeat cycle
+
+    LinkedIn People runs twice per cycle (rounds 2+5, 8+11, ...) because it's
+    the only source that reliably produces named contacts, making enrichment
+    work consistently.
 
     Returns:
         tuple: (source_name, source_type) or (None, None) if all exhausted.
     """
     cycle_position = (round_num - 1) % 6
 
-    # LinkedIn people (rounds 2, 8, 14, ...)
-    if cycle_position == 1:
+    # LinkedIn people (rounds 2, 5, 8, 11, 14, 17, 20, 23, ...)
+    if cycle_position in (1, 4):
         return ("linkedin_people", "linkedin_people")
 
-    # LinkedIn companies (rounds 5, 11, 17, ...)
-    if cycle_position == 4:
-        return ("linkedin_companies", "linkedin_companies")
-
-    # Shopify or Jobs (rounds 3, 9, 15, ...)
-    if cycle_position == 2:
+    # Shopify or Jobs (rounds 4, 10, 16, 22, ...)
+    if cycle_position == 3:
         if include_jobs and not jobs_used:
             return ("job_listings", "jobs")
         # Pick a Shopify niche from the queue
@@ -1113,11 +1128,14 @@ def _pick_next_source(niche_queue, exhausted, round_num, include_jobs, jobs_used
                 return (sn, "shopify")
         return ("supplements", "shopify")
 
-    # Agencies (rounds 6, 12, 18, ...)
+    # Agencies or LinkedIn companies (rounds 6, 12, 18, 24, ...)
     if cycle_position == 5:
-        return ("agencies", "agencies")
+        # Alternate between agencies and linkedin_companies
+        if (round_num // 6) % 2 == 0:
+            return ("agencies", "agencies")
+        return ("linkedin_companies", "linkedin_companies")
 
-    # Default: niche-based DDG + Ad Library (rounds 1, 4, 7, 10, ...)
+    # Default: niche-based DDG + Ad Library (rounds 1, 3, 7, 9, 13, 15, ...)
     tried = 0
     while niche_queue and tried < len(niche_queue):
         niche = niche_queue.popleft()

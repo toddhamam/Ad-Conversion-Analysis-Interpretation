@@ -391,8 +391,9 @@ def batch_enrich(stage="researched", score_min=None, max_credits=None):
             stats["skipped"] += 1
             continue
 
-        # Skip if enrichment was already attempted and failed
-        if prospect.get("enrichment_status") in ("no_match", "no_useful_data"):
+        # Skip if enrichment was already attempted twice (allow one retry)
+        attempts = prospect.get("enrichment_attempts", 0)
+        if attempts >= 2:
             stats["skipped"] += 1
             continue
 
@@ -456,7 +457,9 @@ def batch_enrich(stage="researched", score_min=None, max_credits=None):
                 # Save discovered name, fall through to People Match
                 update_prospect(prospect["id"], name_updates)
             else:
-                update_prospect(prospect["id"], {"enrichment_status": "no_match"})
+                update_prospect(prospect["id"], {
+                    "enrichment_attempts": attempts + 1,
+                })
                 stats["skipped"] += 1
                 stats["results"].append({
                     "id": prospect["id"],
@@ -495,16 +498,60 @@ def batch_enrich(stage="researched", score_min=None, max_credits=None):
                     "role": result["person"].get("title", ""),
                 })
             else:
-                update_prospect(pid, {"enrichment_status": "no_useful_data"})
+                update_prospect(pid, {"enrichment_attempts": attempts + 1})
                 stats["no_match"] += 1
                 stats["results"].append({
                     "id": pid, "status": "no_useful_data",
                 })
 
         elif result["status"] == "no_match":
-            update_prospect(pid, {"enrichment_status": "no_match"})
-            stats["no_match"] += 1
-            stats["results"].append({"id": pid, "status": "no_match"})
+            # Fallback: try Domain Search to find ANY contact at the company
+            # People Match failed (name not in Apollo's DB), but domain search
+            # may find a different decision-maker with a verified email.
+            time.sleep(BATCH_DELAY)
+            domain_result = search_domain_contacts(domain)
+            stats["credits_used"] += 1
+
+            if domain_result["status"] == "found" and domain_result["contacts"]:
+                best = domain_result["contacts"][0]
+                fallback_updates = {}
+
+                # If domain search found a verified email, use it
+                if best.get("email") and best.get("email_status") in ("verified", "valid"):
+                    fallback_updates["email"] = best["email"]
+                    fallback_updates["email_source"] = "apollo_domain_fallback"
+                    fallback_updates["email_verified"] = True
+                    if best.get("linkedin_url"):
+                        fallback_updates["linkedin_url"] = best["linkedin_url"]
+                    if best.get("phone"):
+                        intel = dict(prospect.get("company_intel", {}))
+                        intel["phone"] = best["phone"]
+                        fallback_updates["company_intel"] = intel
+                    # Update name to the contact we actually found
+                    fallback_updates["name"] = f"{best['first_name']} {best['last_name']}"
+                    if best.get("role") and not prospect.get("role"):
+                        fallback_updates["role"] = best["role"]
+
+                    update_prospect(pid, fallback_updates)
+                    stats["enriched"] += 1
+                    stats["emails_found"] += 1
+                    stats["results"].append({
+                        "id": pid,
+                        "status": "enriched_via_domain_fallback",
+                        "email": best["email"],
+                        "name": fallback_updates.get("name", ""),
+                    })
+                    log.info(f"  Domain fallback found email for {pid}: {best['email']}")
+                else:
+                    # Domain search found contacts but no verified email
+                    update_prospect(pid, {"enrichment_attempts": attempts + 1})
+                    stats["no_match"] += 1
+                    stats["results"].append({"id": pid, "status": "no_match_domain_unverified"})
+            else:
+                # Both People Match and Domain Search failed
+                update_prospect(pid, {"enrichment_attempts": attempts + 1})
+                stats["no_match"] += 1
+                stats["results"].append({"id": pid, "status": "no_match"})
 
         else:
             stats["errors"] += 1

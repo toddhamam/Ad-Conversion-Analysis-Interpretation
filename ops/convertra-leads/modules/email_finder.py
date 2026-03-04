@@ -102,16 +102,23 @@ def verify_email(address):
     }
 
 
-def batch_find_emails(stage="researched", score_min=None):
+def batch_find_emails(stage="researched", score_min=None, skip_enrichment=False):
     """Find emails for pipeline prospects without verified email.
 
-    Uses Hunter.io enrichment first (if configured), then falls back
-    to pattern guessing for prospects Hunter missed.
+    Uses enrichment API first (if configured and not skipped), then falls back
+    to pattern guessing for prospects enrichment missed.
+
+    Args:
+        stage: Pipeline stage to filter on.
+        score_min: Minimum fit_score to process.
+        skip_enrichment: If True, skip the internal batch_enrich call.
+            Set this when the caller already ran batch_enrich (e.g.,
+            _run_enrichment_pass) to avoid double credit usage.
     """
     # Phase 1: Try enrichment API (Apollo primary, Hunter fallback)
     enrichment_emails = 0
     has_enrichment = bool(os.environ.get("APOLLO_API_KEY", "") or os.environ.get("HUNTER_API_KEY", ""))
-    if has_enrichment:
+    if has_enrichment and not skip_enrichment:
         try:
             from modules.enrichment import batch_enrich
             enrich_stats = batch_enrich(stage=stage, score_min=score_min)
@@ -142,7 +149,7 @@ def batch_find_emails(stage="researched", score_min=None):
         if prospect.get("email") and prospect.get("email_verified"):
             continue
         # Skip if enrichment already found an email (even unverified)
-        if prospect.get("email") and prospect.get("email_source") in ("apollo", "apollo_search", "hunter", "hunter_domain"):
+        if prospect.get("email") and prospect.get("email_source") in ("apollo", "apollo_search", "apollo_domain_fallback", "hunter", "hunter_domain"):
             continue
 
         name = prospect.get("name", "")
