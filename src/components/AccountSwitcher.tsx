@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdAccount } from '../contexts/AdAccountContext';
+import type { AdAccountInfo } from '../services/metaApi';
 import './AccountSwitcher.css';
 
 interface AccountSwitcherProps {
@@ -9,14 +10,14 @@ interface AccountSwitcherProps {
 }
 
 export default function AccountSwitcher({ collapsed = false, onCloseMobile }: AccountSwitcherProps) {
-  const { accounts, currentAccount, switchAccount, isMultiAccount } = useAdAccount();
+  const { accounts, currentAccount, switchAccount } = useAdAccount();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   // Close on outside click — must be called unconditionally (Rules of Hooks)
   useEffect(() => {
-    if (!isOpen || !isMultiAccount) return;
+    if (!isOpen) return;
     const handleClick = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsOpen(false);
@@ -31,12 +32,12 @@ export default function AccountSwitcher({ collapsed = false, onCloseMobile }: Ac
       document.removeEventListener('mousedown', handleClick);
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [isOpen, isMultiAccount]);
+  }, [isOpen]);
 
-  // Don't render for single-account orgs (after all hooks)
-  if (!isMultiAccount) return null;
+  // Render only when there's an active account context
+  if (!currentAccount) return null;
 
-  const getStatusColor = (account: typeof currentAccount) => {
+  const getStatusColor = (account: AdAccountInfo | null) => {
     if (!account) return 'var(--text-muted)';
     if (!account.page_id || !account.pixel_id) return '#f59e0b'; // amber — needs config
     return '#22c55e'; // green — fully configured
@@ -53,6 +54,15 @@ export default function AccountSwitcher({ collapsed = false, onCloseMobile }: Ac
     onCloseMobile?.();
     navigate('/integrations');
   };
+
+  const activeAccounts = accounts.filter((a) => a.is_active);
+  const hasCurrentInActiveList = activeAccounts.some(
+    (account) => account.ad_account_id === currentAccount.ad_account_id
+  );
+  const dropdownAccounts = hasCurrentInActiveList
+    ? activeAccounts
+    : [currentAccount, ...activeAccounts];
+  const totalSeatCount = accounts.length > 0 ? accounts.length : dropdownAccounts.length;
 
   // Collapsed sidebar — show icon only
   if (collapsed) {
@@ -75,11 +85,12 @@ export default function AccountSwitcher({ collapsed = false, onCloseMobile }: Ac
         {isOpen && (
           <div className="account-switcher-dropdown floating">
             <AccountDropdownContent
-              accounts={accounts}
+              accounts={dropdownAccounts}
               currentAccount={currentAccount}
               getStatusColor={getStatusColor}
               onSwitch={handleSwitch}
               onManage={handleManage}
+              totalSeatCount={totalSeatCount}
             />
           </div>
         )}
@@ -118,11 +129,12 @@ export default function AccountSwitcher({ collapsed = false, onCloseMobile }: Ac
       {isOpen && (
         <div className="account-switcher-dropdown">
           <AccountDropdownContent
-            accounts={accounts}
+            accounts={dropdownAccounts}
             currentAccount={currentAccount}
             getStatusColor={getStatusColor}
             onSwitch={handleSwitch}
             onManage={handleManage}
+            totalSeatCount={totalSeatCount}
           />
         </div>
       )}
@@ -138,21 +150,21 @@ function AccountDropdownContent({
   getStatusColor,
   onSwitch,
   onManage,
+  totalSeatCount,
 }: {
-  accounts: Array<{ ad_account_id: string; ad_account_name: string | null; page_id: string | null; pixel_id: string | null; currency: string | null; account_status: number | null; id: string; is_active: boolean }>;
-  currentAccount: typeof accounts[0] | null;
-  getStatusColor: (account: typeof accounts[0] | null) => string;
+  accounts: AdAccountInfo[];
+  currentAccount: AdAccountInfo;
+  getStatusColor: (account: AdAccountInfo | null) => string;
   onSwitch: (adAccountId: string) => void;
   onManage: () => void;
+  totalSeatCount: number;
 }) {
-  const activeAccounts = accounts.filter(a => a.is_active);
-
   return (
     <>
       <div className="dropdown-header">Switch Account</div>
 
       <div className="dropdown-accounts">
-        {activeAccounts.map(account => {
+        {accounts.map(account => {
           const isCurrent = account.ad_account_id === currentAccount?.ad_account_id;
           return (
             <button
@@ -191,7 +203,7 @@ function AccountDropdownContent({
           Manage Accounts
         </button>
         <span className="dropdown-seat-count">
-          {activeAccounts.length} of {accounts.length} seats used
+          {accounts.length} of {totalSeatCount} seats used
         </span>
       </div>
     </>
