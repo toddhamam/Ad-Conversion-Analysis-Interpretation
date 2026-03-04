@@ -227,6 +227,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleVideoUpload(req, res);
       case 'ad-accounts':
         return handleAdAccounts(req, res);
+      case 'refresh-available':
+        return handleRefreshAvailable(req, res);
       case 'report-schedules':
         return handleReportSchedules(req, res);
       case 'report-export':
@@ -384,9 +386,12 @@ async function handleStatus(req: VercelRequest, res: VercelResponse) {
   const isExpired = cred.token_expires_at && new Date(cred.token_expires_at) < new Date();
   const isActive = cred.status === 'active' && !isExpired;
 
-  // Ensure the primary credential's ad account exists in organization_ad_accounts.
-  // This handles orgs that were set up before the multi-account migration — their first
-  // account lives only in organization_credentials and won't appear in the switcher otherwise.
+  // One-time migration: ensure the primary credential's ad account exists in
+  // organization_ad_accounts. Handles orgs set up before multi-account migration.
+  // Uses INSERT ... ON CONFLICT DO NOTHING (ignoreDuplicates) so it:
+  // - Never overwrites user-configured page_id/pixel_id on existing rows
+  // - Never re-activates intentionally deactivated accounts
+  // - Only inserts if the row doesn't exist at all
   if (cred.ad_account_id) {
     await supabase
       .from('organization_ad_accounts')
@@ -1601,6 +1606,152 @@ async function handleVideoUpload(req: VercelRequest, res: VercelResponse) {
     await flushSentry();
     return res.status(500).json({
       error: 'Video upload failed',
+      message: err instanceof Error ? err.message : 'Unknown error',
+    });
+  }
+}
+
+// ─── Graph API pagination helper ────────────────────────────────────────────
+
+interface PaginatedGraphResponse<T> {
+  data: T[];
+  paging?: { cursors?: { after?: string }; next?: string };
+}
+
+async function fetchAllGraphPages<T>(initialUrl: string): Promise<T[]> {
+  const all: T[] = [];
+  let url: string | null = initialUrl;
+
+  while (url) {
+    const response = await fetch(url);
+    if (!response.ok) break;
+    const data: PaginatedGraphResponse<T> = await response.json();
+    if (data.data) all.push(...data.data);
+    url = data.paging?.next || null;
+  }
+
+  return all;
+}
+
+// ─── Route: refresh-available ────────────────────────────────────────────────
+// Re-fetch available ad accounts and pages from the Graph API using the stored
+// token. Updates organization_credentials.metadata without re-running OAuth.
+// Also reconciles stale selections: if the current ad_account_id / page_id / pixel_id
+// no longer exists in the refreshed list, it is cleared from organization_credentials.
+
+async function handleRefreshAvailable(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const creds = await loadCredentials(auth.organizationId);
+  if (!creds) {
+    return res.status(404).json({ error: 'No Meta credentials found. Please connect your Meta account first.' });
+  }
+
+  try {
+    // Fetch all ad accounts (paginated)
+    const adAccountsUrl = new URL(`${GRAPH_API_BASE}/me/adaccounts`);
+    adAccountsUrl.searchParams.set('access_token', creds.accessToken);
+    adAccountsUrl.searchParams.set('fields', 'account_id,id,name,account_status,currency');
+    adAccountsUrl.searchParams.set('limit', '100');
+
+    const freshAccounts = await fetchAllGraphPages<{
+      account_id: string; id: string; name: string; account_status: number; currency: string;
+    }>(adAccountsUrl.toString());
+
+    // Fetch all pages (paginated)
+    const pagesUrl = new URL(`${GRAPH_API_BASE}/me/accounts`);
+    pagesUrl.searchParams.set('access_token', creds.accessToken);
+    pagesUrl.searchParams.set('fields', 'id,name');
+    pagesUrl.searchParams.set('limit', '100');
+
+    const freshPages = await fetchAllGraphPages<{ id: string; name: string }>(pagesUrl.toString());
+
+    // Load current credential row to reconcile stale selections
+    const { data: cred } = await supabase
+      .from('organization_credentials')
+      .select('ad_account_id, page_id, pixel_id, metadata')
+      .eq('organization_id', auth.organizationId)
+      .eq('provider', 'meta')
+      .single();
+
+    if (!cred) {
+      return res.status(404).json({ error: 'Credential record not found' });
+    }
+
+    // Reconcile: clear selections that are no longer valid in the refreshed scope
+    const accountStillValid = !cred.ad_account_id ||
+      freshAccounts.some(a => a.id === cred.ad_account_id);
+    const pageStillValid = !cred.page_id ||
+      freshPages.some(p => p.id === cred.page_id);
+
+    const updates: Record<string, unknown> = {
+      metadata: {
+        ...cred.metadata,
+        available_accounts: freshAccounts,
+        available_pages: freshPages,
+        last_refreshed_at: new Date().toISOString(),
+      },
+      updated_at: new Date().toISOString(),
+    };
+
+    if (!accountStillValid) {
+      updates.ad_account_id = null;
+      updates.page_id = null;
+      updates.pixel_id = null;
+    } else if (!pageStillValid) {
+      updates.page_id = null;
+    }
+
+    await supabase
+      .from('organization_credentials')
+      .update(updates)
+      .eq('organization_id', auth.organizationId)
+      .eq('provider', 'meta');
+
+    // Also sync metadata (name, currency, status) for activated accounts
+    // in organization_ad_accounts from the fresh Graph API data
+    const { data: activatedAccounts } = await supabase
+      .from('organization_ad_accounts')
+      .select('ad_account_id')
+      .eq('organization_id', auth.organizationId)
+      .eq('is_active', true);
+
+    if (activatedAccounts && activatedAccounts.length > 0) {
+      for (const activated of activatedAccounts) {
+        const fresh = freshAccounts.find(a => a.id === activated.ad_account_id);
+        if (fresh) {
+          await supabase
+            .from('organization_ad_accounts')
+            .update({
+              ad_account_name: fresh.name || null,
+              account_status: fresh.account_status || null,
+              currency: fresh.currency || null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('organization_id', auth.organizationId)
+            .eq('ad_account_id', activated.ad_account_id);
+        }
+      }
+    }
+
+    return res.status(200).json({
+      availableAccounts: freshAccounts,
+      availablePages: freshPages,
+      selectionsCleared: !accountStillValid || !pageStillValid,
+    });
+  } catch (err: unknown) {
+    console.error('Failed to refresh available data:', err);
+    captureError(err, { route: 'meta/refresh-available', organizationId: auth.organizationId });
+    await flushSentry();
+    return res.status(500).json({
+      error: 'Failed to refresh available data from Meta',
       message: err instanceof Error ? err.message : 'Unknown error',
     });
   }

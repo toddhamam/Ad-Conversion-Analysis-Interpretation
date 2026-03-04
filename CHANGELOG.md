@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-03-04 — Add re-authorize permissions and refresh available data for multi-account
+
+### Overview
+Addresses issues where users couldn't grant access to additional Facebook Pages or ad accounts after the initial OAuth connection. Adds a re-authorization flow, a lightweight refresh endpoint, and Graph API pagination to handle large Business Manager accounts.
+
+### Added
+- **"Update Permissions" button** on Integrations page — triggers OAuth re-flow with `auth_type=rerequest`, forcing the Facebook consent screen so users can re-select which pages and ad accounts the app can access.
+- **"Refresh" button** in the ad account configure panel — re-fetches available pages and ad accounts from the Meta Graph API using the stored token (no re-OAuth needed). Syncs account metadata (name, currency, status) for activated accounts.
+- **`refresh-available` backend route** (`api/meta.ts`) — paginated fetch of `me/adaccounts` and `me/accounts`, updates `organization_credentials.metadata`, and reconciles stale selections (clears ad_account_id/page_id/pixel_id if no longer in scope).
+- **`refreshAvailableData()` frontend service** (`src/services/metaApi.ts`) — calls the new endpoint with JWT auth.
+- **Empty state hint** in page dropdown — guides users to Refresh or Update Permissions when no pages are available.
+
+### Fixed
+- **Graph API pagination** in OAuth callback (`api/auth/meta/callback.ts`) — added `fetchAllPages<T>()` cursor-based pagination helper. Large Business Manager accounts with many ad accounts/pages now return complete lists instead of only the first page.
+- **Migration upsert clarified** (`api/meta.ts`) — `ignoreDuplicates: true` (INSERT ON CONFLICT DO NOTHING) preserved intentionally: never overwrites user-configured page_id/pixel_id and never re-activates intentionally deactivated accounts.
+
+### Files Modified
+- `api/auth/meta/connect.ts` — Added `reauth` query param, sets `auth_type=rerequest`
+- `api/auth/meta/callback.ts` — Added paginated `fetchAllPages()`, applied to ad accounts and pages fetch
+- `api/meta.ts` — New `refresh-available` route with pagination, selection reconciliation, and account metadata sync; clarified migration upsert comments
+- `src/pages/Integrations.tsx` — "Update Permissions" button, "Refresh" button, empty state hint, `handleReauthorize()` and `handleRefreshAvailable()` handlers
+- `src/pages/Integrations.css` — Styles for reauthorize button, config refresh button, config empty hint, responsive support
+- `src/services/metaApi.ts` — Added `refreshAvailableData()` function
+
 ## 2026-03-04 — Fix multi-ad-account switcher, data scoping, and UI cleanup
 
 ### Overview
