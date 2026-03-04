@@ -336,6 +336,20 @@ def cmd_orchestrate_prospect(args):
     output(result)
 
 
+def cmd_orchestrate_fill(args):
+    from orchestrator import run_fill
+    niches = [n.strip() for n in args.niches.split(",")] if args.niches else None
+    result = run_fill(
+        target=args.target,
+        campaign_id=args.campaign,
+        niches=niches,
+        max_rounds=args.max_rounds,
+        score_threshold=args.score_threshold,
+        include_jobs=args.include_jobs,
+    )
+    output(result)
+
+
 # ─── Enrich commands ─────────────────────────────────────────────────
 
 def cmd_enrich_person(args):
@@ -880,6 +894,17 @@ def build_parser():
     o_prospect.add_argument("--max-rounds", type=int, default=10, dest="max_rounds", help="Max rounds (default: 10)")
     o_prospect.add_argument("--campaign", type=str, dest="campaign_name")
     o_prospect.set_defaults(func=cmd_orchestrate_prospect)
+
+    o_fill = orch_sub.add_parser("fill", help="Discover, enrich, draft, and push leads to Instantly")
+    o_fill.add_argument("--target", type=int, default=25, help="Target leads to prepare (default: 25)")
+    o_fill.add_argument("--campaign", type=str, help="Instantly campaign UUID")
+    o_fill.add_argument("--niches", type=str, help="Comma-separated niches (default: all)")
+    o_fill.add_argument("--max-rounds", type=int, default=25, dest="max_rounds", help="Max discovery rounds (default: 25)")
+    o_fill.add_argument("--score-threshold", type=int, default=5, dest="score_threshold", help="Min fit score (default: 5)")
+    o_fill.add_argument("--include-jobs", action="store_true", default=True, dest="include_jobs")
+    o_fill.add_argument("--no-jobs", action="store_false", dest="include_jobs")
+    o_fill.add_argument("--verified-only", action="store_true", default=False, dest="verified_only", help="Only push Apollo/Hunter verified emails")
+    o_fill.set_defaults(func=cmd_orchestrate_fill)
 
     # ── draft ──
     draft_parser = subparsers.add_parser("draft", help="AI email drafting")

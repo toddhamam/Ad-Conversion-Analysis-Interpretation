@@ -569,15 +569,21 @@ Every cold email follows a strict 4-part structure. Two variants: SaaS/DTC found
 **SaaS/DTC Founder Formula:**
 ```
 1. GREETING:     Hi {first_name},
-2. OPENING:      Just [specific observation — ad count, hiring, growth signal].
-   BRIDGE:       At that volume, the biggest challenge is usually keeping enough
-                 fresh variations flowing into testing.
-3. VALUE OFFER:  I mocked up 2 fresh ad variations based on what's already winning
-                 in your account. Want me to send them over?
+2. OPENING:      Just [specific observation — ad activity, hiring, ecommerce growth,
+                 or what they're building]. Uses strongest available signal.
+   BRIDGE:       Dynamic based on data:
+                 - With ad count: "At that volume, the biggest challenge is usually..."
+                 - Without:       "The biggest challenge for brands scaling Meta ads is usually..."
+3. VIDEO CTA:   I recorded a quick video for you showing how we're helping businesses
+                 just like {company} transform their full Meta ad creative generation
+                 and testing process from days into just minutes, (literally, under 3
+                 minutes)... No designers. No briefs. No agencies. No waiting...
+                 Want me to send it over?
 4. SIGN-OFF:     {sender_name}
 ```
 - No product name in the email. Convertra is introduced on the reply.
-- CTA offers a tangible free deliverable, not a video pitch.
+- CTA offers a personalized video showing time-saving benefit with {company} name.
+- "No designers. No briefs. No agencies. No waiting." eliminates objections in-line.
 
 **Agency Owner Formula:**
 ```
@@ -600,7 +606,7 @@ Every cold email follows a strict 4-part structure. Two variants: SaaS/DTC found
 - Under 80 words, plain text only, no links, no "Reply STOP to opt out"
 
 **Follow-up sequence — two-touch rule (based on 2026 cold email research):**
-- Follow-up 1 (day 3): Short bump — "Just floating this back up. The ad variations are ready whenever you want them."
+- Follow-up 1 (day 3): Social proof + personalized CTA — "Our users are launching high-converting Meta ad creatives ready to test in under 3 minutes. No designers. No briefs. No agencies. No waiting. I've still got that video ready for you if you want to see how it would work for {company}?"
 - That's it. No follow-up 2, no breakup email.
 - Non-responders after 2 emails are recycled into a new campaign with a different Tier 1 subject line and a different opening angle.
 
@@ -779,14 +785,18 @@ python3 cli.py followup resume --id p_042
 │   ├── research.py          ← Website scraping
 │   ├── scorer.py            ← 17-point lead scoring
 │   ├── email_finder.py      ← Email discovery + DNS verify
-│   ├── enrichment.py        ← Hunter.io Email Finder + People Enrichment (NEW)
+│   ├── enrichment.py        ← Provider router: Apollo (primary) → Hunter (fallback)
+│   ├── apollo_enrichment.py ← Apollo.io People Match API (10K credits/mo free)
+│   ├── linkedin_discovery.py← LinkedIn x-ray search via DuckDuckGo
+│   ├── shopify_discovery.py ← Shopify store discovery via /products.json
+│   ├── google_business.py   ← Google Business + agency directory discovery
 │   ├── mailer.py            ← Gmail SMTP + warmup
 │   ├── inbox.py             ← Gmail IMAP reader
 │   ├── followup.py          ← Sequence scheduling
 │   ├── reporter.py          ← Pipeline metrics
-│   ├── drafter.py           ← GPT-5.2 email drafting (NEW)
-│   ├── job_scraper.py       ← Job listing scraper (NEW)
-│   └── notifier.py          ← Telegram notifications (NEW)
+│   ├── drafter.py           ← GPT-5.2 email drafting + video CTA
+│   ├── job_scraper.py       ← Job listing scraper
+│   └── notifier.py          ← Telegram notifications
 ├── data/
 │   ├── pipeline.json        ← All prospect records
 │   ├── config.json          ← Warmup state, email settings

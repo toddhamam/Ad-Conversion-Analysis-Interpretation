@@ -202,7 +202,7 @@ def _build_prompt(prospect):
    Note: For agencies, Convertra is named because they are evaluating tooling for their workflow."""
         bridge_suffix = " for each client"
     else:
-        cta_instruction = f"""4. CTA (exact format): "Using my Conversion Intelligence technology I mocked up 3 fresh ad variations for you to test based on what's already proven to work on Meta right now. Want me to send them over?"
+        cta_instruction = f"""4. CTA (exact format): "I recorded a quick video for you showing how we're helping businesses just like {company_name} transform their full Meta ad creative generation and testing process from days into just minutes, (literally, under 3 minutes)... No designers. No briefs. No agencies. No waiting...\n\nWant me to send it over?"
    Note: For SaaS/DTC founders, do NOT mention Convertra by name. The product is introduced on the reply, not the cold open."""
         bridge_suffix = ""
 
@@ -217,7 +217,7 @@ STRUCTURE: every email must follow this exact 4-part structure:
 
 1. GREETING: "Hi {{first_name}}," on its own line. Never use an em dash after the name.
 
-2. OPENING + BRIDGE (2 sentences max): Start with "Just" followed by a specific observation about their Meta/Facebook ads activity (what they're promoting in their ads, their ad creative volume, offers running on Meta, ad count). The observation MUST reference their Meta ads or Facebook ads specifically. Never reference blogs, newsletters, content marketing, or general website activity... we only care about their paid Meta ads. Then connect it to the universal challenge: "At that volume, the biggest challenge is usually keeping enough fresh ad creatives flowing into Meta testing{bridge_suffix}." Do NOT frame this as criticism of their team. Frame it as a natural challenge that comes with scale. Do NOT mention tech stack names (Shopify, Klaviyo, HubSpot, etc.) or "Meta Pixel". Do NOT say "I looked you up on LinkedIn."
+2. OPENING + BRIDGE (2 sentences max): Start with "Just" followed by a specific observation about their business — their Meta ads activity, growth signals (hiring, scaling, ecommerce growth), or what they're building. Use whatever personalization hook is strongest from the data provided. Never reference blogs, newsletters, content marketing, or general website activity. Then connect it to the universal challenge: "At that volume, the biggest challenge is usually keeping enough fresh ad creatives flowing into Meta testing{bridge_suffix}." Do NOT frame this as criticism of their team. Frame it as a natural challenge that comes with scale. Do NOT mention tech stack names (Shopify, Klaviyo, HubSpot, etc.) or "Meta Pixel". Do NOT say "I looked you up on LinkedIn."
 
 {cta_instruction}
 
@@ -376,11 +376,15 @@ def _fallback_template(prospect):
     elif company_intel.get("active_ad_count", 0) > 10:
         hook = f"saw {company} is running {company_intel['active_ad_count']}+ ads on Meta"
     elif company_intel.get("hiring_signals"):
-        hook = f"noticed you're hiring a {company_intel['hiring_signals'][0]} and running Meta ads"
+        hook = f"noticed {company} is hiring a {company_intel['hiring_signals'][0]}"
+    elif company_intel.get("has_meta_pixel"):
+        hook = f"saw {company} is running Meta ads"
+    elif company_intel.get("is_ecommerce_store"):
+        hook = f"came across {company}'s store and saw you're scaling"
     elif pains:
         hook = pains[0]
     else:
-        hook = f"saw {company} is running ads on Meta"
+        hook = f"came across {company} and saw what you're building"
 
     # Pick subject line from active pool
     subject = _pick_subject_line(prospect)
@@ -398,13 +402,20 @@ def _fallback_template(prospect):
     for key, value in subs.items():
         body = body.replace(f"{{{key}}}", value)
 
+    # Pick the right bridge based on whether we have volume data
+    has_volume = company_intel.get("active_ad_count", 0) > 5
+    if has_volume:
+        bridge = "At that volume, the biggest challenge is usually"
+    else:
+        bridge = "The biggest challenge for brands scaling Meta ads is usually"
+
     # If template was empty, use a generic fallback
     is_agency = first_bucket == "enterprise_partner"
     if not body:
         if is_agency:
             body = (
                 f"Hi {first_name},\n\n"
-                f"Just {hook}. At that volume, the biggest challenge is usually "
+                f"Just {hook}. {bridge} "
                 f"keeping enough fresh ad creatives flowing into Meta testing for each client.\n\n"
                 f"Convertra can help you pump out fresh winning creatives to test "
                 f"for your clients in less than 3 minutes. I shot a video to show "
@@ -414,11 +425,13 @@ def _fallback_template(prospect):
         else:
             body = (
                 f"Hi {first_name},\n\n"
-                f"Just {hook}. At that volume, the biggest challenge is usually "
+                f"Just {hook}. {bridge} "
                 f"keeping enough fresh ad creatives flowing into Meta testing.\n\n"
-                f"Using my Conversion Intelligence technology I mocked up 3 fresh ad variations "
-                f"for you to test based on what's already proven to work on Meta right now. "
-                f"Want me to send them over?\n\n"
+                f"I recorded a quick video for you showing how we're helping businesses "
+                f"just like {company} transform their full Meta ad creative generation "
+                f"and testing process from days into just minutes, (literally, under 3 "
+                f"minutes)... No designers. No briefs. No agencies. No waiting...\n\n"
+                f"Want me to send it over?\n\n"
                 f"{sender_name}"
             )
 
