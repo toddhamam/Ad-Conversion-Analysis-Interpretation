@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-03-04 — Rename billing section and remove promo code toggle
+
+### Changed
+- **Page title** — Renamed "Billing" to "Billing and Plans" on the billing page
+- **Dropdown menu** — Renamed "Billing Details" to "Billing and Plans" in the user profile dropdown
+- **Removed promo code toggle** — Removed the "I have a promo code" checkbox and hint text from the billing page; Stripe's native promo code field now always shows during checkout
+
+### Files Modified
+- `src/pages/Billing.tsx` — Updated title, removed `usePromoCode` state and promo toggle UI, always pass `true` to `redirectToCheckout`
+- `src/pages/Billing.css` — Removed `.promo-code-toggle`, `.promo-toggle-label`, `.promo-toggle-hint` styles
+- `src/components/UserProfileDropdown.tsx` — Updated dropdown label from "Billing Details" to "Billing and Plans"
+
 ## 2026-03-04 — Move ad account switcher to top bar with inline activation
 
 ### Overview
