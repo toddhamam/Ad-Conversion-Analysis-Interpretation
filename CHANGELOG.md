@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-03-04 — Agency billing tier UI
+
+### Overview
+Adds the Agency plan to the Billing page with a 3-column pricing layout, ad account info on all plan cards, and a seat management card for agency+ tiers. Addresses two rounds of Codex review findings.
+
+### Added
+- **Agency standalone card** — New card between Small Business and Enterprise in the pricing grid with "For Agencies" holographic badge, Briefcase icon, and $249/mo pricing
+- **3-column pricing grid** — Billing page now shows Small Business | Agency | Enterprise side-by-side on desktop
+- **Ad account feature line** — All plan cards now show ad account allowance (e.g., "1 ad account", "3 ad accounts included (+$59/mo each)", "Unlimited ad accounts") sourced from `PLAN_LIMITS`
+- **Seat management card** — Progress bar showing seats used/total, included vs extra seat breakdown with per-seat cost, "Manage Accounts" and "Manage in Stripe" buttons
+- **`extraSeatPrice`** — New optional field on `PricingPlan` type; set on Pro ($49), Agency ($59), Enterprise ($99)
+- **Responsive tablet layout** — At 1100px breakpoint, CSS `order` puts Small Business + Enterprise on row 1 and Agency centered on row 2 (avoids empty grid cell)
+
+### Fixed
+- **Free-tier badge fallback** — Added explicit `free` case to `getTierIcon()` and `getTierBadgeClass()` so free users don't inherit starter styling
+- **`transition: all` violations** — Replaced all 6 instances in Billing.css with targeted property transitions to prevent browser crashes with base64 images
+- **Extra seat cost calculation** — Uses paid seats (`ad_account_seats`) not active seats (`ad_account_seats_used`) for billing math
+- **Unlimited tier seat card** — Checks `PLAN_LIMITS[tier].maxAdAccounts === -1` to correctly hide seat management for VP/Enterprise (backend uses 999, not -1)
+
+### Files Modified
+- `src/types/billing.ts` — Added `extraSeatPrice` to `PricingPlan`
+- `src/services/stripeApi.ts` — Added `extraSeatPrice` to Pro, Agency, Enterprise plans
+- `src/pages/Billing.tsx` — 3-column layout, Agency card, seat management, ad account features, free-tier fix
+- `src/pages/Billing.css` — Agency styles, seat management styles, responsive breakpoints, transition fixes
+
 ## 2026-03-03 — Agency multi-ad-account support
 
 ### Overview

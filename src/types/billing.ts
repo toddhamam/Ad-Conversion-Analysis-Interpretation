@@ -25,6 +25,7 @@ export interface PricingPlan {
   earlyBirdPrice?: number;         // Early-bird monthly price (during trial)
   setupFee?: number;               // One-time setup fee in dollars
   features: PlanFeatures;
+  extraSeatPrice?: number;         // Price per additional ad account seat/month
   stripePriceIdMonthly?: string;
   stripePriceIdYearly?: string;
   popular?: boolean;
