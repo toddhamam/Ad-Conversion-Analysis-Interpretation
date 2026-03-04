@@ -16,6 +16,8 @@ const METRIC_FORMATS: Record<string, MetricFormat> = {
   roas: 'multiplier',
   cac: 'currency',
   transactionFees: 'currency',
+  cogs: 'currency',
+  grossProfit: 'currency',
   netProfit: 'currency',
   leads: 'number',
   costPerLead: 'currency_precise',
