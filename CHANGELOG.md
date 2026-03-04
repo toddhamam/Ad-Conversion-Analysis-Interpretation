@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-03-04 — Always-visible ad account switcher
+
+### Overview
+The account switcher dropdown in the sidebar was only visible when an organization had 2+ activated ad accounts. This meant users with a single account couldn't see which account they were working with, and the switcher was hidden until a second account was activated. The switcher now always renders when a Meta account is connected, enabling rapid account identification and switching from any page.
+
+### Changed
+- **AccountSwitcher always visible** — Removed `isMultiAccount` render gate; the switcher now appears whenever `currentAccount` exists (i.e., Meta is connected), even for single-account orgs.
+- **Outside-click handler simplified** — No longer gated by `isMultiAccount`; works consistently regardless of account count.
+- **Dropdown list always includes current account** — Handles single-account and synthetic-default-account scenarios where the current account wasn't in the `accounts` array.
+- **Dashboard subtitle** — Always shows the active account name (removed `isMultiAccount &&` guard).
+- **Meta Ads subtitle** — "Live data" label always includes the active account name when available.
+- **Proper TypeScript types** — `AccountDropdownContent` now uses the `AdAccountInfo` type import instead of inline `typeof` inference.
+
+### Files Modified
+- `src/components/AccountSwitcher.tsx` — Removed `isMultiAccount` gate, built `dropdownAccounts` list with fallback, added `totalSeatCount` prop, used `AdAccountInfo` type
+- `src/pages/Dashboard.tsx` — Removed `isMultiAccount` from destructuring and subtitle/export guards
+- `src/pages/MetaAds.tsx` — Removed `isMultiAccount` from destructuring and subtitle guard
+
 ## 2026-03-04 — Add re-authorize permissions and refresh available data for multi-account
 
 ### Overview

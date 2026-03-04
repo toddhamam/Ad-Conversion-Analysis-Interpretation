@@ -473,7 +473,7 @@ function formatDateForApi(date: Date): string {
 
 const Dashboard = () => {
   const { isTrialing, trialDaysRemaining, isSuperAdmin } = useOrganization();
-  const { currentAccount, isMultiAccount } = useAdAccount();
+  const { currentAccount } = useAdAccount();
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [metaData, setMetaData] = useState<{
     totalSpend: number;
@@ -890,7 +890,7 @@ const Dashboard = () => {
         <div className="dashboard-header-left">
           <h1 className="dashboard-title">Dashboard</h1>
           <p className="dashboard-subtitle">
-            Your ad performance at a glance{isMultiAccount && currentAccount?.ad_account_name ? ` · ${currentAccount.ad_account_name}` : ''}
+            Your ad performance at a glance{currentAccount?.ad_account_name ? ` · ${currentAccount.ad_account_name}` : ''}
           </p>
         </div>
         <div className="dashboard-header-right">
@@ -902,7 +902,7 @@ const Dashboard = () => {
             stats={stats as unknown as Record<string, number>}
             visibleMetrics={visibleMetrics.map((m) => ({ id: m.id, label: METRIC_LABELS[m.id] || m.label }))}
             dateRangeLabel={dateRangeLabel}
-            accountName={isMultiAccount && currentAccount?.ad_account_name ? currentAccount.ad_account_name : undefined}
+            accountName={currentAccount?.ad_account_name || undefined}
           />
           <DashboardCustomizer
             metrics={isSuperAdmin ? metricsConfig : metricsConfig.filter((m) => !FUNNEL_ONLY_METRICS.includes(m.id))}
