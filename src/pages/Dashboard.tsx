@@ -166,7 +166,7 @@ const DEFAULT_METRICS: MetricConfig[] = [
   { id: 'totalPurchases', label: 'Total Conversions', visible: true },
   { id: 'conversionRate', label: 'Conversion Rate', visible: true },
   { id: 'aov', label: 'Avg. Order Value', visible: true },
-  { id: 'uniqueCustomers', label: 'Unique Customers', visible: false },
+  { id: 'uniqueCustomers', label: 'Unique Customers', visible: true },
   { id: 'sessions', label: 'Sessions', visible: false },
   { id: 'adSpend', label: 'Ad Spend', visible: true },
   { id: 'roas', label: 'ROAS', visible: true },
@@ -295,12 +295,12 @@ const METRIC_LABELS: Record<string, string> = {
 
 // Metric periods - some are dynamic based on date range
 const STATIC_PERIODS: Record<string, string> = {
-  totalPurchases: 'Conversions',
-  conversionRate: 'LPV to purchase',
-  aov: 'Revenue ÷ conversions',
+  totalPurchases: 'All purchase events',
+  conversionRate: 'LPV to unique purchase',
+  aov: 'Revenue ÷ unique customers',
   sessions: 'Unique visitors',
   roas: 'Return on ad spend',
-  cac: 'Spend ÷ conversions',
+  cac: 'Spend ÷ unique customers',
   transactionFees: 'Payment processing fees',
   cogs: 'Cost of goods sold',
   grossProfit: 'Revenue − COGS',
@@ -331,7 +331,7 @@ const DATE_RANGE_METRICS = [
 // Funnel-only metrics — hidden for non-super-admins (requires Supabase funnel data)
 // Only uniqueCustomers and sessions genuinely require funnel tracking;
 // AOV and CPA are now derived from Meta API data and available to all users.
-const FUNNEL_ONLY_METRICS = ['uniqueCustomers', 'sessions'];
+const FUNNEL_ONLY_METRICS = ['sessions'];
 
 // Load metrics config from localStorage
 function loadMetricsConfig(): MetricConfig[] {
@@ -731,7 +731,7 @@ const Dashboard = () => {
         const accountPromise = fetchAccountLevelInsights(metaDateOptions)
           .catch((err) => {
             console.error('Failed to fetch account-level insights:', err);
-            return { reach: 0, uniqueLinkClicks: 0 } as AccountLevelInsights;
+            return { reach: 0, uniqueLinkClicks: 0, uniquePurchases: 0 } as AccountLevelInsights;
           });
 
         const [funnelResponse, campaigns, acctInsights] = await Promise.all([funnelPromise, metaPromise, accountPromise]);
@@ -847,22 +847,27 @@ const Dashboard = () => {
   const totalRevenue = metaData?.totalPurchaseValue || 0;
   const totalClicks = metaData?.totalClicks || 0;
 
-  // AOV: Average purchase value from Meta (revenue / conversions)
-  const aov = totalPurchases > 0 ? totalRevenue / totalPurchases : 0;
+  // Unique purchasers from account-level unique_actions (deduplicated across campaigns).
+  // This prevents double-counting customers who trigger multiple purchase events
+  // (e.g., initial order + upsell/downsell in post-purchase sequence).
+  const uniquePurchases = accountInsights?.uniquePurchases || 0;
 
-  // CPA: Cost Per Acquisition from Meta (spend / conversions)
-  const cac = totalPurchases > 0 && adSpend > 0 ? adSpend / totalPurchases : 0;
+  // AOV: Revenue per unique customer (total revenue includes upsells)
+  const aov = uniquePurchases > 0 ? totalRevenue / uniquePurchases : 0;
 
-  // Conversion Rate: Landing page views to purchase
+  // CPA: Cost per unique customer acquired
+  const cac = uniquePurchases > 0 && adSpend > 0 ? adSpend / uniquePurchases : 0;
+
+  // Conversion Rate: % of landing page viewers who became unique customers.
   // Uses Landing Page Views (not link clicks) — LPV only fires after the page
   // actually loads and the Meta pixel initializes, filtering out accidental taps and bot clicks.
   const totalLPV = metaData?.totalLandingPageViews || 0;
-  const conversionRate = totalLPV > 0 && totalPurchases > 0
-    ? (totalPurchases / totalLPV) * 100
+  const conversionRate = totalLPV > 0 && uniquePurchases > 0
+    ? (uniquePurchases / totalLPV) * 100
     : 0;
 
-  // Funnel-only metrics (super admin only, requires Supabase funnel tracking)
-  const uniqueCustomers = metrics?.summary.uniqueCustomers || 0;
+  // Unique Customers: from Meta unique_actions (works for all users, not just funnel-tracked)
+  const uniqueCustomers = uniquePurchases;
 
   // Transaction fees: configurable rate (default 2.9%)
   const transactionFees = totalRevenue * transactionFeeRate;

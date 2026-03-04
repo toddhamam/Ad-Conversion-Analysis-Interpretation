@@ -852,6 +852,7 @@ export async function fetchCampaignSummaries(dateOptions?: DateRangeOptions): Pr
 export interface AccountLevelInsights {
   reach: number;
   uniqueLinkClicks: number;
+  uniquePurchases: number;
 }
 
 export async function fetchAccountLevelInsights(dateOptions?: DateRangeOptions): Promise<AccountLevelInsights> {
@@ -860,7 +861,7 @@ export async function fetchAccountLevelInsights(dateOptions?: DateRangeOptions):
     await loadOrgMetaCredentials();
     adAccountId = getAdAccountId();
     if (!adAccountId) {
-      return { reach: 0, uniqueLinkClicks: 0 };
+      return { reach: 0, uniqueLinkClicks: 0, uniquePurchases: 0 };
     }
   }
 
@@ -873,18 +874,22 @@ export async function fetchAccountLevelInsights(dateOptions?: DateRangeOptions):
     });
 
     const row = data.data?.[0];
-    if (!row) return { reach: 0, uniqueLinkClicks: 0 };
+    if (!row) return { reach: 0, uniqueLinkClicks: 0, uniquePurchases: 0 };
 
     const reach = parseInt(row.reach || '0', 10);
     const uniqueLinkClicks = parseInt(
       row.unique_actions?.find((a: any) => a.action_type === 'link_click')?.value || '0',
       10
     );
+    const uniquePurchases = parseInt(
+      row.unique_actions?.find((a: any) => a.action_type === 'offsite_conversion.fb_pixel_purchase')?.value || '0',
+      10
+    );
 
-    return { reach, uniqueLinkClicks };
+    return { reach, uniqueLinkClicks, uniquePurchases };
   } catch (error: unknown) {
     console.error('Error fetching account-level insights:', error);
-    return { reach: 0, uniqueLinkClicks: 0 };
+    return { reach: 0, uniqueLinkClicks: 0, uniquePurchases: 0 };
   }
 }
 
