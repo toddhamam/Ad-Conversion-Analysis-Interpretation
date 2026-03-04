@@ -4,6 +4,7 @@ import {
   getOrgMetaIds,
   setCurrentAdAccount as setMetaCurrentAccount,
   onOrgMetaChange,
+  fetchAdAccounts,
   type AdAccountInfo,
 } from '../services/metaApi';
 import { setScopedAccountId, migrateToScoped } from '../lib/scopedStorage';
@@ -46,57 +47,99 @@ export function AdAccountProvider({ children }: { children: React.ReactNode }) {
     return onOrgMetaChange(() => setMetaVersion(v => v + 1));
   }, []);
 
-  // Load accounts from the cached org meta IDs — re-runs on org change AND after meta load completes
+  // Load accounts — first from cached orgMeta, then fetch fresh from the
+  // dedicated ad-accounts endpoint to ensure we have the complete list.
+  // The status endpoint's adAccounts can be stale or silently empty on errors.
   useEffect(() => {
     const orgMeta = getOrgMetaIds();
     if (!orgMeta) {
       setAccounts([]);
       setCurrentAccount(null);
+      setMetaCurrentAccount(null);
       setScopedAccountId(null);
       return;
     }
 
-    const adAccounts = orgMeta.adAccounts || [];
-    setAccounts(adAccounts);
-
-    if (adAccounts.length === 0) {
-      // Single-account org or no accounts — use the default credential row values
-      if (orgMeta.adAccountId) {
-        const defaultAccount: AdAccountInfo = {
-          id: '',
-          ad_account_id: orgMeta.adAccountId,
-          ad_account_name: orgMeta.accountName,
-          page_id: orgMeta.pageId || null,
-          pixel_id: orgMeta.pixelId || null,
-          is_active: true,
-          account_status: null,
-          currency: null,
-        };
-        setCurrentAccount(defaultAccount);
-        // Don't scope storage for single-account orgs (backwards compatible)
-        setScopedAccountId(null);
-      }
+    // If Meta isn't connected, nothing to do
+    if (!orgMeta.connected) {
+      setAccounts([]);
+      setCurrentAccount(null);
+      setMetaCurrentAccount(null);
+      setScopedAccountId(null);
       return;
     }
 
-    // Multi-account org — restore the last selected account from localStorage
+    // Helper to apply an account list (shared by fast path and fresh fetch)
     const orgId = organization?.id || '';
-    const savedAccountId = localStorage.getItem(`ci_current_ad_account_${orgId}`);
-    const savedAccount = savedAccountId
-      ? adAccounts.find(a => a.ad_account_id === savedAccountId)
-      : null;
-    const activeAccount = savedAccount || adAccounts[0];
+    const applyAccounts = (adAccounts: AdAccountInfo[]) => {
+      setAccounts(adAccounts);
 
-    setCurrentAccount(activeAccount);
-    setScopedAccountId(activeAccount.ad_account_id);
-    setMetaCurrentAccount(activeAccount);
+      if (adAccounts.length === 0) {
+        // No activated accounts — fall back to default credential row values
+        if (orgMeta.adAccountId) {
+          const defaultAccount: AdAccountInfo = {
+            id: '',
+            ad_account_id: orgMeta.adAccountId,
+            ad_account_name: orgMeta.accountName,
+            page_id: orgMeta.pageId || null,
+            pixel_id: orgMeta.pixelId || null,
+            is_active: true,
+            account_status: null,
+            currency: null,
+          };
+          setCurrentAccount(defaultAccount);
+          setMetaCurrentAccount(defaultAccount);
+          setScopedAccountId(null);
+        } else {
+          // Connected but no ad account configured — clear all state
+          setCurrentAccount(null);
+          setMetaCurrentAccount(null);
+          setScopedAccountId(null);
+        }
+        return;
+      }
 
-    // Migrate unscoped data for the first account (single→multi upgrade path)
-    if (adAccounts.length > 0) {
+      // Restore last selected account from localStorage
+      const savedAccountId = localStorage.getItem(`ci_current_ad_account_${orgId}`);
+      const savedAccount = savedAccountId
+        ? adAccounts.find(a => a.ad_account_id === savedAccountId)
+        : null;
+      const activeAccount = savedAccount || adAccounts[0];
+
+      setCurrentAccount(activeAccount);
+      setScopedAccountId(activeAccount.ad_account_id);
+      setMetaCurrentAccount(activeAccount);
+
+      // Migrate unscoped data for the first account (single→multi upgrade path)
       for (const key of SCOPED_KEYS) {
         migrateToScoped(key, activeAccount.ad_account_id);
       }
-    }
+    };
+
+    // Fast path: apply cached adAccounts from status endpoint immediately
+    const cachedAccounts = orgMeta.adAccounts || [];
+    applyAccounts(cachedAccounts);
+
+    // Then fetch fresh from dedicated ad-accounts endpoint (authoritative source).
+    // This catches cases where the status endpoint's adAccounts query silently failed
+    // or returned stale data (e.g., missing newly activated accounts or outdated page_id).
+    let cancelled = false;
+    fetchAdAccounts()
+      .then((data) => {
+        if (cancelled) return;
+        const freshAccounts = (data.accounts || []).filter(a => a.is_active);
+        // Build a fingerprint that captures both the account list and key config fields
+        const fingerprint = (accts: AdAccountInfo[]) =>
+          accts.map(a => `${a.ad_account_id}:${a.page_id || ''}:${a.pixel_id || ''}`).sort().join(',');
+        if (fingerprint(freshAccounts) !== fingerprint(cachedAccounts)) {
+          applyAccounts(freshAccounts);
+        }
+      })
+      .catch(() => {
+        // Fresh fetch failed — cached data is still applied, no action needed
+      });
+
+    return () => { cancelled = true; };
   }, [organization?.id, metaVersion]); // Re-run when org changes or meta credentials load
 
   const switchAccount = useCallback((adAccountId: string) => {
