@@ -138,7 +138,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // Determine ad account seats based on plan tier
           const seatsByPlan: Record<string, number> = {
             starter: 1, pro: 3, agency: 3,
-            enterprise: 10, velocity_partner: 999,
+            enterprise: -1, velocity_partner: -1,
           };
           const adAccountSeats = seatsByPlan[planTier || 'starter'] || 1;
 
