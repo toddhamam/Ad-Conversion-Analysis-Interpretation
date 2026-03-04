@@ -315,7 +315,7 @@ const MetaAds = () => {
           },
         };
     loadMetaData(dateOptions);
-  }, [dateRange, loadMetaData]);
+  }, [dateRange, loadMetaData, currentAccount?.ad_account_id]);
 
   const handleDateRangeChange = (newDateRange: { preset?: DatePreset; startDate: Date; endDate: Date }) => {
     setDateRange(newDateRange);

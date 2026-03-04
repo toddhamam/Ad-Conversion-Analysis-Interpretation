@@ -42,11 +42,6 @@ export default function AccountSwitcher({ collapsed = false, onCloseMobile }: Ac
     return '#22c55e'; // green — fully configured
   };
 
-  const truncateId = (id: string) => {
-    if (id.length <= 15) return id;
-    return `${id.slice(0, 7)}...${id.slice(-3)}`;
-  };
-
   const handleSwitch = (adAccountId: string) => {
     switchAccount(adAccountId);
     setIsOpen(false);
@@ -83,7 +78,6 @@ export default function AccountSwitcher({ collapsed = false, onCloseMobile }: Ac
               accounts={accounts}
               currentAccount={currentAccount}
               getStatusColor={getStatusColor}
-              truncateId={truncateId}
               onSwitch={handleSwitch}
               onManage={handleManage}
             />
@@ -108,9 +102,6 @@ export default function AccountSwitcher({ collapsed = false, onCloseMobile }: Ac
           <span className="account-trigger-name">
             {currentAccount?.ad_account_name || 'Select Account'}
           </span>
-          <span className="account-trigger-id">
-            {currentAccount ? truncateId(currentAccount.ad_account_id) : ''}
-          </span>
         </div>
         <svg
           className={`account-trigger-chevron ${isOpen ? 'open' : ''}`}
@@ -130,7 +121,6 @@ export default function AccountSwitcher({ collapsed = false, onCloseMobile }: Ac
             accounts={accounts}
             currentAccount={currentAccount}
             getStatusColor={getStatusColor}
-            truncateId={truncateId}
             onSwitch={handleSwitch}
             onManage={handleManage}
           />
@@ -146,14 +136,12 @@ function AccountDropdownContent({
   accounts,
   currentAccount,
   getStatusColor,
-  truncateId,
   onSwitch,
   onManage,
 }: {
   accounts: Array<{ ad_account_id: string; ad_account_name: string | null; page_id: string | null; pixel_id: string | null; currency: string | null; account_status: number | null; id: string; is_active: boolean }>;
   currentAccount: typeof accounts[0] | null;
   getStatusColor: (account: typeof accounts[0] | null) => string;
-  truncateId: (id: string) => string;
   onSwitch: (adAccountId: string) => void;
   onManage: () => void;
 }) {
@@ -182,8 +170,7 @@ function AccountDropdownContent({
                   {account.ad_account_name || account.ad_account_id}
                 </span>
                 <span className="dropdown-account-detail">
-                  {truncateId(account.ad_account_id)}
-                  {account.currency ? ` \u00B7 ${account.currency}` : ''}
+                  {account.currency || 'No currency set'}
                 </span>
               </div>
               <span
