@@ -847,9 +847,11 @@ const Dashboard = () => {
   const totalRevenue = metaData?.totalPurchaseValue || 0;
   const totalClicks = metaData?.totalClicks || 0;
 
-  // Unique purchasers from account-level unique_actions (deduplicated across campaigns).
-  // This prevents double-counting customers who trigger multiple purchase events
-  // (e.g., initial order + upsell/downsell in post-purchase sequence).
+  // Purchasers from account-level actions (deduplicated across campaigns).
+  // Fetched at account level rather than summed per-campaign to avoid inflating
+  // counts when the same purchase is attributed to multiple campaigns.
+  // Note: this is total purchases, not unique people — Meta doesn't support
+  // unique_actions for conversion types. Multiple purchases by one person count separately.
   const uniquePurchases = accountInsights?.uniquePurchases || 0;
 
   // AOV: Revenue per unique customer (total revenue includes upsells)

@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-03-04 — Fix empty Unique Customers — use account-level actions instead of unique_actions
+
+### Overview
+Unique Customers, CPA, AOV, and CVR all showed 0/empty because Meta's `unique_actions` field does **not** support conversion-type action types like `offsite_conversion.fb_pixel_purchase`. It only works for engagement actions (link clicks, post engagements, etc.). Switched to using account-level `actions` for purchase counts, which still deduplicates across campaigns but is actually supported by Meta's API.
+
+### Fixed
+- **Unique Customers** — Now reads from `actions` (not `unique_actions`) at the account level; data actually returns from Meta
+- **CPA, AOV, CVR** — All cascade from Unique Customers, so all are restored
+
+### Changed
+- **Meta API fields** — Account-level insights now requests `reach,actions,unique_actions` (added `actions`); purchases parsed from `actions` array, link clicks still from `unique_actions` (which does support engagement types)
+
+### Trade-off
+Account-level `actions` counts total purchase events, not unique people. If one customer makes 3 purchases, it counts as 3. Meta does not offer unique-person purchase counts through their Marketing API. For most ad accounts this is a reasonable proxy.
+
+### Files Modified
+- `src/services/metaApi.ts` — Changed `fetchAccountLevelInsights` to request `actions` alongside `unique_actions`, parse purchases from `actions` array
+- `src/pages/Dashboard.tsx` — Updated comments to reflect the data source accurately
+
 ## 2026-03-04 — Fix double-counted purchases with Meta unique_actions
 
 ### Overview
