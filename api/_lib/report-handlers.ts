@@ -920,7 +920,7 @@ async function processAndSendReport(schedule: any): Promise<void> {
 
   // Update last_sent_at
   await supabase.from('report_schedules').update({
-    last_sent_at: now.toISOString(),
+    last_sent_at: new Date().toISOString(),
     last_error: null,
   }).eq('id', schedule.id);
 }
