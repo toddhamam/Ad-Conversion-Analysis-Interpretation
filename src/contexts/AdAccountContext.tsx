@@ -55,6 +55,7 @@ export function AdAccountProvider({ children }: { children: React.ReactNode }) {
     if (!orgMeta) {
       setAccounts([]);
       setCurrentAccount(null);
+      setMetaCurrentAccount(null);
       setScopedAccountId(null);
       return;
     }
@@ -63,6 +64,7 @@ export function AdAccountProvider({ children }: { children: React.ReactNode }) {
     if (!orgMeta.connected) {
       setAccounts([]);
       setCurrentAccount(null);
+      setMetaCurrentAccount(null);
       setScopedAccountId(null);
       return;
     }
@@ -86,6 +88,12 @@ export function AdAccountProvider({ children }: { children: React.ReactNode }) {
             currency: null,
           };
           setCurrentAccount(defaultAccount);
+          setMetaCurrentAccount(defaultAccount);
+          setScopedAccountId(null);
+        } else {
+          // Connected but no ad account configured — clear all state
+          setCurrentAccount(null);
+          setMetaCurrentAccount(null);
           setScopedAccountId(null);
         }
         return;
