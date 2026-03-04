@@ -34,7 +34,7 @@ import './ReportSettings.css';
 
 // ─── Metric options (excluding funnel-only) ─────────────────────────────────
 
-const FUNNEL_ONLY = new Set(['uniqueCustomers', 'aov', 'sessions', 'cac']);
+const FUNNEL_ONLY = new Set(['sessions']);
 
 interface MetricOption {
   id: string;

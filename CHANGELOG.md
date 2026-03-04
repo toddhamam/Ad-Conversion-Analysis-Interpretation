@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-03-04 — Fix double-counted purchases with Meta unique_actions
+
+### Overview
+Meta's pixel fires a `purchase` event for both the initial order AND any upsell/downsell in the post-purchase sequence. One customer could generate 2+ purchase events, inflating counts and distorting AOV, CPA, and CVR. Fixed by using Meta's `unique_actions` at the account level (fully deduplicated across campaigns) for per-customer metrics.
+
+### Fixed
+- **AOV** — Now uses `totalRevenue / uniquePurchases` instead of `totalRevenue / totalPurchases` (revenue per unique customer, not per order)
+- **CPA** — Now uses `adSpend / uniquePurchases` (cost per unique customer acquired)
+- **CVR** — Now uses `uniquePurchases / landingPageViews` (% of visitors who become unique customers)
+- **Unique Customers** — Now sourced from Meta `unique_actions` instead of Supabase funnel data; works for all users, not just super admins with funnel tracking
+
+### Changed
+- **Unique Customers visible by default** — Card now works for all users (Meta-derived), no longer hidden behind funnel-only gate
+- **FUNNEL_ONLY reduced** — Only `sessions` remains funnel-only; `uniqueCustomers`, `aov`, `cac` removed from funnel-only sets in both Dashboard and ReportSettings
+- **STATIC_PERIODS clarified** — Descriptions updated to distinguish "all purchase events" from "unique customers"
+
+### Not Changed
+- **Total Conversions** — Still shows all purchase events (including upsells), matching Meta's reporting
+- **COGS per-unit** — Still uses total purchases (each order has COGS)
+- **ROAS** — Revenue is correct as-is (includes all upsells)
+- **ConversionIQ / MetaAds** — Completely independent, not affected
+
+### Files Modified
+- `src/services/metaApi.ts` — Added `uniquePurchases` to `AccountLevelInsights`, extracting from `unique_actions` for `offsite_conversion.fb_pixel_purchase`
+- `src/pages/Dashboard.tsx` — Wired `uniquePurchases` into AOV/CPA/CVR calculations, updated visibility and labels
+- `src/pages/ReportSettings.tsx` — Removed `uniqueCustomers`/`aov`/`cac` from `FUNNEL_ONLY` set
+
 ## 2026-03-04 — Fix dashboard metric accuracy, add COGS & Net Profit P&L
 
 ### Overview
