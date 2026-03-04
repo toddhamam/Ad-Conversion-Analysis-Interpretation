@@ -845,13 +845,19 @@ export async function fetchCampaignSummaries(dateOptions?: DateRangeOptions): Pr
 }
 
 /**
- * Fetch account-level insights for unique-user metrics (reach, unique link clicks).
- * These cannot be summed across campaigns without double-counting users,
- * so we fetch them at account level where Meta deduplicates correctly.
+ * Fetch account-level insights for deduplicated metrics (reach, purchases).
+ * Fetched at account level (not summed across campaigns) so Meta deduplicates
+ * actions that span multiple campaigns — preventing inflated counts.
+ *
+ * Note: Meta's `unique_actions` field does NOT support conversion-type actions
+ * like purchases — only engagement actions (link_click, post_engagement, etc.).
+ * We use `actions` at account level instead, which still deduplicates across
+ * campaigns but counts multiple purchases by the same person separately.
  */
 export interface AccountLevelInsights {
   reach: number;
   uniqueLinkClicks: number;
+  /** Account-level purchase count (deduplicated across campaigns, not per-person) */
   uniquePurchases: number;
 }
 
@@ -868,7 +874,7 @@ export async function fetchAccountLevelInsights(dateOptions?: DateRangeOptions):
   try {
     const data = await metaFetch(`${adAccountId}/insights`, {
       params: {
-        fields: 'reach,unique_actions',
+        fields: 'reach,actions,unique_actions',
         ...buildDateParams(dateOptions),
       },
     });
@@ -877,12 +883,17 @@ export async function fetchAccountLevelInsights(dateOptions?: DateRangeOptions):
     if (!row) return { reach: 0, uniqueLinkClicks: 0, uniquePurchases: 0 };
 
     const reach = parseInt(row.reach || '0', 10);
+
+    // unique_actions works for engagement actions (link_click) but NOT conversions
     const uniqueLinkClicks = parseInt(
       row.unique_actions?.find((a: any) => a.action_type === 'link_click')?.value || '0',
       10
     );
+
+    // Use account-level `actions` for purchases — deduplicates across campaigns
+    // (Meta's unique_actions doesn't support offsite_conversion action types)
     const uniquePurchases = parseInt(
-      row.unique_actions?.find((a: any) => a.action_type === 'offsite_conversion.fb_pixel_purchase')?.value || '0',
+      row.actions?.find((a: any) => a.action_type === 'offsite_conversion.fb_pixel_purchase')?.value || '0',
       10
     );
 
