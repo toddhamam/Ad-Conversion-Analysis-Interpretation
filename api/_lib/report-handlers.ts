@@ -62,6 +62,7 @@ function isSchemaError(err: unknown): boolean {
   return String(err).includes('schema cache');
 }
 
+
 // ─── Auth Helpers ─────────────────────────────────────────────────────────────
 
 interface AuthContext {

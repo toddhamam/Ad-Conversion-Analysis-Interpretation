@@ -278,6 +278,8 @@ const supabase = createClient(
 );
 ```
 
+**PostgREST schema cache**: After running DDL migrations (CREATE TABLE, ALTER TABLE), PostgREST may not immediately see the new tables/columns. Run `NOTIFY pgrst, 'reload schema';` in the Supabase SQL Editor to force a cache refresh. Without this, queries will fail with "Could not find the table in the schema cache."
+
 ---
 
 ## Sentry Error Monitoring
@@ -349,6 +351,13 @@ A Sentry MCP server is configured globally (`~/.claude.json`) using OAuth at `ht
 - `/sentry keyword` — filters by keyword
 
 **Authentication**: OAuth-based, authenticates on first use in a new session. Re-authenticate via `/mcp` → Sentry → Authenticate.
+
+**Conductor workaround**: Conductor agents don't have access to Sentry MCP tools. Instead, use the Sentry REST API via `curl` with credentials stored in `.context/sentry.json`:
+```bash
+SENTRY_TOKEN=$(python3 -c "import json; print(json.load(open('.context/sentry.json'))['auth_token'])")
+curl -s -H "Authorization: Bearer $SENTRY_TOKEN" \
+  "https://sentry.io/api/0/projects/spire-enterprises-pty-ltd/javascript-react/issues/?query=is:unresolved&sort=freq&limit=25"
+```
 
 ---
 
