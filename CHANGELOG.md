@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-03-05 — Add regenerate & remove for individual text ad images
+
+### Added
+- **Regenerate individual text ad images** — "Regenerate" button on each text ad image re-renders it with a different style from the selected presets (cycles to next style). Instant, no API calls.
+- **Remove individual images** — Red "Remove" button on every image card (all ad types) lets users drop unwanted images before publishing to Meta. Guard: can't remove the last image.
+- **`textAdConfig` persisted on `GeneratedAdPackage`** — Stores the original primary/highlight/anchor text and style IDs so text ad images can be regenerated after initial generation.
+
+### Changed
+- **`GeneratedAdCard`** — Added `onRemoveImage` prop, `Trash2` icon import, remove button with red styling (`.remove-btn`)
+- **`AdGenerator.tsx`** — Added `handleRegenerateTextImage` and `handleRemoveImage` callbacks; text ads now receive `onRegenerateImage` (mapped to text handler) and `onRemoveImage`
+- **`openaiApi.ts`** — `GeneratedAdPackage.textAdConfig` field added; populated in `generateAdPackage()` return for text ads
+
+---
+
 ## 2026-03-05 — Add text-only ad image generation for CreativeIQ
 
 ### Overview

@@ -33,7 +33,7 @@ import {
   type VideoModel,
   type TextAdCopyResult,
 } from '../services/openaiApi';
-import { TEXT_AD_STYLES, getDefaultStyleId } from '../services/textAdCanvas';
+import { TEXT_AD_STYLES, getDefaultStyleId, generateTextAdImage, getStyleById } from '../services/textAdCanvas';
 import { getCacheStats as getImageCacheStats, uploadBrandImages, clearImageCache } from '../services/imageCache';
 import { fetchAdCreatives, type DatePreset } from '../services/metaApi';
 import GeneratedAdCard from '../components/GeneratedAdCard';
@@ -1090,6 +1090,56 @@ const AdGenerator = () => {
       throw new Error(err instanceof Error ? err.message : 'Failed to regenerate video');
     }
   }, [generatedAds, analysisData, videoAspectRatio, videoDuration, videoModel, selectedProduct]);
+
+  // Regenerate a single text ad image with a different style
+  const handleRegenerateTextImage = useCallback(async (adId: string, imageIndex: number) => {
+    const adToUpdate = generatedAds.find(ad => ad.id === adId);
+    if (!adToUpdate?.images || adToUpdate.images.length <= imageIndex || !adToUpdate.textAdConfig) {
+      console.error('Cannot regenerate: text ad or image not found');
+      return;
+    }
+
+    const config = adToUpdate.textAdConfig;
+    // Pick a different style — cycle through selected styles offset by index
+    const resolvedStyles = config.styleIds
+      .map(id => getStyleById(id))
+      .filter((s): s is NonNullable<typeof s> => s !== undefined);
+    if (resolvedStyles.length === 0) resolvedStyles.push(TEXT_AD_STYLES[0]);
+
+    // Offset by +1 from original index to get a different style
+    const style = resolvedStyles[(imageIndex + 1) % resolvedStyles.length];
+
+    const newImage = generateTextAdImage({
+      primaryText: config.primaryText,
+      highlightText: config.highlightText,
+      anchorText: config.anchorText,
+      style,
+      imageSize: imageSize,
+    });
+
+    const updatedAds = generatedAds.map(ad => {
+      if (ad.id === adId && ad.images) {
+        const updatedImages = [...ad.images];
+        updatedImages[imageIndex] = newImage;
+        return { ...ad, images: updatedImages };
+      }
+      return ad;
+    });
+
+    setGeneratedAds(updatedAds);
+  }, [generatedAds, imageSize]);
+
+  // Remove a single image from an ad package
+  const handleRemoveImage = useCallback((adId: string, imageIndex: number) => {
+    const updatedAds = generatedAds.map(ad => {
+      if (ad.id === adId && ad.images && ad.images.length > 1) {
+        const updatedImages = ad.images.filter((_, i) => i !== imageIndex);
+        return { ...ad, images: updatedImages };
+      }
+      return ad;
+    });
+    setGeneratedAds(updatedAds);
+  }, [generatedAds]);
 
   const hasAnalysisData = !!analysisData;
   const isGenerating = isGeneratingCopy || isGeneratingCreatives;
@@ -2214,9 +2264,10 @@ const AdGenerator = () => {
               <GeneratedAdCard
                 key={ad.id}
                 ad={ad}
-                onRegenerateImage={ad.adType === 'image' ? handleRegenerateImage : undefined}
+                onRegenerateImage={ad.adType === 'image' ? handleRegenerateImage : ad.adType === 'text' ? handleRegenerateTextImage : undefined}
                 onRegenerateAllImages={ad.adType === 'image' ? handleRegenerateAllImages : undefined}
                 onRegenerateVideo={ad.adType === 'video' ? handleRegenerateVideo : undefined}
+                onRemoveImage={handleRemoveImage}
               />
             ))}
           </div>
