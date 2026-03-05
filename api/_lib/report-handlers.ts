@@ -45,6 +45,14 @@ const CRON_BATCH_LIMIT = 10;
 const SEND_LOCK_MINUTES = 5;
 const MANUAL_SEND_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 
+/**
+ * Detect Supabase "table not found in schema cache" errors.
+ * These occur when report tables haven't been created via migration yet.
+ */
+function isTableNotFoundError(error: { message?: string; code?: string } | null): boolean {
+  return !!error?.message?.includes('schema cache');
+}
+
 // ─── Auth Helpers ─────────────────────────────────────────────────────────────
 
 interface AuthContext {
@@ -371,6 +379,9 @@ export async function handleReportSchedules(req: VercelRequest, res: VercelRespo
       .order('created_at', { ascending: false });
 
     if (error) {
+      if (isTableNotFoundError(error)) {
+        return res.status(501).json({ error: 'Report scheduling is not yet available. Database migration pending.' });
+      }
       captureError(new Error(error.message), { route: 'meta/report-schedules' });
       await flushSentry();
       return res.status(500).json({ error: 'Failed to fetch report schedules' });
@@ -460,6 +471,9 @@ export async function handleReportSchedules(req: VercelRequest, res: VercelRespo
       .single();
 
     if (error) {
+      if (isTableNotFoundError(error)) {
+        return res.status(501).json({ error: 'Report scheduling is not yet available. Database migration pending.' });
+      }
       if (error.code === '23505') {
         return res.status(409).json({ error: 'A schedule with this frequency already exists for this account.' });
       }
@@ -671,6 +685,9 @@ export async function handleReportCron(req: VercelRequest, res: VercelResponse) 
       .limit(CRON_BATCH_LIMIT);
 
     if (queryError) {
+      if (isTableNotFoundError(queryError)) {
+        return res.status(200).json({ message: 'Report tables not yet provisioned — skipping cron', sent: 0, failed: 0 });
+      }
       captureError(new Error(queryError.message), { route: 'meta/report-cron' });
       await flushSentry();
       return res.status(500).json({ error: 'Failed to query due schedules' });
@@ -765,6 +782,9 @@ export async function handleReportHistory(req: VercelRequest, res: VercelRespons
     .limit(20);
 
   if (error) {
+    if (isTableNotFoundError(error)) {
+      return res.status(501).json({ error: 'Report history is not yet available. Database migration pending.' });
+    }
     captureError(new Error(error.message), { route: 'meta/report-history' });
     await flushSentry();
     return res.status(500).json({ error: 'Failed to fetch report history' });

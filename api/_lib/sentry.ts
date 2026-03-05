@@ -73,8 +73,15 @@ export function captureError(
       Sentry.captureException(error);
     } else if (typeof error === 'object' && error !== null && 'message' in error) {
       // Handle Supabase PostgrestError and similar objects with a message property
-      const msg = (error as { message: string }).message;
-      Sentry.captureException(new Error(msg));
+      const msg = (error as { message: unknown }).message;
+      Sentry.captureException(new Error(typeof msg === 'string' ? msg : JSON.stringify(msg)));
+    } else if (typeof error === 'object' && error !== null) {
+      // Handle plain objects without a message property
+      try {
+        Sentry.captureException(new Error(JSON.stringify(error)));
+      } catch {
+        Sentry.captureException(new Error('[Non-serializable error object]'));
+      }
     } else {
       Sentry.captureException(new Error(String(error)));
     }
