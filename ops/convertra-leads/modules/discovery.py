@@ -1,9 +1,12 @@
 """Autonomous prospect discovery via DuckDuckGo search."""
 
+import logging
 import re
 from urllib.parse import urlparse
 
 from modules.pipeline import load_pipeline
+
+log = logging.getLogger("discovery")
 
 # Niche -> search queries designed to find actual brand/company homepages (not articles)
 # Strategy: use e-commerce signals, Shopify stores, and negative modifiers to skip listicles
@@ -394,9 +397,11 @@ def _ddg_search(query, max_results=10):
         with DDGS() as ddgs:
             return list(ddgs.text(query, max_results=max_results))
     except ImportError:
-        return [{"title": "ERROR", "href": "", "body": "ddgs package not installed. Run: pip3 install ddgs"}]
+        log.error("ddgs package not installed. Run: pip3 install ddgs")
+        return []
     except Exception as e:
-        return [{"title": "ERROR", "href": "", "body": f"Search failed: {e}"}]
+        log.error("DDG search failed for %r: %s", query, e)
+        return []
 
 
 def _extract_domain(url):

@@ -4,6 +4,7 @@ import re
 from urllib.parse import urlparse
 
 from modules.pipeline import load_pipeline, add_prospect
+from modules.discovery import _ddg_search
 
 
 # Default search keywords targeting companies that need ad velocity
@@ -292,21 +293,3 @@ def _get_pipeline_domains():
         return domains
     except Exception:
         return set()
-
-
-_used_queries = set()
-
-
-def _ddg_search(query, max_results=10):
-    """Run a DuckDuckGo search. Skips duplicate queries within a session."""
-    if query in _used_queries:
-        return []
-    _used_queries.add(query)
-    try:
-        from ddgs import DDGS
-        with DDGS() as ddgs:
-            return list(ddgs.text(query, max_results=max_results))
-    except ImportError:
-        return []
-    except Exception:
-        return []
