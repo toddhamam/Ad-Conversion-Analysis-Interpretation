@@ -105,7 +105,10 @@ public/
 | `src/components/MainLayout.tsx` | App shell with sidebar, header, and responsive navigation |
 | `src/services/stripeApi.ts` | Stripe integration - checkout, portal, subscription management (sends JWT auth headers) |
 | `src/pages/Billing.tsx` | Billing portal page with plan management |
-| `src/pages/AccountSettings.tsx` | Account settings — reads user identity from OrganizationContext (Supabase) |
+| `src/pages/AccountSettings.tsx` | Account settings — profile, company branding, password (no business type — that's per-account in Integrations) |
+| `src/pages/Integrations.tsx` | Meta connection, per-account config (page, pixel, business type), multi-account activation |
+| `src/lib/businessTypeConfig.ts` | Central config for e-commerce vs lead gen — labels, thresholds, AI prompts, dashboard metrics, publisher defaults |
+| `src/contexts/AdAccountContext.tsx` | Multi-account context — account switching, resolved `accountBusinessType`, scoped localStorage |
 | `src/components/SubscriptionGate.tsx` | Subscription/trial gate — blocks free/expired users, exempts super admins |
 | `src/pages/Dashboard.tsx` | Main dashboard with customizable stat cards, date range picker, fetches from both Meta API and Supabase funnel API |
 | `src/pages/Funnels.tsx` | Funnel metrics page with ad spend configuration |
@@ -164,7 +167,9 @@ public/
 /products       → Products management
 /insights       → Channel AI analysis (ConversionIQ™)
 /seo-iq         → SEO IQ dashboard (sites, keywords, articles, autopilot)
+/integrations   → Meta connection & per-account configuration
 /billing        → Billing & subscription management
+/account        → Account settings (profile, company, password)
 /*              → 404 Not Found (catch-all for unknown routes)
 ```
 
@@ -186,6 +191,8 @@ public/
 14. **Catch-all serverless function consolidation** - Multi-route API handlers use a single serverless function with `route` query param dispatching (e.g., `api/meta.ts`, `api/seoiq.ts`). Vercel rewrites map friendly URLs to query params. This is required to stay within Vercel Hobby plan's **12 serverless function limit**
 15. **Per-org encrypted credentials** - Meta access tokens stored encrypted (AES-256-GCM) in `organization_credentials` table via `api/_lib/encryption.ts`. Admin can enter credentials manually or use OAuth flow. Credentials include `access_token_encrypted`, `ad_account_id`, `page_id`, `pixel_id`
 16. **Dev mode fallback** - When Supabase is not configured (local dev), `metaApi.ts` falls back to `VITE_META_*` env vars so development works without auth
+17. **Per-account business type** - Business type (`ecommerce` | `leadgen`) is set per ad account in Integrations, not at the org level. Resolution: account `business_type` > org `business_type` > `'ecommerce'`. Controls metric labels, dashboard visibility, AI prompt context, ad publisher defaults, and classification thresholds via `businessTypeConfig.ts`. All consumers use `useAdAccount().accountBusinessType`
+18. **Pixel ID required per account** - Pixel ID is a required field in the per-account configure panel (Integrations). Loaded via dropdown from Meta API (`fetchAvailablePixels`), not manual text entry. Account status dot shows amber until both page and pixel are configured
 
 ---
 
@@ -560,7 +567,7 @@ The Overview tab in `OrganizationDetail.tsx` shows a granular setup checklist:
 - Meta Ads connected (links to Meta Setup tab)
 - Ad Account ID configured (links to Meta Setup tab)
 - Page ID configured (links to Meta Setup tab)
-- Pixel ID configured (optional, links to Meta Setup tab)
+- Pixel ID configured (required, links to Meta Setup tab)
 
 ### Database: `organization_credentials` Table
 
@@ -1323,7 +1330,7 @@ The `publishAds()` function runs automatic diagnostics before ad set creation:
 ### Pixel Management
 
 - Pixels are fetched via `fetchAdPixels()` from the `adspixels` endpoint (fallback: `datasets` endpoint)
-- Never manually enter pixel IDs — always fetch from the API to ensure they're associated with the ad account
+- Pixel ID is a **required** field in the Integrations per-account configure panel — loaded via dropdown from `fetchAvailablePixels()`, never manual text entry
 - Pixel ID is required for `OUTCOME_SALES` campaigns (used in both `promoted_object` and `tracking_specs`)
 
 ### Budget Modes (CBO vs ABO)
