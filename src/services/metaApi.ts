@@ -43,6 +43,7 @@ export interface AdAccountInfo {
   is_active: boolean;
   account_status: number | null;
   currency: string | null;
+  business_type: import('../types/organization').BusinessType | null;
 }
 
 export interface OrgMetaIds {
@@ -2165,6 +2166,7 @@ export async function deactivateAdAccount(adAccountId: string): Promise<void> {
 export async function configureAdAccount(adAccountId: string, config: {
   pageId?: string | null;
   pixelId?: string | null;
+  businessType?: import('../types/organization').BusinessType | null;
 }): Promise<void> {
   const token = await getAuthToken();
   const res = await fetch('/api/meta/ad-accounts', {
@@ -2178,6 +2180,7 @@ export async function configureAdAccount(adAccountId: string, config: {
       adAccountId,
       pageId: config.pageId,
       pixelId: config.pixelId,
+      businessType: config.businessType,
     }),
   });
   if (!res.ok) {

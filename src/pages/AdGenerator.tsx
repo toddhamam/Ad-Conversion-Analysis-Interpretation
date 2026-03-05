@@ -41,7 +41,7 @@ import SEO from '../components/SEO';
 import { setPublishData } from '../services/publishStore';
 import type { AdLibraryInspiration } from '../types';
 import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
-import { useOrganization } from '../contexts/OrganizationContext';
+import { useAdAccount } from '../contexts/AdAccountContext';
 import './AdGenerator.css';
 
 const CACHE_KEY = 'channel_analysis_cache';
@@ -152,7 +152,7 @@ const IMPORT_DATE_OPTIONS: { id: DatePreset; label: string }[] = [
 
 const AdGenerator = () => {
   const navigate = useNavigate();
-  const { businessType } = useOrganization();
+  const { accountBusinessType: businessType } = useAdAccount();
 
   // Render tracking for debugging Chrome crashes
   const renderCountRef = useRef(0);

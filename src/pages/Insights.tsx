@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { getScopedItem, setScopedItem } from '../lib/scopedStorage';
-import { useOrganization } from '../contexts/OrganizationContext';
+import { useAdAccount } from '../contexts/AdAccountContext';
 import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
 import './Insights.css';
 
@@ -88,7 +88,7 @@ function setCachedAnalysis(channel: Channel, analysis: ChannelAnalysisResult): v
 }
 
 const Insights = () => {
-  const { businessType } = useOrganization();
+  const { accountBusinessType: businessType } = useAdAccount();
   const [selectedChannel, setSelectedChannel] = useState<Channel>('meta');
   const [analysis, setAnalysis] = useState<ChannelAnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);

@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { useOrganization } from './OrganizationContext';
+import type { BusinessType } from '../types/organization';
 import {
   getOrgMetaIds,
   setCurrentAdAccount as setMetaCurrentAccount,
@@ -49,6 +50,8 @@ export interface AdAccountContextValue {
   activateAccount: (adAccountId: string) => Promise<void>;
   /** The ad account ID currently being activated (loading state) */
   activatingAccountId: string | null;
+  /** Resolved business type: per-account override > org default > 'ecommerce' */
+  accountBusinessType: BusinessType;
 }
 
 const AdAccountContext = createContext<AdAccountContextValue | undefined>(undefined);
@@ -114,6 +117,7 @@ export function AdAccountProvider({ children }: { children: React.ReactNode }) {
             is_active: true,
             account_status: null,
             currency: null,
+            business_type: null,
           };
           setCurrentAccount(defaultAccount);
           setMetaCurrentAccount(defaultAccount);
@@ -159,7 +163,7 @@ export function AdAccountProvider({ children }: { children: React.ReactNode }) {
         setSeatInfo({ seats: data.seats, seatsUsed: data.seatsUsed, maxAccounts: data.maxAccounts });
         // Build a fingerprint that captures both the account list and key config fields
         const fingerprint = (accts: AdAccountInfo[]) =>
-          accts.map(a => `${a.ad_account_id}:${a.page_id || ''}:${a.pixel_id || ''}`).sort().join(',');
+          accts.map(a => `${a.ad_account_id}:${a.page_id || ''}:${a.pixel_id || ''}:${a.business_type || ''}`).sort().join(',');
         if (fingerprint(freshAccounts) !== fingerprint(cachedAccounts)) {
           applyAccounts(freshAccounts);
         }
@@ -239,6 +243,12 @@ export function AdAccountProvider({ children }: { children: React.ReactNode }) {
 
   const isMultiAccount = accounts.length > 1;
 
+  const { businessType: orgBusinessType } = useOrganization();
+  const accountBusinessType: BusinessType = useMemo(
+    () => currentAccount?.business_type || orgBusinessType || 'ecommerce',
+    [currentAccount?.business_type, orgBusinessType]
+  );
+
   return (
     <AdAccountContext.Provider
       value={{
@@ -251,6 +261,7 @@ export function AdAccountProvider({ children }: { children: React.ReactNode }) {
         seatInfo,
         activateAccount,
         activatingAccountId,
+        accountBusinessType,
       }}
     >
       {children}

@@ -27,7 +27,6 @@ import {
 } from '../services/imageCache';
 import Loading from '../components/Loading';
 import { AlertTriangle, Check } from 'lucide-react';
-import { useOrganization } from '../contexts/OrganizationContext';
 import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
 import './MetaAds.css';
 
@@ -107,8 +106,7 @@ function convertToAdCreativeData(creative: AdCreative): AdCreativeData {
 
 const MetaAds = () => {
   // Meta Ads page with logo
-  const { currentAccount } = useAdAccount();
-  const { businessType } = useOrganization();
+  const { currentAccount, accountBusinessType: businessType } = useAdAccount();
   const btConfig = getBusinessTypeConfig(businessType);
   const [creatives, setCreatives] = useState<AdCreative[]>([]);
   const [campaignMetrics, setCampaignMetrics] = useState<CampaignTypeMetrics[]>([]);
