@@ -263,7 +263,7 @@ def run_campaign(niches, include_jobs=False, campaign_name=None):
         if has_enrichment:
             try:
                 from modules.enrichment import batch_enrich
-                enrich_stats = batch_enrich(stage="researched", score_min=5, max_credits=100)
+                enrich_stats = batch_enrich(stage="researched", score_min=5, max_credits=500)
                 provider = enrich_stats.get("provider", "unknown")
                 log.info(
                     f"  {provider.title()}: {enrich_stats.get('enriched', 0)} enriched, "
@@ -1068,7 +1068,7 @@ def _run_enrichment_pass(email_score_min):
         try:
             from modules.enrichment import batch_enrich
             enrich_stats = batch_enrich(
-                stage="researched", score_min=email_score_min, max_credits=50
+                stage="researched", score_min=email_score_min, max_credits=300
             )
             provider = enrich_stats.get("provider", "unknown")
             log.info(

@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 import requests
 
 from modules.pipeline import load_pipeline, add_prospect
+from modules.discovery import _ddg_search
 
 
 # ── Niche search queries ─────────────────────────────────────────────
@@ -283,24 +284,6 @@ def _clean_title(title):
     # Remove "Shop" prefix
     title = re.sub(r'^Shop\s+', '', title, flags=re.IGNORECASE)
     return title.strip()[:80]
-
-
-_used_queries = set()
-
-
-def _ddg_search(query, max_results=10):
-    """Run a DuckDuckGo search. Skips duplicate queries within a session."""
-    if query in _used_queries:
-        return []
-    _used_queries.add(query)
-    try:
-        from ddgs import DDGS
-        with DDGS() as ddgs:
-            return list(ddgs.text(query, max_results=max_results))
-    except ImportError:
-        return []
-    except Exception:
-        return []
 
 
 def _get_pipeline_domains():

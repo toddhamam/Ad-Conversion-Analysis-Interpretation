@@ -2,3 +2,6 @@ requests==2.31.0
 beautifulsoup4==4.12.3
 dnspython==2.6.1
 ddgs>=8.0.0
+# transitive dep of ddgs — not declared in its package metadata, causes silent
+# ModuleNotFoundError crashes without it (discovered 2026-03-05)
+typing_extensions==4.15.0

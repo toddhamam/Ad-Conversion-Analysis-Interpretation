@@ -893,3 +893,25 @@ DDG is deterministic. The niche queue wraps around after 6 niches, so Round 19 "
 4. **Raised `max_rounds` default** from 25 to 50 in `run_fill()`
 
 **Files changed:** `modules/discovery.py`, `modules/linkedin_discovery.py`, `modules/shopify_discovery.py`, `modules/google_business.py`, `modules/job_scraper.py`, `orchestrator.py`
+
+### 2026-03-05 — Fix Enrichment Bottleneck & DDG Error Swallowing
+
+A `fill --target 100` test discovered 171 prospects but only 15 reached `ready_to_send` (8.8% conversion). Two root causes fixed:
+
+**1. Apollo credit budgets too low** (`orchestrator.py`)
+- Fill mode: `max_credits` raised from 50 → 300 per enrichment pass
+- Campaign mode: `max_credits` raised from 100 → 500
+- Still well within Apollo's 10,000/month free tier (~333/day)
+
+**2. Consolidated `_ddg_search()` into single shared function** (5 files)
+- 5 modules each had their own copy of `_ddg_search()` with separate `_used_queries` sets
+- Silent error swallowing: errors returned as `[{"title":"ERROR"...}]` dict entries that polluted downstream results, or were silently dropped
+- `reset_query_cache()` only cleared `discovery.py`'s set, not the other 4
+- **Fix**: All 4 duplicate modules now import `_ddg_search` from `discovery.py`. Errors are logged via `logging` and return clean `[]`
+
+**3. Pin `typing_extensions`** (`requirements.txt`)
+- `ddgs` package depends on `typing_extensions` but doesn't declare it in its metadata
+- Without it, every DDG search crashed with `ModuleNotFoundError` but `except Exception` handlers silently swallowed it — the entire previous 100-lead run had zero working DDG searches
+- Pinned to `typing_extensions==4.15.0`
+
+**Files changed:** `orchestrator.py`, `modules/discovery.py`, `modules/shopify_discovery.py`, `modules/linkedin_discovery.py`, `modules/google_business.py`, `modules/job_scraper.py`, `requirements.txt`
