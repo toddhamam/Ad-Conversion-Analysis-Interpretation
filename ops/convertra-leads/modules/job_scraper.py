@@ -65,11 +65,11 @@ def search_job_listings(keywords=None, limit=30):
         # Search job boards specifically
         for site in ["indeed.com", "seek.com.au", "linkedin.com/jobs"]:
             query = f"{keyword} site:{site}"
-            hits = _ddg_search(query, max_results=limit // (len(keywords) * 2) + 3)
+            hits = _ddg_search(query, max_results=max(15, limit // (len(keywords) * 2) + 3))
             _process_hits(hits, all_results, seen_domains, existing_domains, keyword)
 
         # Also search the open web for career pages
-        hits = _ddg_search(f"{keyword} careers", max_results=limit // len(keywords) + 3)
+        hits = _ddg_search(f"{keyword} careers", max_results=max(15, limit // len(keywords) + 3))
         _process_hits(hits, all_results, seen_domains, existing_domains, keyword)
 
         if len(all_results) >= limit:
@@ -294,8 +294,14 @@ def _get_pipeline_domains():
         return set()
 
 
+_used_queries = set()
+
+
 def _ddg_search(query, max_results=10):
-    """Run a DuckDuckGo search. Returns list of result dicts."""
+    """Run a DuckDuckGo search. Skips duplicate queries within a session."""
+    if query in _used_queries:
+        return []
+    _used_queries.add(query)
     try:
         from ddgs import DDGS
         with DDGS() as ddgs:

@@ -111,7 +111,7 @@ def search_agencies(location=None, country="us", agency_type="performance_market
     for loc in locations:
         for query_tmpl in queries_template:
             query = query_tmpl.replace("{location}", f'"{loc}"')
-            hits = _ddg_search(query, max_results=limit // (len(locations) * len(queries_template)) + 3)
+            hits = _ddg_search(query, max_results=max(20, limit // (len(locations) * len(queries_template)) + 3))
 
             for hit in hits:
                 url = hit.get("href", "")
@@ -164,7 +164,7 @@ def search_directories(limit=30):
     existing_domains = _get_pipeline_domains()
 
     for query in DIRECTORY_QUERIES:
-        hits = _ddg_search(query, max_results=limit // len(DIRECTORY_QUERIES) + 3)
+        hits = _ddg_search(query, max_results=max(20, limit // len(DIRECTORY_QUERIES) + 3))
 
         for hit in hits:
             url = hit.get("href", "")
@@ -349,8 +349,14 @@ def _extract_agency_domains_from_text(text):
     return domains[:5]  # Max 5 per listing
 
 
+_used_queries = set()
+
+
 def _ddg_search(query, max_results=10):
-    """Run a DuckDuckGo search."""
+    """Run a DuckDuckGo search. Skips duplicate queries within a session."""
+    if query in _used_queries:
+        return []
+    _used_queries.add(query)
     try:
         from ddgs import DDGS
         with DDGS() as ddgs:

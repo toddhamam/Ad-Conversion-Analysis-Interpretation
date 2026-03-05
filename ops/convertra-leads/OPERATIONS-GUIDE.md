@@ -885,9 +885,11 @@ DDG is deterministic. The niche queue wraps around after 6 niches, so Round 19 "
 × ~35% enrichment conversion        = ~130-220 ready_to_send
 ```
 
-#### Pending fixes (not yet implemented)
+#### Fixes implemented (2026-03-05)
 
-1. **Raise `max_results`** in all 6 discovery modules from ~11 to 30-50 per DDG query
-2. **Raise `limit_per_niche`** in orchestrator's `batch_discover()` call from 20 to 50
-3. **Never re-run the same query** — track queries used this session and skip duplicates
-4. **Raise `max_rounds` default** from 25 to 50 (safety margin; loop already exits on target met)
+1. **Raised `max_results`** in all 6 discovery modules — DDG queries now request `max(30, ...)` results instead of ~11. Applies to: `discovery.py`, `linkedin_discovery.py`, `shopify_discovery.py`, `google_business.py`, `job_scraper.py`
+2. **Raised all orchestrator limits** from 20 to 50 — `batch_discover(limit_per_niche=50)`, LinkedIn people/companies `limit=50`, Shopify `limit=50`, agencies `limit=50`, jobs `limit=50`
+3. **Session-level query dedup** — each module's `_ddg_search()` now tracks queries used this session via `_used_queries` set and returns `[]` for repeats. `reset_query_cache()` called at start of each prospect hunt
+4. **Raised `max_rounds` default** from 25 to 50 in `run_fill()`
+
+**Files changed:** `modules/discovery.py`, `modules/linkedin_discovery.py`, `modules/shopify_discovery.py`, `modules/google_business.py`, `modules/job_scraper.py`, `orchestrator.py`

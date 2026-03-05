@@ -251,7 +251,7 @@ def search_prospects_by_niche(niche, limit=30):
     existing_domains = _get_pipeline_domains()
 
     for query in queries:
-        hits = _ddg_search(query, max_results=limit // len(queries) + 5)
+        hits = _ddg_search(query, max_results=max(30, limit // len(queries) + 5))
         for hit in hits:
             domain = _extract_domain(hit.get("href", ""))
             if not domain or domain in seen_domains or domain in existing_domains:
@@ -282,7 +282,7 @@ def search_prospects_by_keywords(keywords_list, limit=30):
     existing_domains = _get_pipeline_domains()
 
     for keyword in keywords_list:
-        hits = _ddg_search(keyword, max_results=limit // len(keywords_list) + 5)
+        hits = _ddg_search(keyword, max_results=max(30, limit // len(keywords_list) + 5))
         for hit in hits:
             domain = _extract_domain(hit.get("href", ""))
             if not domain or domain in seen_domains or domain in existing_domains:
@@ -376,8 +376,19 @@ def _clean_ddg_title(title):
     return title.strip()
 
 
+_used_queries = set()
+
+
+def reset_query_cache():
+    """Reset the session query cache. Call at the start of a new orchestrator run."""
+    _used_queries.clear()
+
+
 def _ddg_search(query, max_results=10):
-    """Run a DuckDuckGo search. Returns list of result dicts."""
+    """Run a DuckDuckGo search. Skips duplicate queries within a session."""
+    if query in _used_queries:
+        return []
+    _used_queries.add(query)
     try:
         from ddgs import DDGS
         with DDGS() as ddgs:
