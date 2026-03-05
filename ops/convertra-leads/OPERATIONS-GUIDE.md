@@ -837,3 +837,57 @@ The `fill --target 25` pipeline was completing all 25 rounds but only producing 
 - Doubled to ~8/25 rounds by assigning positions 1 and 4 in the 6-round cycle.
 
 **Files changed:** `modules/apollo_enrichment.py`, `modules/email_finder.py`, `modules/enrichment.py`, `orchestrator.py`
+
+### 2026-03-05 — Pipeline Audit: Discovery Throttle Diagnosis
+
+Full audit of the outreach pipeline to understand why `fill --target 25` with 25 rounds only produced ~15 leads (before the yield fixes above). The enrichment fixes (PR #287) improved conversion from discovered → ready_to_send from ~6% to ~30-35%, but a second systemic issue was identified: **all 6 discovery sources are artificially throttled at the DDG query level**.
+
+#### Root cause: All 6 sources use DuckDuckGo
+
+Every discovery module — niche DDG, LinkedIn x-ray, Shopify stores, agencies, job listings, LinkedIn companies — uses DuckDuckGo as its sole data source with different query templates. The queries ARE diverse enough to produce different results (LinkedIn profiles vs Shopify domains vs agency websites), so the sources themselves are effectively unlimited at our scale. The problem is three artificial throttles:
+
+**1. `max_results` per DDG query is capped at ~11**
+
+All discovery modules calculate results per query as:
+```python
+max_results = limit // len(queries) + 5   # = 20 // 3 + 5 = ~11
+```
+DDG can return 50-100+ per query. The system asks for a tablespoon when it could ask for a bucket.
+
+Where this is set:
+- `modules/discovery.py` line 254: `_ddg_search(query, max_results=limit // len(queries) + 5)` — niche DDG
+- `modules/linkedin_discovery.py` line 116: same pattern — LinkedIn people
+- `modules/linkedin_discovery.py` line 175: same pattern — LinkedIn companies
+- `modules/shopify_discovery.py` line 91: same pattern — Shopify stores
+- `modules/google_business.py` line 114: same pattern — agencies
+- `modules/job_scraper.py` line 68: same pattern — job listings
+- `orchestrator.py` line 751: `batch_discover(niches=niches, limit_per_niche=20)` — the limit fed to all niche discovery
+
+**2. Same queries return same results on repeat**
+
+DDG is deterministic. The niche queue wraps around after 6 niches, so Round 19 "supplements" sends the exact same 3 queries as Round 1 — every result is already in the pipeline. Rounds 19, 21, 25 are wasted unless sub-niches have been injected.
+
+**3. Pipeline-wide dedup is permanent**
+
+`_get_pipeline_domains()` in every discovery module loads ALL prospects ever added (including those already pushed to Instantly and completed). Over multiple days, the dedup set grows and new DDG results increasingly hit existing domains.
+
+#### Expected yield with vs without throttles
+
+**Current (throttled) — 25 rounds:**
+```
+25 rounds × ~5-10 new per round   = 125-250 discovered
+× ~35% enrichment conversion       = ~45-85 ready_to_send
+```
+
+**With max_results raised to 30-50 per query — 25 rounds:**
+```
+25 rounds × ~15-25 new per round   = 375-625 discovered
+× ~35% enrichment conversion        = ~130-220 ready_to_send
+```
+
+#### Pending fixes (not yet implemented)
+
+1. **Raise `max_results`** in all 6 discovery modules from ~11 to 30-50 per DDG query
+2. **Raise `limit_per_niche`** in orchestrator's `batch_discover()` call from 20 to 50
+3. **Never re-run the same query** — track queries used this session and skip duplicates
+4. **Raise `max_rounds` default** from 25 to 50 (safety margin; loop already exits on target met)

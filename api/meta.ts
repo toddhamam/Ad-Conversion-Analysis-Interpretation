@@ -243,6 +243,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: `Unknown route: ${route}` });
     }
   } catch (err: unknown) {
+    // Handle thrown "table not found in schema cache" errors gracefully —
+    // report tables may not be provisioned yet (migration pending)
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg.includes('schema cache')) {
+      return res.status(501).json({
+        error: 'Feature not yet available',
+        message: 'A required database table has not been created. Database migration pending.',
+      });
+    }
+
     console.error(`Meta API error (${route}):`, err);
     captureError(err, { route: `meta/${route}` });
     await flushSentry();
