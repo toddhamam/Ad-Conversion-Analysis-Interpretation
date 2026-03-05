@@ -672,8 +672,8 @@ function formatDateForApi(date: Date): string {
 }
 
 const Dashboard = () => {
-  const { isTrialing, trialDaysRemaining, isSuperAdmin, businessType } = useOrganization();
-  const { currentAccount } = useAdAccount();
+  const { isTrialing, trialDaysRemaining, isSuperAdmin } = useOrganization();
+  const { currentAccount, accountBusinessType: businessType } = useAdAccount();
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [metaData, setMetaData] = useState<{
     totalSpend: number;

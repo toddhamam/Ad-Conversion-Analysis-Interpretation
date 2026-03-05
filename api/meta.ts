@@ -167,10 +167,10 @@ async function loadCredentials(
 async function resolveAdAccountConfig(
   organizationId: string,
   adAccountId: string
-): Promise<{ adAccountId: string; pageId: string | null; pixelId: string | null } | null> {
+): Promise<{ adAccountId: string; pageId: string | null; pixelId: string | null; businessType: string | null } | null> {
   const { data: account } = await supabase
     .from('organization_ad_accounts')
-    .select('ad_account_id, page_id, pixel_id, is_active')
+    .select('ad_account_id, page_id, pixel_id, is_active, business_type')
     .eq('organization_id', organizationId)
     .eq('ad_account_id', adAccountId)
     .single();
@@ -181,6 +181,7 @@ async function resolveAdAccountConfig(
     adAccountId: account.ad_account_id,
     pageId: account.page_id,
     pixelId: account.pixel_id,
+    businessType: account.business_type || null,
   };
 }
 
@@ -419,7 +420,7 @@ async function handleStatus(req: VercelRequest, res: VercelResponse) {
   // Load activated ad accounts from organization_ad_accounts table
   const { data: adAccounts, error: adAccountsError } = await supabase
     .from('organization_ad_accounts')
-    .select('id, ad_account_id, ad_account_name, page_id, pixel_id, is_active, account_status, currency')
+    .select('id, ad_account_id, ad_account_name, page_id, pixel_id, is_active, account_status, currency, business_type')
     .eq('organization_id', auth.organizationId)
     .eq('is_active', true)
     .order('ad_account_name', { ascending: true });
@@ -1835,7 +1836,7 @@ async function handleAdAccountsWrite(
   res: VercelResponse,
   auth: AuthContext
 ) {
-  const { action, adAccountId, adAccountName, pageId, pixelId, currency } = req.body || {};
+  const { action, adAccountId, adAccountName, pageId, pixelId, currency, businessType } = req.body || {};
 
   if (!action || !adAccountId) {
     return res.status(400).json({ error: 'action and adAccountId are required' });
@@ -1942,6 +1943,7 @@ async function handleAdAccountsWrite(
       .update({
         page_id: pageId !== undefined ? (pageId || null) : undefined,
         pixel_id: pixelId !== undefined ? (pixelId || null) : undefined,
+        business_type: businessType !== undefined ? (businessType || null) : undefined,
         updated_at: new Date().toISOString(),
       })
       .eq('organization_id', auth.organizationId)

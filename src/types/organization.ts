@@ -150,6 +150,7 @@ export interface OrganizationAdAccount {
   is_active: boolean;
   account_status: number | null;
   currency: string | null;
+  business_type: BusinessType | null;
   created_at: string;
   updated_at: string;
 }

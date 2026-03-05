@@ -153,7 +153,7 @@ function AccountSettings() {
           return;
         }
 
-        setBusinessTypeSuccess('Business type updated. Please refresh for changes to take effect across the app.');
+        setBusinessTypeSuccess('Default business type updated. Ad accounts without an override will use this setting.');
       } else {
         setBusinessTypeError('Unable to save — Supabase not configured.');
       }
@@ -448,7 +448,7 @@ function AccountSettings() {
         <section className="settings-section">
           <div className="section-header">
             <h2>Business Type</h2>
-            <p>Select your business model to customize metrics, labels, and AI analysis</p>
+            <p>Set the default business model for ConversionIQ™ analysis. Individual ad accounts can override this in Integrations.</p>
           </div>
 
           <div className="business-type-content">

@@ -17,7 +17,7 @@ import {
   type AdAccountInfo,
   type AdAccountListResponse,
 } from '../services/metaApi';
-import { PLAN_LIMITS } from '../types/organization';
+import { PLAN_LIMITS, type BusinessType } from '../types/organization';
 import SEO from '../components/SEO';
 import Loading from '../components/Loading';
 import './Integrations.css';
@@ -44,6 +44,7 @@ function Integrations() {
   const [configuringAccount, setConfiguringAccount] = useState<string | null>(null);
   const [configPageId, setConfigPageId] = useState('');
   const [configPixelId, setConfigPixelId] = useState('');
+  const [configBusinessType, setConfigBusinessType] = useState<BusinessType | ''>('');
   const [refreshingAvailable, setRefreshingAvailable] = useState(false);
 
   // Determine if org supports multi-account
@@ -222,6 +223,7 @@ function Integrations() {
     setConfiguringAccount(account.ad_account_id);
     setConfigPageId(account.page_id || '');
     setConfigPixelId(account.pixel_id || '');
+    setConfigBusinessType(account.business_type || '');
   };
 
   const handleSaveAccountConfig = async () => {
@@ -231,6 +233,7 @@ function Integrations() {
       await configureAdAccount(configuringAccount, {
         pageId: configPageId || null,
         pixelId: configPixelId || null,
+        businessType: configBusinessType || null,
       });
       setConfiguringAccount(null);
       await loadAdAccounts();
@@ -482,6 +485,7 @@ function Integrations() {
                             <span className="ad-account-row-detail">
                               {account.ad_account_id}
                               {account.currency ? ` · ${account.currency}` : ''}
+                              {account.business_type ? ` · ${account.business_type === 'leadgen' ? 'Lead Gen' : 'E-Commerce'}` : ''}
                               {account.page_id ? '' : ' · Needs page setup'}
                             </span>
                           </div>
@@ -553,6 +557,20 @@ function Integrations() {
                                 placeholder="Enter Pixel ID (optional)"
                                 className="config-input"
                               />
+                            </div>
+                            <div className="config-group">
+                              <label>Business Type</label>
+                              <select
+                                value={configBusinessType}
+                                onChange={(e) => setConfigBusinessType(e.target.value as BusinessType | '')}
+                              >
+                                <option value="">Use organization default ({organization?.business_type === 'leadgen' ? 'Lead Gen' : 'E-Commerce'})</option>
+                                <option value="ecommerce">E-Commerce</option>
+                                <option value="leadgen">Lead Generation</option>
+                              </select>
+                              <p className="config-hint">
+                                Controls ConversionIQ™ metrics, labels, and AI analysis for this account
+                              </p>
                             </div>
                             <div className="ad-account-configure-actions">
                               <button

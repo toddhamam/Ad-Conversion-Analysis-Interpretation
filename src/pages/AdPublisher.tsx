@@ -28,7 +28,7 @@ import {
 } from '../services/metaApi';
 import { getPublishData } from '../services/publishStore';
 import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
-import { useOrganization } from '../contexts/OrganizationContext';
+import { useAdAccount } from '../contexts/AdAccountContext';
 import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
 import './AdPublisher.css';
 
@@ -370,7 +370,7 @@ type PublishStep = 'select' | 'destination' | 'configure' | 'review';
 
 const AdPublisher = () => {
   const navigate = useNavigate();
-  const { businessType } = useOrganization();
+  const { accountBusinessType: businessType } = useAdAccount();
   const btConfig = getBusinessTypeConfig(businessType);
 
   const renderCountRef = useRef(0);

@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-03-05 — Move business type to per-ad-account level
+
+### Overview
+Moved the business type setting (`ecommerce` | `leadgen`) from the organization level to the per-ad-account level. Agencies managing multiple client accounts with different business models can now set each ad account independently. The org-level setting in Account Settings remains as the default for accounts without an override.
+
+### Added
+- **`business_type` column on `organization_ad_accounts`** — nullable, `NULL` inherits from org default (migration: `011_ad_account_business_type.sql`)
+- **Per-account business type selector** in Integrations configure panel — dropdown with "Use organization default", "E-Commerce", and "Lead Generation" options
+- **Business type badge** in Integrations account row detail line (shows "E-Commerce" or "Lead Gen" when overridden)
+- **`accountBusinessType`** on `AdAccountContext` — resolved value: account override > org default > `'ecommerce'`
+
+### Changed
+- **All business type consumers** now read from `useAdAccount().accountBusinessType` instead of `useOrganization().businessType`:
+  - Dashboard, MetaAds, AdGenerator, AdPublisher, Insights
+- **Account fingerprint** in `AdAccountContext` now includes `business_type` to detect changes on refresh
+- **Backend `api/meta.ts`** — `resolveAdAccountConfig`, `handleStatus`, `handleAdAccountsWrite` (configure action) all read/write `business_type`
+- **`configureAdAccount()` in `metaApi.ts`** — accepts optional `businessType` parameter
+- **AccountSettings** — text updated to reference "ConversionIQ™ analysis" and reframed as org default with note about per-account overrides
+
+---
+
 ## 2026-03-05 — Add lead generation business type support across entire platform
 
 ### Overview
