@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-03-05 — Remove org-level Business Type & require Pixel ID per account
+
+### Removed
+- **Business Type section from Account Settings** — eliminated the org-level business type setting entirely to avoid confusion. Business type is now managed exclusively at the per-ad-account level in Integrations.
+
+### Changed
+- **Pixel ID is now a required field** in the Integrations per-account configure panel — replaced the optional text input with a dropdown that loads available pixels from the Meta API via `fetchAvailablePixels()`
+- **Pixel ID validation** — saving an account configuration without a pixel selected now shows an error message
+- **Account status dot** — now shows amber (needs setup) when either page or pixel is missing, green only when both are configured
+- **Account detail line** — shows "Needs pixel setup" when pixel is not configured
+
+---
+
 ## 2026-03-05 — Move business type to per-ad-account level
 
 ### Overview

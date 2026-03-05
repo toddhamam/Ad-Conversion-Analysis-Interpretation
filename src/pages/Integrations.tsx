@@ -45,6 +45,8 @@ function Integrations() {
   const [configPageId, setConfigPageId] = useState('');
   const [configPixelId, setConfigPixelId] = useState('');
   const [configBusinessType, setConfigBusinessType] = useState<BusinessType | ''>('');
+  const [configPixels, setConfigPixels] = useState<Array<{ id: string; name: string }>>([]);
+  const [configPixelsLoading, setConfigPixelsLoading] = useState(false);
   const [refreshingAvailable, setRefreshingAvailable] = useState(false);
 
   // Determine if org supports multi-account
@@ -224,10 +226,22 @@ function Integrations() {
     setConfigPageId(account.page_id || '');
     setConfigPixelId(account.pixel_id || '');
     setConfigBusinessType(account.business_type || '');
+
+    // Load available pixels for this ad account
+    setConfigPixels([]);
+    setConfigPixelsLoading(true);
+    fetchAvailablePixels(account.ad_account_id)
+      .then(setConfigPixels)
+      .catch(() => setConfigPixels([]))
+      .finally(() => setConfigPixelsLoading(false));
   };
 
   const handleSaveAccountConfig = async () => {
     if (!configuringAccount) return;
+    if (!configPixelId) {
+      setMessage({ type: 'error', text: 'Please select a Meta Pixel before saving. A pixel is required for conversion tracking.' });
+      return;
+    }
     setMessage(null);
     try {
       await configureAdAccount(configuringAccount, {
@@ -362,7 +376,7 @@ function Integrations() {
                         value={selectedPixelId}
                         onChange={(e) => setSelectedPixelId(e.target.value)}
                       >
-                        <option value="">-- Select pixel (optional) --</option>
+                        <option value="">-- Select pixel --</option>
                         {availablePixels.map((pixel) => (
                           <option key={pixel.id} value={pixel.id}>
                             {pixel.name} ({pixel.id})
@@ -475,7 +489,7 @@ function Integrations() {
                           <span
                             className="ad-account-dot"
                             style={{
-                              background: account.page_id ? '#22c55e' : '#f59e0b',
+                              background: account.page_id && account.pixel_id ? '#22c55e' : '#f59e0b',
                             }}
                           />
                           <div className="ad-account-row-info">
@@ -487,6 +501,7 @@ function Integrations() {
                               {account.currency ? ` · ${account.currency}` : ''}
                               {account.business_type ? ` · ${account.business_type === 'leadgen' ? 'Lead Gen' : 'E-Commerce'}` : ''}
                               {account.page_id ? '' : ' · Needs page setup'}
+                              {account.pixel_id ? '' : ' · Needs pixel setup'}
                             </span>
                           </div>
                           <div className="ad-account-row-actions">
@@ -549,14 +564,27 @@ function Integrations() {
                               )}
                             </div>
                             <div className="config-group">
-                              <label>Pixel ID</label>
-                              <input
-                                type="text"
-                                value={configPixelId}
-                                onChange={(e) => setConfigPixelId(e.target.value)}
-                                placeholder="Enter Pixel ID (optional)"
-                                className="config-input"
-                              />
+                              <label>Meta Pixel <span className="config-required">*</span></label>
+                              {configPixelsLoading ? (
+                                <p className="config-empty-hint">Loading available pixels...</p>
+                              ) : configPixels.length > 0 ? (
+                                <select
+                                  value={configPixelId}
+                                  onChange={(e) => setConfigPixelId(e.target.value)}
+                                >
+                                  <option value="">-- Select pixel --</option>
+                                  {configPixels.map((pixel) => (
+                                    <option key={pixel.id} value={pixel.id}>
+                                      {pixel.name} ({pixel.id})
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <p className="config-empty-hint">
+                                  No pixels found for this ad account. Create a pixel in Meta Events Manager first.
+                                </p>
+                              )}
+                              <p className="config-hint">Required for conversion tracking and campaign optimization</p>
                             </div>
                             <div className="config-group">
                               <label>Business Type</label>
