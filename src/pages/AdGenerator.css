@@ -129,7 +129,7 @@
 /* Ad Type Selection */
 .ad-type-options {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
 
@@ -1407,6 +1407,175 @@
   font-style: italic;
 }
 
+/* ==================== Text Ad Configuration ==================== */
+
+.text-ad-config {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.generate-suggestions-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: rgba(168, 85, 247, 0.08);
+  border: 1px solid var(--border-violet);
+  border-radius: 8px;
+  color: var(--accent-violet);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  align-self: flex-start;
+}
+
+.generate-suggestions-btn:hover:not(:disabled) {
+  background: rgba(168, 85, 247, 0.15);
+  border-color: var(--accent-violet);
+}
+
+.generate-suggestions-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.text-ad-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.text-ad-field-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.text-ad-field-label .required {
+  color: #dc2626;
+}
+
+.text-ad-field-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.text-ad-textarea {
+  padding: 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.2s ease;
+}
+
+.text-ad-textarea:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.text-ad-input {
+  padding: 10px 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s ease;
+}
+
+.text-ad-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+/* AI Copy Suggestions */
+.text-ad-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.text-ad-suggestion-btn {
+  padding: 8px 14px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+  max-width: 100%;
+}
+
+.text-ad-suggestion-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-violet);
+}
+
+.text-ad-suggestion-btn.active {
+  background: rgba(212, 225, 87, 0.1);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+/* Style Preset Grid */
+.text-style-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.text-style-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 8px;
+  border: 2px solid var(--border-primary);
+  border-radius: 10px;
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.text-style-btn:hover {
+  border-color: var(--border-violet);
+}
+
+.text-style-btn.active {
+  border-color: var(--accent-primary);
+  background: rgba(212, 225, 87, 0.08);
+}
+
+.text-style-preview {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.text-style-name {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.text-style-btn.active .text-style-name {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 /* ==================== Additional Responsive Styles ====================
 
 /* Tablet breakpoint - 768px */
@@ -1484,6 +1653,10 @@
   .summary-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .text-style-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 /* Mobile breakpoint - 480px */
@@ -1525,5 +1698,13 @@
 
   .empty-state h3 {
     font-size: 18px;
+  }
+
+  .text-style-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .text-ad-suggestions {
+    flex-direction: column;
   }
 }
