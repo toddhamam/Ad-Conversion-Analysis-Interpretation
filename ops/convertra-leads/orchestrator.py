@@ -685,7 +685,7 @@ def _run_discovery(niches, include_jobs, campaign_name, source_type="niche"):
             from modules.linkedin_discovery import search_linkedin_people, batch_add_linkedin_people
             # Rotate through personas based on niche hint
             persona = _niche_to_linkedin_persona(niches[0] if niches else "")
-            result = search_linkedin_people(persona=persona, limit=20)
+            result = search_linkedin_people(persona=persona, limit=50)
             added = batch_add_linkedin_people(
                 result.get("results", []), campaign=campaign_name, persona=persona
             )
@@ -701,7 +701,7 @@ def _run_discovery(niches, include_jobs, campaign_name, source_type="niche"):
         try:
             from modules.linkedin_discovery import search_linkedin_companies, batch_add_linkedin_companies
             persona = _niche_to_linkedin_persona(niches[0] if niches else "")
-            result = search_linkedin_companies(persona=persona, limit=20)
+            result = search_linkedin_companies(persona=persona, limit=50)
             added = batch_add_linkedin_companies(
                 result.get("results", []), campaign=campaign_name, persona=persona
             )
@@ -717,7 +717,7 @@ def _run_discovery(niches, include_jobs, campaign_name, source_type="niche"):
         try:
             from modules.shopify_discovery import search_shopify_stores, batch_add_shopify_stores
             niche = niches[0] if niches else "supplements"
-            result = search_shopify_stores(niche=niche, limit=20, verify=True)
+            result = search_shopify_stores(niche=niche, limit=50, verify=True)
             added = batch_add_shopify_stores(result.get("results", []), campaign=campaign_name)
             stats["shopify_found"] = added.get("added", 0)
             stats["total_added"] += stats["shopify_found"]
@@ -732,7 +732,7 @@ def _run_discovery(niches, include_jobs, campaign_name, source_type="niche"):
             from modules.google_business import search_agencies, batch_add_agencies
             # Use niche hint as location or default to US cities
             location = niches[0] if niches else None
-            result = search_agencies(location=location, limit=20)
+            result = search_agencies(location=location, limit=50)
             added = batch_add_agencies(result.get("results", []), campaign=campaign_name)
             stats["agencies_found"] = added.get("added", 0)
             stats["total_added"] += stats["agencies_found"]
@@ -748,7 +748,7 @@ def _run_discovery(niches, include_jobs, campaign_name, source_type="niche"):
 
     # DuckDuckGo discovery
     try:
-        ddg_result = batch_discover(niches=niches, limit_per_niche=20)
+        ddg_result = batch_discover(niches=niches, limit_per_niche=50)
         for niche, results in ddg_result.get("results_by_niche", {}).items():
             for r in results:
                 prospect_data = {
@@ -790,7 +790,7 @@ def _run_discovery(niches, include_jobs, campaign_name, source_type="niche"):
     if include_jobs:
         try:
             from modules.job_scraper import search_job_listings, batch_add_job_prospects
-            job_result = search_job_listings(limit=30)
+            job_result = search_job_listings(limit=50)
             added = batch_add_job_prospects(job_result.get("results", []), campaign=campaign_name)
             stats["jobs_found"] = added.get("added", 0)
             stats["total_added"] += stats["jobs_found"]
@@ -854,6 +854,11 @@ def run_prospect_hunt(target=20, niches=None, include_jobs=True, max_rounds=10,
     log.info("=== PROSPECT HUNT START ===")
     log.info(f"  Target: {target} hot leads (score >= {score_threshold})")
     log.info(f"  Max rounds: {max_rounds}, Include jobs: {include_jobs}")
+
+    # Reset per-session query dedup caches so repeated niche rotations
+    # skip queries already seen this run (DDG is deterministic).
+    from modules.discovery import reset_query_cache
+    reset_query_cache()
 
     start_time = time.time()
     if not campaign_name:
@@ -1202,14 +1207,14 @@ def _expand_keywords(all_niches, exhausted):
 DEFAULT_INSTANTLY_CAMPAIGN = "8b466981-54d8-4487-ade3-b27ddab16a4e"
 
 
-def run_fill(target=25, campaign_id=None, niches=None, max_rounds=25,
+def run_fill(target=25, campaign_id=None, niches=None, max_rounds=50,
              score_threshold=5, include_jobs=True):
     """Daily lead fill: discover leads, draft emails, push to Instantly.
 
     Designed to run on cron at 7am AEST (before 9am sending window).
     Instantly handles warmup and send pacing — we just keep it topped up.
 
-    The fill command is persistent — it uses up to 25 rounds of discovery
+    The fill command is persistent — it uses up to 50 rounds of discovery
     with aggressive sub-niche expansion to hit the target. It won't stop
     at 0 just because the first few niches are exhausted.
 

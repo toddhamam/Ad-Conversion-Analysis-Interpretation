@@ -88,7 +88,7 @@ def search_shopify_stores(niche=None, keywords=None, limit=30, verify=True):
     existing_domains = _get_pipeline_domains()
 
     for query in queries:
-        hits = _ddg_search(query, max_results=limit // len(queries) + 5)
+        hits = _ddg_search(query, max_results=max(30, limit // len(queries) + 5))
         for hit in hits:
             url = hit.get("href", "")
             domain = _extract_shopify_domain(url)
@@ -285,8 +285,14 @@ def _clean_title(title):
     return title.strip()[:80]
 
 
+_used_queries = set()
+
+
 def _ddg_search(query, max_results=10):
-    """Run a DuckDuckGo search."""
+    """Run a DuckDuckGo search. Skips duplicate queries within a session."""
+    if query in _used_queries:
+        return []
+    _used_queries.add(query)
     try:
         from ddgs import DDGS
         with DDGS() as ddgs:
