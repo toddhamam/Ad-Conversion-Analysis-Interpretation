@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-03-05 — Add Results, Cost Per Result, Result Rate, and Lead to Result Rate metrics
+
+### Overview
+Added 4 new customizable dashboard metrics that match Meta Ads Manager's "Results" column. Results are automatically determined per campaign based on its objective (purchases for sales campaigns, leads for lead gen campaigns, etc.), giving users a unified view of campaign performance regardless of objective mix.
+
+### Added
+- **Results** — Objective-based result count per campaign, summed across all campaigns
+- **Cost Per Result** — `spend ÷ results`
+- **Result Rate** — `results ÷ link clicks × 100` (click-to-result conversion rate)
+- **Lead to Result Rate** — `results ÷ leads × 100` (e.g., call booking rate from leads)
+
+### Changed
+- **`fetchCampaignSummaries`** now fetches campaign objectives in parallel (`/campaigns?fields=id,objective`) and maps each campaign's objective to its corresponding Meta action type
+- Objective fetch is non-fatal — falls back to a heuristic (purchases → leads → LPV → link clicks) if the campaigns endpoint fails
+- All 4 metrics are hidden by default in the dashboard customizer and can be toggled on via the gear icon
+
+### Objective → Result Mapping
+| Campaign Objective | Result Action Type |
+|---|---|
+| `OUTCOME_SALES` | `offsite_conversion.fb_pixel_purchase` |
+| `OUTCOME_LEADS` | `lead` |
+| `OUTCOME_TRAFFIC` | `landing_page_view` |
+| `OUTCOME_ENGAGEMENT` | `post_engagement` |
+| Unknown/missing | First non-zero: purchases → leads → LPV → link clicks |
+
+### Files Modified
+- `src/services/metaApi.ts` — Added `results` and `objective` to `CampaignSummary`, added `getResultActionType()` and `resolveResults()` helpers, modified `fetchCampaignSummaries` to fetch objectives in parallel
+- `src/pages/Dashboard.tsx` — Added 4 new metrics to `DashboardStats`, `DEFAULT_METRICS`, icons, labels, periods, aggregation, calculation, and formatting
+
+---
+
 ## 2026-03-04 — Fix empty Unique Customers — use account-level actions instead of unique_actions
 
 ### Overview

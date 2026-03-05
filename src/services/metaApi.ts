@@ -569,6 +569,9 @@ export interface CampaignSummary {
   initiateCheckout: number;
   videoViews: number;
   reach: number;
+  // Objective-based result metrics
+  results: number;
+  objective?: string;
 }
 
 export interface CampaignTypeMetrics {
@@ -593,6 +596,53 @@ function detectCampaignType(campaignName: string): CampaignType {
   if (name.includes('retargeting') || name.includes('retarget') || name.includes('remarketing') || name.includes('warm')) return 'Retargeting';
   if (name.includes('retention') || name.includes('existing') || name.includes('customer') || name.includes('loyalty')) return 'Retention';
   return 'Other';
+}
+
+// ─── Objective → result action mapping ──────────────────────────────────────
+
+/**
+ * Map a campaign objective to the action_type that constitutes a "result" in Meta Ads Manager.
+ * Falls back to the first non-zero conversion action if objective is unknown.
+ */
+function getResultActionType(objective?: string): string {
+  switch (objective) {
+    case 'OUTCOME_SALES':
+      return 'offsite_conversion.fb_pixel_purchase';
+    case 'OUTCOME_LEADS':
+      return 'lead';
+    case 'OUTCOME_TRAFFIC':
+      return 'landing_page_view';
+    case 'OUTCOME_ENGAGEMENT':
+      return 'post_engagement';
+    case 'OUTCOME_APP_PROMOTION':
+      return 'app_installs';
+    default:
+      // Fallback: will be resolved per-campaign based on available actions
+      return '';
+  }
+}
+
+/**
+ * Determine the result count for a campaign based on its objective.
+ * If no objective is available, falls back to the first non-zero conversion action
+ * in priority order: purchases → leads → landing page views → link clicks.
+ */
+function resolveResults(
+  objective: string | undefined,
+  getAction: (actionType: string) => number
+): number {
+  const resultActionType = getResultActionType(objective);
+  if (resultActionType) {
+    return getAction(resultActionType);
+  }
+  // Fallback: pick the first non-zero conversion in priority order
+  const purchases = getAction('offsite_conversion.fb_pixel_purchase');
+  if (purchases > 0) return purchases;
+  const leads = getAction('lead');
+  if (leads > 0) return leads;
+  const lpv = getAction('landing_page_view');
+  if (lpv > 0) return lpv;
+  return getAction('link_click');
 }
 
 // ─── Read functions ──────────────────────────────────────────────────────────
@@ -787,14 +837,30 @@ export async function fetchCampaignSummaries(dateOptions?: DateRangeOptions): Pr
   }
 
   try {
-    const data = await metaFetch(`${adAccountId}/insights`, {
-      params: {
-        fields: 'campaign_id,campaign_name,spend,impressions,clicks,ctr,actions,action_values,reach,unique_actions',
-        level: 'campaign',
-        limit: '100',
-        ...buildDateParams(dateOptions),
-      },
-    });
+    // Fetch insights and campaign objectives in parallel
+    const [data, campaignsData] = await Promise.all([
+      metaFetch(`${adAccountId}/insights`, {
+        params: {
+          fields: 'campaign_id,campaign_name,spend,impressions,clicks,ctr,actions,action_values,reach,unique_actions',
+          level: 'campaign',
+          limit: '100',
+          ...buildDateParams(dateOptions),
+        },
+      }),
+      // Fetch campaign objectives to determine what "results" means per campaign
+      metaFetch(`${adAccountId}/campaigns`, {
+        params: {
+          fields: 'id,objective',
+          limit: '100',
+        },
+      }).catch(() => ({ data: [] })), // Non-fatal — fall back to heuristic if this fails
+    ]);
+
+    // Build objective lookup: campaignId → objective
+    const objectiveMap = new Map<string, string>();
+    for (const c of campaignsData.data || []) {
+      if (c.id && c.objective) objectiveMap.set(c.id, c.objective);
+    }
 
     return (data.data || []).map((campaign: any, index: number) => {
       const spend = parseFloat(campaign.spend || '0');
@@ -815,9 +881,11 @@ export async function fetchCampaignSummaries(dateOptions?: DateRangeOptions): Pr
       const purchaseValue = getActionValue('offsite_conversion.fb_pixel_purchase');
       const roas = spend > 0 ? purchaseValue / spend : 0;
       const campaignName = campaign.campaign_name || 'Unknown';
+      const campaignId = campaign.campaign_id || `campaign-${index}`;
+      const objective = objectiveMap.get(campaignId);
 
       return {
-        campaignId: campaign.campaign_id || `campaign-${index}`,
+        campaignId,
         campaignName,
         campaignType: detectCampaignType(campaignName),
         spend,
@@ -836,6 +904,8 @@ export async function fetchCampaignSummaries(dateOptions?: DateRangeOptions): Pr
         initiateCheckout: getAction('offsite_conversion.fb_pixel_initiate_checkout'),
         videoViews: getAction('video_view'),
         reach,
+        results: resolveResults(objective, getAction),
+        objective,
       };
     });
   } catch (error) {

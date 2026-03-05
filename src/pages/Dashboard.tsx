@@ -157,6 +157,11 @@ interface DashboardStats {
   // Video metrics
   videoViews: number;
   costPerVideoView: number;
+  // Result metrics (objective-based)
+  results: number;
+  costPerResult: number;
+  resultRate: number;
+  leadToResultRate: number;
 }
 
 // Default metric configuration
@@ -205,6 +210,11 @@ const DEFAULT_METRICS: MetricConfig[] = [
   // Video metrics
   { id: 'videoViews', label: 'Video Views (3-sec)', visible: false },
   { id: 'costPerVideoView', label: 'Cost Per Video View', visible: false },
+  // Result metrics (objective-based — matches Meta Ads Manager "Results" column)
+  { id: 'results', label: 'Results', visible: false },
+  { id: 'costPerResult', label: 'Cost Per Result', visible: false },
+  { id: 'resultRate', label: 'Result Rate', visible: false },
+  { id: 'leadToResultRate', label: 'Lead to Result Rate', visible: false },
 ];
 
 const METRIC_ICONS: Record<string, ReactNode> = {
@@ -251,6 +261,11 @@ const METRIC_ICONS: Record<string, ReactNode> = {
   // Video metrics
   videoViews: <Play size={24} strokeWidth={1.5} />,
   costPerVideoView: <DollarSign size={24} strokeWidth={1.5} />,
+  // Result metrics
+  results: <Target size={24} strokeWidth={1.5} />,
+  costPerResult: <DollarSign size={24} strokeWidth={1.5} />,
+  resultRate: <BarChart3 size={24} strokeWidth={1.5} />,
+  leadToResultRate: <BarChart3 size={24} strokeWidth={1.5} />,
 };
 
 const METRIC_LABELS: Record<string, string> = {
@@ -291,6 +306,10 @@ const METRIC_LABELS: Record<string, string> = {
   costPerInitiateCheckout: 'Cost Per Checkout',
   videoViews: 'Video Views (3-sec)',
   costPerVideoView: 'Cost Per Video View',
+  results: 'Results',
+  costPerResult: 'Cost Per Result',
+  resultRate: 'Result Rate',
+  leadToResultRate: 'Lead to Result Rate',
 };
 
 // Metric periods - some are dynamic based on date range
@@ -319,6 +338,9 @@ const STATIC_PERIODS: Record<string, string> = {
   costPerAddToCart: 'Spend ÷ add to carts',
   costPerInitiateCheckout: 'Spend ÷ checkouts',
   costPerVideoView: 'Spend ÷ video views',
+  costPerResult: 'Spend ÷ results',
+  resultRate: 'Results ÷ link clicks',
+  leadToResultRate: 'Results ÷ leads',
 };
 
 // Metrics that should show the date range (raw counts and totals)
@@ -326,6 +348,7 @@ const DATE_RANGE_METRICS = [
   'totalRevenue', 'uniqueCustomers', 'adSpend', 'transactionFees', 'cogs', 'grossProfit', 'netProfit',
   'leads', 'linkClicks', 'uniqueLinkClicks', 'impressions', 'reach',
   'postEngagements', 'landingPageViews', 'addToCart', 'initiateCheckout', 'videoViews',
+  'results',
 ];
 
 // Funnel-only metrics — hidden for non-super-admins (requires Supabase funnel data)
@@ -445,12 +468,15 @@ function SortableStatCard({
       case 'costPerAddToCart':
       case 'costPerInitiateCheckout':
       case 'costPerVideoView':
+      case 'costPerResult':
       case 'cpm':
         return val > 0 ? formatCurrencyPrecise(val) : '—';
       // Percentage metrics
       case 'leadRate':
       case 'linkCtr':
       case 'uniqueLinkCtr':
+      case 'resultRate':
+      case 'leadToResultRate':
         return val > 0 ? `${val.toFixed(2)}%` : '—';
       // Frequency — decimal
       case 'frequency':
@@ -466,6 +492,7 @@ function SortableStatCard({
       case 'addToCart':
       case 'initiateCheckout':
       case 'videoViews':
+      case 'results':
         return formatNumber(val);
       default:
         return '—';
@@ -623,6 +650,7 @@ const Dashboard = () => {
     totalAddToCart: number;
     totalInitiateCheckout: number;
     totalVideoViews: number;
+    totalResults: number;
   } | null>(null);
   const [accountInsights, setAccountInsights] = useState<AccountLevelInsights | null>(null);
   const [loading, setLoading] = useState(true);
@@ -766,6 +794,7 @@ const Dashboard = () => {
           const totalAddToCart = campaigns.reduce((sum, c) => sum + c.addToCart, 0);
           const totalInitiateCheckout = campaigns.reduce((sum, c) => sum + c.initiateCheckout, 0);
           const totalVideoViews = campaigns.reduce((sum, c) => sum + c.videoViews, 0);
+          const totalResults = campaigns.reduce((sum, c) => sum + c.results, 0);
 
           setMetaData({
             totalSpend,
@@ -781,6 +810,7 @@ const Dashboard = () => {
             totalAddToCart,
             totalInitiateCheckout,
             totalVideoViews,
+            totalResults,
           });
         } else {
           setMetaData(null);
@@ -917,6 +947,12 @@ const Dashboard = () => {
   const costPerInitiateCheckoutVal = totalInitiateCheckout > 0 && adSpend > 0 ? adSpend / totalInitiateCheckout : 0;
   const costPerVideoViewVal = totalVideoViews > 0 && adSpend > 0 ? adSpend / totalVideoViews : 0;
 
+  // Result metrics (objective-based — matches Meta Ads Manager "Results" column)
+  const totalResults = metaData?.totalResults || 0;
+  const costPerResult = totalResults > 0 && adSpend > 0 ? adSpend / totalResults : 0;
+  const resultRate = totalLinkClicks > 0 && totalResults > 0 ? (totalResults / totalLinkClicks) * 100 : 0;
+  const leadToResultRate = totalLeads > 0 && totalResults > 0 ? (totalResults / totalLeads) * 100 : 0;
+
   const stats: DashboardStats = {
     totalRevenue,
     totalPurchases,
@@ -956,6 +992,11 @@ const Dashboard = () => {
     costPerInitiateCheckout: costPerInitiateCheckoutVal,
     videoViews: totalVideoViews,
     costPerVideoView: costPerVideoViewVal,
+    // Result metrics
+    results: totalResults,
+    costPerResult,
+    resultRate,
+    leadToResultRate,
   };
 
   const formatCurrency = (value: number) => {
