@@ -4,6 +4,7 @@ console.log('🤖 openaiApi.ts loaded at', new Date().toISOString());
 // Import image cache for using captured reference images
 import { getTopHighQualityCachedImages } from './imageCache';
 import { getAuthToken } from '../lib/authToken';
+import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
 
 // Dev-mode fallback key (only used when no auth token is available)
 const OPENAI_API_KEY_FALLBACK = import.meta.env.VITE_OPENAI_API_KEY;
@@ -1027,9 +1028,10 @@ interface ChatMessage {
 export async function analyzeChannelPerformance(
   ads: AdCreativeData[],
   channelName: string = 'Meta',
-  options?: { reasoningEffort?: ReasoningEffort }
+  options?: { reasoningEffort?: ReasoningEffort; businessType?: import('../types/organization').BusinessType }
 ): Promise<ChannelAnalysisResult> {
   const reasoningEffort = options?.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
+  const btConfig = getBusinessTypeConfig(options?.businessType || 'ecommerce');
   console.log(`📊 Running channel-wide VISUAL analysis for ${channelName} with ${ads.length} ads | IQ Level: ${reasoningEffort}`);
 
   if (ads.length === 0) {
@@ -1166,6 +1168,9 @@ likely show transformation/resolution imagery").`;
 
   // Add the analysis request
   const analysisPrompt = `
+BUSINESS CONTEXT:
+${btConfig.aiConversionLanguage}
+
 **ACCOUNT OVERVIEW:**
 - Total Ads: ${ads.length}
 - Total Spend: $${totalSpend.toFixed(2)}
@@ -1623,6 +1628,7 @@ export async function generateCopyOptions(config: {
   copyVariationLevel?: number; // 0 = replicate winners exactly, 100 = completely different angles
   productContext?: ProductContext;
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
+  businessType?: import('../types/organization').BusinessType;
 }): Promise<CopyOptionsResult> {
   if (!isOpenAIConfigured()) {
     throw new Error('AI API not configured. Please contact support.');
@@ -1632,6 +1638,7 @@ export async function generateCopyOptions(config: {
   const copyLength = config.copyLength ?? DEFAULT_COPY_LENGTH;
   const copyVariation = config.copyVariationLevel ?? 30;
   const copyLengthConfig = COPY_LENGTH_OPTIONS.find(opt => opt.id === copyLength) ?? COPY_LENGTH_OPTIONS[0];
+  const btConfig = getBusinessTypeConfig(config.businessType || 'ecommerce');
   console.log(`📝 Generating copy options for ${config.audienceType} audience with ${config.conceptType} concept | IQ Level: ${reasoningEffort} | Copy Length: ${copyLength} | Copy Variation: ${copyVariation}%`);
   console.log('📊 Analysis data available:', !!config.analysisData);
   console.log('📦 Product context:', config.productContext ? config.productContext.name : 'Not provided');
@@ -1905,7 +1912,7 @@ CRITICAL INSTRUCTIONS:
 4. Every headline and body text should feel like a natural extension of their winners
 5. DO NOT generate generic marketing copy - it MUST be informed by the data below
 
-The user's livelihood depends on high ROAS. Generic copy won't cut it.`;
+The user's livelihood depends on ${btConfig.primaryKPI}. Generic copy won't cut it.`;
 
     conceptSection = `CONCEPT: C.I. Intelligence (Analysis-Driven)
 Your job is to MINE the analysis data below and create copy that feels like it came from the same winning playbook.
@@ -1952,6 +1959,9 @@ NOTE: No analysis data is available. Run Channel Analysis first for data-driven 
 2. SPECIFICITY RULE: Generic claims kill conversions. Every headline and body text must contain at least one CONCRETE element: a number, a timeframe, a named outcome, or a specific mechanism. "Improve your results" is weak. "Cut your CPA 40% in 14 days" is strong.
 3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.`;
 
+  // Inject business type context
+  systemPrompt += `\n\nBUSINESS CONTEXT:\n${btConfig.aiConversionLanguage}`;
+
   // Build product context section
   let productSection = '';
   if (config.productContext) {
@@ -1975,6 +1985,7 @@ ${productSection}
 
 AWARENESS LEVEL: ${audienceAngle.awarenessLevel}
 ${audienceAngle.awarenessDescription}
+${config.businessType === 'leadgen' && config.audienceType === 'retention' ? `\nIMPORTANT OVERRIDE FOR THIS BUSINESS: ${btConfig.aiRetentionContext}` : ''}
 
 WHAT THE READER ALREADY KNOWS:
 ${audienceAngle.readerKnows.map((k: string) => `- ${k}`).join('\n')}
@@ -1993,6 +2004,7 @@ ${audienceAngle.ctaApproach}
 
 CRITICAL -- DO NOT DO ANY OF THESE:
 ${audienceAngle.antiPatterns.map((p: string) => `- ${p}`).join('\n')}
+${config.businessType === 'leadgen' ? `\nBUSINESS-SPECIFIC PSYCHOLOGY:\n${btConfig.aiPsychologyShifts}` : ''}
 
 ${conceptModifier ? `CONCEPT ADAPTATION FOR ${config.audienceType.toUpperCase()} AUDIENCE:\n${conceptModifier}` : ''}
 
@@ -2125,6 +2137,7 @@ export async function regenerateSingleCopy(config: {
   copyVariationLevel?: number;
   productContext?: ProductContext;
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
+  businessType?: import('../types/organization').BusinessType;
 }): Promise<CopyOption> {
   if (!isOpenAIConfigured()) {
     throw new Error('AI API not configured. Please contact support.');
@@ -2136,6 +2149,7 @@ export async function regenerateSingleCopy(config: {
   const copyLength = config.copyLength ?? DEFAULT_COPY_LENGTH;
   const copyVariation = config.copyVariationLevel ?? 30;
   const copyLengthConfig = COPY_LENGTH_OPTIONS.find(opt => opt.id === copyLength) ?? COPY_LENGTH_OPTIONS[0];
+  const btConfig = getBusinessTypeConfig(config.businessType || 'ecommerce');
   const typeLabel = config.copyType === 'headline' ? 'headline'
     : config.copyType === 'bodyText' ? 'body copy'
     : 'call-to-action';
@@ -2240,6 +2254,15 @@ ${bv.distinctiveTraits?.length ? `Traits: ${bv.distinctiveTraits.join('; ')}` : 
 1. ${BANNED_PHRASES_PROMPT}
 2. SPECIFICITY: Include at least one concrete element per headline and body text (a number, timeframe, named outcome, or specific mechanism). No vague claims.
 3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.`;
+
+  // Inject business context for leadgen
+  systemPrompt += `\n\nBUSINESS CONTEXT:\n${btConfig.aiConversionLanguage}`;
+  if (config.businessType === 'leadgen') {
+    systemPrompt += `\n${btConfig.aiPsychologyShifts}`;
+    if (config.audienceType === 'retention') {
+      systemPrompt += `\n\nRETENTION CONTEXT: ${btConfig.aiRetentionContext}`;
+    }
+  }
 
   // Build product context
   let productSection = '';

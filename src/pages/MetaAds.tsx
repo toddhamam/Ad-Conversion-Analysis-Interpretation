@@ -27,6 +27,8 @@ import {
 } from '../services/imageCache';
 import Loading from '../components/Loading';
 import { AlertTriangle, Check } from 'lucide-react';
+import { useOrganization } from '../contexts/OrganizationContext';
+import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
 import './MetaAds.css';
 
 // Helper to calculate dates from preset
@@ -106,6 +108,8 @@ function convertToAdCreativeData(creative: AdCreative): AdCreativeData {
 const MetaAds = () => {
   // Meta Ads page with logo
   const { currentAccount } = useAdAccount();
+  const { businessType } = useOrganization();
+  const btConfig = getBusinessTypeConfig(businessType);
   const [creatives, setCreatives] = useState<AdCreative[]>([]);
   const [campaignMetrics, setCampaignMetrics] = useState<CampaignTypeMetrics[]>([]);
   const [loading, setLoading] = useState(true);
@@ -268,7 +272,13 @@ const MetaAds = () => {
       // Fetch real data from Meta API directly (no connection test - let it fail gracefully)
       console.log('Fetching creatives and campaign summary data from Meta API...');
       const [creativesData, campaignSummaries] = await Promise.all([
-        fetchAdCreatives(dateOptions),
+        fetchAdCreatives(dateOptions, {
+          primaryActionType: btConfig.primaryActionType,
+          winningCVRThreshold: btConfig.winningCVRThreshold,
+          fatiguedCVRThreshold: btConfig.fatiguedCVRThreshold,
+          winningConversionMin: btConfig.winningConversionMin,
+          fatiguedSpendMin: btConfig.fatiguedSpendMin,
+        }),
         fetchCampaignSummaries(dateOptions)
       ]);
 
@@ -276,7 +286,9 @@ const MetaAds = () => {
       console.log('✅ Campaign summaries loaded:', campaignSummaries.length);
 
       // Aggregate campaign data by type
-      const aggregatedMetrics = aggregateByType(campaignSummaries);
+      const aggregatedMetrics = aggregateByType(campaignSummaries, {
+        primaryConversionField: businessType === 'leadgen' ? 'leads' : 'purchases',
+      });
       console.log('✅ Aggregated metrics by type:', aggregatedMetrics);
 
       setCreatives(creativesData);
@@ -297,7 +309,7 @@ const MetaAds = () => {
     } finally {
       setLoading(false);
     }
-  }, [autoFetchTopImages]);
+  }, [autoFetchTopImages, businessType]);
 
   // Initialize cache IDs on mount
   useEffect(() => {
@@ -375,7 +387,7 @@ const MetaAds = () => {
 
       {/* Campaign Type Dashboard */}
       {!usingMockData && campaignMetrics.length > 0 && (
-        <CampaignTypeDashboard metrics={campaignMetrics} loading={loading} />
+        <CampaignTypeDashboard metrics={campaignMetrics} loading={loading} businessType={businessType} />
       )}
 
       <div className="creative-grid">
@@ -404,7 +416,7 @@ const MetaAds = () => {
                 fontSize: '13px'
               }}>
                 <div>
-                  <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>Conversion Rate</div>
+                  <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>{btConfig.conversionRateLabel}</div>
                   <div style={{
                     fontSize: '20px',
                     fontWeight: '700',
@@ -414,7 +426,7 @@ const MetaAds = () => {
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>Cost/Conv</div>
+                  <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>{btConfig.costPerConversionLabel}</div>
                   <div style={{ fontSize: '20px', fontWeight: '700', color: 'var(--accent-primary)' }}>
                     ${(creative.costPerConversion || 0).toFixed(2)}
                   </div>

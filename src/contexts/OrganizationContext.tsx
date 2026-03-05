@@ -43,6 +43,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
           subscription_id: null,
           current_period_start: null,
           current_period_end: null,
+          business_type: 'ecommerce',
           setup_mode: 'self_service',
           setup_completed: true,
           created_at: new Date().toISOString(),
@@ -230,6 +231,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
   const value: OrganizationContextValue = {
     organization,
     user,
+    businessType: organization?.business_type || 'ecommerce',
     isOwner: user?.role === 'owner',
     isAdmin: user?.role === 'owner' || user?.role === 'admin',
     isSuperAdmin: user?.is_super_admin ?? false,

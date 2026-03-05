@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { getScopedItem, setScopedItem } from '../lib/scopedStorage';
+import { useOrganization } from '../contexts/OrganizationContext';
+import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
 import './Insights.css';
 
 type Channel = 'meta' | 'google' | 'tiktok' | 'email';
@@ -86,6 +88,7 @@ function setCachedAnalysis(channel: Channel, analysis: ChannelAnalysisResult): v
 }
 
 const Insights = () => {
+  const { businessType } = useOrganization();
   const [selectedChannel, setSelectedChannel] = useState<Channel>('meta');
   const [analysis, setAnalysis] = useState<ChannelAnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -125,7 +128,14 @@ const Insights = () => {
 
       if (selectedChannel === 'meta') {
         setLoadingMessage('Fetching Meta ads...');
-        const creatives = await fetchAdCreatives({ datePreset: 'last_30d' });
+        const btConfig = getBusinessTypeConfig(businessType);
+        const creatives = await fetchAdCreatives({ datePreset: 'last_30d' }, {
+          primaryActionType: btConfig.primaryActionType,
+          winningCVRThreshold: btConfig.winningCVRThreshold,
+          fatiguedCVRThreshold: btConfig.fatiguedCVRThreshold,
+          winningConversionMin: btConfig.winningConversionMin,
+          fatiguedSpendMin: btConfig.fatiguedSpendMin,
+        });
         ads = creatives.map(convertToAdCreativeData);
         setAdsCount(ads.length);
       }
@@ -139,7 +149,7 @@ const Insights = () => {
       setLoadingMessage(`ConversionIQ™ analyzing ${ads.length} ads...`);
 
       // Run the analysis with selected reasoning effort
-      const result = await analyzeChannelPerformance(ads, channelConfig.name);
+      const result = await analyzeChannelPerformance(ads, channelConfig.name, { businessType });
 
       // Cache the result
       setCachedAnalysis(selectedChannel, result);
@@ -152,7 +162,7 @@ const Insights = () => {
       setLoading(false);
       setLoadingMessage('');
     }
-  }, [selectedChannel]);
+  }, [selectedChannel, businessType]);
 
   const selectedChannelConfig = CHANNELS.find(c => c.id === selectedChannel);
 

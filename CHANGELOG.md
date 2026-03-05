@@ -1,5 +1,63 @@
 # Changelog
 
+## 2026-03-05 — Add lead generation business type support across entire platform
+
+### Overview
+Added comprehensive lead generation (`leadgen`) business type support so the platform adapts all metrics, labels, AI prompts, and defaults based on whether an organization sells products (e-commerce) or generates leads (coaching, services, info products). Existing e-commerce organizations see zero behavior change.
+
+### Added
+- **`BusinessType` type** (`'ecommerce' | 'leadgen'`) on Organization model and context
+- **`businessTypeConfig.ts`** — centralized config utility with labels, thresholds, AI prompt context, dashboard defaults, and ad publisher defaults per business type
+- **Business Type selector** in Account Settings — radio card UI to switch between E-Commerce and Lead Generation, saves to Supabase `organizations.business_type`
+- **Business Type selector** in Admin Create Organization flow — included in company step and review step
+- **Business Type badge** in Admin Organization Detail header
+- **`needsConversionTracking()` helper** in Ad Publisher — conversion tracking now applies to both `OUTCOME_SALES` and `OUTCOME_LEADS`
+
+### Changed
+- **Dashboard** — Default visible metrics swap based on business type (leadgen shows Leads, CPL, Lead Rate, Results; hides Revenue, ROAS, AOV). Includes localStorage migration to detect stale e-commerce configs for leadgen orgs
+- **CampaignTypeDashboard** — Conditionally hides Revenue, ROAS, AOV columns for leadgen; shows CPL as primary KPI instead of ROAS
+- **MetaAds** — Uses business-type-specific action types, thresholds, and labels for creative cards
+- **Ad Publisher** — Defaults to OUTCOME_LEADS / LEAD / SIGN_UP for leadgen orgs; "(Recommended)" label is dynamic
+- **AI Analysis (openaiApi.ts)** — Business context injected into `analyzeChannelPerformance`, `generateCopyOptions`, and `regenerateSingleCopy` prompts. Includes psychology shifts (purchase fears vs commitment fears) and retention context overrides
+- **Insights page** — Passes business type to fetchAdCreatives and analyzeChannelPerformance
+- **AdGenerator** — Passes business type to generateCopyOptions and regenerateSingleCopy
+- **Backend `credentials.ts`** — `handleCreateOrg` now persists `business_type` in the org insert payload
+
+### Fixed (from code review)
+- **Stale closure in MetaAds `loadMetaData`** — added `businessType` to useCallback deps
+- **Stale closure in Insights `runAnalysis`** — added `businessType` to useCallback deps
+- **Dashboard metrics not updating after org hydration** — added useEffect to re-run migration when businessType changes
+- **AccountSettings radio desync** — added useEffect to sync businessTypeValue when org context hydrates
+- **AdPublisher defaults stuck on ecommerce** — added useEffect to reset objective/event/CTA when businessType resolves
+- **`regenerateSingleCopy` missing business context** — added businessType param and injected AI context modifiers
+
+### Database Migration Required
+```sql
+ALTER TABLE organizations ADD COLUMN business_type TEXT NOT NULL DEFAULT 'ecommerce' CHECK (business_type IN ('ecommerce', 'leadgen'));
+NOTIFY pgrst, 'reload schema';
+```
+
+### Files Modified (18 files)
+- `src/types/organization.ts` — Added `BusinessType`, `business_type` field
+- `src/lib/businessTypeConfig.ts` — New centralized config utility
+- `src/contexts/OrganizationContext.tsx` — Exposed `businessType` on context
+- `src/services/metaApi.ts` — Parameterized fetch/aggregate functions
+- `src/services/openaiApi.ts` — Business context in 3 AI functions
+- `src/pages/Dashboard.tsx` — Metric defaults, migration, labels
+- `src/components/CampaignTypeDashboard.tsx` — Conditional leadgen rendering
+- `src/pages/MetaAds.tsx` — Business-type-aware data fetching
+- `src/pages/Insights.tsx` — Business type passed to analysis
+- `src/pages/AdGenerator.tsx` — Business type passed to copy generation
+- `src/pages/AdPublisher.tsx` — Dynamic defaults and conversion tracking
+- `src/pages/AccountSettings.tsx` + `.css` — Business type selector UI
+- `src/pages/admin/CreateOrganization.tsx` — Business type in create flow
+- `src/pages/admin/OrganizationDetail.tsx` — Business type badge
+- `src/pages/admin/AdminDashboard.tsx` — Mock data updated
+- `src/pages/admin/OrganizationsList.tsx` — Mock data updated
+- `api/admin/credentials.ts` — Backend org creation includes business_type
+
+---
+
 ## 2026-03-05 — Add Results, Cost Per Result, Result Rate, and Lead to Result Rate metrics
 
 ### Overview

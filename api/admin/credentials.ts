@@ -378,7 +378,7 @@ async function handleCreateOrg(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { name, slug, planTier, ownerEmail, ownerName, logoUrl, primaryColor, secondaryColor } = req.body || {};
+  const { name, slug, planTier, businessType, ownerEmail, ownerName, logoUrl, primaryColor, secondaryColor } = req.body || {};
 
   if (!name || !slug) {
     return res.status(400).json({ error: 'name and slug are required' });
@@ -391,6 +391,7 @@ async function handleCreateOrg(req: VercelRequest, res: VercelResponse) {
       name,
       slug,
       plan_tier: planTier || 'enterprise',
+      business_type: (businessType === 'leadgen' ? 'leadgen' : 'ecommerce'),
       setup_mode: 'white_glove',
       setup_completed: false,
       logo_url: logoUrl || null,

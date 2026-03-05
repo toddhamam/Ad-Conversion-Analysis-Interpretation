@@ -28,6 +28,8 @@ import {
 } from '../services/metaApi';
 import { getPublishData } from '../services/publishStore';
 import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
+import { useOrganization } from '../contexts/OrganizationContext';
+import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
 import './AdPublisher.css';
 
 // Debug flag - set to true to enable verbose logging
@@ -95,14 +97,26 @@ const CTA_BUTTON_OPTIONS: { id: CallToActionType; name: string }[] = [
   { id: 'PLAY_GAME', name: 'Play Game' },
 ];
 
-// Campaign objective options - Sales is default/recommended
+// Campaign objective options - recommended is determined by business type
 const OBJECTIVE_OPTIONS: { id: CampaignObjective; name: string }[] = [
-  { id: 'OUTCOME_SALES', name: 'Sales (Recommended)' },
+  { id: 'OUTCOME_SALES', name: 'Sales' },
   { id: 'OUTCOME_TRAFFIC', name: 'Traffic' },
   { id: 'OUTCOME_AWARENESS', name: 'Awareness' },
   { id: 'OUTCOME_ENGAGEMENT', name: 'Engagement' },
   { id: 'OUTCOME_LEADS', name: 'Leads' },
 ];
+
+// Helper to get objective display name with "(Recommended)" based on business type
+function getObjectiveDisplayName(id: CampaignObjective, defaultObjective: string): string {
+  const base = OBJECTIVE_OPTIONS.find(o => o.id === id)?.name || id;
+  return id === defaultObjective ? `${base} (Recommended)` : base;
+}
+
+// Objectives that require conversion tracking (pixel + conversion event)
+const CONVERSION_TRACKING_OBJECTIVES: CampaignObjective[] = ['OUTCOME_SALES', 'OUTCOME_LEADS'];
+function needsConversionTracking(objective: CampaignObjective): boolean {
+  return CONVERSION_TRACKING_OBJECTIVES.includes(objective);
+}
 
 // Conversion event options
 const CONVERSION_EVENT_OPTIONS: { id: ConversionEvent; name: string }[] = [
@@ -356,6 +370,8 @@ type PublishStep = 'select' | 'destination' | 'configure' | 'review';
 
 const AdPublisher = () => {
   const navigate = useNavigate();
+  const { businessType } = useOrganization();
+  const btConfig = getBusinessTypeConfig(businessType);
 
   const renderCountRef = useRef(0);
   const mountedRef = useRef(false);
@@ -386,12 +402,12 @@ const AdPublisher = () => {
   // Campaign settings
   const [campaignName, setCampaignName] = useState('');
   const [adsetName, setAdsetName] = useState('');
-  const [campaignObjective, setCampaignObjective] = useState<CampaignObjective>('OUTCOME_SALES');
+  const [campaignObjective, setCampaignObjective] = useState<CampaignObjective>(btConfig.defaultObjective as CampaignObjective);
   const [budgetMode, setBudgetMode] = useState<BudgetMode>('CBO');
   const [dailyBudget, setDailyBudget] = useState(50);
 
   // Conversion tracking
-  const [conversionEvent, setConversionEvent] = useState<ConversionEvent>('PURCHASE');
+  const [conversionEvent, setConversionEvent] = useState<ConversionEvent>(btConfig.defaultConversionEvent as ConversionEvent);
   const [availablePixels, setAvailablePixels] = useState<PixelRef[]>([]);
   const [pixelsLoading, setPixelsLoading] = useState(false);
   const [pixelId, setPixelId] = useState(() => {
@@ -427,7 +443,7 @@ const AdPublisher = () => {
 
   // Ad setup
   const [landingPageUrl, setLandingPageUrl] = useState('https://example.com/offer');
-  const [ctaButtonType, setCtaButtonType] = useState<CallToActionType>('SHOP_NOW');
+  const [ctaButtonType, setCtaButtonType] = useState<CallToActionType>(btConfig.defaultCTAType as CallToActionType);
   const [urlParameters, setUrlParameters] = useState('');
 
   // Presets
@@ -440,6 +456,17 @@ const AdPublisher = () => {
   const [selectedPresetId, setSelectedPresetId] = useState('');
   const [presetName, setPresetName] = useState('');
   const [showSavePreset, setShowSavePreset] = useState(false);
+
+  // Sync defaults when businessType resolves after initial render
+  const btSyncedRef = useRef(businessType);
+  useEffect(() => {
+    if (businessType !== btSyncedRef.current) {
+      btSyncedRef.current = businessType;
+      setCampaignObjective(btConfig.defaultObjective as CampaignObjective);
+      setConversionEvent(btConfig.defaultConversionEvent as ConversionEvent);
+      setCtaButtonType(btConfig.defaultCTAType as CallToActionType);
+    }
+  }, [businessType, btConfig]);
 
   // Derive the effective campaign objective based on mode
   // For new_adset: inherit from the selected existing campaign
@@ -670,8 +697,8 @@ const AdPublisher = () => {
         campaignObjective,
         budgetMode,
         dailyBudget,
-        conversionEvent: campaignObjective === 'OUTCOME_SALES' ? conversionEvent : undefined,
-        pixelId: campaignObjective === 'OUTCOME_SALES' ? pixelId : undefined,
+        conversionEvent: needsConversionTracking(campaignObjective) ? conversionEvent : undefined,
+        pixelId: needsConversionTracking(campaignObjective) ? pixelId : undefined,
         targeting: {
           geoLocations: { countries: targetCountries },
           ageMin,
@@ -812,7 +839,7 @@ const AdPublisher = () => {
     // For new_adset: only require adsetName and budget (campaign already exists)
     if (publishMode === 'new_campaign' && !campaignName) return false;
     if (!adsetName || dailyBudget <= 0) return false;
-    if (effectiveCampaignObjective === 'OUTCOME_SALES' && !pixelId) return false;
+    if (needsConversionTracking(effectiveCampaignObjective) && !pixelId) return false;
     if (targetCountries.length === 0) return false;
     if (!placementAutomatic && publisherPlatforms.length === 0) return false;
     return true;
@@ -868,8 +895,8 @@ const AdPublisher = () => {
           dailyBudget: publishMode !== 'existing_adset' ? dailyBudget : undefined,
           landingPageUrl,
           urlTags: urlParameters.trim() || undefined,
-          conversionEvent: effectiveCampaignObjective === 'OUTCOME_SALES' ? conversionEvent : undefined,
-          pixelId: effectiveCampaignObjective === 'OUTCOME_SALES' ? pixelId : undefined,
+          conversionEvent: needsConversionTracking(effectiveCampaignObjective) ? conversionEvent : undefined,
+          pixelId: needsConversionTracking(effectiveCampaignObjective) ? pixelId : undefined,
           targeting: publishMode !== 'existing_adset' ? buildTargeting() : undefined,
           placements: publishMode !== 'existing_adset' ? buildPlacements() : undefined,
         },
@@ -1179,7 +1206,7 @@ const AdPublisher = () => {
               <span>
                 Creating ad set in campaign: <strong>{campaigns.find(c => c.id === selectedCampaignId)?.name}</strong>
                 {' '}— Objective: <strong>
-                  {OBJECTIVE_OPTIONS.find(o => o.id === effectiveCampaignObjective)?.name || effectiveCampaignObjective}
+                  {getObjectiveDisplayName(effectiveCampaignObjective, btConfig.defaultObjective)}
                 </strong>
               </span>
             </div>
@@ -1216,7 +1243,7 @@ const AdPublisher = () => {
                         className="form-select"
                       >
                         {OBJECTIVE_OPTIONS.map(o => (
-                          <option key={o.id} value={o.id}>{o.name}</option>
+                          <option key={o.id} value={o.id}>{getObjectiveDisplayName(o.id, btConfig.defaultObjective)}</option>
                         ))}
                       </select>
                     </div>
@@ -1260,8 +1287,8 @@ const AdPublisher = () => {
               </div>
             )}
 
-            {/* CONVERSION TRACKING (only for OUTCOME_SALES) */}
-            {publishMode !== 'existing_adset' && effectiveCampaignObjective === 'OUTCOME_SALES' && (
+            {/* CONVERSION TRACKING (for OUTCOME_SALES and OUTCOME_LEADS) */}
+            {publishMode !== 'existing_adset' && needsConversionTracking(effectiveCampaignObjective) && (
               <div className="config-section">
                 <button
                   className={`config-section-header ${expandedSections.has('conversion') ? 'expanded' : ''}`}
@@ -1881,14 +1908,14 @@ const AdPublisher = () => {
                       <div className="summary-item">
                         <span className="summary-label">Objective</span>
                         <span className="summary-value">
-                          {OBJECTIVE_OPTIONS.find(o => o.id === effectiveCampaignObjective)?.name}
+                          {getObjectiveDisplayName(effectiveCampaignObjective, btConfig.defaultObjective)}
                         </span>
                       </div>
                       <div className="summary-item">
                         <span className="summary-label">Budget</span>
                         <span className="summary-value">${dailyBudget}/day ({publishMode === 'new_adset' ? 'Ad Set' : budgetMode})</span>
                       </div>
-                      {effectiveCampaignObjective === 'OUTCOME_SALES' && (
+                      {needsConversionTracking(effectiveCampaignObjective) && (
                         <div className="summary-item">
                           <span className="summary-label">Conversion Event</span>
                           <span className="summary-value">

@@ -126,6 +126,7 @@ function OrganizationDetail() {
         current_period_end: '2024-02-01T00:00:00Z',
         setup_mode: 'white_glove',
         setup_completed: false,
+        business_type: 'ecommerce',
         created_at: '2024-01-15T10:00:00Z',
         updated_at: '2024-01-15T10:00:00Z',
       });
@@ -571,6 +572,9 @@ function OrganizationDetail() {
           </span>
           <span className={`admin-badge-pill ${organization.subscription_status === 'active' ? 'active' : 'inactive'}`}>
             {organization.subscription_status}
+          </span>
+          <span className="admin-badge-pill" style={{ background: organization.business_type === 'leadgen' ? 'rgba(168, 85, 247, 0.1)' : 'rgba(34, 197, 94, 0.1)', color: organization.business_type === 'leadgen' ? '#a855f7' : '#16a34a' }}>
+            {organization.business_type === 'leadgen' ? 'Lead Gen' : 'E-Commerce'}
           </span>
         </div>
       </div>
