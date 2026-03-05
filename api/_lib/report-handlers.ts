@@ -48,9 +48,18 @@ const MANUAL_SEND_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 /**
  * Detect Supabase "table not found in schema cache" errors.
  * These occur when report tables haven't been created via migration yet.
+ * Works with both returned Supabase error objects and thrown exceptions.
  */
 function isTableNotFoundError(error: { message?: string; code?: string } | null): boolean {
   return !!error?.message?.includes('schema cache');
+}
+
+function isSchemaError(err: unknown): boolean {
+  if (err instanceof Error) return err.message.includes('schema cache');
+  if (typeof err === 'object' && err !== null && 'message' in err) {
+    return String((err as { message: unknown }).message).includes('schema cache');
+  }
+  return String(err).includes('schema cache');
 }
 
 // ─── Auth Helpers ─────────────────────────────────────────────────────────────
@@ -622,13 +631,16 @@ export async function handleReportSend(req: VercelRequest, res: VercelResponse) 
   const { schedule_id } = req.body;
   if (!schedule_id) return res.status(400).json({ error: 'schedule_id is required.' });
 
-  const { data: schedule } = await supabase
+  const { data: schedule, error: scheduleError } = await supabase
     .from('report_schedules')
     .select('*')
     .eq('id', schedule_id)
     .eq('organization_id', auth.organizationId)
     .single();
 
+  if (scheduleError && isTableNotFoundError(scheduleError)) {
+    return res.status(501).json({ error: 'Report scheduling is not yet available. Database migration pending.' });
+  }
   if (!schedule) return res.status(404).json({ error: 'Schedule not found.' });
 
   // Rate limit: 5 minute cooldown
@@ -757,6 +769,9 @@ export async function handleReportCron(req: VercelRequest, res: VercelResponse) 
     await flushSentry();
     return res.status(200).json({ message: `Processed ${sent + failed} reports`, sent, failed });
   } catch (err: unknown) {
+    if (isSchemaError(err)) {
+      return res.status(200).json({ message: 'Report tables not yet provisioned — skipping cron', sent: 0, failed: 0 });
+    }
     captureError(err, { route: 'meta/report-cron' });
     await flushSentry();
     return res.status(500).json({ error: 'Cron handler failed' });
