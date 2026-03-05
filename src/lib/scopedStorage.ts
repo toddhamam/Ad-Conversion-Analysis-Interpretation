@@ -43,7 +43,23 @@ export function getScopedItem(baseKey: string): string | null {
  * Set an item in localStorage using a scoped key.
  */
 export function setScopedItem(baseKey: string, value: string): void {
-  localStorage.setItem(scopedKey(baseKey), value);
+  try {
+    localStorage.setItem(scopedKey(baseKey), value);
+  } catch {
+    // QuotaExceededError — clear image cache to free space and retry
+    try {
+      const key = scopedKey(baseKey);
+      localStorage.removeItem('conversion_intelligence_image_cache');
+      // Also try scoped image cache variants
+      const accountId = getScopedAccountId();
+      if (accountId) {
+        localStorage.removeItem(`conversion_intelligence_image_cache_${accountId}`);
+      }
+      localStorage.setItem(key, value);
+    } catch {
+      // Still over quota — caller should handle gracefully
+    }
+  }
 }
 
 /**
@@ -63,6 +79,17 @@ export function migrateToScoped(baseKey: string, adAccountId: string): void {
   const scopedKeyName = `${baseKey}_${adAccountId}`;
   const unscoped = localStorage.getItem(baseKey);
   if (unscoped && !localStorage.getItem(scopedKeyName)) {
-    localStorage.setItem(scopedKeyName, unscoped);
+    try {
+      localStorage.setItem(scopedKeyName, unscoped);
+    } catch {
+      // QuotaExceededError — clear image cache to free space and retry
+      try {
+        localStorage.removeItem('conversion_intelligence_image_cache');
+        localStorage.removeItem(`conversion_intelligence_image_cache_${adAccountId}`);
+        localStorage.setItem(scopedKeyName, unscoped);
+      } catch {
+        // Still over quota — skip migration; data remains under the unscoped key
+      }
+    }
   }
 }
