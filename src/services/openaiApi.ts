@@ -592,6 +592,7 @@ export interface GeneratedAdPackage {
   videoError?: string; // Error message if video generation failed
   imageHeadlines?: string[]; // Headlines rendered into images, indexed by variation
   variationCount?: number; // Original requested variation count (for retry)
+  textAdConfig?: TextAdConfig; // Config used for text ad generation (for regeneration)
 }
 
 // Copy Options for multi-step generation
@@ -3974,6 +3975,7 @@ export async function generateAdPackage(config: {
     imageError,
     imageHeadlines: config.imageHeadlines,
     variationCount: config.variationCount,
+    textAdConfig: config.adType === 'text' ? config.textAdConfig : undefined,
   };
 }
 

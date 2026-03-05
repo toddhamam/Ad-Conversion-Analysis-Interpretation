@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, memo } from 'react';
 import type { GeneratedAdPackage } from '../services/openaiApi';
-import { Image, Video, Type, AlertTriangle, Clock, Lightbulb, Timer, Ruler, Download, Loader, RefreshCw } from 'lucide-react';
+import { Image, Video, Type, AlertTriangle, Clock, Lightbulb, Timer, Ruler, Download, Loader, RefreshCw, Trash2 } from 'lucide-react';
 import './GeneratedAdCard.css';
 
 interface GeneratedAdCardProps {
@@ -8,6 +8,7 @@ interface GeneratedAdCardProps {
   onRegenerateImage?: (adId: string, imageIndex: number) => Promise<void>;
   onRegenerateAllImages?: (adId: string) => Promise<void>;
   onRegenerateVideo?: (adId: string, videoIndex: number) => Promise<void>;
+  onRemoveImage?: (adId: string, imageIndex: number) => void;
 }
 
 function formatDate(isoString: string): string {
@@ -88,7 +89,7 @@ function LazyImage({ src, alt, onLoad }: { src: string; alt: string; onLoad?: ()
 
 // Memoized to prevent all cards re-rendering when one ad changes in the parent array.
 // Each card holds potentially large base64 images, so unnecessary re-renders are expensive.
-const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, onRegenerateAllImages, onRegenerateVideo }: GeneratedAdCardProps) {
+const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, onRegenerateAllImages, onRegenerateVideo, onRemoveImage }: GeneratedAdCardProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [downloadingImage, setDownloadingImage] = useState<number | null>(null);
   const [downloadingVideo, setDownloadingVideo] = useState(false);
@@ -437,6 +438,16 @@ const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, o
                       >
                         {downloadingImage === index ? '⏳' : '📥'} Download
                       </button>
+                      {onRemoveImage && imageCount > 1 && (
+                        <button
+                          className="action-btn remove-btn"
+                          onClick={() => onRemoveImage(ad.id, index)}
+                          disabled={regeneratingImage !== null || regeneratingAllImages}
+                          title="Remove this image from the batch"
+                        >
+                          <Trash2 size={14} strokeWidth={1.5} /> Remove
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

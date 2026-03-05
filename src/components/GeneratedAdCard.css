@@ -251,6 +251,17 @@
   border-color: var(--accent-violet);
 }
 
+/* Remove Button */
+.remove-btn {
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.remove-btn:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: #dc2626;
+}
+
 /* Regenerating Overlay */
 .regenerating-overlay {
   position: absolute;
