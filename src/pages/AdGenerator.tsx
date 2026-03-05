@@ -5,6 +5,7 @@ import {
   isGeminiConfigured,
   generateAdPackage,
   generateCopyOptions,
+  generateTextAdCopy,
   regenerateSingleCopy,
   generateAdImage,
   regenerateAllImages,
@@ -30,7 +31,9 @@ import {
   type VideoAspectRatio,
   type VideoDuration,
   type VideoModel,
+  type TextAdCopyResult,
 } from '../services/openaiApi';
+import { TEXT_AD_STYLES, getDefaultStyleId } from '../services/textAdCanvas';
 import { getCacheStats as getImageCacheStats, uploadBrandImages, clearImageCache } from '../services/imageCache';
 import { fetchAdCreatives, type DatePreset } from '../services/metaApi';
 import GeneratedAdCard from '../components/GeneratedAdCard';
@@ -173,6 +176,14 @@ const AdGenerator = () => {
   const [videoAspectRatio, setVideoAspectRatio] = useState<VideoAspectRatio>(DEFAULT_VIDEO_CONFIG.aspectRatio);
   const [videoDuration, setVideoDuration] = useState<VideoDuration>(DEFAULT_VIDEO_CONFIG.duration);
   const [videoModel, setVideoModel] = useState<VideoModel>(DEFAULT_VIDEO_CONFIG.model);
+
+  // Text ad configuration
+  const [textAdPrimaryText, setTextAdPrimaryText] = useState('');
+  const [textAdHighlightText, setTextAdHighlightText] = useState('');
+  const [textAdAnchorText, setTextAdAnchorText] = useState('');
+  const [selectedTextStyles, setSelectedTextStyles] = useState<string[]>([getDefaultStyleId()]);
+  const [textAdCopySuggestions, setTextAdCopySuggestions] = useState<TextAdCopyResult | null>(null);
+  const [isGeneratingTextAdCopy, setIsGeneratingTextAdCopy] = useState(false);
 
   // Copy source mode
   const [copySource, setCopySource] = useState<CopySource>('generate');
@@ -698,17 +709,26 @@ const AdGenerator = () => {
 
   // Generate final creatives
   const handleGenerateCreatives = async () => {
-    const hasImageApi = isGeminiConfigured() || isOpenAIConfigured();
-    const hasTextApi = isOpenAIConfigured();
+    // Text ads use Canvas rendering — no API keys needed for image generation
+    if (adType !== 'text') {
+      const hasImageApi = isGeminiConfigured() || isOpenAIConfigured();
+      const hasTextApi = isOpenAIConfigured();
 
-    if (!hasImageApi && !hasTextApi) {
-      setError('No AI API keys configured. Please contact your administrator.');
-      return;
+      if (!hasImageApi && !hasTextApi) {
+        setError('No AI API keys configured. Please contact your administrator.');
+        return;
+      }
+
+      // Only require OpenAI for AI-generated copy; import/manual copy doesn't need it
+      if (!hasTextApi && copySource === 'generate') {
+        setError('OpenAI API is not configured. Please contact your administrator.');
+        return;
+      }
     }
 
-    // Only require OpenAI for AI-generated copy; import/manual copy doesn't need it
-    if (!hasTextApi && copySource === 'generate') {
-      setError('OpenAI API is not configured. Please contact your administrator.');
+    // Validate text ad has primary text
+    if (adType === 'text' && !textAdPrimaryText.trim()) {
+      setError('Primary text is required for text ad generation.');
       return;
     }
 
@@ -735,11 +755,13 @@ const AdGenerator = () => {
 
     setIsGeneratingCreatives(true);
     setError(null);
-    setGenerationProgress(adType === 'image'
-      ? 'ConversionIQ™ generating images and finalizing copy...'
-      : isGeminiConfigured()
-        ? 'ConversionIQ™ generating video...'
-        : 'ConversionIQ™ creating video storyboard...');
+    setGenerationProgress(adType === 'text'
+      ? 'ConversionIQ™ rendering text creatives...'
+      : adType === 'image'
+        ? 'ConversionIQ™ generating images and finalizing copy...'
+        : isGeminiConfigured()
+          ? 'ConversionIQ™ generating video...'
+          : 'ConversionIQ™ creating video storyboard...');
 
     try {
       const activeInspirationsForCreative = savedInspirations.filter(i => activeInspirationIds.includes(i.id));
@@ -764,6 +786,12 @@ const AdGenerator = () => {
           duration: videoDuration,
           resolution: '720p' as const,
           model: videoModel,
+        } : undefined,
+        textAdConfig: adType === 'text' ? {
+          primaryText: textAdPrimaryText,
+          highlightText: textAdHighlightText || undefined,
+          anchorText: textAdAnchorText || undefined,
+          styleIds: selectedTextStyles,
         } : undefined,
         onProgress: setGenerationProgress,
       });
@@ -1071,7 +1099,8 @@ const AdGenerator = () => {
   // CTAs are optional when using import/manual copy (user sets CTA button type in publisher)
   const ctaOk = copySource === 'generate' ? selectedCTAs.length >= 1 : true;
   const canProceedToFinalConfig = selectedHeadlines.length >= 1 && selectedBodyTexts.length >= 1 && ctaOk;
-  const canGenerateCreatives = selectedHeadlines.length >= 1 && selectedBodyTexts.length >= 1 && ctaOk;
+  const canGenerateCreatives = selectedHeadlines.length >= 1 && selectedBodyTexts.length >= 1 && ctaOk
+    && (adType !== 'text' || textAdPrimaryText.trim().length > 0);
   const canSubmitManualCopy = manualHeadlines.some(h => h.trim().length > 0) && manualBodyTexts.some(b => b.trim().length > 0);
 
   return (
@@ -1760,11 +1789,170 @@ const AdGenerator = () => {
                 <span className="ad-type-name">Video Ad</span>
                 <span className="ad-type-desc">{isGeminiConfigured() ? 'Generate AI video' : 'Generate storyboard'}</span>
               </button>
+              <button
+                className={`ad-type-btn ${adType === 'text' ? 'active' : ''}`}
+                onClick={() => setAdType('text')}
+              >
+                <span className="ad-type-icon">Aa</span>
+                <span className="ad-type-name">Text Ad</span>
+                <span className="ad-type-desc">Bold text on background</span>
+              </button>
             </div>
           </div>
 
-          {/* Image Size Selection - only shown for image ads */}
-          {adType === 'image' && (
+          {/* Text Ad Configuration */}
+          {adType === 'text' && (
+            <div className="config-section text-ad-config">
+              <label className="config-label">Text Ad Content</label>
+              <p className="config-hint">Enter the text to display on your ad image. Each section appears in a different zone of the image.</p>
+
+              {/* Generate Suggestions Button */}
+              {isOpenAIConfigured() && (
+                <button
+                  className="generate-suggestions-btn"
+                  onClick={async () => {
+                    setIsGeneratingTextAdCopy(true);
+                    try {
+                      const result = await generateTextAdCopy({
+                        audienceType,
+                        conceptType,
+                        analysisData,
+                        productContext: selectedProduct || undefined,
+                        businessType,
+                      });
+                      setTextAdCopySuggestions(result);
+                    } catch (err: unknown) {
+                      setError(err instanceof Error ? err.message : 'Failed to generate suggestions');
+                    } finally {
+                      setIsGeneratingTextAdCopy(false);
+                    }
+                  }}
+                  disabled={isGeneratingTextAdCopy}
+                >
+                  {isGeneratingTextAdCopy ? 'Generating...' : 'Generate Suggestions with AI'}
+                </button>
+              )}
+
+              {/* Primary Text */}
+              <div className="text-ad-field">
+                <label className="text-ad-field-label">
+                  Primary Text <span className="required">*</span>
+                </label>
+                <p className="text-ad-field-hint">The bold main hook at the top of the image</p>
+                {textAdCopySuggestions && textAdCopySuggestions.primaryTexts.length > 0 && (
+                  <div className="text-ad-suggestions">
+                    {textAdCopySuggestions.primaryTexts.map(s => (
+                      <button
+                        key={s.id}
+                        className={`text-ad-suggestion-btn ${textAdPrimaryText === s.text ? 'active' : ''}`}
+                        onClick={() => setTextAdPrimaryText(s.text)}
+                        title={s.rationale}
+                      >
+                        {s.text}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <textarea
+                  className="text-ad-textarea"
+                  placeholder="e.g., We Will Run Your Ads"
+                  value={textAdPrimaryText}
+                  onChange={e => setTextAdPrimaryText(e.target.value)}
+                  maxLength={80}
+                  rows={2}
+                />
+              </div>
+
+              {/* Highlight Banner Text */}
+              <div className="text-ad-field">
+                <label className="text-ad-field-label">Highlight Banner Text</label>
+                <p className="text-ad-field-hint">Key offer on a contrasting dark banner (optional)</p>
+                {textAdCopySuggestions && textAdCopySuggestions.highlightTexts.length > 0 && (
+                  <div className="text-ad-suggestions">
+                    {textAdCopySuggestions.highlightTexts.map(s => (
+                      <button
+                        key={s.id}
+                        className={`text-ad-suggestion-btn ${textAdHighlightText === s.text ? 'active' : ''}`}
+                        onClick={() => setTextAdHighlightText(s.text)}
+                        title={s.rationale}
+                      >
+                        {s.text}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <textarea
+                  className="text-ad-textarea"
+                  placeholder="e.g., Get 10-20 Booked Calls Every 30 Days"
+                  value={textAdHighlightText}
+                  onChange={e => setTextAdHighlightText(e.target.value)}
+                  maxLength={120}
+                  rows={2}
+                />
+              </div>
+
+              {/* Anchor Text */}
+              <div className="text-ad-field">
+                <label className="text-ad-field-label">Anchor Text</label>
+                <p className="text-ad-field-hint">Trust anchor word at the bottom (optional)</p>
+                {textAdCopySuggestions && textAdCopySuggestions.anchorTexts.length > 0 && (
+                  <div className="text-ad-suggestions">
+                    {textAdCopySuggestions.anchorTexts.map(s => (
+                      <button
+                        key={s.id}
+                        className={`text-ad-suggestion-btn ${textAdAnchorText === s.text ? 'active' : ''}`}
+                        onClick={() => setTextAdAnchorText(s.text)}
+                        title={s.rationale}
+                      >
+                        {s.text}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <input
+                  type="text"
+                  className="text-ad-input"
+                  placeholder="e.g., Guaranteed"
+                  value={textAdAnchorText}
+                  onChange={e => setTextAdAnchorText(e.target.value)}
+                  maxLength={40}
+                />
+              </div>
+
+              {/* Style Preset Selector */}
+              <div className="text-ad-field">
+                <label className="text-ad-field-label">Background Style</label>
+                <p className="text-ad-field-hint">Select one or more. Multiple styles = different style per variation.</p>
+                <div className="text-style-grid">
+                  {TEXT_AD_STYLES.map(style => (
+                    <button
+                      key={style.id}
+                      className={`text-style-btn ${selectedTextStyles.includes(style.id) ? 'active' : ''}`}
+                      onClick={() => {
+                        setSelectedTextStyles(prev => {
+                          if (prev.includes(style.id)) {
+                            // Don't allow deselecting the last one
+                            if (prev.length <= 1) return prev;
+                            return prev.filter(id => id !== style.id);
+                          }
+                          return [...prev, style.id];
+                        });
+                      }}
+                    >
+                      <div
+                        className="text-style-preview"
+                        style={{ background: style.previewCSS }}
+                      />
+                      <span className="text-style-name">{style.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Image Size Selection - shown for image and text ads */}
+          {(adType === 'image' || adType === 'text') && (
             <div className="config-section">
               <label className="config-label">Image Size</label>
               <p className="config-hint">Select the aspect ratio for your ad images</p>

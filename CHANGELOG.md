@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-03-05 — Add text-only ad image generation for CreativeIQ
+
+### Overview
+Added a new "Text Ad" creative type to the CreativeIQ ad generation workflow. Instead of using Gemini AI to generate photographic images, text ads render bold typographic images programmatically via the Canvas API — zero cost, instant generation, pixel-perfect text. This is especially effective for lead generation advertisers whose best-performing ads are text-only images with bold promises and guarantees.
+
+### Added
+- **`src/services/textAdCanvas.ts`** — New canvas rendering engine with 12 style presets (Clean Orange, Dark Orange, Navy Gold, Clean Red, Dark Lime, Clean Blue, Warm Gradient, Cool Gradient, High Contrast, Charcoal, Money Green, Electric Blue)
+- **Multi-section image layout** — Primary text (accent color, top), highlight banner (dark contrast strip, middle), anchor text (trust word, bottom). Each section is optional; layout adjusts proportionally
+- **Text Ad type button** in Step 3 (Final Config) alongside Image and Video
+- **Structured text input fields** — Primary Text (required), Highlight Banner Text (optional), Anchor Text (optional) with separate inputs for each image zone
+- **"Generate Suggestions with AI" button** — Calls new `generateTextAdCopy()` GPT function that produces text-ad-optimized copy (bold promises, quantified outcomes, trust anchors) tailored to audience type, concept angle, and business type
+- **Clickable suggestion chips** — AI-generated suggestions appear as selectable chips above each text field; clicking one populates the field
+- **Style preset selector** — Grid of 12 color swatches with multi-select; multiple styles = different style per variation
+- **`TextAdConfig` interface** and `textAdConfig` parameter on `generateAdPackage()`
+- **`TextAdCopyResult` interface** and `generateTextAdCopy()` export in openaiApi.ts
+
+### Changed
+- **`AdType` extended**: `'image' | 'video'` → `'image' | 'video' | 'text'`
+- **`generateAdPackage()`** — Added explicit `else if (config.adType === 'text')` branch before the video else block (prevents text ads falling into the video path)
+- **API key validation bypass** — Text ads skip Gemini/OpenAI key checks since Canvas rendering needs no external APIs
+- **`canGenerateCreatives` validation** — Now also requires `textAdPrimaryText` when ad type is text
+- **Ad type selector grid** — Changed from 2-column to 3-column layout
+- **Image size selector** — Now shown for both image and text ad types
+- **Progress message** — Shows "ConversionIQ™ rendering text creatives..." for text ads
+- **`GeneratedAdCard`** — Badge shows "Text Ad" with Type icon; image display and error conditions include `adType === 'text'`
+
+### Technical Notes
+- Canvas renders at full Meta ad resolution (1080×1080, 1920×1080, 1080×1920)
+- Text is auto-uppercased for maximum impact
+- Font sizing algorithm steps down from 140px until text fits within section bounds (min 36px)
+- Text ad images are significantly smaller than AI-generated images (~20-50KB vs 500KB-2MB), reducing localStorage pressure
+- Ad Publisher requires no changes — text ads produce standard `GeneratedImageResult[]` that flows through the existing image upload pipeline unchanged
+- `revisedPrompt` field populated with descriptive string for each canvas-rendered image
+
+---
+
 ## 2026-03-05 — Remove org-level Business Type & require Pixel ID per account
 
 ### Removed

@@ -402,7 +402,7 @@ export interface CampaignInsightsSummary {
 
 // Ad Generator Types
 export type AudienceType = 'prospecting' | 'retargeting' | 'retention';
-export type AdType = 'image' | 'video';
+export type AdType = 'image' | 'video' | 'text';
 
 // Concept Types for multi-step creative generation
 export type ConceptType =
@@ -555,6 +555,13 @@ export interface GeneratedCopyResult {
   bodyTexts: string[];
   callToActions: string[];
   rationale: string;
+}
+
+export interface TextAdConfig {
+  primaryText: string;
+  highlightText?: string;
+  anchorText?: string;
+  styleIds: string[];
 }
 
 export interface VideoStoryboard {
@@ -3802,6 +3809,8 @@ export async function generateAdPackage(config: {
   imageHeadlines?: string[];
   // Video generation configuration (aspect ratio, duration, resolution, model)
   videoConfig?: VideoConfig;
+  // Text ad configuration (canvas-rendered text images)
+  textAdConfig?: TextAdConfig;
   // Progress callback for UI updates during generation
   onProgress?: (message: string) => void;
 }): Promise<GeneratedAdPackage> {
@@ -3855,6 +3864,27 @@ export async function generateAdPackage(config: {
     imageError = imageResult.imageError;
 
     whyItWorks = `This ad package uses ${config.audienceType} audience targeting with ${images.length} image variation(s). ${copy.rationale}`;
+  } else if (config.adType === 'text') {
+    // Text-only ad: Canvas-rendered typographic images — no API calls, zero cost, instant
+    const { generateTextAdVariations } = await import('./textAdCanvas');
+    const textConfig = config.textAdConfig;
+    if (!textConfig?.primaryText?.trim()) {
+      imageError = 'Primary text is required for text ad generation.';
+      images = [];
+    } else {
+      config.onProgress?.('ConversionIQ™ rendering text creatives...');
+      const textResult = generateTextAdVariations({
+        primaryText: textConfig.primaryText,
+        highlightText: textConfig.highlightText,
+        anchorText: textConfig.anchorText,
+        styleIds: textConfig.styleIds,
+        imageSize: config.imageSize ?? DEFAULT_IMAGE_SIZE,
+        variationCount: config.variationCount,
+      });
+      images = textResult.images;
+      imageError = textResult.imageError;
+    }
+    whyItWorks = `Text-only ad with ${images?.length || 0} style variation(s) for ${config.audienceType} audience. Bold text-on-background format optimized for scroll-stopping visibility. ${copy.rationale}`;
   } else {
     // Generate video(s) with Veo 3.1 — text-to-video, supports multi-variation
     const videos: GeneratedVideoResult[] = [];
@@ -3945,4 +3975,148 @@ export async function generateAdPackage(config: {
     imageHeadlines: config.imageHeadlines,
     variationCount: config.variationCount,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Text Ad Copy Generation — GPT-powered suggestions for text-only ad images
+// ---------------------------------------------------------------------------
+
+export interface TextAdCopyResult {
+  primaryTexts: CopyOption[];
+  highlightTexts: CopyOption[];
+  anchorTexts: CopyOption[];
+}
+
+/**
+ * Generate text-ad-optimized copy suggestions.
+ * Produces bold promise/guarantee-style text specifically designed for
+ * rendering as text-only ad images (not standard ad headlines).
+ */
+export async function generateTextAdCopy(config: {
+  audienceType: AudienceType;
+  conceptType: ConceptType;
+  analysisData: ChannelAnalysisResult | null;
+  reasoningEffort?: ReasoningEffort;
+  productContext?: ProductContext;
+  businessType?: import('../types/organization').BusinessType;
+}): Promise<TextAdCopyResult> {
+  if (!isOpenAIConfigured()) {
+    throw new Error('AI API not configured. Please contact support.');
+  }
+
+  const reasoningEffort = config.reasoningEffort ?? 'medium';
+  const btConfig = getBusinessTypeConfig(config.businessType || 'ecommerce');
+  const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
+  const analysis = config.analysisData;
+
+  let contextSection = '';
+
+  // Inject channel analysis if available
+  if (analysis) {
+    contextSection += `
+=== PERFORMANCE CONTEXT ===
+${analysis.executiveSummary || ''}
+
+Health Score: ${analysis.overallHealthScore}/10
+Top performing patterns from this account inform the suggestions below.
+`;
+    if (analysis.winningPatterns) {
+      const wp = analysis.winningPatterns;
+      if (wp.headlines?.length) contextSection += `\nWinning headline patterns: ${wp.headlines.join('; ')}`;
+      if (wp.emotionalTriggers?.length) contextSection += `\nEmotional triggers that work: ${wp.emotionalTriggers.join('; ')}`;
+    }
+  }
+
+  // Inject product context if available
+  if (config.productContext) {
+    contextSection += `
+=== PRODUCT/SERVICE ===
+Name: ${config.productContext.name}
+${config.productContext.author ? `By: ${config.productContext.author}` : ''}
+${config.productContext.description || ''}
+`;
+  }
+
+  const systemPrompt = `You are an expert direct-response copywriter who specializes in TEXT-ONLY ad creatives for Meta (Facebook/Instagram) ads.
+
+TEXT-ONLY ADS are images that contain ONLY bold text — no photographs, no graphics, just powerful words on a colored background. They work by conveying a clear, specific promise or outcome that stops the scroll.
+
+Your job is to generate text suggestions for three sections of a text-only ad image:
+
+1. PRIMARY TEXT (top of image) — The bold main hook. This is the first thing people see. Should be:
+   - A clear, specific promise or action statement
+   - Short enough to read in 1-2 seconds (ideally 3-8 words)
+   - Written in second person ("We will..." / "Get..." / "Your...")
+   - Example: "WE WILL RUN YOUR ADS" or "30 LEADS IN 30 DAYS"
+
+2. HIGHLIGHT TEXT (middle banner) — The specific offer/outcome rendered on a contrasting dark banner. Should be:
+   - A quantified promise with timeframe or specifics
+   - More detailed than the primary text
+   - Example: "GET 10-20 BOOKED CALLS EVERY 30 DAYS" or "DOUBLE YOUR REVENUE IN 90 DAYS"
+
+3. ANCHOR TEXT (bottom) — A single trust-building word or short phrase. Should be:
+   - 1-3 words maximum
+   - Conveys guarantee, authority, or urgency
+   - Example: "GUARANTEED" or "RISK-FREE" or "LIMITED SPOTS"
+
+IMPORTANT RULES:
+- This is for ${btConfig.conversionNoun.toLowerCase()} generation (${btConfig.aiConversionLanguage})
+- Write for ${audienceAngle.awarenessLevel} audiences (${audienceAngle.focus})
+- Be SPECIFIC with numbers, timeframes, and outcomes — vague promises don't stop the scroll
+- Avoid AI-sounding phrases: no "unlock", "revolutionize", "game-changer", "transform your"
+- Write like a direct-response marketer, not a brand copywriter
+- All text will be rendered in ALL CAPS, so write naturally and the system will uppercase it
+${contextSection}
+
+Respond in JSON format:
+{
+  "primaryTexts": [
+    { "id": "p1", "text": "...", "rationale": "..." },
+    { "id": "p2", "text": "...", "rationale": "..." },
+    { "id": "p3", "text": "...", "rationale": "..." },
+    { "id": "p4", "text": "...", "rationale": "..." }
+  ],
+  "highlightTexts": [
+    { "id": "h1", "text": "...", "rationale": "..." },
+    { "id": "h2", "text": "...", "rationale": "..." },
+    { "id": "h3", "text": "...", "rationale": "..." }
+  ],
+  "anchorTexts": [
+    { "id": "a1", "text": "...", "rationale": "..." },
+    { "id": "a2", "text": "...", "rationale": "..." },
+    { "id": "a3", "text": "...", "rationale": "..." }
+  ]
+}`;
+
+  const response = await callOpenAI(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `Generate text-only ad copy suggestions for a ${config.audienceType} ${btConfig.conversionNoun.toLowerCase()} campaign using a ${config.conceptType === 'auto' ? 'data-driven' : config.conceptType.replace(/_/g, ' ')} angle.` },
+    ],
+    { reasoningEffort, maxTokens: 2000 },
+  );
+
+  // Parse response
+  let cleanedResponse = response.trim();
+  if (cleanedResponse.startsWith('```json')) cleanedResponse = cleanedResponse.slice(7);
+  if (cleanedResponse.startsWith('```')) cleanedResponse = cleanedResponse.slice(3);
+  if (cleanedResponse.endsWith('```')) cleanedResponse = cleanedResponse.slice(0, -3);
+
+  try {
+    const parsed = JSON.parse(cleanedResponse.trim());
+
+    // Sanitize all text
+    for (const item of [...(parsed.primaryTexts || []), ...(parsed.highlightTexts || []), ...(parsed.anchorTexts || [])]) {
+      if (item.text) item.text = sanitizeCopyText(item.text);
+    }
+
+    return {
+      primaryTexts: parsed.primaryTexts || [],
+      highlightTexts: parsed.highlightTexts || [],
+      anchorTexts: parsed.anchorTexts || [],
+    };
+  } catch (error: unknown) {
+    console.error('Failed to parse text ad copy:', error);
+    throw new Error('Failed to generate text ad copy suggestions');
+  }
 }
