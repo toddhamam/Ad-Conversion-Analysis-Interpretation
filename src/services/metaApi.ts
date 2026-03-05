@@ -586,6 +586,10 @@ export interface CampaignTypeMetrics {
   conversionRate: number;
   aov: number;
   campaignCount: number;
+  // Business-type-agnostic fields
+  totalConversions: number;
+  costPerConversion: number;
+  totalLeads: number;
 }
 
 // ─── Campaign type detection ─────────────────────────────────────────────────
@@ -730,10 +734,18 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
   }
 }
 
+export interface FetchCreativeOptions {
+  primaryActionType?: string;
+  winningCVRThreshold?: number;
+  fatiguedCVRThreshold?: number;
+  winningConversionMin?: number;
+  fatiguedSpendMin?: number;
+}
+
 /**
  * Fetch ad creatives with performance data
  */
-export async function fetchAdCreatives(dateOptions?: DateRangeOptions): Promise<AdCreative[]> {
+export async function fetchAdCreatives(dateOptions?: DateRangeOptions, options?: FetchCreativeOptions): Promise<AdCreative[]> {
   adCounter = 0;
 
   try {
@@ -744,8 +756,9 @@ export async function fetchAdCreatives(dateOptions?: DateRangeOptions): Promise<
 
     return insights.map((ad, index) => {
       const creative = creativeDetails[index];
+      const actionType = options?.primaryActionType || 'offsite_conversion.fb_pixel_purchase';
       const conversions = ad.actions?.find(
-        action => action.action_type === 'offsite_conversion.fb_pixel_purchase'
+        action => action.action_type === actionType
       )?.value || '0';
 
       const spend = parseFloat(ad.spend || '0');
@@ -757,9 +770,14 @@ export async function fetchAdCreatives(dateOptions?: DateRangeOptions): Promise<
       const costPerConversion = conversionCount > 0 ? spend / conversionCount : 0;
       const clickThroughRate = impressions > 0 ? (clicks / impressions) * 100 : 0;
 
+      const winCVR = options?.winningCVRThreshold ?? 5;
+      const winMin = options?.winningConversionMin ?? 10;
+      const fatigueSpend = options?.fatiguedSpendMin ?? 50;
+      const fatigueCVR = options?.fatiguedCVRThreshold ?? 1;
+
       let status: 'Winning' | 'Testing' | 'Fatigued' = 'Testing';
-      if (conversionRate > 5 && conversionCount > 10) status = 'Winning';
-      else if (spend > 50 && conversionRate < 1) status = 'Fatigued';
+      if (conversionRate > winCVR && conversionCount > winMin) status = 'Winning';
+      else if (spend > fatigueSpend && conversionRate < fatigueCVR) status = 'Fatigued';
 
       let confidence: 'High' | 'Medium' | 'Low' = 'Low';
       if (clicks > 1000 && conversionCount > 20) confidence = 'High';
@@ -793,7 +811,7 @@ export async function fetchAdCreatives(dateOptions?: DateRangeOptions): Promise<
 /**
  * Fetch traffic type performance
  */
-export async function fetchTrafficTypes(dateOptions?: DateRangeOptions): Promise<TrafficType[]> {
+export async function fetchTrafficTypes(dateOptions?: DateRangeOptions, options?: { primaryActionType?: string }): Promise<TrafficType[]> {
   const adAccountId = getAdAccountId();
   if (!adAccountId) return [];
 
@@ -807,12 +825,13 @@ export async function fetchTrafficTypes(dateOptions?: DateRangeOptions): Promise
       },
     });
 
+    const trafficActionType = options?.primaryActionType || 'offsite_conversion.fb_pixel_purchase';
     return (data.data || []).map((campaign: any, index: number) => ({
       id: campaign.campaign_id || `traffic-${index}`,
       name: campaign.campaign_name || 'Unknown',
       spend: parseFloat(campaign.spend || '0'),
       conversions: parseInt(
-        campaign.actions?.find((a: any) => a.action_type === 'offsite_conversion.fb_pixel_purchase')?.value || '0',
+        campaign.actions?.find((a: any) => a.action_type === trafficActionType)?.value || '0',
         10
       ),
     }));
@@ -929,6 +948,8 @@ export interface AccountLevelInsights {
   uniqueLinkClicks: number;
   /** Account-level purchase count (deduplicated across campaigns, not per-person) */
   uniquePurchases: number;
+  /** Account-level lead count (deduplicated across campaigns) */
+  uniqueLeads: number;
 }
 
 export async function fetchAccountLevelInsights(dateOptions?: DateRangeOptions): Promise<AccountLevelInsights> {
@@ -937,7 +958,7 @@ export async function fetchAccountLevelInsights(dateOptions?: DateRangeOptions):
     await loadOrgMetaCredentials();
     adAccountId = getAdAccountId();
     if (!adAccountId) {
-      return { reach: 0, uniqueLinkClicks: 0, uniquePurchases: 0 };
+      return { reach: 0, uniqueLinkClicks: 0, uniquePurchases: 0, uniqueLeads: 0 };
     }
   }
 
@@ -950,7 +971,7 @@ export async function fetchAccountLevelInsights(dateOptions?: DateRangeOptions):
     });
 
     const row = data.data?.[0];
-    if (!row) return { reach: 0, uniqueLinkClicks: 0, uniquePurchases: 0 };
+    if (!row) return { reach: 0, uniqueLinkClicks: 0, uniquePurchases: 0, uniqueLeads: 0 };
 
     const reach = parseInt(row.reach || '0', 10);
 
@@ -967,18 +988,29 @@ export async function fetchAccountLevelInsights(dateOptions?: DateRangeOptions):
       10
     );
 
-    return { reach, uniqueLinkClicks, uniquePurchases };
+    const uniqueLeads = parseInt(
+      row.actions?.find((a: any) => a.action_type === 'lead')?.value || '0',
+      10
+    );
+
+    return { reach, uniqueLinkClicks, uniquePurchases, uniqueLeads };
   } catch (error: unknown) {
     console.error('Error fetching account-level insights:', error);
-    return { reach: 0, uniqueLinkClicks: 0, uniquePurchases: 0 };
+    return { reach: 0, uniqueLinkClicks: 0, uniquePurchases: 0, uniqueLeads: 0 };
   }
 }
 
 /**
  * Get aggregated metrics by campaign type
+ * @param campaigns - Campaign summaries to aggregate
+ * @param options - Optional config for business-type-aware aggregation
  */
-export function aggregateByType(campaigns: CampaignSummary[]): CampaignTypeMetrics[] {
+export function aggregateByType(
+  campaigns: CampaignSummary[],
+  options?: { primaryConversionField?: 'purchases' | 'leads' }
+): CampaignTypeMetrics[] {
   const typeMap = new Map<CampaignType, CampaignTypeMetrics>();
+  const useLeads = options?.primaryConversionField === 'leads';
 
   const types: CampaignType[] = ['Prospecting', 'Retargeting', 'Retention', 'Other'];
   types.forEach(type => {
@@ -994,6 +1026,9 @@ export function aggregateByType(campaigns: CampaignSummary[]): CampaignTypeMetri
       conversionRate: 0,
       aov: 0,
       campaignCount: 0,
+      totalConversions: 0,
+      costPerConversion: 0,
+      totalLeads: 0,
     });
   });
 
@@ -1004,14 +1039,18 @@ export function aggregateByType(campaigns: CampaignSummary[]): CampaignTypeMetri
     metrics.totalPurchaseValue += campaign.purchaseValue;
     metrics.totalClicks += campaign.clicks;
     metrics.totalImpressions += campaign.impressions;
+    metrics.totalLeads += campaign.leads;
     metrics.campaignCount += 1;
+    // Business-type-agnostic: use the correct conversion field
+    metrics.totalConversions += useLeads ? campaign.leads : campaign.purchases;
   });
 
   typeMap.forEach(metrics => {
     metrics.roas = metrics.totalSpend > 0 ? metrics.totalPurchaseValue / metrics.totalSpend : 0;
     metrics.costPerPurchase = metrics.totalPurchases > 0 ? metrics.totalSpend / metrics.totalPurchases : 0;
-    metrics.conversionRate = metrics.totalClicks > 0 ? (metrics.totalPurchases / metrics.totalClicks) * 100 : 0;
+    metrics.conversionRate = metrics.totalClicks > 0 ? (metrics.totalConversions / metrics.totalClicks) * 100 : 0;
     metrics.aov = metrics.totalPurchases > 0 ? metrics.totalPurchaseValue / metrics.totalPurchases : 0;
+    metrics.costPerConversion = metrics.totalConversions > 0 ? metrics.totalSpend / metrics.totalConversions : 0;
   });
 
   return Array.from(typeMap.values());

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { DashboardMetrics } from '../types/funnel';
@@ -59,6 +59,8 @@ import {
 } from 'lucide-react';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import { useOrganization } from '../contexts/OrganizationContext';
+import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
+import type { BusinessType } from '../types/organization';
 import './Dashboard.css';
 
 // Default transaction fee rate (percentage of revenue)
@@ -217,6 +219,28 @@ const DEFAULT_METRICS: MetricConfig[] = [
   { id: 'leadToResultRate', label: 'Lead to Result Rate', visible: false },
 ];
 
+// Generate default metrics for a given business type
+function getDefaultMetricsForBusinessType(businessType: BusinessType): MetricConfig[] {
+  const config = getBusinessTypeConfig(businessType);
+  return DEFAULT_METRICS.map(metric => ({
+    ...metric,
+    visible: config.defaultVisibleMetrics.includes(metric.id),
+  }));
+}
+
+// Get metric label with business-type overrides
+function getMetricLabel(metricId: string, businessType: BusinessType): string {
+  if (businessType === 'leadgen') {
+    const overrides: Record<string, string> = {
+      totalPurchases: 'Total Leads',
+      conversionRate: 'Lead Rate',
+      cac: 'Cost Per Lead',
+    };
+    if (overrides[metricId]) return overrides[metricId];
+  }
+  return METRIC_LABELS[metricId] || metricId;
+}
+
 const METRIC_ICONS: Record<string, ReactNode> = {
   totalRevenue: <TrendingUp size={24} strokeWidth={1.5} />,
   totalPurchases: <ShoppingCart size={24} strokeWidth={1.5} />,
@@ -356,8 +380,11 @@ const DATE_RANGE_METRICS = [
 // AOV and CPA are now derived from Meta API data and available to all users.
 const FUNNEL_ONLY_METRICS = ['sessions'];
 
-// Load metrics config from localStorage
-function loadMetricsConfig(): MetricConfig[] {
+// Lead-specific metric IDs used for migration detection
+const LEAD_METRIC_IDS = ['leads', 'costPerLead', 'leadRate'];
+
+// Load metrics config from localStorage with business-type migration
+function loadMetricsConfig(businessType: BusinessType): MetricConfig[] {
   if (typeof window !== 'undefined') {
     try {
       const saved = localStorage.getItem('dashboard_metrics_config');
@@ -371,13 +398,23 @@ function loadMetricsConfig(): MetricConfig[] {
             merged.push(defaultMetric);
           }
         }
+        // Migration: if businessType is leadgen but no lead metrics are visible,
+        // this is a stale e-commerce config — reset to leadgen defaults
+        if (businessType === 'leadgen') {
+          const hasAnyLeadMetricVisible = merged.some(
+            (m: MetricConfig) => LEAD_METRIC_IDS.includes(m.id) && m.visible
+          );
+          if (!hasAnyLeadMetricVisible) {
+            return getDefaultMetricsForBusinessType('leadgen');
+          }
+        }
         return merged;
       }
     } catch {
       // Fall through to default
     }
   }
-  return DEFAULT_METRICS;
+  return getDefaultMetricsForBusinessType(businessType);
 }
 
 // Save metrics config to localStorage
@@ -398,6 +435,7 @@ interface SortableStatCardProps {
   onTransactionFeeRateChange?: (rate: number) => void;
   cogsConfig?: CogsConfig;
   onCogsConfigChange?: (config: CogsConfig) => void;
+  businessType?: BusinessType;
 }
 
 function SortableStatCard({
@@ -411,6 +449,7 @@ function SortableStatCard({
   onTransactionFeeRateChange,
   cogsConfig,
   onCogsConfigChange,
+  businessType,
 }: SortableStatCardProps) {
   const {
     attributes,
@@ -509,7 +548,7 @@ function SortableStatCard({
     >
       <div className="stat-icon">{METRIC_ICONS[id]}</div>
       <div className="stat-content">
-        <div className="stat-label">{METRIC_LABELS[id]}</div>
+        <div className="stat-label">{getMetricLabel(id, businessType || 'ecommerce')}</div>
         <div className="stat-value">{formatValue()}</div>
         <div className="stat-period">
           {id === 'transactionFees' && transactionFeeRate !== undefined && onTransactionFeeRateChange ? (
@@ -633,7 +672,7 @@ function formatDateForApi(date: Date): string {
 }
 
 const Dashboard = () => {
-  const { isTrialing, trialDaysRemaining, isSuperAdmin } = useOrganization();
+  const { isTrialing, trialDaysRemaining, isSuperAdmin, businessType } = useOrganization();
   const { currentAccount } = useAdAccount();
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [metaData, setMetaData] = useState<{
@@ -657,7 +696,17 @@ const Dashboard = () => {
   const [error, setError] = useState<string | null>(null);
   const [funnelWarning, setFunnelWarning] = useState<string | null>(null);
   const [metaWarning, setMetaWarning] = useState<string | null>(null);
-  const [metricsConfig, setMetricsConfig] = useState<MetricConfig[]>(loadMetricsConfig);
+  const [metricsConfig, setMetricsConfig] = useState<MetricConfig[]>(() => loadMetricsConfig(businessType));
+  const businessTypeRef = useRef(businessType);
+
+  // Re-run metrics migration when businessType changes (e.g., after async org hydration)
+  useEffect(() => {
+    if (businessType !== businessTypeRef.current) {
+      businessTypeRef.current = businessType;
+      setMetricsConfig(loadMetricsConfig(businessType));
+    }
+  }, [businessType]);
+
   const [transactionFeeRate, setTransactionFeeRate] = useState(loadTransactionFeeRate);
   const [cogsConfig, setCogsConfig] = useState<CogsConfig>(loadCogsConfig);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1094,7 +1143,7 @@ const Dashboard = () => {
           />
           <ExportMenu
             stats={stats as unknown as Record<string, number>}
-            visibleMetrics={visibleMetrics.map((m) => ({ id: m.id, label: METRIC_LABELS[m.id] || m.label }))}
+            visibleMetrics={visibleMetrics.map((m) => ({ id: m.id, label: getMetricLabel(m.id, businessType) }))}
             dateRangeLabel={dateRangeLabel}
             accountName={currentAccount?.ad_account_name || undefined}
           />
@@ -1154,6 +1203,7 @@ const Dashboard = () => {
                     onTransactionFeeRateChange={setTransactionFeeRate}
                     cogsConfig={cogsConfig}
                     onCogsConfigChange={setCogsConfig}
+                    businessType={businessType}
                   />
                 ))}
               </div>

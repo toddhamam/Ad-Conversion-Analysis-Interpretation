@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import { getAuthToken } from '../../lib/authToken';
-import type { PlanTier } from '../../types/organization';
+import type { PlanTier, BusinessType } from '../../types/organization';
 
 interface FormData {
   name: string;
   slug: string;
   planTier: PlanTier;
+  businessType: BusinessType;
   ownerEmail: string;
   ownerName: string;
   logoUrl: string;
@@ -31,6 +32,7 @@ function CreateOrganization() {
     name: '',
     slug: '',
     planTier: 'enterprise',
+    businessType: 'ecommerce',
     ownerEmail: '',
     ownerName: '',
     logoUrl: '',
@@ -136,6 +138,7 @@ function CreateOrganization() {
           name: formData.name,
           slug: formData.slug,
           planTier: formData.planTier,
+          businessType: formData.businessType,
           ownerEmail: formData.ownerEmail,
           ownerName: formData.ownerName,
           logoUrl: formData.logoUrl,
@@ -500,6 +503,37 @@ function CreateOrganization() {
                 ))}
               </div>
             </div>
+
+            <div className="admin-form-group">
+              <label className="admin-form-label">Business Type *</label>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                {([{ id: 'ecommerce' as BusinessType, label: 'E-Commerce', desc: 'Purchases, revenue, ROAS' }, { id: 'leadgen' as BusinessType, label: 'Lead Generation', desc: 'Leads, CPL, lead rate' }]).map((bt) => (
+                  <label
+                    key={bt.id}
+                    style={{
+                      flex: '1',
+                      padding: '16px',
+                      borderRadius: '12px',
+                      border: `2px solid ${formData.businessType === bt.id ? 'var(--accent-violet)' : 'var(--border-primary)'}`,
+                      background: formData.businessType === bt.id ? 'rgba(168, 85, 247, 0.05)' : 'var(--bg-card)',
+                      cursor: 'pointer',
+                      transition: 'border-color 0.2s ease, background-color 0.2s ease',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="businessType"
+                      value={bt.id}
+                      checked={formData.businessType === bt.id}
+                      onChange={() => setFormData((prev) => ({ ...prev, businessType: bt.id }))}
+                      style={{ display: 'none' }}
+                    />
+                    <div style={{ fontWeight: 600, marginBottom: '4px' }}>{bt.label}</div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{bt.desc}</div>
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -670,9 +704,14 @@ function CreateOrganization() {
                 <div style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '8px' }}>
                   {formData.slug}.convertra.io
                 </div>
-                <span className={`admin-badge-pill ${formData.planTier}`}>
-                  {formData.planTier.charAt(0).toUpperCase() + formData.planTier.slice(1)}
-                </span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <span className={`admin-badge-pill ${formData.planTier}`}>
+                    {formData.planTier.charAt(0).toUpperCase() + formData.planTier.slice(1)}
+                  </span>
+                  <span className="admin-badge-pill" style={{ background: formData.businessType === 'leadgen' ? 'rgba(168, 85, 247, 0.1)' : 'rgba(34, 197, 94, 0.1)', color: formData.businessType === 'leadgen' ? '#a855f7' : '#16a34a' }}>
+                    {formData.businessType === 'leadgen' ? 'Lead Gen' : 'E-Commerce'}
+                  </span>
+                </div>
               </div>
 
               {/* Owner */}

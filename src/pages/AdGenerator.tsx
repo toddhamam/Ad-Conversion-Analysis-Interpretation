@@ -41,6 +41,7 @@ import SEO from '../components/SEO';
 import { setPublishData } from '../services/publishStore';
 import type { AdLibraryInspiration } from '../types';
 import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
+import { useOrganization } from '../contexts/OrganizationContext';
 import './AdGenerator.css';
 
 const CACHE_KEY = 'channel_analysis_cache';
@@ -151,6 +152,7 @@ const IMPORT_DATE_OPTIONS: { id: DatePreset; label: string }[] = [
 
 const AdGenerator = () => {
   const navigate = useNavigate();
+  const { businessType } = useOrganization();
 
   // Render tracking for debugging Chrome crashes
   const renderCountRef = useRef(0);
@@ -601,6 +603,7 @@ const AdGenerator = () => {
         copyVariationLevel: copyVariationValue,
         productContext: selectedProduct || undefined,
         adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
+        businessType,
       });
 
       // Replace the old item with the new one
@@ -675,6 +678,7 @@ const AdGenerator = () => {
         copyVariationLevel: copyVariationValue,
         productContext: selectedProduct || undefined,
         adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
+        businessType,
       });
 
       setCopyOptions(result);

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrganization } from '../contexts/OrganizationContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import type { BusinessType } from '../types/organization';
 import './AccountSettings.css';
 
 interface UserData {
@@ -62,6 +63,10 @@ function AccountSettings() {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [logoPreview, setLogoPreview] = useState<string | undefined>(formData.companyLogo);
+  const [businessTypeValue, setBusinessTypeValue] = useState<BusinessType>(organization?.business_type || 'ecommerce');
+  const [isSavingBusinessType, setIsSavingBusinessType] = useState(false);
+  const [businessTypeSuccess, setBusinessTypeSuccess] = useState('');
+  const [businessTypeError, setBusinessTypeError] = useState('');
 
   // Sync with localStorage on mount
   useEffect(() => {
@@ -69,6 +74,13 @@ function AccountSettings() {
     setFormData(userData);
     setLogoPreview(userData.companyLogo);
   }, []);
+
+  // Sync businessTypeValue when org context hydrates
+  useEffect(() => {
+    if (organization?.business_type) {
+      setBusinessTypeValue(organization.business_type);
+    }
+  }, [organization?.business_type]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -120,6 +132,36 @@ function AccountSettings() {
     setFormData(prev => ({ ...prev, companyLogo: undefined }));
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const handleSaveBusinessType = async () => {
+    setIsSavingBusinessType(true);
+    setBusinessTypeError('');
+    setBusinessTypeSuccess('');
+
+    try {
+      if (isConfigured && isSupabaseConfigured() && organization?.id) {
+        const { error: updateError } = await supabase
+          .from('organizations')
+          .update({ business_type: businessTypeValue })
+          .eq('id', organization.id);
+
+        if (updateError) {
+          setBusinessTypeError('Failed to update business type. Please try again.');
+          setIsSavingBusinessType(false);
+          return;
+        }
+
+        setBusinessTypeSuccess('Business type updated. Please refresh for changes to take effect across the app.');
+      } else {
+        setBusinessTypeError('Unable to save — Supabase not configured.');
+      }
+    } catch (err) {
+      console.error('Error saving business type:', err);
+      setBusinessTypeError('Failed to save business type. Please try again.');
+    } finally {
+      setIsSavingBusinessType(false);
     }
   };
 
@@ -399,6 +441,89 @@ function AccountSettings() {
                 required
               />
             </div>
+          </div>
+        </section>
+
+        {/* Business Type Section */}
+        <section className="settings-section">
+          <div className="section-header">
+            <h2>Business Type</h2>
+            <p>Select your business model to customize metrics, labels, and AI analysis</p>
+          </div>
+
+          <div className="business-type-content">
+            {businessTypeError && (
+              <div className="settings-error">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                {businessTypeError}
+              </div>
+            )}
+
+            {businessTypeSuccess && (
+              <div className="settings-success">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                  <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+                {businessTypeSuccess}
+              </div>
+            )}
+
+            <div className="business-type-options">
+              <label
+                className={`business-type-option ${businessTypeValue === 'ecommerce' ? 'selected' : ''}`}
+                onClick={() => setBusinessTypeValue('ecommerce')}
+              >
+                <input
+                  type="radio"
+                  name="businessType"
+                  value="ecommerce"
+                  checked={businessTypeValue === 'ecommerce'}
+                  onChange={() => setBusinessTypeValue('ecommerce')}
+                />
+                <div className="option-content">
+                  <span className="option-title">E-Commerce</span>
+                  <span className="option-description">Track purchases, revenue, ROAS, and AOV. Optimized for online stores and product sales.</span>
+                </div>
+              </label>
+
+              <label
+                className={`business-type-option ${businessTypeValue === 'leadgen' ? 'selected' : ''}`}
+                onClick={() => setBusinessTypeValue('leadgen')}
+              >
+                <input
+                  type="radio"
+                  name="businessType"
+                  value="leadgen"
+                  checked={businessTypeValue === 'leadgen'}
+                  onChange={() => setBusinessTypeValue('leadgen')}
+                />
+                <div className="option-content">
+                  <span className="option-title">Lead Generation</span>
+                  <span className="option-description">Track leads, cost per lead, and lead rate. Optimized for service businesses, coaching, and info products.</span>
+                </div>
+              </label>
+            </div>
+
+            <button
+              type="button"
+              className="save-button"
+              disabled={isSavingBusinessType || businessTypeValue === (organization?.business_type || 'ecommerce')}
+              onClick={handleSaveBusinessType}
+            >
+              {isSavingBusinessType ? (
+                <>
+                  <span className="button-spinner"></span>
+                  Saving...
+                </>
+              ) : (
+                'Save Business Type'
+              )}
+            </button>
           </div>
         </section>
 

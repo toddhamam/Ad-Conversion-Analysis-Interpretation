@@ -5,6 +5,7 @@ export type BillingInterval = 'monthly' | 'yearly';
 export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'trialing' | 'incomplete';
 export type UserRole = 'owner' | 'admin' | 'member' | 'viewer';
 export type UserStatus = 'active' | 'invited' | 'suspended';
+export type BusinessType = 'ecommerce' | 'leadgen';
 export type SetupMode = 'self_service' | 'white_glove';
 export type CredentialStatus = 'active' | 'expired' | 'revoked' | 'error';
 export type CredentialProvider = 'meta' | 'google' | 'tiktok';
@@ -32,6 +33,9 @@ export interface Organization {
   // Ad Account Seats (multi-account support)
   ad_account_seats?: number;
   ad_account_seats_used?: number;
+
+  // Business Type
+  business_type: BusinessType;
 
   // Setup
   setup_mode: SetupMode;
@@ -265,6 +269,7 @@ export interface UpdateOrganizationRequest {
   primary_color?: string;
   secondary_color?: string;
   plan_tier?: PlanTier;
+  business_type?: BusinessType;
   setup_completed?: boolean;
 }
 
@@ -285,6 +290,7 @@ export interface AcceptInvitationRequest {
 export interface OrganizationContextValue {
   organization: Organization | null;
   user: User | null;
+  businessType: BusinessType;
   isOwner: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
