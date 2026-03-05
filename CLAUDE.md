@@ -337,6 +337,19 @@ The `@sentry/vite-plugin` in `vite.config.ts` uploads hidden source maps during 
 | `SENTRY_ORG` | Vite plugin (build time) | Organization slug |
 | `SENTRY_PROJECT` | Vite plugin (build time) | Project slug |
 
+### Sentry MCP Integration
+
+A Sentry MCP server is configured globally (`~/.claude.json`) using OAuth at `https://mcp.sentry.dev/mcp`. This allows Claude Code to query Sentry directly for issues, stack traces, and error details without copy-pasting.
+
+**Slash command**: `/sentry` (defined in `~/.claude/commands/sentry.md`) — autonomously pulls unresolved Sentry issues, reads stack traces, generates fixes, and creates PRs.
+
+**Usage**:
+- `/sentry` — triages all recent unresolved issues
+- `/sentry JAVASCRIPT-REACT-7` — targets a specific issue ID
+- `/sentry keyword` — filters by keyword
+
+**Authentication**: OAuth-based, authenticates on first use in a new session. Re-authenticate via `/mcp` → Sentry → Authenticate.
+
 ---
 
 ## API Authentication & Tenant Isolation
