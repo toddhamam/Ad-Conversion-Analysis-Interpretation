@@ -462,6 +462,11 @@
   line-height: 1.4;
 }
 
+.config-required {
+  color: #ef4444;
+  font-weight: 600;
+}
+
 .ad-account-configure-actions {
   display: flex;
   gap: 8px;
