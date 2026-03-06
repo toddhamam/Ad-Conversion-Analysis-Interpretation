@@ -673,6 +673,7 @@ async function callOpenAI(
     model?: string;
     maxTokens?: number;
     reasoningEffort?: ReasoningEffort;
+    responseFormat?: { type: 'json_object' } | { type: 'text' };
   } = {}
 ): Promise<string> {
   if (!isOpenAIConfigured()) {
@@ -682,7 +683,8 @@ async function callOpenAI(
   const {
     model = DEFAULT_CHAT_MODEL,
     maxTokens = 2000,
-    reasoningEffort = DEFAULT_REASONING_EFFORT
+    reasoningEffort = DEFAULT_REASONING_EFFORT,
+    responseFormat
   } = options;
 
   console.log('🤖 Calling OpenAI API with model:', model);
@@ -696,32 +698,82 @@ async function callOpenAI(
     reasoning_effort: reasoningEffort,
   };
 
-  const response = await openaiProxy('chat', requestBody);
+  // Add response_format if specified — forces model to output valid JSON
+  if (responseFormat) {
+    requestBody.response_format = responseFormat;
+  }
+
+  let response = await openaiProxy('chat', requestBody);
 
   if (!response.ok) {
     const errorText = await response.text();
     console.error('❌ OpenAI API Error Status:', response.status);
     console.error('❌ OpenAI API Error Text:', errorText);
 
-    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-
-    try {
-      const errorJson = JSON.parse(errorText);
-      if (errorJson.error?.message) {
-        errorMessage = errorJson.error.message;
+    // If the error is specifically about response_format being unsupported,
+    // retry without it — some model versions may not support json_object mode
+    if (responseFormat && (response.status === 400 || response.status === 422)) {
+      const lowerErr = errorText.toLowerCase();
+      if (lowerErr.includes('response_format') || lowerErr.includes('json_object') || lowerErr.includes('not supported')) {
+        console.warn('⚠️ response_format not supported by this model — retrying without it');
+        delete requestBody.response_format;
+        response = await openaiProxy('chat', requestBody);
+        if (!response.ok) {
+          const retryErrorText = await response.text();
+          throw new Error(`AI service error (retry): ${retryErrorText.substring(0, 200)}`);
+        }
+        // Fall through to normal response processing below
+      } else {
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.error?.message) {
+            errorMessage = errorJson.error.message;
+          }
+        } catch {
+          if (errorText) {
+            errorMessage = errorText.substring(0, 200);
+          }
+        }
+        throw new Error(`AI service error: ${errorMessage}`);
       }
-    } catch (parseError) {
-      // JSON parsing failed, use the raw text if available
-      if (errorText) {
-        errorMessage = errorText.substring(0, 200);
+    } else {
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.error?.message) {
+          errorMessage = errorJson.error.message;
+        }
+      } catch {
+        if (errorText) {
+          errorMessage = errorText.substring(0, 200);
+        }
       }
+      throw new Error(`AI service error: ${errorMessage}`);
     }
-
-    throw new Error(`AI service error: ${errorMessage}`);
   }
 
   const data = await response.json();
-  console.log('✅ OpenAI response received');
+  const finishReason = data.choices?.[0]?.finish_reason;
+  const usage = data.usage;
+  if (import.meta.env.DEV) {
+    console.log('✅ OpenAI response received | finish_reason:', finishReason);
+    if (usage) {
+      const reasoningTokens = usage.completion_tokens_details?.reasoning_tokens ?? 0;
+      const outputTokens = usage.completion_tokens - reasoningTokens;
+      console.log(`📊 Tokens — reasoning: ${reasoningTokens}, output: ${outputTokens}, total completion: ${usage.completion_tokens}/${maxTokens}`);
+    }
+  }
+
+  if (finishReason === 'length') {
+    console.warn('⚠️ Response truncated — max_completion_tokens exhausted. Reasoning tokens consumed too much of the budget.');
+    if (responseFormat?.type === 'json_object') {
+      const reasoningTokens = usage?.completion_tokens_details?.reasoning_tokens ?? 0;
+      throw new Error(
+        `AI response was truncated — reasoning used ${reasoningTokens} tokens, exhausting the ${maxTokens} token budget before completing the JSON output. Try again with a lower ConversionIQ™ reasoning level.`
+      );
+    }
+  }
 
   return data.choices[0]?.message?.content || '';
 }
@@ -914,7 +966,7 @@ Return ONLY the JSON object, no additional text.`;
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { reasoningEffort });
+  ], { maxTokens: 8192, reasoningEffort, responseFormat: { type: 'json_object' } });
 
   try {
     // Clean the response - remove markdown code blocks if present
@@ -929,14 +981,25 @@ Return ONLY the JSON object, no additional text.`;
       cleanedResponse = cleanedResponse.slice(0, -3);
     }
 
-    const analysis = JSON.parse(cleanedResponse.trim());
+    let analysis;
+    try {
+      analysis = JSON.parse(cleanedResponse.trim());
+    } catch {
+      const repaired = attemptJsonRepair(cleanedResponse);
+      if (repaired) {
+        console.warn('⚠️ Ad analysis JSON truncated — repaired');
+        analysis = JSON.parse(repaired);
+      } else {
+        throw new Error('JSON parse failed and repair unsuccessful');
+      }
+    }
     return {
       adId: ad.id,
       ...analysis,
     };
   } catch (error) {
     console.error('❌ Failed to parse OpenAI response:', error);
-    console.error('Raw response:', response);
+    console.error('Raw response (first 500 chars):', response.substring(0, 500));
     throw new Error('Failed to parse ad analysis response');
   }
 }
@@ -995,7 +1058,7 @@ Return ONLY the JSON object, no additional text.`;
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { maxTokens: 1500 });
+  ], { maxTokens: 8192, responseFormat: { type: 'json_object' } });
 
   try {
     let cleanedResponse = response.trim();
@@ -1009,7 +1072,16 @@ Return ONLY the JSON object, no additional text.`;
       cleanedResponse = cleanedResponse.slice(0, -3);
     }
 
-    return JSON.parse(cleanedResponse.trim());
+    try {
+      return JSON.parse(cleanedResponse.trim());
+    } catch {
+      const repaired = attemptJsonRepair(cleanedResponse);
+      if (repaired) {
+        console.warn('⚠️ Campaign insights JSON truncated — repaired');
+        return JSON.parse(repaired);
+      }
+      throw new Error('JSON parse failed and repair unsuccessful');
+    }
   } catch (error) {
     console.error('❌ Failed to parse campaign insights:', error);
     throw new Error('Failed to parse campaign insights response');
@@ -2269,10 +2341,14 @@ Return JSON only:
     console.log('⚠️ Copy generation will be GENERIC (no analysis data available)');
   }
 
+  // GPT-5.4 reasoning tokens share the max_completion_tokens budget.
+  // 3500 was too tight — reasoning can consume 2-5K tokens, leaving insufficient
+  // room for the full JSON output. 16384 provides adequate headroom.
+  // response_format: json_object forces valid JSON output, eliminating markdown fences.
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { maxTokens: 3500, reasoningEffort });
+  ], { maxTokens: 16384, reasoningEffort, responseFormat: { type: 'json_object' } });
 
   try {
     let cleanedResponse = response.trim();
@@ -2286,7 +2362,19 @@ Return JSON only:
       cleanedResponse = cleanedResponse.slice(0, -3);
     }
 
-    const parsed = JSON.parse(cleanedResponse.trim());
+    let parsed;
+    try {
+      parsed = JSON.parse(cleanedResponse.trim());
+    } catch {
+      // Attempt JSON repair for truncated responses
+      const repaired = attemptJsonRepair(cleanedResponse);
+      if (repaired) {
+        console.warn('⚠️ Copy options JSON was truncated — repaired successfully');
+        parsed = JSON.parse(repaired);
+      } else {
+        throw new Error('JSON parse failed and repair unsuccessful');
+      }
+    }
 
     // Post-processing: sanitize all generated copy text
     if (parsed.headlines) {
@@ -2303,6 +2391,7 @@ Return JSON only:
     return parsed;
   } catch (error) {
     console.error('❌ Failed to parse copy options:', error);
+    console.error('❌ Raw response (first 500 chars):', response.substring(0, 500));
     throw new Error('Failed to generate copy options');
   }
 }
@@ -2534,7 +2623,7 @@ Return JSON only:
     const response = await callOpenAI([
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
-    ], { maxTokens: 500, reasoningEffort });
+    ], { maxTokens: 2000, reasoningEffort, responseFormat: { type: 'json_object' } });
 
     try {
       let cleanedResponse = response.trim();
@@ -2542,7 +2631,18 @@ Return JSON only:
       if (cleanedResponse.startsWith('```')) cleanedResponse = cleanedResponse.slice(3);
       if (cleanedResponse.endsWith('```')) cleanedResponse = cleanedResponse.slice(0, -3);
 
-      const parsed = JSON.parse(cleanedResponse.trim());
+      let parsed;
+      try {
+        parsed = JSON.parse(cleanedResponse.trim());
+      } catch {
+        const repaired = attemptJsonRepair(cleanedResponse);
+        if (repaired) {
+          console.warn('⚠️ Single copy regen JSON truncated — repaired');
+          parsed = JSON.parse(repaired);
+        } else {
+          throw new Error('JSON parse failed and repair unsuccessful');
+        }
+      }
 
       // Post-processing: sanitize generated copy text
       if (parsed.text) {
@@ -3415,7 +3515,7 @@ Return JSON only:
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { maxTokens: 1500 });
+  ], { maxTokens: 8192, responseFormat: { type: 'json_object' } });
 
   try {
     let cleanedResponse = response.trim();
@@ -3429,7 +3529,18 @@ Return JSON only:
       cleanedResponse = cleanedResponse.slice(0, -3);
     }
 
-    const parsed = JSON.parse(cleanedResponse.trim());
+    let parsed;
+    try {
+      parsed = JSON.parse(cleanedResponse.trim());
+    } catch {
+      const repaired = attemptJsonRepair(cleanedResponse);
+      if (repaired) {
+        console.warn('⚠️ Ad copy JSON truncated — repaired');
+        parsed = JSON.parse(repaired);
+      } else {
+        throw new Error('JSON parse failed and repair unsuccessful');
+      }
+    }
 
     // Post-processing: sanitize all generated copy text
     if (parsed.headlines) {
@@ -3518,7 +3629,7 @@ Return JSON only:
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { maxTokens: 2000 });
+  ], { maxTokens: 8192, responseFormat: { type: 'json_object' } });
 
   try {
     let cleanedResponse = response.trim();
@@ -3532,7 +3643,18 @@ Return JSON only:
       cleanedResponse = cleanedResponse.slice(0, -3);
     }
 
-    const parsed = JSON.parse(cleanedResponse.trim());
+    let parsed;
+    try {
+      parsed = JSON.parse(cleanedResponse.trim());
+    } catch {
+      const repaired = attemptJsonRepair(cleanedResponse);
+      if (repaired) {
+        console.warn('⚠️ Video storyboard JSON truncated — repaired');
+        parsed = JSON.parse(repaired);
+      } else {
+        throw new Error('JSON parse failed and repair unsuccessful');
+      }
+    }
     console.log('✅ Video storyboard generated successfully');
     return parsed;
   } catch (error) {
@@ -4277,7 +4399,7 @@ Respond in JSON format:
       { role: 'system', content: systemPrompt },
       { role: 'user', content: `Generate text-only ad copy suggestions for a ${config.audienceType} ${btConfig.conversionNoun.toLowerCase()} campaign using a ${config.conceptType === 'auto' ? 'data-driven' : config.conceptType.replace(/_/g, ' ')} angle.` },
     ],
-    { reasoningEffort, maxTokens: 2000 },
+    { reasoningEffort, maxTokens: 8192, responseFormat: { type: 'json_object' } },
   );
 
   // Parse response
@@ -4287,7 +4409,18 @@ Respond in JSON format:
   if (cleanedResponse.endsWith('```')) cleanedResponse = cleanedResponse.slice(0, -3);
 
   try {
-    const parsed = JSON.parse(cleanedResponse.trim());
+    let parsed;
+    try {
+      parsed = JSON.parse(cleanedResponse.trim());
+    } catch {
+      const repaired = attemptJsonRepair(cleanedResponse);
+      if (repaired) {
+        console.warn('⚠️ Text ad copy JSON truncated — repaired');
+        parsed = JSON.parse(repaired);
+      } else {
+        throw new Error('JSON parse failed and repair unsuccessful');
+      }
+    }
 
     // Sanitize all text
     for (const item of [...(parsed.primaryTexts || []), ...(parsed.highlightTexts || []), ...(parsed.anchorTexts || [])]) {
