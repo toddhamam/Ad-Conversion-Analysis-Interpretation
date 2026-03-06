@@ -277,6 +277,64 @@ export const faqSchema = {
 };
 
 /**
+ * Agency FAQPage Schema - GEO-optimized for AI citations (agency audience)
+ */
+export const agencyFaqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    {
+      '@type': 'Question',
+      name: 'How does Convertra work for agencies?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Convertra connects to each of your client ad accounts and uses ConversionIQ™ to analyze each client\'s unique conversion patterns. It then autonomously generates high-converting ad creatives — copy, images, and targeting — tailored to each client\'s audience. Agencies can launch ads across every client account in under 3 minutes per account, dramatically increasing creative output without increasing headcount.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'Can ConversionIQ™ manage multiple client ad accounts?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Yes. ConversionIQ™ is built for multi-client operations. Each client account gets its own conversion intelligence layer that learns from that specific client\'s ad performance data. Agencies can switch between accounts instantly, generate creatives per client, and manage their entire portfolio from one platform. There is no limit to the number of client accounts you can connect.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'How fast can agencies launch ads with ConversionIQ™?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Agencies can go from zero to published high-converting ads in under 3 minutes per client account. ConversionIQ™ handles the full workflow: analyzing the client\'s conversion data, generating ad copy and images based on proven patterns, configuring targeting and budget, and publishing the campaign — all from a single platform. This replaces the traditional process of briefing designers, waiting days for creative delivery, and going through multiple revision cycles.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'What is the ROI for agencies using Convertra?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Agencies using Convertra typically see 4x increase in accounts managed per operator, 47% reduction in client CPA, and significant reduction in creative production overhead. By increasing the number of accounts each team member can effectively manage, agencies improve their margin per client while delivering better results. The platform pays for itself by reducing the need for additional media buyers and designers as your client base grows.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'How does Convertra help agencies retain clients?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Client churn in agencies is often driven by slow creative turnaround and declining ad performance. Convertra solves both problems: ConversionIQ™ launches fresh creatives in minutes instead of days, and automatically detects creative fatigue before performance drops. Agencies can show clients measurable improvements from day one and maintain consistent creative velocity that keeps ad performance strong over time.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'Do agencies need technical expertise to use Convertra?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'No. Convertra includes white-glove implementation where our team configures the platform for your agency\'s workflow and client portfolio. The platform is designed so that any team member can generate and launch high-converting ads without needing design skills, copywriting expertise, or deep media buying experience. ConversionIQ™ handles the intelligence — your team handles the strategy.',
+      },
+    },
+  ],
+};
+
+/**
  * WebPage Schema - Generic page schema
  */
 export const createWebPageSchema = (name: string, description: string, url: string) => ({

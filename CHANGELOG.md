@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-03-06 — Add agency-targeted sales landing page
+
+### Added
+- **`src/pages/AgencySalesLanding.tsx`** — New sales landing page at `/for-agencies` targeting agencies. Same visual structure as the generic page but with agency-specific copy: multi-client scaling, capacity per operator, margin improvement, eliminating feedback loops.
+- **Agency ROI Calculator** — Redesigned for agency economics: inputs are client accounts, media buyers, cost per buyer, ads per client/week, days to launch. Outputs: annual team savings, accounts per operator, margin improvement, velocity multiplier.
+- **`src/components/sales/VSLPoster.tsx`** — Extracted shared VSL poster component (from SalesLanding.tsx).
+- **`src/components/sales/DemoPoster.tsx`** — Extracted shared demo poster component (from SalesLanding.tsx).
+- **`src/components/sales/useSalesPageEffects.ts`** — Shared hook for scroll animations, anchor smooth scrolling, and nav shadow state. Returns `{ isScrolled, isMobileMenuOpen, toggleMobileMenu }`.
+- **`agencyFaqSchema`** in `SEO.tsx` — 6 agency-specific FAQ entries for structured data / GEO optimization.
+- **Sitemap entry** — `/for-agencies` added to `public/sitemap.xml`.
+- **UTM tracking** — Agency calendar URL includes `utm_source=website&utm_medium=landing&utm_campaign=agencies` for demo booking attribution.
+
+### Changed
+- **`SalesLanding.tsx`** — Refactored to import shared components (`VSLPoster`, `DemoPoster`, `useSalesPageEffects`) instead of defining inline. No copy changes.
+- **`App.tsx`** — Added `/for-agencies` public route.
+
+---
+
 ## 2026-03-05 — Add regenerate & remove for individual text ad images
 
 ### Added

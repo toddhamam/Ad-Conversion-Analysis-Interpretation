@@ -21,6 +21,7 @@ import AccountSettings from './pages/AccountSettings';
 import Integrations from './pages/Integrations';
 import ReportSettings from './pages/ReportSettings';
 import SalesLanding from './pages/SalesLanding';
+import AgencySalesLanding from './pages/AgencySalesLanding';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ChoosePlan from './pages/ChoosePlan';
@@ -80,6 +81,7 @@ function App() {
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<SalesLanding />} />
+          <Route path="/for-agencies" element={<AgencySalesLanding />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
