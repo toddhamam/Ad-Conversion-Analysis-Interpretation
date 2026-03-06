@@ -100,8 +100,9 @@ function AgencySalesLanding() {
       <section id="hero" className="section hero-section">
         <div className="hero-content">
           <h1 className="hero-headline animate-on-scroll">
+            <span className="headline-eyebrow">Agency Owners</span>
             <span className="headline-main">Launch High-Converting Ads Across Every Client Account. In Minutes.</span>
-            <span className="headline-sub">While Other Agencies Are Still Briefing Designers</span>
+            <span className="headline-sub">While Other Agencies Are Still Briefing Designers and Training Media Buyers</span>
           </h1>
           <p className="hero-subhead animate-on-scroll delay-1">
             <span className="highlight">ConversionIQ™</span> generates, launches, and scales winning ads across all your client accounts — based on real conversion data. Under 3 minutes per account.
@@ -196,7 +197,7 @@ function AgencySalesLanding() {
 
           <div className="problem-content animate-on-scroll delay-2">
             <p>
-              You've got the client briefs. The designers. The media buyers. And still — launching a new ad creative for just <em>one</em> client takes days.
+              You've got the client briefs. The designers. The media buyers you spent months training. And still — launching a new ad creative for just <em>one</em> client takes days.
             </p>
             <p>
               Now multiply that across 5, 10, 20 client accounts.
@@ -467,7 +468,7 @@ function AgencySalesLanding() {
             <ul className="not-list">
               <li>It's not another tool that generates generic content your clients won't approve.</li>
               <li>It's not another platform that takes weeks to learn and still can't produce at scale.</li>
-              <li>It's not another hire who costs $10K/month and can only manage a handful of accounts.</li>
+              <li>It's not another hire who costs $10K/month, takes 3 months to train, and can still only manage a handful of accounts.</li>
             </ul>
             <p className="bespoke-statement">
               <strong>Convertra is an autonomous creative intelligence platform that lets your agency produce and launch high-converting ads across every client account — in minutes, not days.</strong>
@@ -512,7 +513,7 @@ function AgencySalesLanding() {
               </div>
               <h3>Increase Capacity Per Operator</h3>
               <p>
-                One platform operator can now produce the creative output of multiple media buyers. Scale your client portfolio without scaling your payroll.
+                One platform operator can deploy high-converting ads across every client account in under 3 minutes — no months of media buyer training required. Scale your client portfolio without scaling your payroll.
               </p>
             </div>
           </div>
@@ -528,7 +529,7 @@ function AgencySalesLanding() {
           </h2>
 
           <p className="outcome-intro animate-on-scroll delay-1">
-            When your agency uses Convertra, you're not waiting on designers or stretching your media buyers thin.<br />
+            When your agency uses Convertra, you're not waiting on designers, training new media buyers, or stretching your team thin.<br />
             You're deploying dozens of creatives per client — <strong>engineered from each client's proven conversion patterns</strong> — in minutes.
           </p>
 
@@ -580,8 +581,8 @@ function AgencySalesLanding() {
               </div>
               <h3>Scale clients without scaling headcount.</h3>
               <p>
-                Take on more client accounts without hiring more media buyers or designers.
-                One operator handles what used to require a team.
+                Take on more client accounts without hiring and training more media buyers.
+                One operator deploys high-converting ads in under 3 minutes per account — no ramp-up time required.
               </p>
             </div>
 
@@ -651,7 +652,7 @@ function AgencySalesLanding() {
             <p className="credibility-lead">Our agency partners come to us because they've hit the ceiling with the alternatives:</p>
             <ul className="alternatives-list">
               <li>Freelance designers who can't keep up with multi-client volume.</li>
-              <li>Additional media buyers who increase payroll but not margin.</li>
+              <li>Additional media buyers who take months to train and increase payroll but not margin.</li>
               <li>AI tools that generate volume but not quality clients will approve.</li>
             </ul>
             <p className="credibility-close">
@@ -938,7 +939,7 @@ function AgencySalesLanding() {
               <div className="cost-card-amount">$80–100K<span className="cost-card-period">/year</span></div>
               <h3 className="cost-card-title">Excess Headcount</h3>
               <p className="cost-card-desc">
-                Each additional media buyer costs $8–12K/month — and can only manage a handful of accounts effectively. ConversionIQ™ lets one operator produce creative output across your entire portfolio.
+                Each additional media buyer costs $8–12K/month and takes months to hire and train — and can still only manage a handful of accounts effectively. ConversionIQ™ lets one operator deploy high-converting ads across your entire portfolio in under 3 minutes per account.
               </p>
             </div>
 

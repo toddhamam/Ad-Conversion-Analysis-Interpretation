@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-03-06 — Agency landing page copy optimizations
+
+### Changed
+- **Hero headline** — Added "Agency Owners" eyebrow text above the main headline for stronger audience callout
+- **Hero sub-headline** — Updated to "While Other Agencies Are Still Briefing Designers and Training Media Buyers"
+- **Problem section** — Added "you spent months training" to media buyers reference
+- **Bespoke "not" list** — Added "takes 3 months to train" to the hire comparison
+- **Increase Capacity feature** — Rewritten to emphasize deploying ads in under 3 minutes with no media buyer training required
+- **Outcome intro** — Updated to reference training new media buyers alongside designers
+- **Scale without headcount benefit** — Rewritten to highlight eliminating hiring/training overhead with 3-minute deployment
+- **Cost of Waiting / Excess Headcount** — Added months to hire and train; reframed around 3-minute per-account deployment
+- **Credibility alternatives** — Added "take months to train" to media buyer alternative
+- **`SalesLanding.css`** — Added `.headline-eyebrow` style (uppercase, violet accent, smaller text)
+
+---
+
 ## 2026-03-06 — Fix channel analysis parse error with GPT-5.4
 
 ### Fixed
