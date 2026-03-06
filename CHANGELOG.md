@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-03-06 — Always show Creative Variation slider for image ad generation
+
+### Fixed
+- **`src/pages/AdGenerator.tsx`** — The Creative Variation slider in Step 3 was gated behind `imageCacheCount > 0`, hiding it when no reference images were cached. Removed the gate so it always appears when `adType === 'image'`. Users can now independently control both Copy Variation (Step 2) and Creative Variation (Step 3) regardless of cached reference state.
+
+### Changed
+- **`src/pages/AdGenerator.tsx`** — Made Creative Variation slider labels context-aware: when analysis data or reference images exist, labels read "Match Winners" ↔ "Bold & New" with tiers like "Near Identical" and "Fresh Visuals"; without context, labels fall back to "Conservative" ↔ "Experimental" (matching the Copy Variation slider's pattern).
+
+---
+
 ## 2026-03-06 — Fix GPT-5.4 copy generation failures across all OpenAI call sites
 
 ### Fixed

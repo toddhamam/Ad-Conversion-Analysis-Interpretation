@@ -2166,18 +2166,24 @@ const AdGenerator = () => {
           </div>
 
           {/* Creative Similarity Slider */}
-          {imageCacheCount > 0 && adType === 'image' && (
+          {adType === 'image' && (
             <div className="config-section similarity-section">
               <label className="config-label">
                 Creative Variation Level
               </label>
               <p className="config-hint">
-                Control how similar/different the new images should be compared to your reference images
+                {imageCacheCount > 0 || analysisData
+                  ? 'Control how closely the new visuals match the creative style already converting in your ad account'
+                  : 'Control how conventional vs. experimental the generated visuals will be'}
               </p>
               <div className="similarity-slider-container">
                 <div className="similarity-labels">
-                  <span className="similarity-label-left">Very Similar</span>
-                  <span className="similarity-label-right">More Creative</span>
+                  <span className="similarity-label-left">
+                    {imageCacheCount > 0 || analysisData ? 'Match Winners' : 'Conservative'}
+                  </span>
+                  <span className="similarity-label-right">
+                    {imageCacheCount > 0 || analysisData ? 'Bold & New' : 'Experimental'}
+                  </span>
                 </div>
                 <input
                   type="range"
@@ -2188,11 +2194,17 @@ const AdGenerator = () => {
                   className="similarity-slider"
                 />
                 <div className="similarity-value">
-                  {similarityValue <= 20 ? '🎯 Near Identical' :
-                   similarityValue <= 40 ? '✨ Subtle Variations' :
-                   similarityValue <= 60 ? '🔄 Balanced Mix' :
-                   similarityValue <= 80 ? '🎨 More Creative' :
-                   '🚀 Bold & Different'}
+                  {imageCacheCount > 0 || analysisData
+                    ? (similarityValue <= 20 ? '🎯 Near Identical' :
+                       similarityValue <= 40 ? '✨ Subtle Variations' :
+                       similarityValue <= 60 ? '🔄 Balanced Mix' :
+                       similarityValue <= 80 ? '🎨 Fresh Visuals' :
+                       '🚀 Bold & Different')
+                    : (similarityValue <= 20 ? '🎯 Conservative' :
+                       similarityValue <= 40 ? '✨ Slightly Creative' :
+                       similarityValue <= 60 ? '🔄 Balanced' :
+                       similarityValue <= 80 ? '🎨 Creative' :
+                       '🚀 Experimental')}
                   <span className="similarity-percent">{similarityValue}% variation</span>
                 </div>
               </div>
