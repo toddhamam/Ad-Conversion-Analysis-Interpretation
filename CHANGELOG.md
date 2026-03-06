@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-03-06 — Fix GPT-5.4 channel analysis token budget & dev-gate logs
+
+### Fixed
+- **`src/services/openaiApi.ts`** — Increased `max_completion_tokens` from 8000 to 16384 for channel analysis. GPT-5.4 with `xhigh` reasoning effort consumed most of the 8000-token budget on internal reasoning tokens, truncating the JSON output and causing "Failed to parse channel analysis response" errors.
+- **`src/services/openaiApi.ts`** — Added token usage diagnostics (reasoning vs output token split, finish_reason logging) gated behind `import.meta.env.DEV` per CLAUDE.md security rules.
+- **`src/services/openaiApi.ts`** — Truncation-aware error message: detects incomplete JSON and suggests lowering the ConversionIQ™ reasoning level instead of showing a generic parse error.
+- **`src/services/openaiApi.ts`** — Raw response dumps in the parse error handler are now dev-gated to prevent production log exposure.
+
+---
+
 ## 2026-03-06 — Agency landing page copy optimizations
 
 ### Changed
