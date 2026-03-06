@@ -93,6 +93,59 @@ class SafetyBlockError extends Error {
 }
 
 // =============================================================================
+// JSON REPAIR UTILITY — fixes truncated JSON from token-limited responses
+// =============================================================================
+
+/**
+ * Attempts to repair truncated JSON by closing any unclosed structures.
+ * Returns null if the input is too damaged to repair.
+ */
+function attemptJsonRepair(input: string): string | null {
+  // Find the start of the JSON object
+  const jsonStart = input.indexOf('{');
+  if (jsonStart === -1) return null;
+
+  let json = input.slice(jsonStart);
+
+  // Track unclosed structures
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < json.length; i++) {
+    const ch = json[i];
+    if (escaped) { escaped = false; continue; }
+    if (ch === '\\' && inString) { escaped = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') stack.push('}');
+    else if (ch === '[') stack.push(']');
+    else if (ch === '}' || ch === ']') stack.pop();
+  }
+
+  if (stack.length === 0) return null; // Already balanced — parse issue is elsewhere
+
+  // Trim trailing incomplete values (partial strings, trailing commas)
+  json = json.replace(/,\s*$/, '');
+  // Close any unclosed string
+  if (inString) json += '"';
+  // Remove trailing incomplete key-value pairs like `"key": ` or `"key": "partial`
+  json = json.replace(/,?\s*"[^"]*":\s*"?[^",}\]]*$/, '');
+  // Close all unclosed structures in reverse order
+  while (stack.length > 0) {
+    json += stack.pop();
+  }
+
+  // Verify the repair actually produces valid JSON
+  try {
+    JSON.parse(json);
+    return json;
+  } catch {
+    return null;
+  }
+}
+
+// =============================================================================
 // IMAGE SIZE CONFIGURATION - Common Meta Ads formats
 // =============================================================================
 export type ImageSize = '1:1' | '16:9' | '9:16';
@@ -681,6 +734,7 @@ async function callOpenAIWithVision(
     model?: string;
     maxTokens?: number;
     reasoningEffort?: ReasoningEffort;
+    responseFormat?: { type: 'json_object' } | { type: 'text' };
   } = {}
 ): Promise<string> {
   if (!isOpenAIConfigured()) {
@@ -691,7 +745,8 @@ async function callOpenAIWithVision(
   const {
     model = DEFAULT_VISION_MODEL,
     maxTokens = 4000,
-    reasoningEffort = DEFAULT_REASONING_EFFORT
+    reasoningEffort = DEFAULT_REASONING_EFFORT,
+    responseFormat
   } = options;
 
   console.log('🖼️ Calling OpenAI Vision API with model:', model);
@@ -706,27 +761,59 @@ async function callOpenAIWithVision(
     reasoning_effort: reasoningEffort,
   };
 
-  const response = await openaiProxy('chat', requestBody);
+  // Add response_format if specified — forces model to output valid JSON
+  if (responseFormat) {
+    requestBody.response_format = responseFormat;
+  }
+
+  let response = await openaiProxy('chat', requestBody);
 
   if (!response.ok) {
     const errorText = await response.text();
     console.error('❌ OpenAI Vision API Error Status:', response.status);
     console.error('❌ OpenAI Vision API Error Text:', errorText);
 
-    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-
-    try {
-      const errorJson = JSON.parse(errorText);
-      if (errorJson.error?.message) {
-        errorMessage = errorJson.error.message;
+    // If the error is specifically about response_format being unsupported,
+    // retry without it — some model versions may not support json_object mode
+    if (responseFormat && (response.status === 400 || response.status === 422)) {
+      const lowerErr = errorText.toLowerCase();
+      if (lowerErr.includes('response_format') || lowerErr.includes('json_object') || lowerErr.includes('not supported')) {
+        console.warn('⚠️ response_format not supported by this model — retrying without it');
+        delete requestBody.response_format;
+        response = await openaiProxy('chat', requestBody);
+        if (!response.ok) {
+          const retryErrorText = await response.text();
+          throw new Error(`AI vision service error (retry): ${retryErrorText.substring(0, 200)}`);
+        }
+        // Fall through to normal response processing below
+      } else {
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.error?.message) {
+            errorMessage = errorJson.error.message;
+          }
+        } catch {
+          if (errorText) {
+            errorMessage = errorText.substring(0, 200);
+          }
+        }
+        throw new Error(`AI vision service error: ${errorMessage}`);
       }
-    } catch (parseError) {
-      if (errorText) {
-        errorMessage = errorText.substring(0, 200);
+    } else {
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.error?.message) {
+          errorMessage = errorJson.error.message;
+        }
+      } catch {
+        if (errorText) {
+          errorMessage = errorText.substring(0, 200);
+        }
       }
+      throw new Error(`AI vision service error: ${errorMessage}`);
     }
-
-    throw new Error(`AI vision service error: ${errorMessage}`);
   }
 
   const data = await response.json();
@@ -743,6 +830,14 @@ async function callOpenAIWithVision(
 
   if (finishReason === 'length') {
     console.warn('⚠️ Response truncated — max_completion_tokens exhausted. Reasoning tokens consumed too much of the budget.');
+    // When JSON mode is enabled, truncated output is guaranteed to be invalid JSON.
+    // Throw immediately with a clear message instead of letting the caller fail on parse.
+    if (responseFormat?.type === 'json_object') {
+      const reasoningTokens = usage?.completion_tokens_details?.reasoning_tokens ?? 0;
+      throw new Error(
+        `AI response was truncated — reasoning used ${reasoningTokens} tokens, exhausting the ${maxTokens} token budget before completing the JSON output. Try again with a lower ConversionIQ™ reasoning level.`
+      );
+    }
   }
 
   return data.choices[0]?.message?.content || '';
@@ -1351,31 +1446,81 @@ Return ONLY the JSON object, no additional text.`;
   ];
 
   // GPT-5.4 with xhigh reasoning uses thousands of internal reasoning tokens that
-  // share the max_completion_tokens budget with the actual output. 8000 was too low —
-  // reasoning consumed most of it, truncating the JSON. 16384 gives ample room.
+  // share the max_completion_tokens budget with the actual output. 16384 was still
+  // too tight — xhigh reasoning can consume 10K+ tokens, leaving insufficient room
+  // for the full JSON output. 32768 provides adequate headroom.
+  // response_format: json_object forces the model to output valid JSON, eliminating
+  // markdown fences, prose wrapping, and other formatting issues at the source.
   const response = await callOpenAIWithVision(messages, {
-    maxTokens: 16384,
-    reasoningEffort
+    maxTokens: 32768,
+    reasoningEffort,
+    responseFormat: { type: 'json_object' }
   });
 
   try {
     let cleanedResponse = response.trim();
 
-    // Extract JSON from markdown fences or surrounding text
-    // Handle ```json ... ```, ``` ... ```, or JSON embedded in prose
-    const jsonBlockMatch = cleanedResponse.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
-    if (jsonBlockMatch) {
-      cleanedResponse = jsonBlockMatch[1].trim();
-    } else {
-      // No markdown fences — try to extract the JSON object directly
-      const jsonStart = cleanedResponse.indexOf('{');
-      const jsonEnd = cleanedResponse.lastIndexOf('}');
-      if (jsonStart !== -1 && jsonEnd > jsonStart) {
-        cleanedResponse = cleanedResponse.slice(jsonStart, jsonEnd + 1);
+    // Strategy 1: Direct parse — with response_format: json_object, the model
+    // should return clean JSON. Try this first before any string manipulation.
+    let analysis: Record<string, unknown> | null = null;
+    try {
+      analysis = JSON.parse(cleanedResponse);
+    } catch {
+      // Direct parse failed — apply extraction strategies
+    }
+
+    if (!analysis) {
+      // Strategy 2: Extract from markdown code fences (```json ... ``` or ``` ... ```)
+      const jsonBlockMatch = cleanedResponse.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+      if (jsonBlockMatch) {
+        cleanedResponse = jsonBlockMatch[1].trim();
+      } else {
+        // Strategy 3: Find the outermost JSON object by matching braces
+        const jsonStart = cleanedResponse.indexOf('{');
+        if (jsonStart !== -1) {
+          let depth = 0;
+          let jsonEnd = -1;
+          for (let i = jsonStart; i < cleanedResponse.length; i++) {
+            if (cleanedResponse[i] === '{') depth++;
+            else if (cleanedResponse[i] === '}') {
+              depth--;
+              if (depth === 0) { jsonEnd = i; break; }
+            }
+          }
+          if (jsonEnd !== -1) {
+            cleanedResponse = cleanedResponse.slice(jsonStart, jsonEnd + 1);
+          } else {
+            // Brace-matching failed (truncated JSON) — fall back to lastIndexOf
+            const lastBrace = cleanedResponse.lastIndexOf('}');
+            if (lastBrace > jsonStart) {
+              cleanedResponse = cleanedResponse.slice(jsonStart, lastBrace + 1);
+            }
+          }
+        }
+      }
+
+      try {
+        analysis = JSON.parse(cleanedResponse.trim());
+      } catch (innerErr) {
+        // Strategy 4: Attempt to repair truncated JSON by closing open structures
+        const repaired = attemptJsonRepair(cleanedResponse.trim());
+        if (repaired) {
+          analysis = JSON.parse(repaired);
+          console.warn('⚠️ Channel analysis JSON was repaired (likely truncated response)');
+        } else {
+          throw innerErr; // Re-throw to hit the outer catch
+        }
       }
     }
 
-    const analysis = JSON.parse(cleanedResponse.trim());
+    // Ensure analysis was successfully parsed — TypeScript can't prove non-null
+    // through the nested try-catch structure above, so guard explicitly
+    if (!analysis) {
+      throw new Error('All JSON parsing strategies failed');
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = analysis as any;
 
     // CRITICAL: Create maps of ad IDs to original data (image URLs, body text)
     // This allows us to attach actual data to the topAds for generation reference
@@ -1391,19 +1536,19 @@ Return ONLY the JSON object, no additional text.`;
     });
 
     // Augment topAds with actual image URLs and full body text from original ad data
-    if (analysis.topAds && Array.isArray(analysis.topAds)) {
-      analysis.topAds = analysis.topAds.map((topAd: { id: string; [key: string]: unknown }) => ({
+    if (parsed.topAds && Array.isArray(parsed.topAds)) {
+      parsed.topAds = parsed.topAds.map((topAd: { id: string; [key: string]: unknown }) => ({
         ...topAd,
         imageUrl: adImageMap.get(topAd.id) || undefined,
         bodyText: adBodyTextMap.get(topAd.id) || undefined,
       }));
-      console.log(`📸 Attached image URLs to ${analysis.topAds.filter((a: { imageUrl?: string }) => a.imageUrl).length}/${analysis.topAds.length} top ads`);
-      console.log(`📝 Attached body text to ${analysis.topAds.filter((a: { bodyText?: string }) => a.bodyText).length}/${analysis.topAds.length} top ads`);
+      console.log(`📸 Attached image URLs to ${parsed.topAds.filter((a: { imageUrl?: string }) => a.imageUrl).length}/${parsed.topAds.length} top ads`);
+      console.log(`📝 Attached body text to ${parsed.topAds.filter((a: { bodyText?: string }) => a.bodyText).length}/${parsed.topAds.length} top ads`);
     }
 
     // Augment bottomAds with image URLs too
-    if (analysis.bottomAds && Array.isArray(analysis.bottomAds)) {
-      analysis.bottomAds = analysis.bottomAds.map((bottomAd: { id: string; [key: string]: unknown }) => ({
+    if (parsed.bottomAds && Array.isArray(parsed.bottomAds)) {
+      parsed.bottomAds = parsed.bottomAds.map((bottomAd: { id: string; [key: string]: unknown }) => ({
         ...bottomAd,
         imageUrl: adImageMap.get(bottomAd.id) || undefined,
       }));
@@ -1422,22 +1567,28 @@ Return ONLY the JSON object, no additional text.`;
         totalSpend,
         totalConversions,
       },
-      ...analysis,
-    };
-  } catch (error) {
+      ...parsed,
+    } as ChannelAnalysisResult;
+  } catch (error: unknown) {
     console.error('❌ Failed to parse channel analysis:', error);
     if (import.meta.env.DEV) {
       console.error('Raw response (first 500 chars):', response.substring(0, 500));
       console.error('Raw response (last 200 chars):', response.substring(response.length - 200));
+      console.error('Response length:', response.length, 'chars');
     }
 
-    // Detect truncation — incomplete JSON typically ends without a closing brace
+    // Detect truncation — check multiple signals
     const trimmed = response.trim();
-    const isTruncated = trimmed.length > 0 && !trimmed.endsWith('}') && !trimmed.endsWith('```');
+    const endsClean = trimmed.endsWith('}') || trimmed.endsWith('```');
+    const hasOpenBraces = (trimmed.match(/{/g) || []).length > (trimmed.match(/}/g) || []).length;
+    const isTruncated = trimmed.length > 0 && (!endsClean || hasOpenBraces);
+
     if (isTruncated) {
-      throw new Error('Channel analysis response was truncated (model ran out of output tokens). Please try again with a lower ConversionIQ™ reasoning level.');
+      throw new Error('Channel analysis response was truncated (model ran out of output tokens). Try again with a lower ConversionIQ™ reasoning level, or reduce the number of ads in the analysis period.');
     }
-    throw new Error('Failed to parse channel analysis response. Please try again.');
+
+    const errMsg = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to parse channel analysis response: ${errMsg}. Please try again.`);
   }
 }
 

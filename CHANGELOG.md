@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-03-06 — Bulletproof GPT-5.4 channel analysis JSON parsing
+
+### Fixed
+- **`src/services/openaiApi.ts`** — Added `response_format: { type: "json_object" }` to the channel analysis API call, forcing GPT-5.4 to output structurally valid JSON instead of relying on prompt instructions alone. This eliminates markdown fences, prose wrapping, and other formatting issues at the API level.
+- **`src/services/openaiApi.ts`** — Increased `max_completion_tokens` from 16384 to 32768. The previous budget was still too tight — `xhigh` reasoning can consume 10K+ tokens, leaving insufficient room for the full JSON output.
+- **`src/services/openaiApi.ts`** — Added automatic retry without `response_format` if the model returns a 400/422 indicating `json_object` mode is unsupported. This ensures forward/backward compatibility with different GPT-5.4 versions.
+- **`src/services/openaiApi.ts`** — Early truncation abort: when `finish_reason === 'length'` and JSON mode is active, throws immediately with token usage diagnostics instead of returning unparseable truncated text.
+- **`src/services/openaiApi.ts`** — Replaced single-pass JSON extraction with a 4-strategy parsing pipeline: direct parse → markdown fence regex → brace-depth matching → `attemptJsonRepair()` (closes unclosed structures in truncated JSON).
+- **`src/services/openaiApi.ts`** — Improved truncation detection: now counts open vs close braces to catch truncation even when the response happens to end with `}` from a nested inner object.
+- **`src/services/openaiApi.ts`** — Error messages now include the actual parse error details and actionable advice (lower reasoning level or reduce ad count).
+
+### Added
+- **`src/services/openaiApi.ts`** — `attemptJsonRepair()` utility function that tracks brace/bracket depth in truncated JSON and closes unclosed structures as a last-resort recovery.
+- **`src/services/openaiApi.ts`** — `responseFormat` option on `callOpenAIWithVision()` to enable JSON mode for any vision API call.
+
+---
+
 ## 2026-03-06 — Fix GPT-5.4 channel analysis token budget & dev-gate logs
 
 ### Fixed
