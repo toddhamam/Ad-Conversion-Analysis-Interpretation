@@ -12,7 +12,7 @@ from modules.pipeline import get_prospect, list_prospects, update_prospect, upda
 
 
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
-MODEL = "gpt-5.2"
+MODEL = "gpt-5.4"
 
 # Bucket -> template key mapping
 BUCKET_TEMPLATE_MAP = {
