@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-03-06 — Fix GPT-5.4 copy generation failures across all OpenAI call sites
+
+### Fixed
+- **`src/services/openaiApi.ts`** — Added `response_format: { type: "json_object" }` and retry-without-format fallback to `callOpenAI()` (text-only function), matching the fixes previously applied to `callOpenAIWithVision()` in PR #313.
+- **`src/services/openaiApi.ts`** — Added truncation detection (`finish_reason: 'length'`) and dev-mode token usage logging to `callOpenAI()`.
+- **`src/services/openaiApi.ts`** — `generateCopyOptions()`: increased `maxTokens` from 3,500 → 16,384. GPT-5.4 reasoning tokens were consuming the budget, leaving insufficient room for JSON output.
+- **`src/services/openaiApi.ts`** — `regenerateSingleCopy()`: increased `maxTokens` from 500 → 2,000.
+- **`src/services/openaiApi.ts`** — `analyzeAdCreative()`: increased `maxTokens` from 2,000 → 8,192.
+- **`src/services/openaiApi.ts`** — `analyzeCampaignAds()`: increased `maxTokens` from 1,500 → 8,192.
+- **`src/services/openaiApi.ts`** — `generateAdCopy()`: increased `maxTokens` from 1,500 → 8,192.
+- **`src/services/openaiApi.ts`** — `generateVideoStoryboard()`: increased `maxTokens` from 2,000 → 8,192.
+- **`src/services/openaiApi.ts`** — Text ad copy generation: increased `maxTokens` from 2,000 → 8,192.
+- **`src/services/openaiApi.ts`** — All 7 JSON-parsing call sites now use `attemptJsonRepair()` fallback for truncated responses.
+
+---
+
 ## 2026-03-06 — Bulletproof GPT-5.4 channel analysis JSON parsing
 
 ### Fixed
