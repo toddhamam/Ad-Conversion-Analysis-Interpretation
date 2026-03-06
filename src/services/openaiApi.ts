@@ -58,14 +58,16 @@ const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models'
 // =============================================================================
 // MODEL CONFIGURATION - Always use the latest available models
 // =============================================================================
-// GPT-5.2 is OpenAI's flagship model - reasoning is controlled via the reasoning.effort parameter
-const DEFAULT_CHAT_MODEL = 'gpt-5.2'; // Latest GPT-5.2 with reasoning capabilities
-const DEFAULT_VISION_MODEL = 'gpt-5.2'; // GPT-5.2 has multimodal vision support
+// GPT-5.4 is OpenAI's flagship model - reasoning is controlled via the reasoning.effort parameter
+// 33% fewer factual errors, 47% more token-efficient, 1M context window, 128K max output
+const DEFAULT_CHAT_MODEL = 'gpt-5.4'; // Latest GPT-5.4 with reasoning capabilities
+const DEFAULT_VISION_MODEL = 'gpt-5.4'; // GPT-5.4 has multimodal vision support
 
-// Reasoning configuration for GPT-5.2
-// Uses 'high' by default for thorough creative analysis
+// Reasoning configuration for GPT-5.4
+// 'high' for generation tasks, 'xhigh' for analysis/interpretation (ConversionIQ™ core)
 type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'high';
+const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'xhigh';
 
 // Image Generation - Gemini models with automatic fallback
 // Primary: gemini-3-pro-image-preview (highest quality)
@@ -632,7 +634,7 @@ async function callOpenAI(
   console.log('🤖 Calling OpenAI API with model:', model);
   console.log('🧠 Reasoning effort:', reasoningEffort);
 
-  // GPT-5.2 with reasoning_effort only supports temperature=1 (default)
+  // GPT-5.4 with reasoning_effort only supports temperature=1 (default)
   const requestBody: Record<string, unknown> = {
     model,
     messages,
@@ -685,7 +687,7 @@ async function callOpenAIWithVision(
     throw new Error('AI API not configured. Please contact support.');
   }
 
-  // Use GPT-5.2 for vision - multimodal capabilities
+  // Use GPT-5.4 for vision - multimodal capabilities
   const {
     model = DEFAULT_VISION_MODEL,
     maxTokens = 4000,
@@ -696,7 +698,7 @@ async function callOpenAIWithVision(
   console.log('🧠 Reasoning effort:', reasoningEffort);
   console.log('📸 Processing images for analysis...');
 
-  // GPT-5.2 with reasoning_effort only supports temperature=1 (default)
+  // GPT-5.4 with reasoning_effort only supports temperature=1 (default)
   const requestBody: Record<string, unknown> = {
     model,
     messages,
@@ -742,7 +744,7 @@ export async function analyzeAdCreative(
   ad: AdCreativeData,
   options?: { reasoningEffort?: ReasoningEffort }
 ): Promise<AdAnalysisResult> {
-  const reasoningEffort = options?.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
+  const reasoningEffort = options?.reasoningEffort ?? ANALYSIS_REASONING_EFFORT;
   console.log('🔍 Analyzing ad:', ad.id, '| IQ Level:', reasoningEffort);
 
   const systemPrompt = `You are an expert digital marketing analyst specializing in Facebook/Meta advertising.
@@ -1038,7 +1040,7 @@ export async function analyzeChannelPerformance(
   channelName: string = 'Meta',
   options?: { reasoningEffort?: ReasoningEffort; businessType?: import('../types/organization').BusinessType }
 ): Promise<ChannelAnalysisResult> {
-  const reasoningEffort = options?.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
+  const reasoningEffort = options?.reasoningEffort ?? ANALYSIS_REASONING_EFFORT;
   const btConfig = getBusinessTypeConfig(options?.businessType || 'ecommerce');
   console.log(`📊 Running channel-wide VISUAL analysis for ${channelName} with ${ads.length} ads | IQ Level: ${reasoningEffort}`);
 

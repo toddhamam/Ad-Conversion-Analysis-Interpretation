@@ -1426,7 +1426,7 @@ The Ad Publisher (Step 3: Configure) provides these ad-level settings that are a
 
 | Provider | Model ID | Purpose |
 |----------|----------|---------|
-| OpenAI | `gpt-5.2` | Ad analysis, copy generation, creative evaluation |
+| OpenAI | `gpt-5.4` | Ad analysis, copy generation, creative evaluation |
 | Google | `gemini-3-pro-image-preview` | Professional image asset generation |
 | Google | Veo | Video variant generation |
 
@@ -1444,12 +1444,15 @@ The `IQSelector` component (`src/components/IQSelector.tsx`) allows users to con
 
 **Usage**: Display the IQ selector before ad analysis, channel analysis, and ad generation workflows to give users control over processing depth and API costs.
 
-### GPT-5.2 Reasoning API
+### GPT-5.4 Reasoning API
 
-The `gpt-5.2` model supports reasoning through the `reasoning.effort` parameter:
+The `gpt-5.4` model supports reasoning through the `reasoning.effort` parameter:
 - Available levels: `none`, `low`, `medium`, `high`, `xhigh`
+- Analysis functions (ad analysis, channel analysis) use `xhigh` for maximum ConversionIQ™ insight quality
+- Generation functions (copy, ad packages) use `high` for balanced quality and speed
+- Regeneration uses `low` to avoid deterministic convergence
 - Higher effort = more tokens consumed = increased API costs
-- Pass via request body: `{ reasoning: { effort: "medium" } }`
+- Pass via request body: `{ reasoning: { effort: "xhigh" } }`
 
 ### Psychological Concepts for Copy
 The ad generator uses these frameworks:
