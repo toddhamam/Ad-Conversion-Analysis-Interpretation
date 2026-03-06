@@ -107,6 +107,17 @@ def cmd_pipeline_delete(args):
     output(result)
 
 
+def cmd_pipeline_import_csv(args):
+    from modules.csv_importer import import_sales_nav_csv
+    result = import_sales_nav_csv(
+        csv_path=args.file,
+        campaign=args.campaign,
+        source=args.source,
+        score_default=args.score_default,
+    )
+    output(result)
+
+
 # ─── Score commands ──────────────────────────────────────────────────
 
 def cmd_score_prospect(args):
@@ -332,6 +343,19 @@ def cmd_orchestrate_prospect(args):
         include_jobs=args.include_jobs,
         max_rounds=args.max_rounds,
         campaign_name=args.campaign_name,
+    )
+    output(result)
+
+
+def cmd_orchestrate_import(args):
+    from orchestrator import run_import
+    result = run_import(
+        csv_path=args.file,
+        campaign=args.campaign,
+        source=args.source,
+        score_default=args.score_default,
+        score_threshold=args.score_threshold,
+        push_campaign_id=args.push_to,
     )
     output(result)
 
@@ -636,6 +660,13 @@ def build_parser():
     p_delete.add_argument("--id", required=True)
     p_delete.set_defaults(func=cmd_pipeline_delete)
 
+    p_import = pipeline_sub.add_parser("import-csv", help="Import Sales Navigator CSV export")
+    p_import.add_argument("--file", required=True, help="Path to CSV file")
+    p_import.add_argument("--campaign", type=str, default="sales-nav", help="Campaign tag (default: sales-nav)")
+    p_import.add_argument("--source", type=str, default="sales_navigator", help="Source tag (default: sales_navigator)")
+    p_import.add_argument("--score-default", type=int, default=5, dest="score_default", help="Default fit score (default: 5)")
+    p_import.set_defaults(func=cmd_pipeline_import_csv)
+
     # ── score ──
     score_parser = subparsers.add_parser("score", help="Lead scoring")
     score_sub = score_parser.add_subparsers(dest="action")
@@ -894,6 +925,17 @@ def build_parser():
     o_prospect.add_argument("--max-rounds", type=int, default=10, dest="max_rounds", help="Max rounds (default: 10)")
     o_prospect.add_argument("--campaign", type=str, dest="campaign_name")
     o_prospect.set_defaults(func=cmd_orchestrate_prospect)
+
+    o_import = orch_sub.add_parser("import", help="Import Sales Nav CSV → enrich → score → draft → push")
+    o_import.add_argument("--file", required=True, help="Path to Sales Navigator CSV export")
+    o_import.add_argument("--campaign", type=str, default="sales-nav", help="Campaign tag")
+    o_import.add_argument("--source", type=str, default="sales_navigator", help="Source tag")
+    o_import.add_argument("--score-default", type=int, default=5, dest="score_default")
+    o_import.add_argument("--score-threshold", type=int, default=8, dest="score_threshold",
+                          help="Min fit score for drafting (default: 8)")
+    o_import.add_argument("--push-to", type=str, dest="push_to",
+                          help="Instantly campaign UUID to push ready leads to")
+    o_import.set_defaults(func=cmd_orchestrate_import)
 
     o_fill = orch_sub.add_parser("fill", help="Discover, enrich, draft, and push leads to Instantly")
     o_fill.add_argument("--target", type=int, default=25, help="Target leads to prepare (default: 25)")

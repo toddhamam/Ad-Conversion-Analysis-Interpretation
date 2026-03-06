@@ -1200,6 +1200,148 @@ def _expand_keywords(all_niches, exhausted):
 
 
 # ──────────────────────────────────────────────────────────────────────
+# SALES NAV CSV IMPORT — Import → Enrich → Score → Draft → Push
+# ──────────────────────────────────────────────────────────────────────
+
+def run_import(csv_path, campaign="sales-nav", source="sales_navigator",
+               score_default=5, score_threshold=8, push_campaign_id=None):
+    """Full pipeline for Sales Navigator CSV imports.
+
+    Steps:
+    1. Import CSV into pipeline (deduplicated)
+    2. Research company websites (tech stack, hiring signals, pain signals)
+    3. Score prospects (fit evaluation based on research intel)
+    4. Enrich via Apollo/Hunter (find emails)
+    5. Draft personalized emails (AI-generated, score >= threshold)
+    6. Optionally push ready leads to Instantly campaign
+    7. Send Telegram summary
+
+    Args:
+        csv_path: Path to Sales Navigator CSV export
+        campaign: Campaign tag (default: sales-nav)
+        source: Source tag (default: sales_navigator)
+        score_default: Default fit score for imports
+        score_threshold: Min score for email drafting (default: 8)
+        push_campaign_id: Instantly campaign UUID (optional — skip push if None)
+
+    Returns:
+        dict: Full import pipeline summary
+    """
+    log.info("=== SALES NAV IMPORT START ===")
+    results = {"timestamp": datetime.now().isoformat(), "mode": "import"}
+
+    # Step 1: Import CSV
+    log.info(f"Step 1: Importing {csv_path}...")
+    from modules.csv_importer import import_sales_nav_csv
+    import_result = import_sales_nav_csv(
+        csv_path=csv_path,
+        campaign=campaign,
+        source=source,
+        score_default=score_default,
+    )
+    results["import"] = import_result
+    added = import_result.get("added", 0)
+    log.info(f"  Imported: {added} new prospects, {import_result.get('skipped_duplicate', 0)} dupes skipped")
+
+    if added == 0:
+        log.info("No new prospects to process. Done.")
+        results["status"] = "no_new_prospects"
+        return results
+
+    # Step 2: Research company websites (tech stack, hiring, pain signals, contacts)
+    log.info("Step 2: Researching company websites...")
+    from modules.research import batch_research
+    research_result = batch_research(stage="discovered")
+    researched_count = research_result.get("researched", 0)
+    skipped_no_url = sum(
+        1 for r in research_result.get("results", [])
+        if r.get("status") == "skipped"
+    )
+    results["research"] = {
+        "researched": researched_count,
+        "skipped_no_url": skipped_no_url,
+    }
+    log.info(
+        f"  Researched: {researched_count} companies "
+        f"(skipped {skipped_no_url} with no company URL)"
+    )
+
+    # Step 3: Score prospects (fit evaluation based on research intel)
+    log.info("Step 3: Scoring prospects...")
+    from modules.scorer import batch_score
+    score_result = batch_score(stage="researched")
+    results["scoring"] = score_result
+    log.info(f"  Scored: {score_result.get('scored', 0)} prospects")
+
+    # Step 4: Enrich via Apollo/Hunter (find emails)
+    log.info("Step 4: Enriching prospects (Apollo/Hunter)...")
+    from modules.enrichment import batch_enrich
+    enrich_result = batch_enrich(stage="researched", score_min=0)
+    results["enrichment"] = {
+        "enriched": enrich_result.get("enriched", 0),
+        "emails_found": enrich_result.get("emails_found", 0),
+        "credits_used": enrich_result.get("credits_used", 0),
+        "provider": enrich_result.get("provider", "none"),
+    }
+    log.info(
+        f"  Enriched: {enrich_result.get('enriched', 0)}, "
+        f"Emails found: {enrich_result.get('emails_found', 0)}, "
+        f"Credits: {enrich_result.get('credits_used', 0)}"
+    )
+
+    # Step 5: Draft personalized emails for high-scoring prospects with emails
+    log.info(f"Step 5: Drafting emails (score >= {score_threshold})...")
+    from modules.drafter import batch_draft
+    draft_result = batch_draft(stage="researched", score_min=score_threshold)
+    results["drafting"] = {
+        "drafted": draft_result.get("drafted", 0),
+        "ai_generated": draft_result.get("ai_generated", 0),
+        "template_used": draft_result.get("template_used", 0),
+    }
+    log.info(f"  Drafted: {draft_result.get('drafted', 0)} emails")
+
+    # Step 6: Push to Instantly (optional)
+    if push_campaign_id:
+        log.info(f"Step 6: Pushing to Instantly campaign {push_campaign_id}...")
+        from modules.instantly import push_leads
+        push_result = push_leads(campaign_id=push_campaign_id, stage="ready_to_send")
+        results["push"] = {
+            "pushed": push_result.get("pushed", 0),
+            "skipped": push_result.get("skipped", 0),
+            "errors": push_result.get("errors", 0),
+        }
+        log.info(f"  Pushed: {push_result.get('pushed', 0)}, Errors: {push_result.get('errors', 0)}")
+    else:
+        results["push"] = {"skipped": True, "reason": "No campaign ID provided. Use --push-to to push."}
+        log.info("Step 6: Skipped push (no --push-to specified)")
+
+    # Step 7: Telegram notification
+    log.info("Step 7: Sending notification...")
+    try:
+        from modules.notifier import send_notification
+        msg = (
+            f"Sales Nav Import — {datetime.now().strftime('%Y-%m-%d')}\n"
+            f"CSV: {import_result.get('file', 'unknown')}\n"
+            f"Imported: {added} new | {import_result.get('skipped_duplicate', 0)} dupes\n"
+            f"Researched: {results['research']['researched']} companies\n"
+            f"Enriched: {results['enrichment']['emails_found']} emails found\n"
+            f"Drafted: {results['drafting']['drafted']} emails\n"
+        )
+        if push_campaign_id:
+            msg += f"Pushed: {results['push'].get('pushed', 0)} to Instantly"
+        else:
+            msg += "Push: skipped (manual)"
+        notif = send_notification(msg)
+        results["notification"] = notif
+    except Exception as e:
+        log.warning(f"Notification failed: {e}")
+        results["notification"] = {"status": "error", "message": str(e)}
+
+    log.info("=== SALES NAV IMPORT COMPLETE ===")
+    return results
+
+
+# ──────────────────────────────────────────────────────────────────────
 # DAILY FILL — Hunt leads + push to Instantly
 # ──────────────────────────────────────────────────────────────────────
 
@@ -1392,6 +1534,14 @@ def main():
     fill.add_argument("--verified-only", action="store_true", dest="verified_only",
                       help="Only push leads with verified emails (Apollo or Hunter)")
 
+    imp = sub.add_parser("import", help="Import Sales Nav CSV → enrich → score → draft → push")
+    imp.add_argument("--file", required=True, dest="csv_file", help="Path to Sales Navigator CSV")
+    imp.add_argument("--campaign", type=str, default="sales-nav", dest="import_campaign")
+    imp.add_argument("--score-threshold", type=int, default=8, dest="import_score_threshold",
+                     help="Min fit score for email drafting (default: 8)")
+    imp.add_argument("--push-to", type=str, dest="import_push_to",
+                     help="Instantly campaign UUID to auto-push ready leads")
+
     args = parser.parse_args()
 
     if args.mode == "daily":
@@ -1420,6 +1570,14 @@ def main():
             max_rounds=args.max_rounds,
             score_threshold=args.score_threshold,
             include_jobs=args.fill_include_jobs,
+        )
+    elif args.mode == "import":
+        result = run_import(
+            csv_path=args.csv_file,
+            campaign=args.import_campaign or "sales-nav",
+            source="sales_navigator",
+            score_threshold=args.import_score_threshold,
+            push_campaign_id=args.import_push_to,
         )
     else:
         parser.print_help()
