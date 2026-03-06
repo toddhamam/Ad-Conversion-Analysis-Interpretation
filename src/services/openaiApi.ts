@@ -64,10 +64,11 @@ const DEFAULT_CHAT_MODEL = 'gpt-5.4'; // Latest GPT-5.4 with reasoning capabilit
 const DEFAULT_VISION_MODEL = 'gpt-5.4'; // GPT-5.4 has multimodal vision support
 
 // Reasoning configuration for GPT-5.4
-// 'high' for generation tasks, 'xhigh' for analysis/interpretation (ConversionIQ™ core)
+// 'high' for both generation and analysis — 'xhigh' causes Vercel Hobby plan
+// FUNCTION_INVOCATION_TIMEOUT (10s limit) because reasoning tokens take too long
 type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'high';
-const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'xhigh';
+const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'high';
 
 // Image Generation - Gemini models with automatic fallback
 // Primary: gemini-3-pro-image-preview (highest quality)
@@ -1445,14 +1446,11 @@ Return ONLY the JSON object, no additional text.`;
     { role: 'user', content: imageContent }
   ];
 
-  // GPT-5.4 with xhigh reasoning uses thousands of internal reasoning tokens that
-  // share the max_completion_tokens budget with the actual output. 16384 was still
-  // too tight — xhigh reasoning can consume 10K+ tokens, leaving insufficient room
-  // for the full JSON output. 32768 provides adequate headroom.
-  // response_format: json_object forces the model to output valid JSON, eliminating
-  // markdown fences, prose wrapping, and other formatting issues at the source.
+  // Token budget: 16384 is sufficient for 'high' reasoning effort.
+  // response_format: json_object forces valid JSON output, eliminating
+  // markdown fences, prose wrapping, and other formatting issues.
   const response = await callOpenAIWithVision(messages, {
-    maxTokens: 32768,
+    maxTokens: 16384,
     reasoningEffort,
     responseFormat: { type: 'json_object' }
   });
