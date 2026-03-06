@@ -730,7 +730,20 @@ async function callOpenAIWithVision(
   }
 
   const data = await response.json();
-  console.log('✅ OpenAI Vision response received');
+  const finishReason = data.choices?.[0]?.finish_reason;
+  const usage = data.usage;
+  if (import.meta.env.DEV) {
+    console.log('✅ OpenAI Vision response received | finish_reason:', finishReason);
+    if (usage) {
+      const reasoningTokens = usage.completion_tokens_details?.reasoning_tokens ?? 0;
+      const outputTokens = usage.completion_tokens - reasoningTokens;
+      console.log(`📊 Tokens — reasoning: ${reasoningTokens}, output: ${outputTokens}, total completion: ${usage.completion_tokens}/${maxTokens}`);
+    }
+  }
+
+  if (finishReason === 'length') {
+    console.warn('⚠️ Response truncated — max_completion_tokens exhausted. Reasoning tokens consumed too much of the budget.');
+  }
 
   return data.choices[0]?.message?.content || '';
 }
@@ -1337,8 +1350,11 @@ Return ONLY the JSON object, no additional text.`;
     { role: 'user', content: imageContent }
   ];
 
+  // GPT-5.4 with xhigh reasoning uses thousands of internal reasoning tokens that
+  // share the max_completion_tokens budget with the actual output. 8000 was too low —
+  // reasoning consumed most of it, truncating the JSON. 16384 gives ample room.
   const response = await callOpenAIWithVision(messages, {
-    maxTokens: 8000,
+    maxTokens: 16384,
     reasoningEffort
   });
 
@@ -1410,8 +1426,18 @@ Return ONLY the JSON object, no additional text.`;
     };
   } catch (error) {
     console.error('❌ Failed to parse channel analysis:', error);
-    console.error('Raw response:', response);
-    throw new Error('Failed to parse channel analysis response');
+    if (import.meta.env.DEV) {
+      console.error('Raw response (first 500 chars):', response.substring(0, 500));
+      console.error('Raw response (last 200 chars):', response.substring(response.length - 200));
+    }
+
+    // Detect truncation — incomplete JSON typically ends without a closing brace
+    const trimmed = response.trim();
+    const isTruncated = trimmed.length > 0 && !trimmed.endsWith('}') && !trimmed.endsWith('```');
+    if (isTruncated) {
+      throw new Error('Channel analysis response was truncated (model ran out of output tokens). Please try again with a lower ConversionIQ™ reasoning level.');
+    }
+    throw new Error('Failed to parse channel analysis response. Please try again.');
   }
 }
 
