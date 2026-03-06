@@ -120,6 +120,7 @@ const Insights = () => {
 
     setLoading(true);
     setError(null);
+    setAnalysis(null);
     setLoadingMessage('Fetching ad data...');
 
     try {

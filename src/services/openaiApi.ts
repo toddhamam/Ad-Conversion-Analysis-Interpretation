@@ -1344,14 +1344,19 @@ Return ONLY the JSON object, no additional text.`;
 
   try {
     let cleanedResponse = response.trim();
-    if (cleanedResponse.startsWith('```json')) {
-      cleanedResponse = cleanedResponse.slice(7);
-    }
-    if (cleanedResponse.startsWith('```')) {
-      cleanedResponse = cleanedResponse.slice(3);
-    }
-    if (cleanedResponse.endsWith('```')) {
-      cleanedResponse = cleanedResponse.slice(0, -3);
+
+    // Extract JSON from markdown fences or surrounding text
+    // Handle ```json ... ```, ``` ... ```, or JSON embedded in prose
+    const jsonBlockMatch = cleanedResponse.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+    if (jsonBlockMatch) {
+      cleanedResponse = jsonBlockMatch[1].trim();
+    } else {
+      // No markdown fences — try to extract the JSON object directly
+      const jsonStart = cleanedResponse.indexOf('{');
+      const jsonEnd = cleanedResponse.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd > jsonStart) {
+        cleanedResponse = cleanedResponse.slice(jsonStart, jsonEnd + 1);
+      }
     }
 
     const analysis = JSON.parse(cleanedResponse.trim());

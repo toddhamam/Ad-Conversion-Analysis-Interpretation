@@ -16,6 +16,14 @@
 
 ---
 
+## 2026-03-06 — Fix channel analysis parse error with GPT-5.4
+
+### Fixed
+- **`src/services/openaiApi.ts`** — Replaced brittle sequential `startsWith`/`endsWith` markdown fence stripping with robust JSON extraction. Now uses regex to extract JSON from markdown fences, and falls back to finding the first `{` to last `}` boundary when GPT-5.4 wraps JSON in prose text. Fixes "Failed to parse channel analysis response" error.
+- **`src/pages/Insights.tsx`** — Clear previous analysis (`setAnalysis(null)`) when starting a new channel analysis run. Previously, a failed re-analysis would show the error banner alongside stale cached results, making it appear as though the analysis both succeeded and failed.
+
+---
+
 ## 2026-03-06 — Add agency-targeted sales landing page
 
 ### Added
