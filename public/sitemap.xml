@@ -6,7 +6,7 @@
 
   <!-- Homepage / Sales Landing -->
   <url>
-    <loc>https://convertra.ai/</loc>
+    <loc>https://www.convertraiq.com/</loc>
     <lastmod>2026-02-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
@@ -14,7 +14,7 @@
 
   <!-- Agency Landing Page -->
   <url>
-    <loc>https://convertra.ai/for-agencies</loc>
+    <loc>https://www.convertraiq.com/for-agencies</loc>
     <lastmod>2026-03-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
@@ -22,14 +22,14 @@
 
   <!-- Public Pages -->
   <url>
-    <loc>https://convertra.ai/login</loc>
+    <loc>https://www.convertraiq.com/login</loc>
     <lastmod>2026-02-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
 
   <url>
-    <loc>https://convertra.ai/signup</loc>
+    <loc>https://www.convertraiq.com/signup</loc>
     <lastmod>2026-02-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
@@ -37,28 +37,28 @@
 
   <!-- App Pages (for logged-in users, but indexable for discovery) -->
   <url>
-    <loc>https://convertra.ai/dashboard</loc>
+    <loc>https://www.convertraiq.com/dashboard</loc>
     <lastmod>2026-02-02</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
-    <loc>https://convertra.ai/channels</loc>
+    <loc>https://www.convertraiq.com/channels</loc>
     <lastmod>2026-02-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <url>
-    <loc>https://convertra.ai/creatives</loc>
+    <loc>https://www.convertraiq.com/creatives</loc>
     <lastmod>2026-02-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <url>
-    <loc>https://convertra.ai/insights</loc>
+    <loc>https://www.convertraiq.com/insights</loc>
     <lastmod>2026-02-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
