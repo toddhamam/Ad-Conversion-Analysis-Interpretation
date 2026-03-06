@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Player } from '@remotion/player';
-import SEO, { organizationSchema, softwareApplicationSchema, faqSchema } from '../components/SEO';
+import SEO, { organizationSchema, softwareApplicationSchema, agencyFaqSchema } from '../components/SEO';
 import { ConvertraVSL } from '../remotion/ConvertraVSL';
 import { DemoVideo } from '../remotion/DemoVideo';
 import { VIDEO_CONFIG, DEMO_VIDEO_CONFIG } from '../remotion/brand';
@@ -10,22 +10,27 @@ import DemoPoster from '../components/sales/DemoPoster';
 import { useSalesPageEffects } from '../components/sales/useSalesPageEffects';
 import './SalesLanding.css';
 
-function SalesLanding() {
+function AgencySalesLanding() {
   const { isScrolled, isMobileMenuOpen, toggleMobileMenu } = useSalesPageEffects();
 
-  // ROI Calculator state
-  const [monthlyAdSpend, setMonthlyAdSpend] = useState(100000);
-  const [teamSize, setTeamSize] = useState(3);
-  const [costPerMember, setCostPerMember] = useState(10000);
-  const [creativesPerWeek, setCreativesPerWeek] = useState(3);
+  // ROI Calculator state — agency defaults
+  const [clientAccounts, setClientAccounts] = useState(10);
+  const [mediaBuyers, setMediaBuyers] = useState(3);
+  const [costPerBuyer, setCostPerBuyer] = useState(10000);
+  const [adsPerClientPerWeek, setAdsPerClientPerWeek] = useState(2);
   const [daysToLaunch, setDaysToLaunch] = useState(5);
 
-  // ROI calculations
-  const annualTeamSavings = teamSize * costPerMember * 12 * 0.70;
-  const annualAdSpendRecovered = monthlyAdSpend * 12 * 0.60 * 0.47;
-  const totalAnnualSavings = annualTeamSavings + annualAdSpendRecovered;
-  const velocityMultiple = Math.round(250 / creativesPerWeek);
-  const annualHoursSaved = creativesPerWeek * (daysToLaunch * 4) * 52;
+  // ROI calculations — agency economics
+  const currentAccountsPerBuyer = Math.max(1, Math.round(clientAccounts / mediaBuyers));
+  const withConvertraAccountsPerBuyer = currentAccountsPerBuyer * 4;
+  const buyersNeededWithConvertra = Math.max(1, Math.ceil(clientAccounts / withConvertraAccountsPerBuyer));
+  const buyersSaved = Math.max(0, mediaBuyers - buyersNeededWithConvertra);
+  const annualBuyerSavings = buyersSaved * costPerBuyer * 12;
+  const annualTimeSaved = clientAccounts * adsPerClientPerWeek * (daysToLaunch * 4) * 52;
+  const totalWeeklyAdsNow = clientAccounts * adsPerClientPerWeek;
+  const totalWeeklyAdsWithConvertra = clientAccounts * 10; // 10 ads per client/week with ConversionIQ
+  const velocityMultiple = Math.round(totalWeeklyAdsWithConvertra / Math.max(1, totalWeeklyAdsNow));
+  const marginImprovement = Math.round((buyersSaved / Math.max(1, mediaBuyers)) * 100);
 
   const formatCurrency = (value: number): string => {
     if (value >= 1000000) {
@@ -34,17 +39,17 @@ function SalesLanding() {
     return `$${Math.round(value).toLocaleString()}`;
   };
 
-  const calendarUrl = 'https://lunacal.ai/todd-hamam/convertra-live-demo';
+  const calendarUrl = 'https://lunacal.ai/todd-hamam/convertra-live-demo?utm_source=website&utm_medium=landing&utm_campaign=agencies';
 
   return (
     <div className="sales-landing">
       {/* SEO Meta Tags & Structured Data */}
       <SEO
-        title="Winning Ads on Autopilot | Conversion Intelligence Platform"
-        description="Convertra's ConversionIQ™ technology autonomously launches, tests, and scales winning ad creatives — at a velocity no human team can match. The #1 autonomous creative intelligence platform for enterprise brands spending $1M+ on paid media."
-        keywords="conversion intelligence, AI ad generation, ad creative automation, ConversionIQ, enterprise ad optimization, automated ad testing, CMO ad platform, ROAS optimization, ad creative platform, conversion optimization, Meta ads optimization, Google ads AI"
-        canonical="/"
-        jsonLd={[organizationSchema, softwareApplicationSchema, faqSchema]}
+        title="AI Ad Creatives for Agencies | Scale Client Campaigns on Autopilot"
+        description="Launch high-converting ads across every client account in under 3 minutes. ConversionIQ™ helps agencies increase account capacity, improve margins, and eliminate creative bottlenecks — without hiring more media buyers."
+        keywords="agency ad creative automation, multi-client ad management, media buying agency tool, agency ad scaling, client ad campaign automation, agency creative production, ConversionIQ for agencies, ad agency software, scale agency operations"
+        canonical="/for-agencies"
+        jsonLd={[organizationSchema, softwareApplicationSchema, agencyFaqSchema]}
       />
 
       {/* Navigation */}
@@ -95,14 +100,14 @@ function SalesLanding() {
       <section id="hero" className="section hero-section">
         <div className="hero-content">
           <h1 className="hero-headline animate-on-scroll">
-            <span className="headline-main">Scale Creative Testing. On Autopilot.</span>
-            <span className="headline-sub">While Your Competitors Are Still Briefing Designers</span>
+            <span className="headline-main">Launch High-Converting Ads Across Every Client Account. In Minutes.</span>
+            <span className="headline-sub">While Other Agencies Are Still Briefing Designers</span>
           </h1>
           <p className="hero-subhead animate-on-scroll delay-1">
-            <span className="highlight">ConversionIQ™</span> autonomously launches, tests, and scales dozens of winning creatives — before your morning standup.
+            <span className="highlight">ConversionIQ™</span> generates, launches, and scales winning ads across all your client accounts — based on real conversion data. Under 3 minutes per account.
           </p>
           <p className="hero-supporting animate-on-scroll delay-2">
-            The autonomous creative intelligence platform for enterprise brands who refuse to stay stuck in the creative bottleneck.
+            The autonomous creative intelligence platform for agencies that want to increase account capacity, improve margins, and eliminate the creative production bottleneck.
           </p>
 
           {/* Hero VSL */}
@@ -136,9 +141,9 @@ function SalesLanding() {
 
           <div className="hero-cta-group animate-on-scroll delay-4">
             <a href={calendarUrl} className="cta-primary">
-              Schedule Custom Demo
+              Schedule Agency Demo
             </a>
-            <p className="cta-subtext">Limited availability. Bespoke implementation only.</p>
+            <p className="cta-subtext">See how agencies scale creative output across all client accounts.</p>
           </div>
         </div>
 
@@ -153,8 +158,8 @@ function SalesLanding() {
       <section id="problem" className="section problem-section">
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">
-            Your Competitors Are Waiting on Designers.<br />
-            <span className="header-emphasis">You're Stuck in the <span className="brush-underline">Creative Bottleneck</span></span>
+            Your Clients Need Fresh Ads. Yesterday.<br />
+            <span className="header-emphasis">You're Stuck in the <span className="brush-underline">Feedback Loop</span></span>
           </h2>
 
           {/* Visual Demo Placeholder - Dashboard comparison */}
@@ -163,12 +168,12 @@ function SalesLanding() {
             <div className="placeholder-inner">
               <div className="comparison-visual">
                 <div className="comparison-side">
-                  <span className="comparison-label">Human Team</span>
+                  <span className="comparison-label">Manual Process</span>
                   <div className="fake-dashboard">
                     <div className="dash-row"></div>
                     <div className="dash-row"></div>
                     <div className="dash-row"></div>
-                    <div className="dash-question">1 ad/week</div>
+                    <div className="dash-question">1 ad/client/week</div>
                   </div>
                 </div>
                 <div className="comparison-arrow">
@@ -182,7 +187,7 @@ function SalesLanding() {
                     <div className="dash-row"></div>
                     <div className="dash-row"></div>
                     <div className="dash-row"></div>
-                    <div className="dash-insight">Dozens/day</div>
+                    <div className="dash-insight">10+ ads/client/day</div>
                   </div>
                 </div>
               </div>
@@ -191,21 +196,21 @@ function SalesLanding() {
 
           <div className="problem-content animate-on-scroll delay-2">
             <p>
-              You've got the media buyers. The designers. The agencies. The creative strategists.
+              You've got the client briefs. The designers. The media buyers. And still — launching a new ad creative for just <em>one</em> client takes days.
             </p>
             <p>
-              And still — launching a single new ad creative takes <em>days</em>.
+              Now multiply that across 5, 10, 20 client accounts.
             </p>
             <p className="problem-callout">
-              Brief the team. Wait for design. Review and revise. Finally launch. <strong>One ad.</strong>
+              Brief the client. Brief the designer. Wait for design. Review and revise. Finally launch. <strong>One ad. For one client. Repeat.</strong>
             </p>
             <ul className="problem-list">
-              <li>Days to produce a single creative variation.</li>
-              <li>Weeks to gather enough data to know what works.</li>
-              <li>Months to iterate through enough tests to find a winner.</li>
+              <li>Days to produce a single creative variation — per client.</li>
+              <li>Multiply that across every account in your portfolio.</li>
+              <li>Months of overhead before you see what actually converts.</li>
             </ul>
             <p>
-              Meanwhile, you're trapped in the same bottleneck as everyone else:
+              Meanwhile, you're trapped in the same cycle as every other agency:
             </p>
             <div className="problem-loop-visual">
               <div className="loop-track">
@@ -217,7 +222,7 @@ function SalesLanding() {
                       <line x1="12" y1="3" x2="12" y2="15"/>
                     </svg>
                   </div>
-                  <span className="loop-text">Brief the team</span>
+                  <span className="loop-text">Brief the client</span>
                 </div>
                 <div className="loop-arrow">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -282,7 +287,7 @@ function SalesLanding() {
                       <path d="M15 9l3-3"/>
                     </svg>
                   </div>
-                  <span className="loop-text">One ad. Repeat.</span>
+                  <span className="loop-text">One client. Repeat.</span>
                 </div>
                 <div className="loop-arrow loop-back">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -293,13 +298,13 @@ function SalesLanding() {
                   </svg>
                 </div>
               </div>
-              <div className="loop-label">The Creative Bottleneck</div>
+              <div className="loop-label">The Agency Bottleneck</div>
             </div>
             <div className="problem-pain">
-              <p>Every day stuck in this cycle is a day your competitors could be pulling ahead.</p>
-              <p>Every creative that takes a week to produce is dozens of tests you never ran.</p>
+              <p>Every day stuck in this cycle is a day your clients could be looking for a faster agency.</p>
+              <p>Every creative that takes a week to produce is dozens of tests you never ran — across every single client.</p>
               <p className="pain-emphasis">And the worst part?</p>
-              <p><strong>The bottleneck isn't talent. It's velocity. And it's costing you everything.</strong></p>
+              <p><strong>The bottleneck isn't talent. It's velocity. And it's costing you clients.</strong></p>
             </div>
           </div>
         </div>
@@ -313,8 +318,8 @@ function SalesLanding() {
             <span className="mechanism-subtitle">The Autonomous Creative Engine That Never Sleeps</span>
           </h2>
           <p className="mechanism-intro animate-on-scroll delay-1">
-            ConversionIQ™ is our autonomous agentic technology that does what human teams can't.<br />
-            <strong>It launches, tests, and scales winning creatives — at a velocity no team can match.</strong>
+            ConversionIQ™ does what growing agency teams can't.<br />
+            <strong>It launches, tests, and scales winning creatives across all your client accounts — at a velocity no team can match.</strong>
           </p>
 
           {/* Animated Workflow Visualization */}
@@ -379,7 +384,7 @@ function SalesLanding() {
               <div className="step-number">01</div>
               <h3 className="step-title">Extract</h3>
               <p className="step-description">
-                Continuously ingests data across all your ad channels—building a real-time intelligence layer that's always learning.
+                Connects to each client's ad account and continuously ingests performance data — building a unique intelligence layer per client that's always learning.
               </p>
             </div>
 
@@ -387,7 +392,7 @@ function SalesLanding() {
               <div className="step-number">02</div>
               <h3 className="step-title">Interpret</h3>
               <p className="step-description">
-                Deep pattern analysis on every conversion—identifying the exact creative elements, copy structures, and audience signals that drive action.
+                Deep pattern analysis on every conversion — identifying the exact creative elements, copy structures, and audience signals that drive action for each client.
               </p>
             </div>
 
@@ -395,7 +400,7 @@ function SalesLanding() {
               <div className="step-number">03</div>
               <h3 className="step-title">Generate</h3>
               <p className="step-description">
-                Autonomously engineers new ad creatives—copy, visuals, and targeting—from proven conversion patterns. Not templates. Real intelligence, at scale.
+                Autonomously engineers new ad creatives — copy, visuals, and targeting — from each client's proven conversion patterns. Not templates. Real intelligence, per account.
               </p>
             </div>
 
@@ -403,7 +408,7 @@ function SalesLanding() {
               <div className="step-number">04</div>
               <h3 className="step-title">Repeat</h3>
               <p className="step-description">
-                Every creative tested makes the next one smarter. It's not a one-time optimization—it's a compounding velocity advantage.
+                Every creative tested makes the next one smarter — for every client. Your creative velocity compounds across your entire portfolio.
               </p>
             </div>
           </div>
@@ -449,65 +454,65 @@ function SalesLanding() {
         </div>
       </section>
 
-      {/* Bespoke Differentiator Section */}
+      {/* Agency Differentiator Section */}
       <section id="bespoke" className="section bespoke-section">
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">
-            This Isn't Software You Figure Out.<br />
-            <span className="header-emphasis">It's an Automated Partnership.</span>
+            Increase Account Capacity.<br />
+            <span className="header-emphasis">Without Increasing Headcount.</span>
           </h2>
 
           <div className="bespoke-intro animate-on-scroll delay-1">
             <p>Let's be clear about what Convertra is <em>not</em>.</p>
             <ul className="not-list">
-              <li>It's not a self-serve tool you log into and figure out yourself.</li>
-              <li>It's not another AI widget that generates generic content.</li>
-              <li>It's not another platform for your team to learn, manage, and troubleshoot.</li>
+              <li>It's not another tool that generates generic content your clients won't approve.</li>
+              <li>It's not another platform that takes weeks to learn and still can't produce at scale.</li>
+              <li>It's not another hire who costs $10K/month and can only manage a handful of accounts.</li>
             </ul>
             <p className="bespoke-statement">
-              <strong>Convertra is a fully autonomous creative intelligence system—built around your business and managed end-to-end.</strong>
+              <strong>Convertra is an autonomous creative intelligence platform that lets your agency produce and launch high-converting ads across every client account — in minutes, not days.</strong>
             </p>
           </div>
 
-          <p className="bespoke-lead animate-on-scroll delay-2">Here's what that means:</p>
+          <p className="bespoke-lead animate-on-scroll delay-2">Here's what that means for your agency:</p>
 
           <div className="bespoke-features animate-on-scroll delay-2">
             <div className="bespoke-feature">
               <div className="bespoke-feature-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                  <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                  <path d="M2 17l10 5 10-5"/>
+                  <path d="M2 12l10 5 10-5"/>
                 </svg>
               </div>
-              <h3>Bespoke Implementation</h3>
+              <h3>Multi-Client Scaling</h3>
               <p>
-                We study your business, channels, and conversion history—then configure ConversionIQ™ to <em>your</em> patterns. No generic templates.
+                Connect every client's ad account. ConversionIQ™ analyzes each client's unique conversion patterns and generates ads tailored to their audience. No more copying templates between accounts.
               </p>
             </div>
 
             <div className="bespoke-feature">
               <div className="bespoke-feature-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                  <circle cx="9" cy="7" r="4"/>
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
                 </svg>
               </div>
-              <h3>White Glove Management</h3>
+              <h3>Eliminate Designer Bottlenecks</h3>
               <p>
-                Our team monitors performance, interprets data, optimizes output, and evolves the model as your market changes. You get results without the overhead.
+                Stop waiting days for designers to deliver. ConversionIQ™ generates professional ad creatives — copy, images, and targeting — based on real conversion data. Launch in under 3 minutes per account.
               </p>
             </div>
 
             <div className="bespoke-feature">
               <div className="bespoke-feature-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  <path d="M23 6l-9.5 9.5-5-5L1 18"/>
+                  <path d="M17 6h6v6"/>
                 </svg>
               </div>
-              <h3>Dedicated Partnership</h3>
+              <h3>Increase Capacity Per Operator</h3>
               <p>
-                A dedicated team who knows your business, understands your goals, and is accountable to your outcomes. Not a chatbot—real people.
+                One platform operator can now produce the creative output of multiple media buyers. Scale your client portfolio without scaling your payroll.
               </p>
             </div>
           </div>
@@ -518,13 +523,13 @@ function SalesLanding() {
       <section id="outcome" className="section outcome-section">
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">
-            The Result: Creative Velocity on Autopilot—<br />
-            <span className="header-emphasis">That Compounds Every Week</span>
+            Scale Every Client Account—<br />
+            <span className="header-emphasis">Without Scaling Your Team</span>
           </h2>
 
           <p className="outcome-intro animate-on-scroll delay-1">
-            When you work with Convertra, you're not <em>waiting</em> on designers or hoping your next ad works.<br />
-            You're deploying dozens of creatives <strong>engineered from proven conversion patterns</strong>—autonomously, at scale.
+            When your agency uses Convertra, you're not waiting on designers or stretching your media buyers thin.<br />
+            You're deploying dozens of creatives per client — <strong>engineered from each client's proven conversion patterns</strong> — in minutes.
           </p>
 
           {/* Results Demo Placeholder */}
@@ -546,12 +551,12 @@ function SalesLanding() {
                     <span className="metric-label">Less Creative Waste</span>
                   </div>
                 </div>
-                <p className="metrics-caption">Example results from enterprise clients</p>
+                <p className="metrics-caption">Average results across client accounts</p>
               </div>
             </div>
           </div>
 
-          <p className="outcome-lead animate-on-scroll delay-3">Here's what that looks like in practice:</p>
+          <p className="outcome-lead animate-on-scroll delay-3">Here's what that looks like for your agency:</p>
 
           <div className="outcome-benefits">
             <div className="outcome-benefit animate-on-scroll delay-1">
@@ -560,10 +565,10 @@ function SalesLanding() {
                   <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
                 </svg>
               </div>
-              <h3>Eliminate the creative bottleneck.</h3>
+              <h3>Eliminate the feedback loop.</h3>
               <p>
-                No more waiting days for a single ad. ConversionIQ™ autonomously generates,
-                launches, and tests dozens of creatives — while your team focuses on strategy.
+                No more back-and-forth with designers. ConversionIQ™ generates ready-to-launch creatives
+                based on each client's actual conversion data — not guesswork.
               </p>
             </div>
 
@@ -573,10 +578,10 @@ function SalesLanding() {
                   <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
                 </svg>
               </div>
-              <h3>Scale without scaling headcount.</h3>
+              <h3>Scale clients without scaling headcount.</h3>
               <p>
-                Replace the bloated creative team with an autonomous system that produces
-                more variations — informed by real conversion data — than any team could.
+                Take on more client accounts without hiring more media buyers or designers.
+                One operator handles what used to require a team.
               </p>
             </div>
 
@@ -587,9 +592,10 @@ function SalesLanding() {
                   <path d="M17 6h6v6"/>
                 </svg>
               </div>
-              <h3>Compound your creative advantage.</h3>
+              <h3>Deliver better results, faster.</h3>
               <p>
-                Every creative tested makes the next one smarter. Your velocity doesn't plateau—it accelerates.
+                Launch dozens of variations per client, find winners faster, and show clients
+                measurable performance improvement from day one.
               </p>
             </div>
 
@@ -600,10 +606,10 @@ function SalesLanding() {
                   <path d="M12 6v6l4 2"/>
                 </svg>
               </div>
-              <h3>Cut hundreds of thousands in overhead.</h3>
+              <h3>Improve your cost-to-serve.</h3>
               <p>
-                Replace the need for additional designers, media buyers, and creative strategists
-                with an autonomous system that outperforms them—faster, smarter, and without the bottleneck.
+                Reduce the team hours required per client account. Increase your margin
+                on every engagement — without cutting corners on quality.
               </p>
             </div>
 
@@ -614,8 +620,11 @@ function SalesLanding() {
                   <path d="M22 4L12 14.01l-3-3"/>
                 </svg>
               </div>
-              <h3>Focus on running your business.</h3>
-              <p>We manage the system. You review the results. That's it.</p>
+              <h3>Focus on strategy, not production.</h3>
+              <p>
+                Let ConversionIQ™ handle creative production and testing. Your team focuses on
+                client relationships and strategic direction.
+              </p>
             </div>
           </div>
         </div>
@@ -625,28 +634,28 @@ function SalesLanding() {
       <section id="credibility" className="section credibility-section">
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">
-            Built for Enterprise Brands<br />
-            <span className="header-emphasis">With Serious Ad Spend</span>
+            Built for Growth Agencies<br />
+            <span className="header-emphasis">Scaling Paid Media Operations</span>
           </h2>
 
           <div className="credibility-content animate-on-scroll delay-1">
             <p className="credibility-statement">
-              Convertra isn't for everyone.
+              Convertra isn't for every agency.
             </p>
             <p>
-              We work with established companies spending <strong>six to eight figures annually</strong> on
-              paid media—brands who understand that a 10% efficiency gain isn't a "nice to have."
+              We work with agencies managing <strong>multiple client ad accounts</strong> who
+              understand that creative velocity is the difference between retaining clients and losing them.
             </p>
-            <p className="credibility-emphasis">It's millions in recovered revenue.</p>
+            <p className="credibility-emphasis">It's the difference between growing your book and plateauing.</p>
 
-            <p className="credibility-lead">Our clients come to us because they've hit the ceiling with the alternatives:</p>
+            <p className="credibility-lead">Our agency partners come to us because they've hit the ceiling with the alternatives:</p>
             <ul className="alternatives-list">
-              <li>Agencies that bill hours but can't move fast enough.</li>
-              <li>AI tools that generate volume but not intelligence.</li>
-              <li>In-house teams stretched too thin to test at the velocity the market demands.</li>
+              <li>Freelance designers who can't keep up with multi-client volume.</li>
+              <li>Additional media buyers who increase payroll but not margin.</li>
+              <li>AI tools that generate volume but not quality clients will approve.</li>
             </ul>
             <p className="credibility-close">
-              They come to Convertra because they're <strong>done being bottlenecked</strong>.
+              They come to Convertra because they're <strong>done being the bottleneck for their own clients</strong>.
             </p>
           </div>
 
@@ -676,13 +685,13 @@ function SalesLanding() {
               <div className="card-inner">
                 <div className="quote-mark">"</div>
                 <p className="testimonial-text">
-                  Testimonial quote will go here. This is placeholder text for a client success story.
+                  Agency testimonial will go here. This is placeholder text for an agency partner success story.
                 </p>
                 <div className="testimonial-author">
                   <div className="author-avatar"></div>
                   <div className="author-info">
-                    <span className="author-name">Client Name</span>
-                    <span className="author-title">Title, Company</span>
+                    <span className="author-name">Agency Partner Name</span>
+                    <span className="author-title">Founder, Agency Name</span>
                   </div>
                 </div>
               </div>
@@ -695,7 +704,7 @@ function SalesLanding() {
       <section id="offer" className="section offer-section">
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">What You Get</h2>
-          <p className="offer-intro animate-on-scroll delay-1">When you partner with Convertra, you receive:</p>
+          <p className="offer-intro animate-on-scroll delay-1">When your agency partners with Convertra, you receive:</p>
 
           <div className="offer-grid">
             <div className="offer-item gradient-border-card animate-on-scroll delay-1">
@@ -709,7 +718,7 @@ function SalesLanding() {
                   </svg>
                 </div>
                 <h3>ConversionIQ™ Technology</h3>
-                <p>Our autonomous agentic engine that launches, tests, and scales winning creatives — configured to your business.</p>
+                <p>Our autonomous creative engine configured for multi-client operations. Each client account gets its own conversion intelligence layer.</p>
               </div>
             </div>
 
@@ -718,11 +727,11 @@ function SalesLanding() {
               <div className="card-inner">
                 <div className="offer-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
                   </svg>
                 </div>
-                <h3>Bespoke Implementation</h3>
-                <p>A fully custom setup built around your channels, audiences, and conversion goals.</p>
+                <h3>Rapid Onboarding</h3>
+                <p>Connect client ad accounts in minutes. ConversionIQ™ auto-analyzes each account's conversion history and starts generating immediately.</p>
               </div>
             </div>
 
@@ -731,12 +740,14 @@ function SalesLanding() {
               <div className="card-inner">
                 <div className="offer-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 20h9"/>
-                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                   </svg>
                 </div>
-                <h3>Ongoing Management</h3>
-                <p>Continuous monitoring, optimization, and evolution by our dedicated team.</p>
+                <h3>Multi-Account Management</h3>
+                <p>Switch between client accounts instantly. Generate, review, and launch ads across your entire portfolio from one platform.</p>
               </div>
             </div>
 
@@ -751,7 +762,7 @@ function SalesLanding() {
                   </svg>
                 </div>
                 <h3>Autonomous Creative Velocity</h3>
-                <p>Dozens of creatives generated, launched, and scaled autonomously from your proven conversion patterns.</p>
+                <p>Dozens of creatives generated, launched, and scaled autonomously from each client's proven conversion patterns.</p>
               </div>
             </div>
 
@@ -764,8 +775,8 @@ function SalesLanding() {
                     <path d="M22 12A10 10 0 0 0 12 2v10z"/>
                   </svg>
                 </div>
-                <h3>Performance Reporting</h3>
-                <p>Clear, actionable insights — not vanity metrics. Real-time visibility into what's converting and what's scaling.</p>
+                <h3>Client-Ready Reporting</h3>
+                <p>Clear, client-facing performance data. Show clients exactly how their ads are performing and improving — without building reports manually.</p>
               </div>
             </div>
 
@@ -774,14 +785,11 @@ function SalesLanding() {
               <div className="card-inner">
                 <div className="offer-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                    <circle cx="9" cy="7" r="4"/>
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                   </svg>
                 </div>
-                <h3>Dedicated Partnership</h3>
-                <p>A team that knows your business and is accountable to your outcomes.</p>
+                <h3>Dedicated Support</h3>
+                <p>Priority support from a team that understands agency workflows and multi-client operations.</p>
               </div>
             </div>
           </div>
@@ -797,17 +805,17 @@ function SalesLanding() {
           </h2>
           <p className="pricing-intro animate-on-scroll delay-1">
             Every engagement starts with white-glove implementation.<br />
-            <strong>Choose how you want to run it from there.</strong>
+            <strong>Choose how your agency wants to run it from there.</strong>
           </p>
 
           <div className="pricing-cards-grid">
-            {/* Enterprise Self-Service */}
+            {/* Agency Self-Service */}
             <div className="pricing-card gradient-border-card animate-on-scroll delay-2">
               <div className="card-gradient-border"></div>
               <div className="card-inner">
-                <div className="pricing-badge">Enterprise</div>
+                <div className="pricing-badge">Agency</div>
                 <h3 className="pricing-title">Self-Service</h3>
-                <p className="pricing-tagline">We set it up. Your team runs it.</p>
+                <p className="pricing-tagline">We set it up. Your team runs it across all client accounts.</p>
 
                 <div className="pricing-price-block">
                   <div className="pricing-price-custom">Custom Pricing</div>
@@ -815,7 +823,7 @@ function SalesLanding() {
                 </div>
 
                 <p className="pricing-description">
-                  We install and configure your Convertra platform, then hand the keys to your internal team. A dedicated point of contact from our team is always available to assist.
+                  We install and configure your Convertra platform for multi-client operations, then hand the keys to your team. A dedicated point of contact is always available.
                 </p>
 
                 <ul className="pricing-checklist">
@@ -829,15 +837,15 @@ function SalesLanding() {
                   </li>
                   <li>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
-                    Your team member drives day-to-day
+                    Your team drives day-to-day across all clients
                   </li>
                   <li>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
-                    Unlimited creatives &amp; analyses
+                    Unlimited creatives &amp; analyses per account
                   </li>
                   <li>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
-                    Custom branding &amp; API access
+                    Multi-account switching &amp; management
                   </li>
                   <li>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
@@ -853,13 +861,13 @@ function SalesLanding() {
               </div>
             </div>
 
-            {/* Velocity Partner */}
+            {/* Agency Partner */}
             <div className="pricing-card pricing-card-featured gradient-border-card animate-on-scroll delay-3">
               <div className="card-gradient-border"></div>
               <div className="card-inner">
-                <div className="pricing-badge pricing-badge-featured">Velocity Partner</div>
+                <div className="pricing-badge pricing-badge-featured">Agency Partner</div>
                 <h3 className="pricing-title">Full Partnership</h3>
-                <p className="pricing-tagline">We set it up. We run it for you.</p>
+                <p className="pricing-tagline">We set it up. We help you run it.</p>
 
                 <div className="pricing-price-block">
                   <div className="pricing-price-custom">Custom Pricing</div>
@@ -867,21 +875,21 @@ function SalesLanding() {
                 </div>
 
                 <p className="pricing-description">
-                  Everything in Enterprise, plus a dedicated Convertra media buyer who runs your entire creative testing operation. Set your weekly quota — we handle the rest.
+                  Everything in Agency, plus a dedicated Convertra specialist who helps manage creative output across your client portfolio. Set your weekly quota — we help you hit it.
                 </p>
 
                 <ul className="pricing-checklist">
                   <li>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
-                    Everything in Enterprise, plus:
+                    Everything in Agency, plus:
                   </li>
                   <li className="pricing-checklist-highlight">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
-                    Dedicated Convertra media buyer
+                    Dedicated Convertra creative specialist
                   </li>
                   <li className="pricing-checklist-highlight">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
-                    Weekly creative output quota
+                    Weekly creative output quota per client
                   </li>
                   <li className="pricing-checklist-highlight">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
@@ -893,7 +901,7 @@ function SalesLanding() {
                   </li>
                   <li>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
-                    More creative output, better results
+                    Higher creative throughput, better client results
                   </li>
                 </ul>
 
@@ -907,12 +915,11 @@ function SalesLanding() {
           </div>
 
           <div className="pricing-why animate-on-scroll delay-4">
-            <p className="pricing-why-title">Why enterprise only — for now?</p>
+            <p className="pricing-why-title">Why agency-focused pricing?</p>
             <p className="pricing-why-text">
-              Because every implementation is fully custom and bespoke. We study your business,
-              configure the system to your patterns, and manage it end-to-end. This level of
-              white-glove service requires dedicated attention and expertise that doesn't scale
-              with self-serve signups — at least not yet.
+              Because we build the system around your agency's workflow and client portfolio.
+              Custom pricing ensures the platform scales with your book of business — whether
+              you're managing 5 accounts or 50.
             </p>
           </div>
         </div>
@@ -923,31 +930,31 @@ function SalesLanding() {
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">The Cost of Waiting</h2>
           <p className="urgency-subtitle animate-on-scroll delay-1">
-            Every month without ConversionIQ™, the creative bottleneck is costing you across three areas most teams never audit.
+            Every month without ConversionIQ™, the creative bottleneck is costing your agency across three areas most teams never audit.
           </p>
 
           <div className="cost-cards animate-on-scroll delay-2">
             <div className="cost-card">
               <div className="cost-card-amount">$80–100K<span className="cost-card-period">/year</span></div>
-              <h3 className="cost-card-title">Bloated Creative Teams</h3>
+              <h3 className="cost-card-title">Excess Headcount</h3>
               <p className="cost-card-desc">
-                Designers, media buyers, and creative strategists commanding $8–12K/month each — and still only producing a handful of creatives per week. ConversionIQ™ replaces the bottleneck with autonomous velocity.
+                Each additional media buyer costs $8–12K/month — and can only manage a handful of accounts effectively. ConversionIQ™ lets one operator produce creative output across your entire portfolio.
               </p>
             </div>
 
             <div className="cost-card">
               <div className="cost-card-amount">$100K+<span className="cost-card-period">/year</span></div>
-              <h3 className="cost-card-title">Slow Creative Testing</h3>
+              <h3 className="cost-card-title">Slow Creative Turnaround</h3>
               <p className="cost-card-desc">
-                60–70% of ad spend wasted on creatives that never convert — because your team can only test a few variations per week. ConversionIQ™ tests dozens autonomously, finding winners at a velocity humans can't match.
+                3–5 day turnarounds per client mean missed optimization windows and stale ads. When clients see slow results, they look for a faster agency. ConversionIQ™ launches in under 3 minutes per account.
               </p>
             </div>
 
             <div className="cost-card">
               <div className="cost-card-amount">$50–75K<span className="cost-card-period">/year</span></div>
-              <h3 className="cost-card-title">Creative Fatigue & Decay</h3>
+              <h3 className="cost-card-title">Client Churn From Creative Fatigue</h3>
               <p className="cost-card-desc">
-                Winning ads have a shelf life. Most teams don't catch the decay until CPA has already spiked 30–50%. ConversionIQ™ autonomously detects fatigue and generates proven replacements before performance drops.
+                When ad performance drops and your team takes weeks to refresh creatives, clients start shopping for a new agency. ConversionIQ™ detects fatigue and generates proven replacements before performance drops.
               </p>
             </div>
           </div>
@@ -956,11 +963,11 @@ function SalesLanding() {
             <div className="cost-total-inner">
               <p className="cost-total-label">Total hidden cost of the status quo</p>
               <p className="cost-total-amount">$230–275K <span className="cost-total-period">per year</span></p>
-              <p className="cost-total-note">And that's before counting the revenue you're leaving on the table from underperforming creatives.</p>
+              <p className="cost-total-note">And that's before counting the clients you're losing to agencies that move faster.</p>
               <div className="cost-total-cta">
-                <p className="cost-total-cta-text">But what are <em>your</em> actual numbers?</p>
+                <p className="cost-total-cta-text">But what are <em>your agency's</em> actual numbers?</p>
                 <a href="#roi-calculator" className="cost-total-cta-btn">
-                  Calculate Your Savings
+                  Calculate Your Agency's Savings
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
                     <path d="M12 5v14M5 12l7 7 7-7"/>
                   </svg>
@@ -971,12 +978,12 @@ function SalesLanding() {
 
           <div className="urgency-close-wrapper animate-on-scroll delay-3">
             <p className="urgency-scarcity">
-              Because every implementation is bespoke—built and managed by our team—we
-              only take on a <strong>limited number of clients</strong> at any time.
+              We're onboarding a <strong>limited number of agency partners</strong> to ensure
+              quality support and successful adoption.
             </p>
             <div className="urgency-visual">
               <div className="countdown-placeholder">
-                <span className="spots-label">Limited spots available</span>
+                <span className="spots-label">Limited agency spots available</span>
                 <div className="spots-indicator">
                   <span className="spot filled"></span>
                   <span className="spot filled"></span>
@@ -990,14 +997,14 @@ function SalesLanding() {
         </div>
       </section>
 
-      {/* ROI Calculator Section */}
+      {/* ROI Calculator Section — Agency Economics */}
       <section id="roi-calculator" className="section roi-section">
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">
-            What Could ConversionIQ™ Save <span className="header-emphasis">Your Business</span>?
+            What Could ConversionIQ™ Save <span className="header-emphasis">Your Agency</span>?
           </h2>
           <p className="roi-subtitle animate-on-scroll delay-1">
-            Enter your numbers below. See what autonomous creative velocity is worth to your bottom line.
+            Enter your numbers below. See what autonomous creative velocity is worth to your agency's bottom line.
           </p>
 
           <div className="roi-card animate-on-scroll delay-2">
@@ -1005,73 +1012,73 @@ function SalesLanding() {
               <div className="roi-inputs">
                 <div className="roi-input-row">
                   <div className="roi-input-header">
-                    <label className="roi-input-label" htmlFor="roi-ad-spend">Monthly Ad Spend</label>
-                    <span className="roi-input-value" aria-live="polite">${monthlyAdSpend.toLocaleString()}</span>
+                    <label className="roi-input-label" htmlFor="roi-client-accounts">Client Ad Accounts</label>
+                    <span className="roi-input-value" aria-live="polite">{clientAccounts} {clientAccounts === 1 ? 'account' : 'accounts'}</span>
                   </div>
                   <input
                     type="range"
-                    id="roi-ad-spend"
+                    id="roi-client-accounts"
                     className="roi-slider"
-                    min={10000}
-                    max={1000000}
-                    step={5000}
-                    value={monthlyAdSpend}
-                    onChange={(e) => setMonthlyAdSpend(Number(e.target.value))}
-                    aria-label="Monthly ad spend"
+                    min={3}
+                    max={50}
+                    step={1}
+                    value={clientAccounts}
+                    onChange={(e) => setClientAccounts(Number(e.target.value))}
+                    aria-label="Number of client ad accounts"
                   />
                 </div>
 
                 <div className="roi-input-row">
                   <div className="roi-input-header">
-                    <label className="roi-input-label" htmlFor="roi-team-size">Creative Team Size</label>
-                    <span className="roi-input-value" aria-live="polite">{teamSize} {teamSize === 1 ? 'person' : 'people'}</span>
+                    <label className="roi-input-label" htmlFor="roi-media-buyers">Media Buyers / Creative Team</label>
+                    <span className="roi-input-value" aria-live="polite">{mediaBuyers} {mediaBuyers === 1 ? 'person' : 'people'}</span>
                   </div>
                   <input
                     type="range"
-                    id="roi-team-size"
+                    id="roi-media-buyers"
                     className="roi-slider"
                     min={1}
                     max={15}
                     step={1}
-                    value={teamSize}
-                    onChange={(e) => setTeamSize(Number(e.target.value))}
-                    aria-label="Creative team size"
+                    value={mediaBuyers}
+                    onChange={(e) => setMediaBuyers(Number(e.target.value))}
+                    aria-label="Media buyers and creative team size"
                   />
                 </div>
 
                 <div className="roi-input-row">
                   <div className="roi-input-header">
-                    <label className="roi-input-label" htmlFor="roi-cost-member">Avg. Cost per Team Member</label>
-                    <span className="roi-input-value" aria-live="polite">${costPerMember.toLocaleString()}/mo</span>
+                    <label className="roi-input-label" htmlFor="roi-cost-buyer">Avg. Cost per Team Member</label>
+                    <span className="roi-input-value" aria-live="polite">${costPerBuyer.toLocaleString()}/mo</span>
                   </div>
                   <input
                     type="range"
-                    id="roi-cost-member"
+                    id="roi-cost-buyer"
                     className="roi-slider"
                     min={3000}
                     max={25000}
                     step={500}
-                    value={costPerMember}
-                    onChange={(e) => setCostPerMember(Number(e.target.value))}
+                    value={costPerBuyer}
+                    onChange={(e) => setCostPerBuyer(Number(e.target.value))}
                     aria-label="Average monthly cost per team member"
                   />
                 </div>
 
                 <div className="roi-input-row">
                   <div className="roi-input-header">
-                    <label className="roi-input-label" htmlFor="roi-creatives-week">Creatives Produced per Week</label>
-                    <span className="roi-input-value" aria-live="polite">{creativesPerWeek} {creativesPerWeek === 1 ? 'creative' : 'creatives'}</span>
+                    <label className="roi-input-label" htmlFor="roi-ads-per-client">Ads Produced per Client / Week</label>
+                    <span className="roi-input-value" aria-live="polite">{adsPerClientPerWeek} {adsPerClientPerWeek === 1 ? 'ad' : 'ads'}</span>
                   </div>
                   <input
                     type="range"
-                    id="roi-creatives-week"
+                    id="roi-ads-per-client"
                     className="roi-slider"
                     min={1}
-                    max={20}
+                    max={10}
                     step={1}
-                    value={creativesPerWeek}
-                    onChange={(e) => setCreativesPerWeek(Number(e.target.value))}
-                    aria-label="Creatives produced per week"
+                    value={adsPerClientPerWeek}
+                    onChange={(e) => setAdsPerClientPerWeek(Number(e.target.value))}
+                    aria-label="Ads produced per client per week"
                   />
                 </div>
 
@@ -1093,48 +1100,52 @@ function SalesLanding() {
                   />
                 </div>
               </div>
-            </div>
 
-            <div className="roi-divider"></div>
+              <div className="roi-divider"></div>
 
-            <div className="roi-results">
-              <div className="roi-results-primary">
-                <div className="roi-result-card">
-                  <div className="roi-result-value">{formatCurrency(annualTeamSavings)}</div>
-                  <div className="roi-result-label">Annual Team Cost Savings</div>
-                  <div className="roi-result-detail">Replaces 70% of manual creative production</div>
+              <div className="roi-results">
+                <div className="roi-results-primary">
+                  <div className="roi-result-card">
+                    <div className="roi-result-value">{formatCurrency(annualBuyerSavings)}</div>
+                    <div className="roi-result-label">Annual Team Cost Savings</div>
+                    <div className="roi-result-detail">
+                      {buyersSaved > 0
+                        ? `${buyersSaved} fewer team member${buyersSaved > 1 ? 's' : ''} needed at current capacity`
+                        : 'Handle 4x more accounts with current team'}
+                    </div>
+                  </div>
+                  <div className="roi-result-card">
+                    <div className="roi-result-value">{withConvertraAccountsPerBuyer} accounts</div>
+                    <div className="roi-result-label">Accounts per Operator</div>
+                    <div className="roi-result-detail">Up from {currentAccountsPerBuyer} accounts today</div>
+                  </div>
+                  <div className="roi-result-card roi-result-card-primary">
+                    <div className="roi-result-value roi-result-total">{marginImprovement > 0 ? `${marginImprovement}%` : '4x'}</div>
+                    <div className="roi-result-label">{marginImprovement > 0 ? 'Margin Improvement' : 'Capacity Increase'}</div>
+                  </div>
                 </div>
-                <div className="roi-result-card">
-                  <div className="roi-result-value">{formatCurrency(annualAdSpendRecovered)}</div>
-                  <div className="roi-result-label">Wasted Ad Spend Recovered</div>
-                  <div className="roi-result-detail">47% less spend on non-converting creatives</div>
-                </div>
-                <div className="roi-result-card roi-result-card-primary">
-                  <div className="roi-result-value roi-result-total">{formatCurrency(totalAnnualSavings)}</div>
-                  <div className="roi-result-label">Total Annual Savings</div>
+
+                <div className="roi-results-secondary">
+                  <div className="roi-result-secondary">
+                    <span className="roi-secondary-value">{velocityMultiple}x</span>
+                    <span className="roi-secondary-label">Creative Velocity Increase</span>
+                  </div>
+                  <div className="roi-result-secondary">
+                    <span className="roi-secondary-value">{annualTimeSaved.toLocaleString()}</span>
+                    <span className="roi-secondary-label">Team Hours Freed Per Year</span>
+                  </div>
                 </div>
               </div>
-
-              <div className="roi-results-secondary">
-                <div className="roi-result-secondary">
-                  <span className="roi-secondary-value">{velocityMultiple}x</span>
-                  <span className="roi-secondary-label">Creative Velocity Increase</span>
-                </div>
-                <div className="roi-result-secondary">
-                  <span className="roi-secondary-value">{annualHoursSaved.toLocaleString()}</span>
-                  <span className="roi-secondary-label">Team Hours Freed Per Year</span>
-                </div>
-              </div>
             </div>
-          </div>
 
-          <div className="roi-cta-row animate-on-scroll delay-4">
-            <p className="roi-disclaimer">
-              Estimates based on industry benchmarks. Schedule a custom assessment for your business.
-            </p>
-            <a href={calendarUrl} className="cta-primary">
-              Get Your Custom Assessment
-            </a>
+            <div className="roi-cta-row animate-on-scroll delay-4">
+              <p className="roi-disclaimer">
+                Estimates based on agency benchmarks. Schedule a custom assessment for your agency.
+              </p>
+              <a href={calendarUrl} className="cta-primary">
+                Get Your Custom Agency Assessment
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -1143,25 +1154,25 @@ function SalesLanding() {
       <section id="contact" className="section cta-section">
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">
-            Ready to Break Free From the Creative Bottleneck?
+            Ready to Scale Your Agency's Creative Output?
           </h2>
 
           <div className="cta-content animate-on-scroll delay-1">
             <p className="cta-intro">Request a custom assessment and we'll show you:</p>
             <ul className="cta-list">
-              <li>How many creatives ConversionIQ™ could be testing for you — autonomously.</li>
-              <li>The conversion patterns hiding in your current ad data.</li>
-              <li>How a bespoke autonomous implementation would work for your business.</li>
+              <li>How many creatives ConversionIQ™ could produce across all your client accounts.</li>
+              <li>The conversion patterns hiding in your clients' ad data.</li>
+              <li>How your agency can serve more clients without adding headcount.</li>
             </ul>
             <p className="cta-reassurance">
               No obligation. No generic pitch deck.<br />
-              Just a conversation about what autonomous creative velocity looks like for your business.
+              Just a conversation about what autonomous creative velocity looks like for your agency.
             </p>
             <div className="cta-final">
               <a href={calendarUrl} className="cta-primary cta-large pulse-glow">
-                Schedule Custom Demo
+                Schedule Agency Demo
               </a>
-              <p className="cta-subtext">Limited availability. Enterprise clients only.</p>
+              <p className="cta-subtext">For agencies managing multiple client ad accounts.</p>
               <p className="cta-subtext" style={{ marginTop: '12px' }}>
                 Or email us directly at{' '}
                 <a href="mailto:hello@convertraiq.com" style={{ color: 'var(--accent-violet)', fontWeight: 600, textDecoration: 'none' }}>
@@ -1205,4 +1216,4 @@ function SalesLanding() {
   );
 }
 
-export default SalesLanding;
+export default AgencySalesLanding;
