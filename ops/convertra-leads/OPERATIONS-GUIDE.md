@@ -915,3 +915,83 @@ A `fill --target 100` test discovered 171 prospects but only 15 reached `ready_t
 - Pinned to `typing_extensions==4.15.0`
 
 **Files changed:** `orchestrator.py`, `modules/discovery.py`, `modules/shopify_discovery.py`, `modules/linkedin_discovery.py`, `modules/google_business.py`, `modules/job_scraper.py`, `requirements.txt`
+
+---
+
+## Sales Navigator CSV Import
+
+Import leads from LinkedIn Sales Navigator into the full outreach pipeline. This replaces the web scraper as the primary lead source — Sales Nav provides real names, roles, and companies that Apollo/Hunter can actually match to email addresses.
+
+### Workflow
+
+1. **Build a lead list in Sales Navigator** — use filters (Title, Industry, Company Size, Geography)
+2. **Export to CSV** from Sales Navigator
+3. **Upload to VPS:**
+   ```bash
+   scp ~/Downloads/sales-nav-export.csv ubuntu@152.69.171.177:~/convertra-leads/imports/
+   ```
+4. **Run the full pipeline:**
+   ```bash
+   ssh -i ~/.ssh/convertra-ops.key ubuntu@152.69.171.177
+   cd ~/convertra-leads
+   mkdir -p imports
+   python3 cli.py orchestrate import --file imports/sales-nav-export.csv --campaign agency-march
+   ```
+
+### What the Pipeline Does (7 steps, automated)
+
+| Step | Command | What It Does |
+|------|---------|-------------|
+| 1. Import | CSV parser | Loads CSV, maps Sales Nav columns, deduplicates against existing pipeline |
+| 2. Research | `batch_research` | Scrapes company websites for tech stack, hiring signals, Meta Pixel, pain signals |
+| 3. Score | `batch_score` | Evaluates fit based on research intel (12+ = hot, 8-11 = warm) |
+| 4. Enrich | `batch_enrich` | Apollo/Hunter finds email addresses using real names + domains |
+| 5. Draft | `batch_draft` | AI writes personalized cold emails using research hooks |
+| 6. Push | `push_leads` | Sends ready leads to Instantly campaign (optional) |
+| 7. Notify | Telegram | Summary notification with counts |
+
+### CLI Commands
+
+**Quick import (just load CSV, no enrichment):**
+```bash
+python3 cli.py pipeline import-csv --file imports/export.csv --campaign "agency-march"
+```
+
+**Full pipeline (import → research → score → enrich → draft → push):**
+```bash
+python3 cli.py orchestrate import \
+  --file imports/export.csv \
+  --campaign "agency-march" \
+  --score-threshold 8 \
+  --push-to "8b466981-54d8-4487-ade3-b27ddab16a4e"
+```
+
+### CSV Column Mapping
+
+The importer auto-detects Sales Navigator column names:
+
+| Sales Nav Column | Prospect Field |
+|-----------------|---------------|
+| First Name + Last Name | `name` |
+| Company / Company Name for Leads | `company` |
+| Title / Job Title | `role` |
+| Person Linkedin Url | `linkedin_url` |
+| Website / Company Website | `company_url` |
+| Industry | `company_type` (inferred) |
+| Geography / Location | `notes` |
+| Company Size | `notes` |
+| Email (if available) | `email` |
+
+### Deduplication
+
+Prospects are deduplicated by:
+1. **LinkedIn URL** — normalized (strips query params, trailing slashes)
+2. **Name + Company** — exact match (case-insensitive)
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `modules/csv_importer.py` | CSV parser, column mapping, dedup, prospect creation |
+| `cli.py` | `pipeline import-csv` and `orchestrate import` commands |
+| `orchestrator.py` | `run_import()` — 7-step automated pipeline |
