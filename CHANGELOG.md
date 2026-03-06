@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-03-06 — Upgrade OpenAI model from GPT-5.2 to GPT-5.4
+
+### Changed
+- **`src/services/openaiApi.ts`** — Upgraded `DEFAULT_CHAT_MODEL` and `DEFAULT_VISION_MODEL` from `gpt-5.2` to `gpt-5.4`. Added `ANALYSIS_REASONING_EFFORT: 'xhigh'` constant. Analysis functions (`analyzeAdCreative`, `analyzeChannelPerformance`) now use `xhigh` reasoning effort for maximum ConversionIQ™ insight quality. Generation functions remain at `high`; regeneration stays at `low` to avoid deterministic convergence.
+- **`ops/convertra-leads/modules/drafter.py`** — Upgraded `MODEL` from `gpt-5.2` to `gpt-5.4`
+- **`CLAUDE.md`** — Updated model references and documented reasoning effort strategy per function type
+
+### Why
+GPT-5.4 (released March 5, 2026) delivers 33% fewer factual errors, 47% better token efficiency, 1M token context window (up from 256K), and 128K max output (up from 32K). Same API — drop-in model ID swap with no breaking changes. GPT-5.2 retires June 5, 2026.
+
+---
+
 ## 2026-03-05 — Add regenerate & remove for individual text ad images
 
 ### Added
