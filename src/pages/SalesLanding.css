@@ -398,6 +398,16 @@
   gap: 12px;
 }
 
+.headline-eyebrow {
+  display: block;
+  font-size: 0.4em;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent-violet);
+  margin-bottom: 8px;
+}
+
 .headline-main {
   display: block;
   font-size: 1em;
