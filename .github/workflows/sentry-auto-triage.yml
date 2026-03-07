@@ -5,6 +5,12 @@ on:
     - cron: '0 8 * * 1-5' # Weekdays at 8:00 AM UTC
   workflow_dispatch: # Manual trigger from GitHub UI
 
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
 jobs:
   triage:
     runs-on: ubuntu-latest
