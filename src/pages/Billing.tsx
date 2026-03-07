@@ -6,17 +6,18 @@ import {
   fetchBillingData,
   redirectToCheckout,
   redirectToPortal,
+  purchaseCreditPack,
   PRICING_PLANS,
   formatPrice,
   isStripeConfigured,
   getTierOrder,
+  creditsToShortReadable,
 } from '../services/stripeApi';
-import { PLAN_LIMITS } from '../types/organization';
+import { PLAN_LIMITS, CREDIT_COSTS } from '../types/organization';
 import type { BillingData, PricingPlan, PlanTier, BillingInterval } from '../types/billing';
 import {
   CreditCard,
   Sparkles,
-  BarChart3,
   Users,
   Check,
   X,
@@ -30,6 +31,12 @@ import {
   Briefcase,
   Monitor,
   Settings,
+  Wallet,
+  ImageIcon,
+  Video,
+  FileText,
+  ScanSearch,
+  ShoppingBag,
 } from 'lucide-react';
 import './Billing.css';
 
@@ -43,7 +50,9 @@ const Billing = () => {
   const [billingInterval, setBillingInterval] = useState<BillingInterval>('monthly');
   const [upgrading, setUpgrading] = useState<PlanTier | null>(null);
   const [smallBizTab, setSmallBizTab] = useState<'starter' | 'pro'>('starter');
+  const [agencyTab, setAgencyTab] = useState<'agency' | 'agency_pro'>('agency');
   const [enterpriseTab, setEnterpriseTab] = useState<'enterprise' | 'velocity_partner'>('enterprise');
+  const [buyingPack, setBuyingPack] = useState<string | null>(null);
 
   // Check for success/cancel from Stripe checkout
   const checkoutSuccess = searchParams.get('success') === 'true';
@@ -117,6 +126,7 @@ const Billing = () => {
       case 'pro':
         return <Crown size={20} strokeWidth={1.5} />;
       case 'agency':
+      case 'agency_pro':
         return <Briefcase size={20} strokeWidth={1.5} />;
       case 'enterprise':
         return <Building2 size={20} strokeWidth={1.5} />;
@@ -136,6 +146,7 @@ const Billing = () => {
       case 'pro':
         return 'tier-badge-pro';
       case 'agency':
+      case 'agency_pro':
         return 'tier-badge-agency';
       case 'enterprise':
         return 'tier-badge-enterprise';
@@ -258,77 +269,122 @@ const Billing = () => {
         )}
       </div>
 
-      {/* Usage Section */}
+      {/* Credits Usage Section */}
       <div className="usage-section">
-        <h3 className="section-title">Current Usage</h3>
-        <div className="usage-grid">
-          <div className="usage-card glass">
-            <div className="usage-header">
-              <Sparkles size={20} strokeWidth={1.5} />
-              <span>Creatives Generated</span>
-            </div>
-            <div className="usage-progress">
-              <div className="usage-values">
-                <span className="usage-current">{billingData?.usage.creativesGenerated || 0}</span>
-                <span className="usage-limit">
-                  /{' '}
-                  {billingData?.usage.creativesLimit === -1
-                    ? 'Unlimited'
-                    : billingData?.usage.creativesLimit}
-                </span>
-              </div>
-              {billingData?.usage.creativesLimit !== -1 && (
-                <div className="progress-bar">
-                  <div
-                    className="progress-fill"
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        ((billingData?.usage.creativesGenerated || 0) /
-                          (billingData?.usage.creativesLimit || 1)) *
-                          100
-                      )}%`,
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
+        <h3 className="section-title">Credit Usage</h3>
+        {(() => {
+          const creditsUsed = billingData?.usage.creditsUsed ?? 0;
+          const creditsLimit = billingData?.usage.creditsLimit ?? 0;
+          const bonusCredits = billingData?.usage.bonusCredits ?? 0;
+          const creditsRemaining = billingData?.usage.creditsRemaining ?? 0;
+          const isUnlimited = creditsLimit === -1;
+          const totalAvailable = isUnlimited ? -1 : creditsLimit + bonusCredits;
+          const percentUsed = isUnlimited || totalAvailable <= 0 ? 0 : Math.min(100, (creditsUsed / totalAvailable) * 100);
+          const colorClass = isUnlimited ? 'green' : percentUsed < 50 ? 'green' : percentUsed < 90 ? 'amber' : 'red';
 
-          <div className="usage-card glass">
-            <div className="usage-header">
-              <BarChart3 size={20} strokeWidth={1.5} />
-              <span>Analyses Run</span>
-            </div>
-            <div className="usage-progress">
-              <div className="usage-values">
-                <span className="usage-current">{billingData?.usage.analysesRun || 0}</span>
-                <span className="usage-limit">
-                  /{' '}
-                  {billingData?.usage.analysesLimit === -1
-                    ? 'Unlimited'
-                    : billingData?.usage.analysesLimit}
-                </span>
-              </div>
-              {billingData?.usage.analysesLimit !== -1 && (
-                <div className="progress-bar">
-                  <div
-                    className="progress-fill"
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        ((billingData?.usage.analysesRun || 0) /
-                          (billingData?.usage.analysesLimit || 1)) *
-                          100
-                      )}%`,
-                    }}
-                  />
+          return (
+            <div className="credit-overview-card glass">
+              <div className="credit-overview-main">
+                <div className="credit-overview-header">
+                  <Wallet size={20} strokeWidth={1.5} />
+                  <span>Credits Used</span>
                 </div>
-              )}
+                <div className="credit-overview-values">
+                  <span className="credit-overview-current">{creditsUsed}</span>
+                  <span className="credit-overview-limit">
+                    / {isUnlimited ? 'Unlimited' : totalAvailable}
+                  </span>
+                </div>
+                {!isUnlimited && totalAvailable > 0 && (
+                  <div className="credit-overview-bar">
+                    <div
+                      className={`credit-overview-fill ${colorClass}`}
+                      style={{ width: `${percentUsed}%` }}
+                    />
+                  </div>
+                )}
+                <div className="credit-overview-remaining">
+                  <span className={`credit-remaining-value ${colorClass}`}>
+                    {isUnlimited ? 'Unlimited' : `${creditsRemaining} credits remaining`}
+                  </span>
+                  {bonusCredits > 0 && (
+                    <span className="credit-bonus-badge">+{bonusCredits} bonus</span>
+                  )}
+                </div>
+                {!isUnlimited && creditsLimit > 0 && (
+                  <p className="credit-overview-equiv">{creditsToShortReadable(creditsRemaining)}</p>
+                )}
+              </div>
+
+              {/* Breakdown */}
+              <div className="credit-breakdown">
+                <div className="credit-breakdown-item">
+                  <ImageIcon size={14} strokeWidth={1.5} />
+                  <span>{billingData?.usage.imageAdsGenerated ?? 0} image ads</span>
+                  <span className="credit-breakdown-cost">{CREDIT_COSTS.image_ad} cr each</span>
+                </div>
+                <div className="credit-breakdown-item">
+                  <Video size={14} strokeWidth={1.5} />
+                  <span>{billingData?.usage.videoAdsGenerated ?? 0} video ads</span>
+                  <span className="credit-breakdown-cost">{CREDIT_COSTS.video_ad} cr each</span>
+                </div>
+                <div className="credit-breakdown-item">
+                  <FileText size={14} strokeWidth={1.5} />
+                  <span>{billingData?.usage.textAdsGenerated ?? 0} text ads</span>
+                  <span className="credit-breakdown-cost">{CREDIT_COSTS.text_ad} cr each</span>
+                </div>
+                <div className="credit-breakdown-item">
+                  <ScanSearch size={14} strokeWidth={1.5} />
+                  <span>{billingData?.usage.analysesRun ?? 0} analyses</span>
+                  <span className="credit-breakdown-cost">{CREDIT_COSTS.channel_analysis} cr each</span>
+                </div>
+              </div>
             </div>
+          );
+        })()}
+      </div>
+
+      {/* Credit Packs */}
+      {currentPlanTier !== 'free' && currentPlanTier !== 'velocity_partner' && (
+        <div className="credit-packs-section">
+          <h3 className="section-title">Need More Credits?</h3>
+          <p className="credit-packs-subtitle">Purchase additional credits that never expire</p>
+          <div className="credit-packs-grid">
+            {([
+              { id: '50' as const, credits: 50, price: 29 },
+              { id: '100' as const, credits: 100, price: 49 },
+              { id: '250' as const, credits: 250, price: 99 },
+            ]).map((pack) => (
+              <div key={pack.id} className="credit-pack-card glass">
+                <div className="credit-pack-amount">{pack.credits} credits</div>
+                <div className="credit-pack-price">${pack.price}</div>
+                <p className="credit-pack-equiv">{creditsToShortReadable(pack.credits)}</p>
+                <button
+                  className="credit-pack-buy-btn"
+                  disabled={buyingPack === pack.id}
+                  onClick={async () => {
+                    try {
+                      setBuyingPack(pack.id);
+                      await purchaseCreditPack(pack.id);
+                    } catch (err) {
+                      const msg = err instanceof Error ? err.message : 'Failed to start checkout';
+                      setError(msg);
+                      setBuyingPack(null);
+                    }
+                  }}
+                >
+                  {buyingPack === pack.id ? <span className="spinner-small" /> : (
+                    <>
+                      <ShoppingBag size={14} strokeWidth={1.5} />
+                      Buy
+                    </>
+                  )}
+                </button>
+              </div>
+            ))}
           </div>
         </div>
-      </div>
+      )}
 
       {/* Pricing Plans */}
       <div className="pricing-section">
@@ -392,20 +448,36 @@ const Billing = () => {
             );
           })()}
 
-          {/* Agency Card (standalone, no tabs) */}
+          {/* Agency Card with Tabs */}
           {(() => {
-            const agencyPlan = PRICING_PLANS.find((p) => p.id === 'agency');
+            const agencyPlan = PRICING_PLANS.find((p) => p.id === agencyTab);
             if (!agencyPlan) return null;
-            const isCurrentAgency = currentPlanTier === 'agency' && organization?.subscription_status === 'active';
+            const isCurrentAgency = currentPlanTier === agencyTab && organization?.subscription_status === 'active';
             return (
               <div className={`agency-standalone-card glass ${isCurrentAgency ? 'plan-current' : ''}`}>
                 <div className="agency-label">For Agencies</div>
+                <div className="tabbed-card-tabs">
+                  <button
+                    className={`tabbed-card-tab ${agencyTab === 'agency' ? 'active' : ''}`}
+                    onClick={() => setAgencyTab('agency')}
+                  >
+                    <Briefcase size={16} strokeWidth={1.5} />
+                    Agency
+                  </button>
+                  <button
+                    className={`tabbed-card-tab ${agencyTab === 'agency_pro' ? 'active' : ''}`}
+                    onClick={() => setAgencyTab('agency_pro')}
+                  >
+                    <Crown size={16} strokeWidth={1.5} />
+                    Agency Pro
+                  </button>
+                </div>
                 <PlanCard
                   plan={agencyPlan}
                   billingInterval={billingInterval}
                   isCurrentPlan={isCurrentAgency}
-                  onUpgrade={() => handleUpgrade('agency')}
-                  upgrading={upgrading === 'agency'}
+                  onUpgrade={() => handleUpgrade(agencyTab)}
+                  upgrading={upgrading === agencyTab}
                   currentTier={currentPlanTier}
                   embedded
                 />
@@ -608,21 +680,24 @@ const PlanCard = ({
 
       <ul className="plan-features">
         <li>
-          <Sparkles size={16} strokeWidth={1.5} />
+          <Wallet size={16} strokeWidth={1.5} />
           <span>
-            {plan.features.creativesPerMonth === -1
-              ? 'Unlimited'
-              : plan.features.creativesPerMonth}{' '}
-            creatives/month
+            {(() => {
+              const credits = billingInterval === 'yearly' ? plan.creditsPerMonthYearly : plan.creditsPerMonth;
+              if (!credits || credits === -1) return 'Unlimited credits/month';
+              return `${credits} credits/month`;
+            })()}
           </span>
         </li>
-        <li>
-          <BarChart3 size={16} strokeWidth={1.5} />
-          <span>
-            {plan.features.analysesPerMonth === -1 ? 'Unlimited' : plan.features.analysesPerMonth}{' '}
-            analyses/month
-          </span>
-        </li>
+        {(() => {
+          const credits = billingInterval === 'yearly' ? plan.creditsPerMonthYearly : plan.creditsPerMonth;
+          if (!credits || credits === -1) return null;
+          return (
+            <li className="plan-feature-sub">
+              <span className="plan-credit-equiv">{creditsToShortReadable(credits)}</span>
+            </li>
+          );
+        })()}
         <li>
           <Users size={16} strokeWidth={1.5} />
           <span>

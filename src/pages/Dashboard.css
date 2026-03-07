@@ -492,6 +492,73 @@
   color: var(--text-muted);
 }
 
+/* Credit Usage Card */
+.credit-usage-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px 24px;
+  border-radius: var(--radius-card);
+  margin-bottom: 32px;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.credit-usage-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.credit-usage-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.credit-usage-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.credit-usage-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.credit-usage-value {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.credit-usage-value.green { color: #16a34a; }
+.credit-usage-value.amber { color: #d97706; }
+.credit-usage-value.red { color: #dc2626; }
+
+.credit-usage-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-secondary);
+  border-radius: 3px;
+  overflow: hidden;
+  max-width: 200px;
+}
+
+.credit-usage-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.credit-usage-fill.green { background: #16a34a; }
+.credit-usage-fill.amber { background: #d97706; }
+.credit-usage-fill.red { background: #dc2626; }
+
 /* Quick Actions */
 .quick-actions {
   display: flex;

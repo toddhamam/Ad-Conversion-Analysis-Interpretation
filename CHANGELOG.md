@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-03-07 — Credit-based pricing system
+
+### Added
+- **Credit system**: Unified credit-based pricing replacing legacy creatives/analyses limits. Credit costs: 1 image ad = 1 credit, 1 video ad = 5 credits, 1 text ad = 0.5 credits, 1 analysis = 1 credit.
+- **`supabase/migrations/012_credit_system.sql`** — Database migration adding `credits_used`, `image_ads_generated`, `video_ads_generated`, `text_ads_generated` columns to `usage_tracking`; `bonus_credits` column to `organizations`; new `credit_transactions` audit ledger table.
+- **`api/billing/subscription.ts`** — Converted to catch-all handler with credit routes: `status` (real usage), `check-credits` (pre-flight), `reserve-credits` (atomic gate), `confirm-credits`, `refund-credits`, `credit-pack-checkout`, `account-block-checkout`. Reserve-then-refund pattern prevents race conditions.
+- **`src/hooks/useCredits.ts`** — Custom hook providing credit state (used, limit, remaining, bonus, color coding) to any component.
+- **`src/components/CreditExhaustionModal.tsx`** — Modal shown when credits are insufficient, with upgrade and credit pack purchase CTAs.
+- **Agency Pro tier** ($449/mo, 1,500 credits, 20 ad accounts) added across checkout, webhook, types, services, and UI.
+- **Credit packs**: 50 credits/$29, 100 credits/$49, 250 credits/$99 as one-time Stripe purchases.
+- **Extra ad account blocks**: +5/$20, +10/$40, +25/$75 as recurring add-ons, purchasable from Integrations page.
+- **`src/pages/SalesLanding.tsx`** — Self-serve pricing table showing Starter through Agency Pro tiers with credit counts.
+- **`src/pages/Dashboard.tsx`** — Credit usage stat card with progress bar and color coding.
+- **`src/components/Sidebar.tsx`** — Compact credit counter ("42 credits left") with color coding.
+
+### Changed
+- **`src/pages/AdGenerator.tsx`** — Integrated reserve/confirm/refund credit flow around creative generation. Shows credit cost near Generate button.
+- **`src/pages/Insights.tsx`** — Integrated reserve/confirm/refund credit flow around channel analysis.
+- **`src/pages/Billing.tsx`** — Replaced legacy "Creatives Generated"/"Analyses Run" cards with unified credit overview showing progress bar, breakdown by type, and credit pack purchase section. Updated plan cards to show credits with human-readable equivalents.
+- **`src/pages/Integrations.tsx`** — Replaced simple "upgrade" prompt with ad account block purchase options when hitting account limits.
+- **`src/services/stripeApi.ts`** — Added Agency Pro plan, credit API functions (reserve, confirm, refund, check, purchase packs/blocks), `creditsToShortReadable` helper.
+- **`src/services/openaiApi.ts`** — Switched Veo from Standard ($0.40/sec) to Fast ($0.15/sec) for 62.5% video cost reduction.
+- **`src/types/organization.ts`** — Added `agency_pro` to `PlanTier`, credit fields to interfaces, `CREDIT_COSTS` constant.
+- **`src/types/billing.ts`** — Added credit fields to `UsageMetrics`.
+- **`api/billing/webhook.ts`** — Added billing period reset logic, credit pack fulfillment, account block fulfillment, `agency_pro` seat mapping.
+- **`api/billing/checkout.ts`** — Added `agency_pro` tier support.
+- **`vercel.json`** — Added `/api/billing/usage/:path` rewrite to subscription catch-all.
+
+---
+
 ## 2026-03-07 — Preserve copy selections when clearing generated creatives
 
 ### Fixed

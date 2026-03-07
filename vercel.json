@@ -6,6 +6,7 @@
     { "source": "/api/meta/:path(.*)", "destination": "/api/meta?route=:path" },
     { "source": "/api/ai/:path(.*)", "destination": "/api/meta?route=ai-:path" },
     { "source": "/api/feedback/:path(.*)", "destination": "/api/seoiq?route=feedback-:path" },
+    { "source": "/api/billing/usage/:path(.*)", "destination": "/api/billing/subscription?route=:path" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "crons": [

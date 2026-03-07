@@ -22,6 +22,8 @@ import type { LucideIcon } from 'lucide-react';
 import { getScopedItem, setScopedItem } from '../lib/scopedStorage';
 import { useAdAccount } from '../contexts/AdAccountContext';
 import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
+import { reserveCredits, confirmCredits, refundCredits, InsufficientCreditsError } from '../services/stripeApi';
+import CreditExhaustionModal from '../components/CreditExhaustionModal';
 import './Insights.css';
 
 type Channel = 'meta' | 'google' | 'tiktok' | 'email';
@@ -106,6 +108,10 @@ const Insights = () => {
     setError(null);
   }, [selectedChannel]);
 
+  // Credit exhaustion modal state
+  const [showCreditModal, setShowCreditModal] = useState(false);
+  const [creditModalData, setCreditModalData] = useState({ remaining: 0, required: 0 });
+
   const runAnalysis = useCallback(async () => {
     const channelConfig = CHANNELS.find(c => c.id === selectedChannel);
     if (!channelConfig?.available) {
@@ -116,6 +122,20 @@ const Insights = () => {
     if (!isOpenAIConfigured()) {
       setError('OpenAI API key not configured. Please add your API key to run analysis.');
       return;
+    }
+
+    // Reserve credits before analysis
+    let transactionId: string | undefined;
+    try {
+      const reservation = await reserveCredits('channel_analysis', 1);
+      transactionId = reservation.transactionId;
+    } catch (err: unknown) {
+      if (err instanceof InsufficientCreditsError) {
+        setCreditModalData({ remaining: err.creditsRemaining, required: err.creditsRequired });
+        setShowCreditModal(true);
+        return;
+      }
+      console.warn('Credit reservation failed, proceeding:', err);
     }
 
     setLoading(true);
@@ -144,6 +164,8 @@ const Insights = () => {
       if (ads.length === 0) {
         setError('No ads found for analysis. Make sure you have active ads in your account.');
         setLoading(false);
+        // Refund credits since no analysis was run
+        if (transactionId) refundCredits(transactionId);
         return;
       }
 
@@ -152,11 +174,16 @@ const Insights = () => {
       // Run the analysis with selected reasoning effort
       const result = await analyzeChannelPerformance(ads, channelConfig.name, { businessType });
 
+      // Confirm credit consumption on success
+      if (transactionId) confirmCredits(transactionId);
+
       // Cache the result
       setCachedAnalysis(selectedChannel, result);
 
       setAnalysis(result);
     } catch (err: any) {
+      // Refund credits on failure
+      if (transactionId) refundCredits(transactionId);
       console.error('Analysis failed:', err);
       setError(err.message || 'Analysis failed. Please try again.');
     } finally {
@@ -264,6 +291,15 @@ const Insights = () => {
       {/* Analysis Results */}
       {!loading && analysis && (
         <ChannelInsightsPanel analysis={analysis} />
+      )}
+
+      {/* Credit Exhaustion Modal */}
+      {showCreditModal && (
+        <CreditExhaustionModal
+          creditsRemaining={creditModalData.remaining}
+          creditsRequired={creditModalData.required}
+          onClose={() => setShowCreditModal(false)}
+        />
       )}
     </div>
   );

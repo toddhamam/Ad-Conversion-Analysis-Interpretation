@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { useCredits } from '../hooks/useCredits';
 import type { DashboardMetrics } from '../types/funnel';
 import { fetchCampaignSummaries, fetchAccountLevelInsights, type CampaignSummary, type AccountLevelInsights, type DatePreset, loadOrgMetaCredentials, clearOrgMetaCache } from '../services/metaApi';
 import { useAdAccount } from '../contexts/AdAccountContext';
@@ -1210,6 +1211,9 @@ const Dashboard = () => {
             </SortableContext>
           </DndContext>
 
+          {/* Credit Usage Card */}
+          <CreditUsageCard />
+
           {/* Channel Breakdown */}
           <div className="section-header">
             <h2 className="section-title">Channels</h2>
@@ -1317,6 +1321,40 @@ const Dashboard = () => {
           </div>
         </>
       )}
+    </div>
+  );
+};
+
+// Compact credit usage card for dashboard
+const CreditUsageCard = () => {
+  const { creditsRemaining, creditsLimit, unlimited, loading, colorClass, percentUsed } = useCredits();
+  const navigate = useNavigate();
+
+  if (loading) return null;
+
+  return (
+    <div
+      className="credit-usage-card glass"
+      onClick={() => navigate('/billing')}
+      style={{ cursor: 'pointer' }}
+    >
+      <div className="credit-usage-header">
+        <Wallet size={18} strokeWidth={1.5} />
+        <span className="credit-usage-title">Credits</span>
+      </div>
+      <div className="credit-usage-body">
+        <span className={`credit-usage-value ${colorClass}`}>
+          {unlimited ? 'Unlimited' : `${creditsRemaining} remaining`}
+        </span>
+        {!unlimited && creditsLimit > 0 && (
+          <div className="credit-usage-bar">
+            <div
+              className={`credit-usage-fill ${colorClass}`}
+              style={{ width: `${Math.min(100, percentUsed)}%` }}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 };

@@ -517,10 +517,10 @@
 
 .ad-accounts-upgrade-prompt {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 10px;
   margin-top: 16px;
-  padding: 12px 16px;
+  padding: 16px;
   background: rgba(168, 85, 247, 0.06);
   border: 1px solid rgba(168, 85, 247, 0.15);
   border-radius: 8px;
@@ -528,10 +528,38 @@
   color: var(--text-secondary);
 }
 
+.upgrade-prompt-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.account-block-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.account-block-btn {
+  padding: 6px 14px;
+  background: var(--accent-violet);
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.account-block-btn:hover {
+  background: #9333ea;
+}
+
 .upgrade-link {
   font-weight: 600;
   color: var(--accent-violet);
   text-decoration: none;
+  font-size: 12px;
 }
 
 .upgrade-link:hover {

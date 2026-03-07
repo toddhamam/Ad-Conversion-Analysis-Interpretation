@@ -46,6 +46,9 @@ import { setPublishData } from '../services/publishStore';
 import type { AdLibraryInspiration } from '../types';
 import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
 import { useAdAccount } from '../contexts/AdAccountContext';
+import { reserveCredits, confirmCredits, refundCredits, InsufficientCreditsError, checkCredits } from '../services/stripeApi';
+import type { CreditActionType } from '../types/organization';
+import CreditExhaustionModal from '../components/CreditExhaustionModal';
 import './AdGenerator.css';
 
 const CACHE_KEY = 'channel_analysis_cache';
@@ -755,6 +758,10 @@ const AdGenerator = () => {
     }
   };
 
+  // Credit exhaustion modal state
+  const [showCreditModal, setShowCreditModal] = useState(false);
+  const [creditModalData, setCreditModalData] = useState({ remaining: 0, required: 0 });
+
   // Generate final creatives
   const handleGenerateCreatives = async () => {
     // Text ads use Canvas rendering — no API keys needed for image generation
@@ -778,6 +785,25 @@ const AdGenerator = () => {
     if (adType === 'text' && !textAdPrimaryText.trim()) {
       setError('Primary text is required for text ad generation.');
       return;
+    }
+
+    // Determine credit action type and reserve credits
+    const creditActionType: CreditActionType = adType === 'video' ? 'video_ad'
+      : adType === 'text' ? 'text_ad'
+      : 'image_ad';
+
+    let transactionId: string | undefined;
+    try {
+      const reservation = await reserveCredits(creditActionType, variationCount);
+      transactionId = reservation.transactionId;
+    } catch (err: unknown) {
+      if (err instanceof InsufficientCreditsError) {
+        setCreditModalData({ remaining: err.creditsRemaining, required: err.creditsRequired });
+        setShowCreditModal(true);
+        return;
+      }
+      // Non-credit error — let generation proceed (credits may not be configured yet)
+      console.warn('Credit reservation failed, proceeding:', err);
     }
 
     // Get selected text content
@@ -844,11 +870,20 @@ const AdGenerator = () => {
         onProgress: setGenerationProgress,
       });
 
+      // Confirm credit consumption on success
+      if (transactionId) {
+        confirmCredits(transactionId);
+      }
+
       setGeneratedAds(prev => [result, ...prev]);
       setGenerationProgress('');
       // Stay on final-config so user can regenerate with same copy selections
       // Copy options and selections are preserved intentionally
     } catch (err: unknown) {
+      // Refund credits on failure
+      if (transactionId) {
+        refundCredits(transactionId);
+      }
       console.error('Generation failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to generate ad. Please try again.');
     } finally {
@@ -2333,6 +2368,9 @@ const AdGenerator = () => {
             </div>
           )}
 
+          {/* Credit Cost Hint */}
+          <CreditCostHint adType={adType} variationCount={variationCount} />
+
           {/* Generate Button */}
           <button
             className="generate-btn"
@@ -2423,8 +2461,46 @@ const AdGenerator = () => {
           <p>Select your audience and concept above, then generate copy options to get started.</p>
         </div>
       )}
+      {/* Credit Exhaustion Modal */}
+      {showCreditModal && (
+        <CreditExhaustionModal
+          creditsRemaining={creditModalData.remaining}
+          creditsRequired={creditModalData.required}
+          onClose={() => setShowCreditModal(false)}
+        />
+      )}
     </div>
   );
 };
+
+/** Inline credit cost hint shown above the Generate button */
+function CreditCostHint({ adType, variationCount }: { adType: string; variationCount: number }) {
+  const [creditInfo, setCreditInfo] = useState<{ remaining: number; cost: number } | null>(null);
+
+  useEffect(() => {
+    const actionType = adType === 'video' ? 'video_ad' : adType === 'text' ? 'text_ad' : 'image_ad';
+    checkCredits(actionType as CreditActionType, variationCount)
+      .then(result => {
+        if (!result.unlimited) {
+          setCreditInfo({ remaining: result.creditsRemaining, cost: result.creditsRequired });
+        } else {
+          setCreditInfo(null);
+        }
+      })
+      .catch(() => setCreditInfo(null));
+  }, [adType, variationCount]);
+
+  if (!creditInfo) return null;
+
+  const color = creditInfo.remaining < creditInfo.cost ? '#ef4444'
+    : creditInfo.remaining < creditInfo.cost * 3 ? '#f59e0b'
+    : 'var(--text-muted)';
+
+  return (
+    <p style={{ fontSize: '13px', color, textAlign: 'center', margin: '0 0 8px' }}>
+      This will use <strong>{creditInfo.cost} credits</strong>. You have <strong>{creditInfo.remaining}</strong> remaining.
+    </p>
+  );
+}
 
 export default AdGenerator;

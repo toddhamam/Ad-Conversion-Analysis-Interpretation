@@ -338,7 +338,7 @@ export const VIDEO_RESOLUTION_OPTIONS: { id: VideoResolution; name: string; cost
 ];
 
 export const VIDEO_MODEL_OPTIONS: { id: VideoModel; name: string; description: string; costPerSec: number }[] = [
-  { id: 'standard', name: 'Standard', description: 'High quality with native audio', costPerSec: 0.40 },
+  { id: 'standard', name: 'Standard', description: 'High quality with native audio', costPerSec: 0.15 },
 ];
 
 export const DEFAULT_VIDEO_CONFIG: VideoConfig = {
@@ -3946,7 +3946,7 @@ export async function generateAdVideoWithVeo(config: {
         console.warn('⚠️ Video download failed, preview unavailable. File ref preserved for publish.');
       }
 
-      const costPerSec = 0.40; // veo-3.1-generate-preview
+      const costPerSec = 0.15; // veo-3.1-fast
       const estimatedCost = `$${(costPerSec * durationSec).toFixed(2)}`;
 
       return {
