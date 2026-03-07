@@ -1,0 +1,55 @@
+name: Sentry Auto-Triage
+
+on:
+  schedule:
+    - cron: '0 8 * * 1-5' # Weekdays at 8:00 AM UTC
+  workflow_dispatch: # Manual trigger from GitHub UI
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Triage unresolved Sentry errors for the Convertra app.
+
+            Step 1: Fetch recent unresolved issues from Sentry
+            Run this command to get the latest unresolved issues:
+            ```
+            curl -s -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+              "https://sentry.io/api/0/projects/spire-enterprises-pty-ltd/javascript-react/issues/?query=is:unresolved&sort=date&limit=10"
+            ```
+
+            Step 2: For each issue, fetch the latest event details:
+            ```
+            curl -s -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+              "https://sentry.io/api/0/issues/{issue_id}/events/latest/"
+            ```
+
+            Step 3: Analyze each error:
+            - Read the stack trace and identify the root cause
+            - Check if it's a known pattern (ResizeObserver, network timeout, etc.) that can be ignored
+            - Determine severity: critical (crashes/data loss), high (broken feature), medium (degraded UX), low (cosmetic)
+
+            Step 4: For critical/high severity errors with clear fixes:
+            - Create a fix branch
+            - Implement the fix following the project's CLAUDE.md conventions
+            - Create a PR with the fix, referencing the Sentry issue URL
+
+            Step 5: For medium/low or complex errors:
+            - Create a GitHub issue with your analysis, the stack trace summary, affected file/line, and suggested approach
+
+            Important rules:
+            - Never log secrets or tokens
+            - Use catch (error: unknown), not catch (error: any)
+            - Don't add new api/*.ts files (Vercel 12 function limit)
+            - Use CSS variables, not hardcoded colors
+            - Follow all CLAUDE.md conventions
+          claude_args: "--max-turns 15 --model claude-sonnet-4-6 --allowedTools Bash,Read,Edit,Write,Glob,Grep"
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
