@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-03-07 — Preserve copy selections when clearing generated creatives
+
+### Fixed
+- **`src/pages/AdGenerator.tsx`** — "Clear All Ads" no longer forces users back to Step 1. Previously, after generating creatives, the workflow reset to the config step and wiped all copy state (copyOptions, selectedHeadlines, selectedBodyTexts, selectedCTAs). Now the user stays on Step 3 (final-config) with copy preserved, so they can immediately regenerate creatives without re-running the minutes-long copy generation process.
+
+### Changed
+- **`src/pages/AdGenerator.tsx`** — Updated the "Clear All" confirmation dialog to inform users that copy selections will be preserved.
+
+---
+
 ## 2026-03-07 — Add custom brand color picker for text-only ads
 
 ### Added

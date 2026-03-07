@@ -584,7 +584,7 @@ const AdGenerator = () => {
 
   // Clear all generated ads
   const handleClearAllAds = useCallback(() => {
-    if (window.confirm('Are you sure you want to delete all generated ads? This cannot be undone.')) {
+    if (window.confirm('Are you sure you want to delete all generated creatives? Your copy selections will be preserved so you can regenerate.')) {
       setGeneratedAds([]);
       removeScopedItem(GENERATED_ADS_STORAGE_KEY);
       clearImageCache(); // Also clear reference image cache to free storage space
@@ -846,14 +846,8 @@ const AdGenerator = () => {
 
       setGeneratedAds(prev => [result, ...prev]);
       setGenerationProgress('');
-      // Reset for next generation
-      setCurrentStep('config');
-      setCopyOptions(null);
-      setSelectedHeadlines([]);
-      setSelectedBodyTexts([]);
-      setSelectedCTAs([]);
-      setHeadlineInImageMode('none');
-      setCustomImageHeadline('');
+      // Stay on final-config so user can regenerate with same copy selections
+      // Copy options and selections are preserved intentionally
     } catch (err: unknown) {
       console.error('Generation failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to generate ad. Please try again.');
