@@ -609,6 +609,97 @@ def cmd_instantly_analytics(args):
     output(result)
 
 
+# ─── Vayne commands ──────────────────────────────────────────────────
+
+
+def cmd_vayne_health(args):
+    from modules.vayne import check_health
+    result = check_health()
+    output(result)
+
+
+def cmd_vayne_credits(args):
+    from modules.vayne import check_credits
+    result = check_credits()
+    output(result)
+
+
+def cmd_vayne_validate(args):
+    from modules.vayne import validate_url
+    result = validate_url(args.url)
+    output(result)
+
+
+def cmd_vayne_scrape(args):
+    from modules.vayne import scrape_and_import
+    result = scrape_and_import(
+        sales_nav_url=args.url,
+        name=args.name,
+        limit=args.limit,
+        campaign=args.campaign,
+        timeout=args.timeout,
+    )
+    output(result)
+
+
+def cmd_vayne_orders(args):
+    from modules.vayne import list_orders
+    result = list_orders()
+    output(result)
+
+
+def cmd_vayne_order_status(args):
+    from modules.vayne import get_order
+    result = get_order(args.order_id)
+    output(result)
+
+
+def cmd_vayne_import_order(args):
+    from modules.vayne import import_order_to_pipeline
+    result = import_order_to_pipeline(
+        order_id=args.order_id,
+        campaign=args.campaign,
+    )
+    output(result)
+
+
+def cmd_vayne_search(args):
+    from modules.vayne import people_search_to_pipeline
+    companies = [c.strip() for c in args.companies.split(",")]
+    titles = [t.strip() for t in args.titles.split(",")]
+    locations = [l.strip() for l in args.locations.split(",")] if args.locations else None
+    result = people_search_to_pipeline(
+        companies=companies,
+        job_titles=titles,
+        locations=locations,
+        campaign=args.campaign,
+    )
+    output(result)
+
+
+def cmd_vayne_cookie(args):
+    from modules.vayne import update_cookie
+    result = update_cookie(args.cookie)
+    output(result)
+
+
+# ─── Orchestrate vayne (full pipeline) ──────────────────────────────
+
+
+def cmd_orchestrate_vayne(args):
+    from orchestrator import run_vayne_import
+    result = run_vayne_import(
+        sales_nav_url=args.url,
+        name=args.name,
+        limit=args.limit,
+        campaign=args.campaign,
+        score_threshold=args.score_threshold,
+        push_campaign_id=args.push_to,
+        timeout=args.timeout,
+    )
+    output(result)
+
+
 # ─── Argument parser ─────────────────────────────────────────────────
 
 def build_parser():
@@ -1004,6 +1095,64 @@ def build_parser():
     n_send = notify_sub.add_parser("send", help="Send a Telegram message")
     n_send.add_argument("--message", required=True)
     n_send.set_defaults(func=cmd_notify_send)
+
+    # ── vayne ──
+    vayne_parser = subparsers.add_parser("vayne", help="Vayne.io LinkedIn scraping")
+    vayne_sub = vayne_parser.add_subparsers(dest="action")
+
+    v_health = vayne_sub.add_parser("health", help="Check LinkedIn cookie + credits")
+    v_health.set_defaults(func=cmd_vayne_health)
+
+    v_credits = vayne_sub.add_parser("credits", help="Check credit balance")
+    v_credits.set_defaults(func=cmd_vayne_credits)
+
+    v_validate = vayne_sub.add_parser("validate", help="Validate Sales Nav URL (free, no credits)")
+    v_validate.add_argument("--url", required=True, help="Sales Navigator search URL")
+    v_validate.set_defaults(func=cmd_vayne_validate)
+
+    v_scrape = vayne_sub.add_parser("scrape", help="Scrape Sales Nav URL → import to pipeline")
+    v_scrape.add_argument("--url", required=True, help="Sales Navigator search URL")
+    v_scrape.add_argument("--name", type=str, help="Order name")
+    v_scrape.add_argument("--limit", type=int, help="Max profiles to scrape")
+    v_scrape.add_argument("--campaign", type=str, help="Campaign tag")
+    v_scrape.add_argument("--timeout", type=int, default=600, help="Max wait seconds (default: 600)")
+    v_scrape.set_defaults(func=cmd_vayne_scrape)
+
+    v_orders = vayne_sub.add_parser("orders", help="List all orders")
+    v_orders.set_defaults(func=cmd_vayne_orders)
+
+    v_status = vayne_sub.add_parser("order-status", help="Check order status")
+    v_status.add_argument("--order-id", required=True, type=int, dest="order_id")
+    v_status.set_defaults(func=cmd_vayne_order_status)
+
+    v_import = vayne_sub.add_parser("import-order", help="Import completed order to pipeline")
+    v_import.add_argument("--order-id", required=True, type=int, dest="order_id")
+    v_import.add_argument("--campaign", type=str, help="Campaign tag")
+    v_import.set_defaults(func=cmd_vayne_import_order)
+
+    v_search = vayne_sub.add_parser("search", help="People search by company + title (100 credits)")
+    v_search.add_argument("--companies", required=True, help="LinkedIn company URLs (comma-separated)")
+    v_search.add_argument("--titles", required=True, help="Job titles (comma-separated)")
+    v_search.add_argument("--locations", type=str, help="Locations (comma-separated)")
+    v_search.add_argument("--campaign", type=str, help="Campaign tag")
+    v_search.set_defaults(func=cmd_vayne_search)
+
+    v_cookie = vayne_sub.add_parser("update-cookie", help="Update LinkedIn session cookie")
+    v_cookie.add_argument("--cookie", required=True, help="LI_AT cookie value")
+    v_cookie.set_defaults(func=cmd_vayne_cookie)
+
+    # ── orchestrate vayne (add to existing orchestrate subcommand) ──
+    o_vayne = orch_sub.add_parser("vayne", help="Vayne scrape → research → score → enrich → draft → push")
+    o_vayne.add_argument("--url", required=True, help="Sales Navigator search URL")
+    o_vayne.add_argument("--name", type=str, help="Order name")
+    o_vayne.add_argument("--limit", type=int, help="Max profiles to scrape")
+    o_vayne.add_argument("--campaign", type=str, help="Campaign tag")
+    o_vayne.add_argument("--score-threshold", type=int, default=8, dest="score_threshold",
+                         help="Min fit score for drafting (default: 8)")
+    o_vayne.add_argument("--push-to", type=str, dest="push_to",
+                         help="Instantly campaign UUID to push ready leads to")
+    o_vayne.add_argument("--timeout", type=int, default=600, help="Max wait seconds (default: 600)")
+    o_vayne.set_defaults(func=cmd_orchestrate_vayne)
 
     return parser
 

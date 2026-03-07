@@ -81,6 +81,27 @@ def run_daily():
         f"{remaining} remaining"
     )
 
+    # Step 2b: Vayne health check (non-blocking — just logs + flags)
+    vayne_healthy = True
+    if os.environ.get("VAYNE_API_KEY", ""):
+        try:
+            from modules.vayne import check_health as vayne_check
+            vayne_status = vayne_check()
+            results["vayne"] = vayne_status
+            vayne_healthy = vayne_status.get("healthy", False)
+            if vayne_healthy:
+                credits = vayne_status.get("credits", {})
+                log.info(f"  Vayne: healthy ({credits.get('credit_available', '?')} credits)")
+            else:
+                log.warning(
+                    f"  Vayne: UNHEALTHY — LinkedIn cookie "
+                    f"{vayne_status.get('linkedin_authentication', 'unknown')}"
+                )
+        except Exception as e:
+            log.warning(f"  Vayne health check failed: {e}")
+            results["vayne"] = {"healthy": False, "error": str(e)}
+            vayne_healthy = False
+
     if remaining <= 0:
         log.info("  No send capacity remaining — skipping send steps.")
         results["followups"] = {"sent": 0, "skipped": 0, "message": "No capacity"}
@@ -123,6 +144,8 @@ def run_daily():
         results.get("followups"),
         results.get("sends"),
     )
+    if not vayne_healthy and os.environ.get("VAYNE_API_KEY", ""):
+        message += "\n⚠️ Vayne LinkedIn cookie expired — update via: cli.py vayne update-cookie"
     notify_result = send_notification(message)
     results["notification"] = notify_result
 
@@ -1338,6 +1361,154 @@ def run_import(csv_path, campaign="sales-nav", source="sales_navigator",
         results["notification"] = {"status": "error", "message": str(e)}
 
     log.info("=== SALES NAV IMPORT COMPLETE ===")
+    return results
+
+
+# ──────────────────────────────────────────────────────────────────────
+# VAYNE IMPORT — Sales Nav URL → scrape → full pipeline
+# ──────────────────────────────────────────────────────────────────────
+
+
+def run_vayne_import(sales_nav_url, name=None, limit=None, campaign=None,
+                     score_threshold=8, push_campaign_id=None, timeout=600):
+    """Full pipeline from a Sales Navigator URL via Vayne API.
+
+    Replaces the manual CSV export step. Same pipeline as run_import but
+    the CSV is scraped automatically from LinkedIn via Vayne.
+
+    Steps:
+    1. Vayne: validate URL → create order → wait → download CSV → import
+    2. Research company websites
+    3. Score prospects
+    4. Enrich via Apollo/Hunter (find emails)
+    5. Draft personalized emails (score >= threshold)
+    6. Optionally push to Instantly
+    7. Telegram notification
+
+    Args:
+        sales_nav_url: LinkedIn Sales Navigator search URL
+        name: Vayne order name
+        limit: Max profiles to scrape
+        campaign: Campaign tag
+        score_threshold: Min score for drafting (default: 8)
+        push_campaign_id: Instantly campaign UUID (optional)
+        timeout: Max seconds to wait for Vayne scraping
+
+    Returns:
+        dict: Full pipeline summary
+    """
+    log.info("=== VAYNE IMPORT START ===")
+    results = {"timestamp": datetime.now().isoformat(), "mode": "vayne_import"}
+
+    if not campaign:
+        campaign = f"vayne-{datetime.now().strftime('%Y-%m-%d')}"
+
+    # Step 1: Vayne scrape + import
+    log.info(f"Step 1: Vayne scrape → import ({sales_nav_url[:80]}...)")
+    from modules.vayne import scrape_and_import
+    vayne_result = scrape_and_import(
+        sales_nav_url=sales_nav_url,
+        name=name,
+        limit=limit,
+        campaign=campaign,
+        timeout=timeout,
+    )
+    results["vayne"] = vayne_result
+
+    if vayne_result.get("status") != "imported":
+        log.error(f"  Vayne scrape failed: {vayne_result.get('message', 'unknown error')}")
+        results["status"] = "vayne_failed"
+        return results
+
+    import_data = vayne_result.get("import", {})
+    added = import_data.get("added", 0)
+    log.info(
+        f"  Imported: {added} new prospects, "
+        f"{import_data.get('skipped_duplicate', 0)} dupes skipped"
+    )
+
+    if added == 0:
+        log.info("No new prospects to process. Done.")
+        results["status"] = "no_new_prospects"
+        return results
+
+    # Step 2: Research company websites
+    log.info("Step 2: Researching company websites...")
+    from modules.research import batch_research
+    research_result = batch_research(stage="discovered")
+    researched_count = research_result.get("researched", 0)
+    results["research"] = {"researched": researched_count}
+    log.info(f"  Researched: {researched_count} companies")
+
+    # Step 3: Score prospects
+    log.info("Step 3: Scoring prospects...")
+    from modules.scorer import batch_score
+    score_result = batch_score(stage="researched")
+    results["scoring"] = score_result
+    log.info(f"  Scored: {score_result.get('scored', 0)} prospects")
+
+    # Step 4: Enrich via Apollo/Hunter
+    log.info("Step 4: Enriching prospects (Apollo/Hunter)...")
+    from modules.enrichment import batch_enrich
+    enrich_result = batch_enrich(stage="researched", score_min=0)
+    results["enrichment"] = {
+        "enriched": enrich_result.get("enriched", 0),
+        "emails_found": enrich_result.get("emails_found", 0),
+        "credits_used": enrich_result.get("credits_used", 0),
+        "provider": enrich_result.get("provider", "none"),
+    }
+    log.info(
+        f"  Enriched: {enrich_result.get('enriched', 0)}, "
+        f"Emails found: {enrich_result.get('emails_found', 0)}"
+    )
+
+    # Step 5: Draft personalized emails
+    log.info(f"Step 5: Drafting emails (score >= {score_threshold})...")
+    from modules.drafter import batch_draft
+    draft_result = batch_draft(stage="researched", score_min=score_threshold)
+    results["drafting"] = {
+        "drafted": draft_result.get("drafted", 0),
+    }
+    log.info(f"  Drafted: {draft_result.get('drafted', 0)} emails")
+
+    # Step 6: Push to Instantly (optional)
+    if push_campaign_id:
+        log.info(f"Step 6: Pushing to Instantly campaign {push_campaign_id}...")
+        from modules.instantly import push_leads
+        push_result = push_leads(campaign_id=push_campaign_id, stage="ready_to_send")
+        results["push"] = {
+            "pushed": push_result.get("pushed", 0),
+            "skipped": push_result.get("skipped", 0),
+            "errors": push_result.get("errors", 0),
+        }
+        log.info(f"  Pushed: {push_result.get('pushed', 0)}")
+    else:
+        results["push"] = {"skipped": True, "reason": "No --push-to specified"}
+        log.info("Step 6: Skipped push (no --push-to)")
+
+    # Step 7: Telegram notification
+    log.info("Step 7: Sending notification...")
+    try:
+        from modules.notifier import send_notification
+        url_check = vayne_result.get("url_check", {})
+        msg = (
+            f"*Vayne Import — {datetime.now().strftime('%Y-%m-%d')}*\n\n"
+            f"URL: {url_check.get('total', '?')} leads found\n"
+            f"Imported: {added} new | {import_data.get('skipped_duplicate', 0)} dupes\n"
+            f"Researched: {results['research']['researched']} companies\n"
+            f"Enriched: {results['enrichment']['emails_found']} emails found\n"
+            f"Drafted: {results['drafting']['drafted']} emails\n"
+        )
+        if push_campaign_id:
+            msg += f"Pushed: {results['push'].get('pushed', 0)} to Instantly"
+        else:
+            msg += "Push: skipped (manual)"
+        send_notification(msg)
+    except Exception as e:
+        log.warning(f"Notification failed: {e}")
+
+    log.info("=== VAYNE IMPORT COMPLETE ===")
+    results["status"] = "complete"
     return results
 
 

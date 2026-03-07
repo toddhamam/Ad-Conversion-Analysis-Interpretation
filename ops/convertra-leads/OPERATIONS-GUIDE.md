@@ -46,6 +46,9 @@ HUNTER_API_KEY=...                   # hunter.io → API (FALLBACK — 25/mo fre
 
 # Instantly (cold email sending)
 INSTANTLY_API_KEY=...                # app.instantly.ai → Settings → Integrations → API
+
+# Vayne (LinkedIn Sales Navigator scraping — OPTIONAL, requires Starter plan)
+# VAYNE_API_KEY=...                  # vayne.io → Dashboard → API Settings → generate token
 ```
 
 **Where to get these:**
@@ -55,6 +58,7 @@ INSTANTLY_API_KEY=...                # app.instantly.ai → Settings → Integra
 - `APOLLO_API_KEY` — From app.apollo.io → Settings → API Keys. Free plan: 10,000 credits/month. Primary enrichment source
 - `HUNTER_API_KEY` — From Hunter.io → API → Copy your API key. Free plan: 25 searches/month. Fallback enrichment
 - `INSTANTLY_API_KEY` — From app.instantly.ai → Settings → Integrations → API. Base64-encoded key used for campaign management and lead push
+- `VAYNE_API_KEY` — (OPTIONAL) From vayne.io → Dashboard → API Settings. Requires Starter plan ($49/mo). Enables automated Sales Nav scraping via API instead of manual CSV export
 
 **Important:** Both `.env` files (local `ops/convertra-leads/.env` and VPS `/home/ubuntu/convertra-leads/.env`) must stay in sync. The local copy is gitignored and persists across branches.
 
@@ -796,6 +800,7 @@ python3 cli.py followup resume --id p_042
 │   ├── reporter.py          ← Pipeline metrics
 │   ├── drafter.py           ← GPT-5.2 email drafting + video CTA
 │   ├── job_scraper.py       ← Job listing scraper
+│   ├── vayne.py             ← Vayne.io API (LinkedIn Sales Nav scraping)
 │   └── notifier.py          ← Telegram notifications
 ├── data/
 │   ├── pipeline.json        ← All prospect records
@@ -811,6 +816,39 @@ python3 cli.py followup resume --id p_042
 ---
 
 ## Changelog
+
+### 2026-03-07 — Add Vayne.io API Integration for Automated Sales Nav Scraping
+
+Added full Vayne API integration to eliminate the manual Sales Navigator CSV export step. The module, CLI commands, and orchestrator pipeline are built and ready — activation requires only adding `VAYNE_API_KEY` to `.env` (Vayne Starter plan, $49/mo).
+
+**New module: `modules/vayne.py`**
+- `scrape_and_import()` — one-call automation: Sales Nav URL → create order → poll → download CSV → pipeline import
+- `people_search_to_pipeline()` — account-based prospecting: find decision makers by company + title + location (100 credits, 25 results)
+- `check_health()` — LinkedIn cookie status + credit balance
+- `validate_url()` — free URL validation before spending credits
+- Order management: `create_order()`, `list_orders()`, `get_order()`, `export_order()`, `wait_for_order()`
+- Cookie rotation: `update_cookie()` for when LinkedIn sessions expire
+
+**New CLI commands: `vayne`**
+- `vayne health` / `vayne credits` — health check + credit balance
+- `vayne validate --url` — free Sales Nav URL validation
+- `vayne scrape --url` — scrape + import to pipeline (waits for completion)
+- `vayne orders` / `vayne order-status` — order management
+- `vayne import-order` — import a completed order
+- `vayne search --companies --titles` — people search (account-based)
+- `vayne update-cookie` — rotate LinkedIn cookie
+
+**New orchestrator mode: `orchestrate vayne`**
+- Full pipeline: Vayne scrape → research → score → enrich → draft → push → Telegram notify
+- Same 7-step pipeline as `orchestrate import` but starts from a URL instead of a CSV file
+
+**Daily routine enhancement**
+- Vayne health check added to 9am daily cron (non-blocking)
+- Expired LinkedIn cookie warning included in Telegram notification
+
+**Current status**: Using Vayne web UI for manual CSV exports (free plan). API integration dormant until Starter plan upgrade.
+
+**Files changed:** `modules/vayne.py` (new), `cli.py`, `orchestrator.py`, `OPERATIONS-GUIDE.md`
 
 ### 2026-03-04 — Fix Lead Pipeline Yield (~6% → ~30%+ conversion)
 
@@ -995,3 +1033,141 @@ Prospects are deduplicated by:
 | `modules/csv_importer.py` | CSV parser, column mapping, dedup, prospect creation |
 | `cli.py` | `pipeline import-csv` and `orchestrate import` commands |
 | `orchestrator.py` | `run_import()` — 7-step automated pipeline |
+
+---
+
+## Vayne — Automated LinkedIn Sales Navigator Scraping
+
+Vayne (vayne.io) is a LinkedIn Sales Navigator scraping service. Currently used via the web UI for manual CSV exports. The API integration is built and ready to activate — it eliminates the manual export step entirely.
+
+### Current Workflow (Manual — No API Key Required)
+
+1. **Build a lead list in Sales Navigator** — filter by title, industry, company size, geography
+2. **Copy the Sales Nav search URL** into Vayne's web UI
+3. **Vayne scrapes LinkedIn** using your connected LinkedIn cookie
+4. **Download the CSV** from Vayne's dashboard
+5. **Upload to VPS and run the pipeline:**
+   ```bash
+   scp ~/Downloads/vayne-export.csv ubuntu@152.69.171.177:~/convertra-leads/imports/
+   ssh -i ~/.ssh/convertra-ops.key ubuntu@152.69.171.177
+   cd ~/convertra-leads
+   python3 cli.py orchestrate import \
+     --file imports/vayne-export.csv \
+     --campaign "agency-march" \
+     --source vayne \
+     --push-to "8b466981-54d8-4487-ade3-b27ddab16a4e"
+   ```
+
+This uses the same `orchestrate import` pipeline as Sales Nav CSV exports. Vayne's CSV format is compatible with the existing column mapper.
+
+### Future Workflow (Automated — Requires Vayne Starter Plan + API Key)
+
+When ready to upgrade, add `VAYNE_API_KEY` to `.env` and the entire manual step disappears:
+
+```bash
+# One command: Sales Nav URL → scrape → research → score → enrich → draft → push
+python3 cli.py orchestrate vayne \
+  --url "https://www.linkedin.com/sales/search/people?query=..." \
+  --campaign "agency-march" \
+  --score-threshold 8 \
+  --push-to "8b466981-54d8-4487-ade3-b27ddab16a4e"
+```
+
+No browser, no manual CSV download, no SCP upload. The API handles:
+1. Validate the Sales Nav URL (free, no credits)
+2. Submit the scraping order
+3. Poll until complete (up to 10 minutes)
+4. Download CSV → import to pipeline
+5. Research → score → enrich → draft → push (same as `orchestrate import`)
+6. Telegram notification with full results
+
+### Vayne CLI Commands
+
+```bash
+# Health check (LinkedIn cookie + credit balance)
+python3 cli.py vayne health
+
+# Check credit balance
+python3 cli.py vayne credits
+
+# Validate a Sales Nav URL (free — no credits consumed)
+python3 cli.py vayne validate --url "https://linkedin.com/sales/search/..."
+
+# Scrape + import to pipeline (waits for completion)
+python3 cli.py vayne scrape \
+  --url "https://linkedin.com/sales/search/..." \
+  --campaign "dtc-march" \
+  --limit 500
+
+# List all orders
+python3 cli.py vayne orders
+
+# Check order status
+python3 cli.py vayne order-status --order-id 123
+
+# Import a completed order to pipeline
+python3 cli.py vayne import-order --order-id 123
+
+# People search: find decision makers at specific companies (100 credits)
+python3 cli.py vayne search \
+  --companies "https://linkedin.com/company/meta/,https://linkedin.com/company/shopify/" \
+  --titles "Head of Growth,Media Buyer,CMO"
+
+# Update LinkedIn cookie (when it expires)
+python3 cli.py vayne update-cookie --cookie "AQEDAx..."
+```
+
+### People Search (Account-Based Prospecting)
+
+The `vayne search` command is distinct from order-based scraping. It searches LinkedIn by company + job title + location and returns up to 25 profiles per call (costs 100 credits).
+
+Best use case: when your scoring identifies a hot company, immediately find the right decision makers there without building a full Sales Nav search.
+
+```bash
+# Find media buyers at specific companies
+python3 cli.py vayne search \
+  --companies "https://linkedin.com/company/gymshark/,https://linkedin.com/company/huel/" \
+  --titles "Media Buyer,Head of Performance,CMO" \
+  --locations "United Kingdom"
+```
+
+Results are deduplicated against the existing pipeline and added at `discovered` stage.
+
+### Health Monitoring
+
+When `VAYNE_API_KEY` is set, the daily cron routine (9am) automatically checks:
+- LinkedIn cookie status (active/expired)
+- Credit balance
+
+If the LinkedIn cookie has expired, the daily Telegram notification includes a warning:
+```
+⚠️ Vayne LinkedIn cookie expired — update via: cli.py vayne update-cookie
+```
+
+### Vayne API Limits
+
+| Limit | Value |
+|-------|-------|
+| Daily scraping | Up to 15,000 profiles |
+| Rate limit (burst) | 3 requests per 5 seconds |
+| Rate limit (sustained) | 20 requests per minute |
+| People search | 25 profiles per call, 100 credits |
+| Order export formats | Simple or Advanced CSV |
+
+### Pricing (Vayne.io)
+
+API access requires the Starter plan. The web UI works on the free plan.
+
+| Plan | API Access | Credits |
+|------|-----------|---------|
+| Free | Web UI only | Limited |
+| Starter ($49/mo) | Full API | Included |
+
+### When to Upgrade
+
+Upgrade to the Starter plan when:
+- You're running outbound campaigns regularly (weekly+)
+- The manual CSV export step is a bottleneck
+- You want to automate the full Sales Nav → Instantly pipeline on cron
+
+The module, CLI commands, and orchestrator integration are already built. Adding the API key is the only step needed.
