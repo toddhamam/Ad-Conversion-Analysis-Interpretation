@@ -454,7 +454,7 @@ export function generateTextAdVariations(config: {
   // Resolve styles — fall back to first preset if none selected or invalid
   const resolvedStyles = styleIds.length > 0
     ? styleIds
-        .map(id => TEXT_AD_STYLES.find(s => s.id === id))
+        .map(id => getStyleById(id))
         .filter((s): s is TextAdStyle => s !== undefined)
     : [TEXT_AD_STYLES[0]];
 
@@ -480,10 +480,29 @@ export function generateTextAdVariations(config: {
 }
 
 // ---------------------------------------------------------------------------
+// Custom Brand Style
+// ---------------------------------------------------------------------------
+
+export const CUSTOM_BRAND_ID = 'custom-brand';
+
+let _customBrandStyle: TextAdStyle | null = null;
+
+export function registerCustomBrandStyle(style: TextAdStyle | null): void {
+  _customBrandStyle = style;
+}
+
+export function getCustomBrandStyle(): TextAdStyle | null {
+  return _customBrandStyle;
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 export function getStyleById(id: string): TextAdStyle | undefined {
+  if (id === CUSTOM_BRAND_ID && _customBrandStyle) {
+    return _customBrandStyle;
+  }
   return TEXT_AD_STYLES.find(s => s.id === id);
 }
 

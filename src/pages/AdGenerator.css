@@ -1576,6 +1576,92 @@
   font-weight: 600;
 }
 
+/* ==================== Custom Brand Color Picker ==================== */
+
+.custom-brand-btn .custom-brand-preview {
+  border: 1px dashed var(--accent-violet);
+}
+
+.brand-color-picker-panel {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+}
+
+.brand-color-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.brand-color-picker-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.brand-color-picker-toggle {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  transition: color 0.2s ease;
+}
+
+.brand-color-picker-toggle:hover {
+  color: var(--text-secondary);
+}
+
+.brand-color-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+.brand-color-field {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.brand-color-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.brand-color-field input[type="color"] {
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--border-primary);
+  border-radius: 8px;
+  padding: 2px;
+  cursor: pointer;
+  background: none;
+  transition: border-color 0.2s ease;
+}
+
+.brand-color-field input[type="color"]:hover {
+  border-color: var(--accent-violet);
+}
+
+.brand-color-field input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.brand-color-field input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+
 /* ==================== Additional Responsive Styles ====================
 
 /* Tablet breakpoint - 768px */
@@ -1657,6 +1743,10 @@
   .text-style-grid {
     grid-template-columns: repeat(3, 1fr);
   }
+
+  .brand-color-picker-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 /* Mobile breakpoint - 480px */
@@ -1701,6 +1791,10 @@
   }
 
   .text-style-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .brand-color-picker-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 

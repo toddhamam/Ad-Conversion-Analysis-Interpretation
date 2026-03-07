@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-03-07 — Add custom brand color picker for text-only ads
+
+### Added
+- **`src/services/textAdCanvas.ts`** — Custom brand style registration system (`registerCustomBrandStyle()`, `getCustomBrandStyle()`, `CUSTOM_BRAND_ID`). Allows runtime registration of a user-defined `TextAdStyle` that resolves alongside the 12 built-in presets.
+- **`src/pages/AdGenerator.tsx`** — "My Brand" tile in the text ad style picker grid (first position, dashed violet border). Selecting it expands an inline color picker panel with 5 native color inputs: Background, Accent Color, Text Color, Banner BG, and Banner Text. Colors persist to localStorage (`ci_custom_brand_style`) and survive page refreshes. Works with multi-select alongside presets.
+- **`src/pages/AdGenerator.css`** — Styled the brand color picker panel, color input grid, and responsive breakpoints (5-col desktop, 3-col tablet, 2-col mobile).
+
+### Fixed
+- **`src/services/textAdCanvas.ts`** — `generateTextAdVariations()` used inline `TEXT_AD_STYLES.find()` instead of `getStyleById()`, meaning custom styles would silently fall back to the default preset during generation. Now uses `getStyleById()` consistently, matching the pattern already used by `handleRegenerateTextImage()`.
+
+---
+
 ## 2026-03-06 — Always show Creative Variation slider for image ad generation
 
 ### Fixed
