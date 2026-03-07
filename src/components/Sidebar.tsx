@@ -2,6 +2,7 @@ import { NavLink, Link } from 'react-router-dom';
 import { useState } from 'react';
 import { getOrgMetaIds } from '../services/metaApi';
 import { useOrganization } from '../contexts/OrganizationContext';
+import { useCredits } from '../hooks/useCredits';
 import './Sidebar.css';
 
 interface SidebarProps {
@@ -167,6 +168,8 @@ const Sidebar = ({
         </NavLink>
       </div>
 
+      <SidebarCreditCounter collapsed={collapsed} onCloseMobile={onCloseMobile} />
+
       {isTrialing && trialDaysRemaining > 0 && (
         <div className="sidebar-trial-badge">
           {collapsed ? (
@@ -244,6 +247,37 @@ function MetaConnectionDot() {
         flexShrink: 0,
       }}
     />
+  );
+}
+
+function SidebarCreditCounter({ collapsed, onCloseMobile }: { collapsed: boolean; onCloseMobile?: () => void }) {
+  const { creditsRemaining, unlimited, loading, colorClass } = useCredits();
+
+  if (loading) return null;
+
+  const dotColor = colorClass === 'red' ? '#ef4444'
+    : colorClass === 'amber' ? '#f59e0b'
+    : '#22c55e';
+
+  return (
+    <div className="sidebar-credit-counter">
+      <Link
+        to="/billing"
+        className="sidebar-credit-link"
+        onClick={onCloseMobile}
+        title={unlimited ? 'Unlimited credits' : `${creditsRemaining} credits remaining`}
+      >
+        <span
+          className="sidebar-credit-dot"
+          style={{ background: dotColor }}
+        />
+        {!collapsed && (
+          <span className="sidebar-credit-label">
+            {unlimited ? 'Unlimited' : `${creditsRemaining} credits`}
+          </span>
+        )}
+      </Link>
+    </div>
   );
 }
 

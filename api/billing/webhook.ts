@@ -115,6 +115,72 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           planTier,
         });
 
+        // Handle credit pack purchases (one-time payments)
+        if (supabase && session.metadata?.type === 'credit_pack') {
+          const packOrgId = session.metadata.organizationId;
+          const packCredits = parseFloat(session.metadata.credits || '0');
+
+          if (packOrgId && packCredits > 0) {
+            // Add bonus credits to organization
+            const { data: packOrg } = await supabase
+              .from('organizations')
+              .select('bonus_credits')
+              .eq('id', packOrgId)
+              .single();
+
+            const currentBonus = packOrg?.bonus_credits || 0;
+            await supabase
+              .from('organizations')
+              .update({
+                bonus_credits: currentBonus + packCredits,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', packOrgId);
+
+            // Insert credit_pack_purchase transaction
+            await supabase
+              .from('credit_transactions')
+              .insert({
+                organization_id: packOrgId,
+                credits: -packCredits, // Negative = credits added (opposite of consumption)
+                action_type: 'credit_pack_purchase',
+                status: 'confirmed',
+                description: `Purchased ${packCredits} credit pack (Pack ${session.metadata.packId})`,
+                quantity: packCredits,
+              });
+
+            console.log('[Billing Webhook] Credit pack fulfilled:', { packOrgId, packCredits });
+          }
+          break; // Credit pack checkout — don't process as subscription
+        }
+
+        // Handle account block purchases (recurring add-on subscriptions)
+        if (supabase && session.metadata?.type === 'account_block') {
+          const blockOrgId = session.metadata.organizationId;
+          const blockSeats = parseInt(session.metadata.seats || '0', 10);
+
+          if (blockOrgId && blockSeats > 0) {
+            // Add seats to organization
+            const { data: blockOrg } = await supabase
+              .from('organizations')
+              .select('ad_account_seats')
+              .eq('id', blockOrgId)
+              .single();
+
+            const currentSeats = blockOrg?.ad_account_seats ?? 1;
+            await supabase
+              .from('organizations')
+              .update({
+                ad_account_seats: currentSeats + blockSeats,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', blockOrgId);
+
+            console.log('[Billing Webhook] Account block fulfilled:', { blockOrgId, blockSeats, newTotal: currentSeats + blockSeats });
+          }
+          break; // Account block checkout — don't process as plan subscription
+        }
+
         // Update organization with Stripe customer and subscription info
         if (supabase && organizationId) {
           // Get actual subscription status (may be 'trialing' for trial checkouts)
@@ -137,7 +203,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           // Determine ad account seats based on plan tier
           const seatsByPlan: Record<string, number> = {
-            starter: 1, pro: 3, agency: 3,
+            starter: 1, pro: 3, agency: 10, agency_pro: 20,
             enterprise: -1, velocity_partner: -1,
           };
           const adAccountSeats = seatsByPlan[planTier || 'starter'] || 1;
@@ -209,6 +275,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Sync subscription changes to organization
         if (supabase && organizationId) {
           const periods = extractPeriodDates(subscription as unknown as Record<string, unknown>);
+
+          // Check if period actually advanced (not just a mid-cycle upgrade/proration)
+          // Only reset usage when current_period_start changes to a later date
+          let shouldResetUsage = false;
+          if (periods.start) {
+            const { data: currentOrg } = await supabase
+              .from('organizations')
+              .select('current_period_start')
+              .eq('id', organizationId)
+              .single();
+
+            if (currentOrg?.current_period_start) {
+              const storedStart = new Date(currentOrg.current_period_start).getTime();
+              const newStart = new Date(periods.start).getTime();
+              shouldResetUsage = newStart > storedStart;
+            } else {
+              // No stored period — this is the first update
+              shouldResetUsage = false;
+            }
+          }
+
           await supabase
             .from('organizations')
             .update({
@@ -218,6 +305,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               updated_at: new Date().toISOString(),
             })
             .eq('id', organizationId);
+
+          // Reset usage tracking for new billing period
+          if (shouldResetUsage && periods.start && periods.end) {
+            const periodStartDate = new Date(periods.start).toISOString().split('T')[0];
+            const periodEndDate = new Date(periods.end).toISOString().split('T')[0];
+
+            // Create fresh usage_tracking row for new period
+            await supabase
+              .from('usage_tracking')
+              .upsert({
+                organization_id: organizationId,
+                period_start: periodStartDate,
+                period_end: periodEndDate,
+                credits_used: 0,
+                creatives_generated: 0,
+                analyses_run: 0,
+                api_calls: 0,
+                image_ads_generated: 0,
+                video_ads_generated: 0,
+                text_ads_generated: 0,
+              }, { onConflict: 'organization_id,period_start' });
+
+            // Insert period_reset audit entry
+            await supabase
+              .from('credit_transactions')
+              .insert({
+                organization_id: organizationId,
+                credits: 0,
+                action_type: 'period_reset',
+                status: 'confirmed',
+                description: `Billing period reset: ${periodStartDate} to ${periodEndDate}`,
+              });
+
+            console.log('[Billing Webhook] Usage reset for new period:', { organizationId, periodStartDate, periodEndDate });
+          }
         }
         break;
       }

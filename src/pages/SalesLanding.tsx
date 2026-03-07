@@ -792,13 +792,44 @@ function SalesLanding() {
       <section id="pricing" className="section pricing-section">
         <div className="section-container">
           <h2 className="section-header animate-on-scroll">
-            Two Ways to Partner<br />
-            <span className="header-emphasis">With Convertra</span>
+            Plans That Scale<br />
+            <span className="header-emphasis">With Your Growth</span>
           </h2>
           <p className="pricing-intro animate-on-scroll delay-1">
-            Every engagement starts with white-glove implementation.<br />
-            <strong>Choose how you want to run it from there.</strong>
+            Start with a free trial. Scale to self-serve or enterprise.<br />
+            <strong>Every plan includes publish-ready ad creatives from day one.</strong>
           </p>
+
+          {/* Self-Serve Plans Table */}
+          <div className="self-serve-pricing animate-on-scroll delay-1">
+            <h3 className="self-serve-heading">Self-Serve Plans</h3>
+            <p className="self-serve-subheading">Start with a free trial — 21 credits, no watermarks, publish-ready ads from day one.</p>
+            <div className="self-serve-table">
+              <div className="self-serve-row self-serve-header-row">
+                <span className="self-serve-plan-name">Plan</span>
+                <span className="self-serve-price">Price</span>
+                <span className="self-serve-credits">Credits/mo</span>
+                <span className="self-serve-equiv">Equivalent</span>
+                <span className="self-serve-cta-col"></span>
+              </div>
+              {([
+                { name: 'Starter', price: '$99', credits: '100', equiv: '100 image ads or 20 video ads' },
+                { name: 'Pro', price: '$149', credits: '300', equiv: '300 image ads or 60 video ads' },
+                { name: 'Agency', price: '$249', credits: '750', equiv: '750 image ads or 150 video ads' },
+                { name: 'Agency Pro', price: '$449', credits: '1,500', equiv: '1,500 image ads or 300 video ads' },
+              ]).map((row) => (
+                <div key={row.name} className="self-serve-row">
+                  <span className="self-serve-plan-name">{row.name}</span>
+                  <span className="self-serve-price">{row.price}<span className="self-serve-mo">/mo</span></span>
+                  <span className="self-serve-credits">{row.credits}</span>
+                  <span className="self-serve-equiv">{row.equiv}</span>
+                  <span className="self-serve-cta-col">
+                    <Link to="/signup" className="self-serve-try-btn">Start Free Trial</Link>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
 
           <div className="pricing-cards-grid">
             {/* Enterprise Self-Service */}
@@ -907,12 +938,11 @@ function SalesLanding() {
           </div>
 
           <div className="pricing-why animate-on-scroll delay-4">
-            <p className="pricing-why-title">Why enterprise only — for now?</p>
+            <p className="pricing-why-title">Why offer enterprise tiers?</p>
             <p className="pricing-why-text">
-              Because every implementation is fully custom and bespoke. We study your business,
-              configure the system to your patterns, and manage it end-to-end. This level of
-              white-glove service requires dedicated attention and expertise that doesn't scale
-              with self-serve signups — at least not yet.
+              Because some businesses need more than software — they need a partner.
+              Enterprise engagements include fully custom implementation, dedicated support,
+              and hands-on creative operations that go beyond what self-serve plans provide.
             </p>
           </div>
         </div>

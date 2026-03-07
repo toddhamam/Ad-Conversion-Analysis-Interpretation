@@ -24,6 +24,8 @@ const PRICE_IDS: Record<string, string | undefined> = {
   pro_yearly: process.env.STRIPE_PRICE_PRO_YEARLY,
   agency_monthly: process.env.STRIPE_PRICE_AGENCY_MONTHLY,
   agency_yearly: process.env.STRIPE_PRICE_AGENCY_YEARLY,
+  agency_pro_monthly: process.env.STRIPE_PRICE_AGENCY_PRO_MONTHLY,
+  agency_pro_yearly: process.env.STRIPE_PRICE_AGENCY_PRO_YEARLY,
   enterprise_monthly: process.env.STRIPE_PRICE_ENTERPRISE_MONTHLY,
   enterprise_yearly: process.env.STRIPE_PRICE_ENTERPRISE_YEARLY,
   velocity_partner_monthly: process.env.STRIPE_PRICE_VELOCITY_PARTNER_MONTHLY,
@@ -85,7 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Cannot checkout for free plan' });
     }
 
-    if (!['starter', 'pro', 'agency', 'enterprise', 'velocity_partner'].includes(planTier)) {
+    if (!['starter', 'pro', 'agency', 'agency_pro', 'enterprise', 'velocity_partner'].includes(planTier)) {
       return res.status(400).json({ error: 'Invalid plan tier' });
     }
 

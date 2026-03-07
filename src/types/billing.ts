@@ -1,6 +1,6 @@
 // Billing Types for Convertra
 
-export type PlanTier = 'free' | 'starter' | 'pro' | 'agency' | 'enterprise' | 'velocity_partner';
+export type PlanTier = 'free' | 'starter' | 'pro' | 'agency' | 'agency_pro' | 'enterprise' | 'velocity_partner';
 export type BillingInterval = 'monthly' | 'yearly';
 export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'trialing' | 'incomplete';
 export type InvoiceStatus = 'paid' | 'open' | 'draft' | 'void' | 'uncollectible';
@@ -26,6 +26,9 @@ export interface PricingPlan {
   setupFee?: number;               // One-time setup fee in dollars
   features: PlanFeatures;
   extraSeatPrice?: number;         // Price per additional ad account seat/month
+  creditsPerMonth?: number;        // Monthly credit allowance (-1 for unlimited)
+  creditsPerMonthYearly?: number;  // Credits when billed yearly (-1 for unlimited)
+  adAccountsIncluded?: number;     // Ad accounts included in plan
   stripePriceIdMonthly?: string;
   stripePriceIdYearly?: string;
   popular?: boolean;
@@ -48,6 +51,13 @@ export interface UsageMetrics {
   creativesLimit: number;          // -1 for unlimited
   analysesRun: number;
   analysesLimit: number;           // -1 for unlimited
+  creditsUsed: number;
+  creditsLimit: number;            // -1 for unlimited
+  bonusCredits: number;
+  creditsRemaining: number;        // -1 for unlimited
+  imageAdsGenerated: number;
+  videoAdsGenerated: number;
+  textAdsGenerated: number;
   currentPeriodStart: string;
   currentPeriodEnd: string;
 }

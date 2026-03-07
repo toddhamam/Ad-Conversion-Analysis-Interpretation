@@ -18,6 +18,7 @@ import {
   type AdAccountListResponse,
 } from '../services/metaApi';
 import { PLAN_LIMITS, type BusinessType } from '../types/organization';
+import { purchaseAccountBlock } from '../services/stripeApi';
 import SEO from '../components/SEO';
 import Loading from '../components/Loading';
 import './Integrations.css';
@@ -658,11 +659,26 @@ function Integrations() {
                   </div>
                 )}
 
-                {/* Seat limit notice */}
+                {/* Seat limit notice — show block purchase options */}
                 {seatsRemaining <= 0 && availableForActivation.length > 0 && (
                   <div className="ad-accounts-upgrade-prompt">
-                    <span>Need more seats?</span>
-                    <Link to="/billing" className="upgrade-link">Upgrade your plan</Link>
+                    <span className="upgrade-prompt-title">Need more seats?</span>
+                    <div className="account-block-options">
+                      {([
+                        { size: '5' as const, seats: 5, price: 20 },
+                        { size: '10' as const, seats: 10, price: 40 },
+                        { size: '25' as const, seats: 25, price: 75 },
+                      ]).map((block) => (
+                        <button
+                          key={block.size}
+                          className="account-block-btn"
+                          onClick={() => purchaseAccountBlock(block.size)}
+                        >
+                          +{block.seats} seats — ${block.price}/mo
+                        </button>
+                      ))}
+                    </div>
+                    <Link to="/billing" className="upgrade-link">Or upgrade your plan</Link>
                   </div>
                 )}
               </>

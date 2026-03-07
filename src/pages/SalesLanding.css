@@ -1589,6 +1589,105 @@
   margin-bottom: 48px;
 }
 
+/* Self-Serve Pricing Table */
+.self-serve-pricing {
+  margin-bottom: 56px;
+  max-width: 1000px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.self-serve-heading {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+  text-align: center;
+}
+
+.self-serve-subheading {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0 0 24px;
+  text-align: center;
+}
+
+.self-serve-table {
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.self-serve-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr 0.8fr 2fr 1fr;
+  align-items: center;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border-primary);
+  font-size: 14px;
+}
+
+.self-serve-row:last-child {
+  border-bottom: none;
+}
+
+.self-serve-header-row {
+  background: var(--bg-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  padding: 10px 24px;
+}
+
+.self-serve-plan-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.self-serve-price {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.self-serve-mo {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.self-serve-credits {
+  font-weight: 600;
+  color: var(--accent-violet);
+}
+
+.self-serve-equiv {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.self-serve-cta-col {
+  text-align: right;
+}
+
+.self-serve-try-btn {
+  display: inline-block;
+  padding: 6px 16px;
+  background: var(--accent-primary);
+  color: var(--text-primary);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.self-serve-try-btn:hover {
+  background: var(--accent-secondary);
+  transform: translateY(-1px);
+}
+
 .pricing-cards-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1765,6 +1864,27 @@
 
   .pricing-card-featured {
     transform: none;
+  }
+
+  .self-serve-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 16px;
+    padding: 12px 16px;
+  }
+
+  .self-serve-header-row {
+    display: none;
+  }
+
+  .self-serve-equiv {
+    grid-column: 1 / -1;
+    font-size: 12px;
+  }
+
+  .self-serve-cta-col {
+    grid-column: 1 / -1;
+    text-align: left;
+    margin-top: 4px;
   }
 }
 

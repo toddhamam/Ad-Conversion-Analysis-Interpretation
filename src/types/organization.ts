@@ -1,6 +1,6 @@
 // Multi-Tenant Organization Types
 
-export type PlanTier = 'free' | 'starter' | 'pro' | 'agency' | 'enterprise' | 'velocity_partner';
+export type PlanTier = 'free' | 'starter' | 'pro' | 'agency' | 'agency_pro' | 'enterprise' | 'velocity_partner';
 export type BillingInterval = 'monthly' | 'yearly';
 export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'trialing' | 'incomplete';
 export type UserRole = 'owner' | 'admin' | 'member' | 'viewer';
@@ -29,6 +29,9 @@ export interface Organization {
   subscription_id: string | null;
   current_period_start: string | null;
   current_period_end: string | null;
+
+  // Credits
+  bonus_credits?: number;
 
   // Ad Account Seats (multi-account support)
   ad_account_seats?: number;
@@ -121,9 +124,23 @@ export interface UsageTracking {
   creatives_generated: number;
   analyses_run: number;
   api_calls: number;
+  credits_used: number;
+  image_ads_generated: number;
+  video_ads_generated: number;
+  text_ads_generated: number;
   created_at: string;
   updated_at: string;
 }
+
+// Credit System Types
+export type CreditActionType = 'image_ad' | 'video_ad' | 'text_ad' | 'channel_analysis';
+
+export const CREDIT_COSTS: Record<CreditActionType, number> = {
+  image_ad: 1,
+  video_ad: 5,
+  text_ad: 0.5,
+  channel_analysis: 1,
+};
 
 // Audit Log Entry
 export interface AuditLogEntry {
@@ -167,6 +184,8 @@ export interface PlanLimits {
   hasDedicatedManager: boolean;
   adAccountsIncluded: number;  // How many ad accounts are included in the plan
   maxAdAccounts: number;       // Maximum ad accounts allowed (-1 for unlimited)
+  creditsPerMonth: number;     // Monthly credit allowance (-1 for unlimited)
+  creditsPerMonthYearly: number; // Credits when billed yearly (-1 for unlimited)
 }
 
 export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
@@ -181,6 +200,8 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     hasDedicatedManager: false,
     adAccountsIncluded: 1,
     maxAdAccounts: 1,
+    creditsPerMonth: 0,
+    creditsPerMonthYearly: 0,
   },
   starter: {
     creativesLimit: 100,
@@ -193,6 +214,8 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     hasDedicatedManager: false,
     adAccountsIncluded: 1,
     maxAdAccounts: 1,
+    creditsPerMonth: 100,
+    creditsPerMonthYearly: 100,
   },
   pro: {
     creativesLimit: 250,
@@ -204,43 +227,65 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     hasApiAccess: true,
     hasDedicatedManager: false,
     adAccountsIncluded: 1,
-    maxAdAccounts: 3,  // Can add up to 2 extra seats at $49/mo
+    maxAdAccounts: 3,
+    creditsPerMonth: 300,
+    creditsPerMonthYearly: 300,
   },
   agency: {
-    creativesLimit: 500,   // Per ad account
-    analysesLimit: 200,    // Per ad account
-    channelsLimit: -1,     // Unlimited
+    creativesLimit: 500,
+    analysesLimit: 200,
+    channelsLimit: -1,
     teamMembersLimit: 25,
     hasPrioritySupport: true,
     hasCustomBranding: false,
     hasApiAccess: true,
     hasDedicatedManager: false,
-    adAccountsIncluded: 3,
-    maxAdAccounts: 25,     // Extra seats at $59/mo
+    adAccountsIncluded: 10,
+    maxAdAccounts: -1,
+    creditsPerMonth: 750,
+    creditsPerMonthYearly: 600,
+  },
+  agency_pro: {
+    creativesLimit: 1000,
+    analysesLimit: 400,
+    channelsLimit: -1,
+    teamMembersLimit: 50,
+    hasPrioritySupport: true,
+    hasCustomBranding: true,
+    hasApiAccess: true,
+    hasDedicatedManager: false,
+    adAccountsIncluded: 20,
+    maxAdAccounts: -1,
+    creditsPerMonth: 1500,
+    creditsPerMonthYearly: 1200,
   },
   enterprise: {
-    creativesLimit: -1,  // Unlimited
-    analysesLimit: -1,   // Unlimited
-    channelsLimit: -1,   // Unlimited
-    teamMembersLimit: -1, // Unlimited
+    creativesLimit: -1,
+    analysesLimit: -1,
+    channelsLimit: -1,
+    teamMembersLimit: -1,
     hasPrioritySupport: true,
     hasCustomBranding: true,
     hasApiAccess: true,
     hasDedicatedManager: true,
-    adAccountsIncluded: 10,
-    maxAdAccounts: -1,   // Unlimited, extra seats at $99/mo
+    adAccountsIncluded: 50,
+    maxAdAccounts: -1,
+    creditsPerMonth: 5000,
+    creditsPerMonthYearly: 4000,
   },
   velocity_partner: {
-    creativesLimit: -1,  // Unlimited
-    analysesLimit: -1,   // Unlimited
-    channelsLimit: -1,   // Unlimited
-    teamMembersLimit: -1, // Unlimited
+    creativesLimit: -1,
+    analysesLimit: -1,
+    channelsLimit: -1,
+    teamMembersLimit: -1,
     hasPrioritySupport: true,
     hasCustomBranding: true,
     hasApiAccess: true,
     hasDedicatedManager: true,
-    adAccountsIncluded: -1, // Unlimited
-    maxAdAccounts: -1,      // Unlimited
+    adAccountsIncluded: -1,
+    maxAdAccounts: -1,
+    creditsPerMonth: -1,
+    creditsPerMonthYearly: -1,
   },
 };
 
