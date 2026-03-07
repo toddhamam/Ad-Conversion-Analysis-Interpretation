@@ -33,7 +33,8 @@ import {
   type VideoModel,
   type TextAdCopyResult,
 } from '../services/openaiApi';
-import { TEXT_AD_STYLES, getDefaultStyleId, generateTextAdImage, getStyleById } from '../services/textAdCanvas';
+import { TEXT_AD_STYLES, getDefaultStyleId, generateTextAdImage, getStyleById, registerCustomBrandStyle, CUSTOM_BRAND_ID } from '../services/textAdCanvas';
+import type { TextAdStyle } from '../services/textAdCanvas';
 import { getCacheStats as getImageCacheStats, uploadBrandImages, clearImageCache } from '../services/imageCache';
 import { fetchAdCreatives, type DatePreset } from '../services/metaApi';
 import GeneratedAdCard from '../components/GeneratedAdCard';
@@ -184,6 +185,53 @@ const AdGenerator = () => {
   const [selectedTextStyles, setSelectedTextStyles] = useState<string[]>([getDefaultStyleId()]);
   const [textAdCopySuggestions, setTextAdCopySuggestions] = useState<TextAdCopyResult | null>(null);
   const [isGeneratingTextAdCopy, setIsGeneratingTextAdCopy] = useState(false);
+
+  // Custom brand style for text ads
+  const [customBrandStyle, setCustomBrandStyle] = useState<TextAdStyle>(() => {
+    try {
+      const saved = localStorage.getItem('ci_custom_brand_style');
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+    return {
+      id: CUSTOM_BRAND_ID,
+      name: 'My Brand',
+      backgroundType: 'solid' as const,
+      backgroundColors: ['#1a1a1a'],
+      textColor: '#ffffff',
+      accentColor: '#f0e0cc',
+      bannerBgColor: '#d4a843',
+      bannerTextColor: '#1a1a1a',
+      bannerAccentColor: '#f0e0cc',
+      previewCSS: 'linear-gradient(135deg, #1a1a1a 60%, #f0e0cc 60%)',
+    };
+  });
+  const [showBrandColorPicker, setShowBrandColorPicker] = useState(false);
+
+  // Register custom brand style so getStyleById resolves it
+  useEffect(() => {
+    registerCustomBrandStyle(customBrandStyle);
+  }, [customBrandStyle]);
+
+  const updateCustomBrandColor = useCallback((field: string, value: string) => {
+    setCustomBrandStyle(prev => {
+      const updated = { ...prev };
+      if (field === 'backgroundColors') {
+        updated.backgroundColors = [value];
+      } else {
+        (updated as Record<string, unknown>)[field] = value;
+      }
+      // Sync bannerAccentColor with accentColor
+      if (field === 'accentColor') {
+        updated.bannerAccentColor = value;
+      }
+      // Regenerate preview swatch
+      updated.previewCSS = `linear-gradient(135deg, ${updated.backgroundColors[0]} 60%, ${updated.accentColor} 60%)`;
+      try {
+        localStorage.setItem('ci_custom_brand_style', JSON.stringify(updated));
+      } catch { /* ignore quota errors */ }
+      return updated;
+    });
+  }, []);
 
   // Copy source mode
   const [copySource, setCopySource] = useState<CopySource>('generate');
@@ -1974,6 +2022,28 @@ const AdGenerator = () => {
                 <label className="text-ad-field-label">Background Style</label>
                 <p className="text-ad-field-hint">Select one or more. Multiple styles = different style per variation.</p>
                 <div className="text-style-grid">
+                  {/* Custom Brand Style — first position */}
+                  <button
+                    className={`text-style-btn custom-brand-btn ${selectedTextStyles.includes(CUSTOM_BRAND_ID) ? 'active' : ''}`}
+                    onClick={() => {
+                      setSelectedTextStyles(prev => {
+                        if (prev.includes(CUSTOM_BRAND_ID)) {
+                          if (prev.length <= 1) return prev;
+                          setShowBrandColorPicker(false);
+                          return prev.filter(id => id !== CUSTOM_BRAND_ID);
+                        }
+                        setShowBrandColorPicker(true);
+                        return [...prev, CUSTOM_BRAND_ID];
+                      });
+                    }}
+                  >
+                    <div
+                      className="text-style-preview custom-brand-preview"
+                      style={{ background: customBrandStyle.previewCSS }}
+                    />
+                    <span className="text-style-name">My Brand</span>
+                  </button>
+
                   {TEXT_AD_STYLES.map(style => (
                     <button
                       key={style.id}
@@ -1997,6 +2067,64 @@ const AdGenerator = () => {
                     </button>
                   ))}
                 </div>
+
+                {/* Brand Color Picker Panel */}
+                {showBrandColorPicker && selectedTextStyles.includes(CUSTOM_BRAND_ID) && (
+                  <div className="brand-color-picker-panel">
+                    <div className="brand-color-picker-header">
+                      <span className="brand-color-picker-title">Customize Brand Colors</span>
+                      <button
+                        className="brand-color-picker-toggle"
+                        onClick={() => setShowBrandColorPicker(false)}
+                        aria-label="Collapse color picker"
+                      >
+                        Collapse
+                      </button>
+                    </div>
+                    <div className="brand-color-picker-grid">
+                      <label className="brand-color-field">
+                        <span className="brand-color-label">Background</span>
+                        <input
+                          type="color"
+                          value={customBrandStyle.backgroundColors[0]}
+                          onChange={e => updateCustomBrandColor('backgroundColors', e.target.value)}
+                        />
+                      </label>
+                      <label className="brand-color-field">
+                        <span className="brand-color-label">Accent Color</span>
+                        <input
+                          type="color"
+                          value={customBrandStyle.accentColor}
+                          onChange={e => updateCustomBrandColor('accentColor', e.target.value)}
+                        />
+                      </label>
+                      <label className="brand-color-field">
+                        <span className="brand-color-label">Text Color</span>
+                        <input
+                          type="color"
+                          value={customBrandStyle.textColor}
+                          onChange={e => updateCustomBrandColor('textColor', e.target.value)}
+                        />
+                      </label>
+                      <label className="brand-color-field">
+                        <span className="brand-color-label">Banner BG</span>
+                        <input
+                          type="color"
+                          value={customBrandStyle.bannerBgColor}
+                          onChange={e => updateCustomBrandColor('bannerBgColor', e.target.value)}
+                        />
+                      </label>
+                      <label className="brand-color-field">
+                        <span className="brand-color-label">Banner Text</span>
+                        <input
+                          type="color"
+                          value={customBrandStyle.bannerTextColor}
+                          onChange={e => updateCustomBrandColor('bannerTextColor', e.target.value)}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
