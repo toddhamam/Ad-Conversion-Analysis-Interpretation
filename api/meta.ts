@@ -10,6 +10,7 @@ import {
   handleReportCron,
   handleReportHistory,
 } from './_lib/report-handlers.js';
+import { handleExternalSummary } from './_lib/external-report.js';
 
 initSentry();
 
@@ -240,6 +241,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleReportCron(req, res);
       case 'report-history':
         return handleReportHistory(req, res);
+      case 'external-summary':
+      case 'reports-external-summary':
+        return handleExternalSummary(req, res);
       default:
         return res.status(400).json({ error: `Unknown route: ${route}` });
     }

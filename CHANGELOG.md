@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-03-08 — External Reports API + MCP Server
+
+### Added
+- **`api/_lib/external-report.ts`** — External summary API handler with bearer token auth (`EXTERNAL_REPORT_API_KEY` + `EXTERNAL_REPORT_ORG_ID` env vars). Three scopes: `metrics` (aggregated dashboard metrics with optional period-over-period comparison), `accounts` (list connected ad accounts), `campaigns` (per-campaign breakdown with pagination). Supports cross-account aggregation when `ad_account_id` is omitted.
+- **`api/_lib/external-analysis.ts`** — Server-side port of `analyzeChannelPerformance()` for text-only AI analysis. Fetches ad-level insights + creative details from Meta, builds prompts, calls GPT-5.4 with `reasoning_effort: 'high'` and `response_format: json_object`. Includes multi-strategy JSON parser with repair fallback and 55s AbortController timeout.
+- **`mcp-server/`** — MCP server exposing 8 tools for Claude Code: `get_metrics`, `get_analysis`, `get_top_ads`, `get_bottom_ads`, `get_recommendations`, `get_winning_patterns`, `get_campaign_breakdown`, `get_ad_accounts`. Calls the deployed Convertra API via bearer token. 10-minute in-memory cache for analysis results.
+- **`vercel.json`** — Added `/api/reports/:path` rewrite routing to `api/meta.ts` and `maxDuration: 60` for AI analysis within Vercel Hobby plan limits.
+
+### Changed
+- **`api/_lib/report-handlers.ts`** — Exported `loadAccessToken()`, `fetchMetricsForAccount()`, and `FetchedMetrics` interface for reuse by external report handler.
+- **`api/meta.ts`** — Added `external-summary` and `reports-external-summary` route cases dispatching to `handleExternalSummary()`.
+
+---
+
 ## 2026-03-08 — Claude Code CI/CD automations
 
 ### Added

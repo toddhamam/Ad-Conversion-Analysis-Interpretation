@@ -1,5 +1,9 @@
 {
+  "functions": {
+    "api/meta.ts": { "maxDuration": 60 }
+  },
   "rewrites": [
+    { "source": "/api/reports/:path(.*)", "destination": "/api/meta?route=reports-:path" },
     { "source": "/api/seo-iq/:path(.*)", "destination": "/api/seoiq?route=:path" },
     { "source": "/api/auth/google/:action", "destination": "/api/google-auth?action=:action" },
     { "source": "/api/admin/credentials/:action", "destination": "/api/admin/credentials?action=:action" },
