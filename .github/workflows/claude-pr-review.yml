@@ -39,7 +39,7 @@ jobs:
 
             Do NOT flag: style preferences, formatting, missing comments, pre-existing issues, or anything a linter would catch.
             Only comment on high-signal issues that could cause production problems.
-          claude_args: "--max-turns 5"
+          claude_args: "--max-turns 5 --model claude-opus-4-6"
 
   # Respond to @claude mentions in PR/issue comments
   respond:
@@ -54,4 +54,4 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_args: "--max-turns 10"
+          claude_args: "--max-turns 10 --model claude-opus-4-6"

@@ -56,6 +56,6 @@ jobs:
             - Don't add new api/*.ts files (Vercel 12 function limit)
             - Use CSS variables, not hardcoded colors
             - Follow all CLAUDE.md conventions
-          claude_args: "--max-turns 15 --allowedTools Bash,Read,Edit,Write,Glob,Grep"
+          claude_args: "--max-turns 15 --model claude-opus-4-6 --allowedTools Bash,Read,Edit,Write,Glob,Grep"
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
