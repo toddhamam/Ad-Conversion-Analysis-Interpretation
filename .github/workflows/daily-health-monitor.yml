@@ -1,0 +1,94 @@
+name: Daily Health Monitor
+
+on:
+  schedule:
+    - cron: '0 7 * * *' # Daily at 7:00 AM UTC
+  workflow_dispatch: # Manual trigger from GitHub UI
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Run a health check on the Convertra platform and send a summary to Telegram.
+
+            Run these checks using bash curl commands. For each check, record PASS or FAIL with a brief detail.
+
+            CHECK 1 — Production site is up:
+            ```
+            curl -s -o /dev/null -w "%{http_code}" https://www.convertraiq.com
+            ```
+            PASS if 200, FAIL otherwise.
+
+            CHECK 2 — Supabase connectivity:
+            ```
+            curl -s -o /dev/null -w "%{http_code}" -H "apikey: $SUPABASE_ANON_KEY" \
+              "$SUPABASE_URL/rest/v1/"
+            ```
+            PASS if 200, FAIL otherwise.
+
+            CHECK 3 — Sentry for new errors (last 24h):
+            ```
+            curl -s -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+              "https://sentry.io/api/0/projects/spire-enterprises-pty-ltd/javascript-react/issues/?query=is:unresolved+firstSeen:-24h&limit=5"
+            ```
+            Report the count of new issues. PASS if 0, WARN if 1-3, FAIL if 4+.
+
+            CHECK 4 — Expired client credentials:
+            ```
+            curl -s -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              "$SUPABASE_URL/rest/v1/organization_credentials?select=organization_id,status,token_expires_at&or=(status.eq.expired,token_expires_at.lt.$(date -u -d '+7 days' +%Y-%m-%dT%H:%M:%SZ))"
+            ```
+            Report any expired or soon-to-expire credentials. PASS if none, WARN if expiring within 7 days, FAIL if already expired.
+
+            CHECK 5 — Stripe API reachable:
+            ```
+            curl -s -o /dev/null -w "%{http_code}" -u "$STRIPE_SECRET_KEY:" https://api.stripe.com/v1/balance
+            ```
+            PASS if 200, FAIL otherwise.
+
+            After all checks, build a Telegram message and send it to the Health Monitor topic:
+            ```
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              -d "chat_id=-1003806442463" \
+              -d "message_thread_id=145" \
+              -d "parse_mode=Markdown" \
+              -d "text=<your formatted message>"
+            ```
+
+            Format the message like this (use actual results):
+            ```
+            *Convertra Daily Health Report*
+
+            ✅ Production site — UP (200)
+            ✅ Supabase — Connected
+            ⚠️ Sentry — 2 new errors (last 24h)
+            ✅ Client credentials — All valid
+            ✅ Stripe — Connected
+
+            _Report generated at <timestamp>_
+            ```
+
+            Use ✅ for PASS, ⚠️ for WARN, ❌ for FAIL.
+
+            IMPORTANT: Never include actual tokens, keys, or secrets in the Telegram message or in any output. Only report status (PASS/FAIL/WARN) and counts.
+          claude_args: "--max-turns 8 --model claude-opus-4-6 --allowedTools Bash"
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
