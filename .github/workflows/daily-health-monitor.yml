@@ -84,7 +84,7 @@ jobs:
             Use ✅ for PASS, ⚠️ for WARN, ❌ for FAIL.
 
             IMPORTANT: Never include actual tokens, keys, or secrets in the Telegram message or in any output. Only report status (PASS/FAIL/WARN) and counts.
-          claude_args: "--max-turns 8 --model claude-sonnet-4-6 --allowedTools Bash"
+          claude_args: "--max-turns 8 --allowedTools Bash"
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
