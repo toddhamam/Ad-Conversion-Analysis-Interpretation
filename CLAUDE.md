@@ -1149,6 +1149,71 @@ Always run `npm run dev` to start the development server before testing URLs. Th
 
 ---
 
+## GitHub Actions — CI/CD Automations
+
+Four automated workflows run via GitHub Actions. Two use `anthropics/claude-code-action@v1` (for PR/issue contexts), one uses plain bash, and one chains into Claude via PR comments.
+
+### Active Workflows
+
+| Workflow | File | Trigger | Engine |
+|----------|------|---------|--------|
+| **PR Review** | `claude-pr-review.yml` | PR opened/updated | `claude-code-action` (Sonnet 4.6) |
+| **@claude Respond** | `claude-pr-review.yml` | `@claude` in PR/issue comment | `claude-code-action` (Sonnet 4.6) |
+| **Sentry Auto-Triage** | `sentry-auto-triage.yml` | Weekdays 8am UTC / manual | `claude-code-action` (Sonnet 4.6) |
+| **Daily Health Monitor** | `daily-health-monitor.yml` | Daily 7am UTC / manual | Bash script (no AI) |
+| **CI Auto-Fix** | `ci-auto-fix.yml` | Vercel deploy failure | Bash → `@claude` PR comment |
+
+### PR Review (`claude-pr-review.yml`)
+
+Two jobs:
+- **auto-review**: Runs on every PR open/update. Checks for security vulnerabilities, logic bugs, performance issues (`transition: all`, missing AbortController timeouts, base64 memory leaks), Vercel function count (12 limit), CSS variable usage, Meta token exposure, and `catch (error: any)` violations. Has `continue-on-error: true` so failures never block merges.
+- **respond**: Triggers on `@claude` mentions in PR/issue comments. Accepts comments from `github-actions[bot]` (`allowed_bots`) to enable CI auto-fix chaining.
+
+### Sentry Auto-Triage (`sentry-auto-triage.yml`)
+
+Runs weekdays at 8am UTC. Fetches unresolved Sentry issues via REST API, reads stack traces, determines severity (critical/high/medium/low), creates fix PRs for critical/high issues, and files GitHub issues for the rest. This is separate from the manual `/sentry` slash command — the workflow runs autonomously on schedule.
+
+### Daily Health Monitor (`daily-health-monitor.yml`)
+
+Pure bash script (no Claude SDK). Runs 5 checks daily at 7am UTC:
+1. Production site (`convertraiq.com`) — HTTP 200 check
+2. Supabase — REST API reachability
+3. Sentry — New unresolved errors in last 24h (0=pass, 1-3=warn, 4+=fail)
+4. Client credentials — Expired Meta tokens in `organization_credentials`
+5. Stripe — API reachability
+
+Posts formatted report to Telegram (`chat_id=-1003806442463`, `message_thread_id=145`).
+
+### CI Auto-Fix (`ci-auto-fix.yml`)
+
+Triggers on failed Vercel deployments (`deployment_status` event). Flow:
+1. Checks out the failing commit
+2. Reproduces the build locally (`npm run build`) to capture error output
+3. Finds the associated PR from the commit SHA
+4. Posts build errors as a PR comment with `@claude` tag
+5. The PR Review respond job picks up the `@claude` mention and attempts to fix the code
+
+### Required GitHub Secrets
+
+| Secret | Used By |
+|--------|---------|
+| `ANTHROPIC_API_KEY` | PR Review, Sentry Triage (API billing, separate from Claude Code subscription) |
+| `SENTRY_AUTH_TOKEN` | Sentry Triage, Health Monitor |
+| `TELEGRAM_BOT_TOKEN` | Health Monitor |
+| `SUPABASE_URL` | Health Monitor |
+| `SUPABASE_ANON_KEY` | Health Monitor |
+| `SUPABASE_SERVICE_ROLE_KEY` | Health Monitor |
+| `STRIPE_SECRET_KEY` | Health Monitor |
+
+### Known Limitations
+
+- **Workflow validation**: PRs that modify `.github/workflows/*.yml` files will fail the auto-review with "Workflow validation failed." This is expected — the Claude GitHub App requires workflow files to match the default branch version. The `continue-on-error: true` setting prevents this from blocking merges.
+- **Model selection**: The `claude-code-action` SDK (`@anthropic-ai/claude-agent-sdk@0.2.70`) crashes on startup when any explicit model is specified (via `--model` in `claude_args` or `settings` input). All workflows use the default model (Sonnet 4.6).
+- **Non-PR triggers**: `claude-code-action` crashes for `workflow_dispatch` and `schedule` triggers that lack PR context. Use plain bash scripts for these (as done with the health monitor).
+- **API billing**: GitHub Actions workflows use the `ANTHROPIC_API_KEY` (API billing), not the Claude Code subscription. Estimated cost: ~$30-80/month depending on PR volume and Sentry issue count.
+
+---
+
 ## Common Tasks
 
 ### Adding a New Page
