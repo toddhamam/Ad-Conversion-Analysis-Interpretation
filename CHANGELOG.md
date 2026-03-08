@@ -1,16 +1,17 @@
 # Changelog
 
-## 2026-03-08 — Claude Code CI/CD automations with Opus 4.6
+## 2026-03-08 — Claude Code CI/CD automations
 
 ### Added
-- **`.github/workflows/claude-pr-review.yml`** — Automated PR review on every pull request using Claude Opus 4.6. Checks for security vulnerabilities (XSS, injection, token exposure), logic errors, performance issues (`transition: all`, missing AbortController timeouts, memory leaks), Vercel function count compliance, CSS variable usage, and Meta token exposure. Also responds to `@claude` mentions in PR/issue comments for interactive code assistance.
-- **`.github/workflows/sentry-auto-triage.yml`** — Scheduled Sentry error triage running weekdays at 8am UTC. Fetches unresolved issues via Sentry REST API, analyzes stack traces, determines severity, creates fix PRs for critical/high issues, and files GitHub issues for medium/low errors. Uses Opus 4.6 for deep multi-step reasoning.
-- **`.github/workflows/daily-health-monitor.yml`** — Daily platform health check at 7am UTC. Monitors 5 services (production site, Supabase, Sentry new errors, client credential expiry, Stripe API) and posts a formatted status report to a dedicated Telegram topic with pass/warn/fail indicators.
+- **`.github/workflows/claude-pr-review.yml`** — Automated PR review on every pull request using Claude (Sonnet 4.6). Checks for security vulnerabilities (XSS, injection, token exposure), logic errors, performance issues (`transition: all`, missing AbortController timeouts, memory leaks), Vercel function count compliance, CSS variable usage, and Meta token exposure. Also responds to `@claude` mentions in PR/issue comments for interactive code assistance. Accepts bot comments from `github-actions[bot]` for CI auto-fix chaining.
+- **`.github/workflows/sentry-auto-triage.yml`** — Scheduled Sentry error triage running weekdays at 8am UTC. Fetches unresolved issues via Sentry REST API, analyzes stack traces, determines severity, creates fix PRs for critical/high issues, and files GitHub issues for medium/low errors.
+- **`.github/workflows/daily-health-monitor.yml`** — Daily platform health check at 7am UTC (pure bash, no AI dependency). Monitors 5 services (production site, Supabase, Sentry new errors, client credential expiry, Stripe API) and posts a formatted status report to a dedicated Telegram topic (`chat_id=-1003806442463`, `message_thread_id=145`) with pass/warn/fail indicators.
+- **`.github/workflows/ci-auto-fix.yml`** — Automatic build failure remediation. Triggers on failed Vercel deployments (`deployment_status` event), reproduces the build locally to capture error output, finds the associated PR, and posts the errors as a PR comment with `@claude` tag. The PR review respond job then picks up the mention and attempts to fix the code.
 
 ### Changed
-- All three workflows use `--model claude-opus-4-6` for maximum reasoning capability.
 - PR auto-review job has `continue-on-error: true` so review failures never block PR merges.
-- Workflows use `anthropics/claude-code-action@v1` with OIDC authentication (`id-token: write` permission).
+- PR review and Sentry triage use `anthropics/claude-code-action@v1` with OIDC authentication. Health monitor uses plain bash (no SDK dependency).
+- `claude-code-action` uses the default model (Sonnet 4.6) — explicit model selection via `--model` or `settings` causes SDK crashes in the current SDK version (`@anthropic-ai/claude-agent-sdk@0.2.70`).
 
 ---
 
