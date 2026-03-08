@@ -1,0 +1,101 @@
+name: CI Auto-Fix
+
+on:
+  deployment_status:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  auto-fix:
+    # Only run on failed Vercel deployments
+    if: github.event.deployment_status.state == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.deployment.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps 2>&1 | tail -5
+
+      - name: Reproduce build failure
+        id: build
+        continue-on-error: true
+        run: |
+          npm run build 2>&1 | tee /tmp/build-output.txt
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Find associated PR
+        id: pr
+        if: steps.build.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA="${{ github.event.deployment.sha }}"
+
+          # Try finding PR by commit SHA
+          PR=$(gh pr list --search "$SHA" --state open --json number --jq '.[0].number // empty')
+
+          # Fallback: find by branch
+          if [ -z "$PR" ]; then
+            BRANCH=$(git branch -r --contains "$SHA" 2>/dev/null | grep -v HEAD | head -1 | sed 's|origin/||' | xargs)
+            if [ -n "$BRANCH" ]; then
+              PR=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+            fi
+          fi
+
+          echo "number=$PR" >> "$GITHUB_OUTPUT"
+          echo "PR found: ${PR:-none}"
+
+      - name: Post build errors to PR
+        if: steps.build.outcome == 'failure' && steps.pr.outputs.number
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Extract last 80 lines of build output
+          ERRORS=$(tail -80 /tmp/build-output.txt)
+
+          # Write comment body to a temp file to avoid escaping issues
+          cat > /tmp/comment.md << 'HEADER'
+          ## ❌ Vercel Build Failed — Auto-Fix Requested
+
+          The deployment failed to build. Build errors below.
+
+          <details>
+          <summary>Build output (last 80 lines)</summary>
+
+          ```
+          HEADER
+
+          echo "$ERRORS" >> /tmp/comment.md
+
+          cat >> /tmp/comment.md << 'FOOTER'
+          ```
+
+          </details>
+
+          @claude The Vercel build failed with the errors shown above. Please:
+          1. Read the build errors carefully
+          2. Identify the root cause (TypeScript errors, missing imports, type mismatches, etc.)
+          3. Fix the code on this branch
+          4. Verify the fix compiles by running `npm run build`
+
+          Remember: don't add new api/*.ts files (12 function limit), use `catch (error: unknown)`, use CSS variables not hardcoded colors.
+          FOOTER
+
+          gh pr comment "${{ steps.pr.outputs.number }}" --body-file /tmp/comment.md
+
+      - name: Log if no PR found
+        if: steps.build.outcome == 'failure' && !steps.pr.outputs.number
+        run: echo "::warning::Build failed but no associated PR found for SHA ${{ github.event.deployment.sha }}"
