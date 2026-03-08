@@ -186,7 +186,7 @@ function localTimeToUtc(date: Date, hour: number, timezone: string): Date {
 
 // ─── Credential Loading ───────────────────────────────────────────────────────
 
-async function loadAccessToken(organizationId: string): Promise<string | null> {
+export async function loadAccessToken(organizationId: string): Promise<string | null> {
   const { data: cred } = await supabase
     .from('organization_credentials')
     .select('access_token_encrypted, status')
@@ -205,14 +205,14 @@ async function loadAccessToken(organizationId: string): Promise<string | null> {
 
 // ─── Data Fetching ────────────────────────────────────────────────────────────
 
-interface FetchedMetrics {
+export interface FetchedMetrics {
   stats: DashboardStats;
   rawMeta: RawMetaData;
   accountLevel: AccountLevelData;
   accountName?: string;
 }
 
-async function fetchMetricsForAccount(
+export async function fetchMetricsForAccount(
   accessToken: string,
   adAccountId: string,
   datePreset: string,
