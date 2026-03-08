@@ -1,0 +1,56 @@
+name: Claude PR Review
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  # Auto-review on PR open/update
+  auto-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review this PR. Focus on:
+            1. Security vulnerabilities (XSS, injection, token exposure, OWASP top 10)
+            2. Logic errors and definite bugs
+            3. Performance issues (transition: all, missing AbortController timeouts, memory leaks from base64 data)
+            4. Vercel serverless function count (must stay at 12 or fewer api/*.ts files)
+            5. CSS variables used instead of hardcoded colors
+            6. Meta access tokens never sent to browser
+            7. No catch (error: any) — must use catch (error: unknown)
+
+            Do NOT flag: style preferences, formatting, missing comments, pre-existing issues, or anything a linter would catch.
+            Only comment on high-signal issues that could cause production problems.
+          claude_args: "--max-turns 5 --model claude-sonnet-4-6"
+
+  # Respond to @claude mentions in PR/issue comments
+  respond:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--max-turns 10 --model claude-sonnet-4-6"
