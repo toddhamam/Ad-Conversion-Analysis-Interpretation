@@ -760,6 +760,133 @@
   color: #ef4444;
 }
 
+/* ─── Semantic Search ────────────────────────────── */
+
+.ad-library-semantic-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.ad-library-semantic-toggle {
+  padding: 6px 14px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.ad-library-semantic-toggle:hover {
+  border-color: var(--accent-violet);
+  color: var(--accent-violet);
+}
+
+.ad-library-semantic-toggle.active {
+  background: rgba(168, 85, 247, 0.1);
+  border-color: var(--accent-violet);
+  color: var(--accent-violet);
+}
+
+.ad-library-semantic-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 7px 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  transition: border-color 0.2s ease;
+}
+
+.ad-library-semantic-input:focus {
+  outline: none;
+  border-color: var(--accent-violet);
+}
+
+.ad-library-semantic-input::placeholder {
+  color: var(--text-muted);
+}
+
+.ad-library-semantic-btn {
+  padding: 7px 16px;
+  border: 1px solid var(--accent-violet);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-violet);
+  background: rgba(168, 85, 247, 0.06);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s ease;
+}
+
+.ad-library-semantic-btn:hover:not(:disabled) {
+  background: rgba(168, 85, 247, 0.12);
+}
+
+.ad-library-semantic-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ad-library-embedding-progress {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Similarity badge */
+.ad-library-similarity-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 100px;
+  white-space: nowrap;
+}
+
+.ad-library-similarity-badge.high {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.ad-library-similarity-badge.medium {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.ad-library-similarity-badge.low {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-muted);
+}
+
+/* Find similar button */
+.ad-library-find-similar-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.ad-library-find-similar-btn:hover {
+  border-color: var(--accent-violet);
+  color: var(--accent-violet);
+  background: rgba(168, 85, 247, 0.04);
+}
+
 /* ─── Responsive ─────────────────────────────────── */
 
 @media (max-width: 900px) {
@@ -785,6 +912,15 @@
 
   .ad-library-advanced-filters {
     grid-template-columns: 1fr;
+  }
+
+  .ad-library-semantic-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ad-library-semantic-input {
+    min-width: unset;
   }
 
   .ad-library-card-hero-top {

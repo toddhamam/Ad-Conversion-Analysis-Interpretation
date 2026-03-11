@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { searchAdLibrary, fetchSnapshotImages, type AdLibraryResult } from '../services/metaApi';
 import type { AdLibraryInspiration } from '../types';
+import { isEmbeddingAvailable, embedText, batchEmbed, cosineSimilarity } from '../services/embeddingService';
 import './AdLibraryBrowser.css';
 
 // EU/UK countries where commercial ads are available via the Ad Library API.
@@ -128,6 +129,12 @@ function hashString(str: string): string {
   return Math.abs(hash).toString(36);
 }
 
+function getResultKey(result: AdLibraryResult): string {
+  if (result.ad_snapshot_url) return result.ad_snapshot_url;
+  const text = [...(result.ad_creative_bodies || []), ...(result.ad_creative_link_titles || [])].join(' ');
+  return hashString(text + (result.page_id || ''));
+}
+
 interface AdLibraryBrowserProps {
   savedInspirations: AdLibraryInspiration[];
   onSaveInspiration: (inspiration: AdLibraryInspiration) => void;
@@ -162,6 +169,15 @@ export default function AdLibraryBrowser({
 
   // Preview image URLs extracted from snapshot pages (snapshot_url → image_url)
   const [previewImages, setPreviewImages] = useState<Record<string, string | null>>({});
+
+  // Semantic search state
+  const [semanticMode, setSemanticMode] = useState(false);
+  const [semanticQuery, setSemanticQuery] = useState('');
+  const [queryEmbedding, setQueryEmbedding] = useState<number[] | null>(null);
+  const [resultEmbeddings, setResultEmbeddings] = useState<Map<string, number[]>>(new Map());
+  const [isEmbedding, setIsEmbedding] = useState(false);
+  const [embeddingProgress, setEmbeddingProgress] = useState('');
+  const embeddingsAvailable = isEmbeddingAvailable();
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -199,6 +215,63 @@ export default function AdLibraryBrowser({
     });
   }, [results]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Compute embeddings for results when semantic mode is active
+  useEffect(() => {
+    if (!semanticMode || results.length === 0 || !embeddingsAvailable) return;
+
+    const toEmbed: { key: string; text: string }[] = [];
+    for (const r of results) {
+      const key = getResultKey(r);
+      if (resultEmbeddings.has(key)) continue;
+      const text = [
+        ...(r.ad_creative_link_titles || []),
+        ...(r.ad_creative_bodies || []),
+      ].join(' ').trim();
+      if (text) toEmbed.push({ key, text });
+    }
+
+    if (toEmbed.length === 0) return;
+
+    let cancelled = false;
+    setIsEmbedding(true);
+    setEmbeddingProgress(`ConversionIQ™ analyzing ${toEmbed.length} ads...`);
+
+    batchEmbed(
+      toEmbed.map(t => ({ text: t.text })),
+      'RETRIEVAL_DOCUMENT',
+      (completed, total) => {
+        if (!cancelled) setEmbeddingProgress(`ConversionIQ™ analyzing ${completed}/${total} ads...`);
+      }
+    ).then(vectors => {
+      if (cancelled) return;
+      setResultEmbeddings(prev => {
+        const next = new Map(prev);
+        for (let i = 0; i < toEmbed.length; i++) {
+          if (vectors[i]) next.set(toEmbed[i].key, vectors[i]!);
+        }
+        return next;
+      });
+      setIsEmbedding(false);
+      setEmbeddingProgress('');
+    });
+
+    return () => {
+      cancelled = true;
+      setIsEmbedding(false);
+      setEmbeddingProgress('');
+    };
+  }, [semanticMode, results, embeddingsAvailable]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Similarity scores (recomputed when query or result embeddings change)
+  const similarityScores = useMemo(() => {
+    if (!queryEmbedding || resultEmbeddings.size === 0) return new Map<string, number>();
+    const scores = new Map<string, number>();
+    for (const [key, vec] of resultEmbeddings) {
+      scores.set(key, cosineSimilarity(queryEmbedding, vec));
+    }
+    return scores;
+  }, [queryEmbedding, resultEmbeddings]);
+
   // Apply client-side filters and sorting
   const filteredResults = useMemo(() => {
     let filtered = results;
@@ -216,7 +289,14 @@ export default function AdLibraryBrowser({
 
     // Sort
     const sorted = [...filtered];
-    if (sortBy === 'duration') {
+    if (semanticMode && queryEmbedding && similarityScores.size > 0) {
+      // Semantic similarity sort takes precedence when active
+      sorted.sort((a, b) => {
+        const scoreA = similarityScores.get(getResultKey(a)) ?? -1;
+        const scoreB = similarityScores.get(getResultKey(b)) ?? -1;
+        return scoreB - scoreA;
+      });
+    } else if (sortBy === 'duration') {
       sorted.sort((a, b) => {
         const dA = calculateDuration(a.ad_delivery_start_time || '', a.ad_delivery_stop_time || undefined).days;
         const dB = calculateDuration(b.ad_delivery_start_time || '', b.ad_delivery_stop_time || undefined).days;
@@ -232,7 +312,7 @@ export default function AdLibraryBrowser({
     // 'relevance' = keep API order
 
     return sorted;
-  }, [results, minDuration, sortBy]);
+  }, [results, minDuration, sortBy, semanticMode, queryEmbedding, similarityScores]);
 
   const doSearch = useCallback(async (query: string, cursor?: string) => {
     if (!query.trim()) return;
@@ -242,6 +322,8 @@ export default function AdLibraryBrowser({
     if (!cursor) {
       setResults([]);
       setTotalFetched(0);
+      setResultEmbeddings(new Map());
+      setQueryEmbedding(null);
     }
 
     try {
@@ -307,6 +389,27 @@ export default function AdLibraryBrowser({
       onSaveInspiration(inspiration);
     }
   }, [savedIds, onSaveInspiration, onRemoveInspiration]);
+
+  const handleSemanticSearch = useCallback(async () => {
+    if (!semanticQuery.trim() || !embeddingsAvailable) return;
+    setIsEmbedding(true);
+    setEmbeddingProgress('ConversionIQ™ matching your description...');
+    const vector = await embedText(semanticQuery.trim(), 'RETRIEVAL_QUERY');
+    setQueryEmbedding(vector);
+    setIsEmbedding(false);
+    setEmbeddingProgress('');
+  }, [semanticQuery, embeddingsAvailable]);
+
+  const handleFindSimilar = useCallback((result: AdLibraryResult) => {
+    const key = getResultKey(result);
+    const embedding = resultEmbeddings.get(key);
+    if (!embedding) return;
+    setQueryEmbedding(embedding);
+    const title = (result.ad_creative_link_titles || [])[0]
+      || (result.ad_creative_bodies || [])[0]?.slice(0, 50)
+      || 'this ad';
+    setSemanticQuery(`Similar to: ${title}`);
+  }, [resultEmbeddings]);
 
   const activeFilterCount = [
     platform !== '',
@@ -513,6 +616,46 @@ export default function AdLibraryBrowser({
             </div>
           )}
 
+          {/* Semantic search (after keyword results loaded) */}
+          {embeddingsAvailable && results.length > 0 && (
+            <div className="ad-library-semantic-row">
+              <button
+                className={`ad-library-semantic-toggle ${semanticMode ? 'active' : ''}`}
+                onClick={() => {
+                  const next = !semanticMode;
+                  setSemanticMode(next);
+                  if (!next) setQueryEmbedding(null);
+                }}
+              >
+                Semantic Search
+              </button>
+              {semanticMode && (
+                <>
+                  <input
+                    type="text"
+                    className="ad-library-semantic-input"
+                    placeholder="Describe the ad style or message you're looking for..."
+                    value={semanticQuery}
+                    onChange={e => setSemanticQuery(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleSemanticSearch();
+                    }}
+                  />
+                  <button
+                    className="ad-library-semantic-btn"
+                    onClick={handleSemanticSearch}
+                    disabled={isEmbedding || !semanticQuery.trim()}
+                  >
+                    {isEmbedding ? '...' : 'Match'}
+                  </button>
+                </>
+              )}
+              {isEmbedding && embeddingProgress && (
+                <span className="ad-library-embedding-progress">{embeddingProgress}</span>
+              )}
+            </div>
+          )}
+
           {/* Results count bar */}
           {filteredResults.length > 0 && (
             <div className="ad-library-results-bar">
@@ -520,9 +663,11 @@ export default function AdLibraryBrowser({
                 {filteredResults.length} ad{filteredResults.length !== 1 ? 's' : ''}
                 {minDuration > 0 && ` (filtered from ${totalFetched})`}
               </span>
-              {sortBy === 'duration' && (
+              {semanticMode && queryEmbedding && similarityScores.size > 0 ? (
+                <span className="ad-library-results-hint">sorted by semantic match</span>
+              ) : sortBy === 'duration' ? (
                 <span className="ad-library-results-hint">sorted by longest running</span>
-              )}
+              ) : null}
             </div>
           )}
 
@@ -589,6 +734,16 @@ export default function AdLibraryBrowser({
                             {duration.tier === 'long' ? '🔥 ' : ''}{duration.label}
                             {!result.ad_delivery_stop_time ? ' (active)' : ''}
                           </span>
+                          {semanticMode && (() => {
+                            const score = similarityScores.get(getResultKey(result));
+                            if (score === undefined) return null;
+                            const pct = Math.round(score * 100);
+                            return (
+                              <span className={`ad-library-similarity-badge ${pct >= 70 ? 'high' : pct >= 40 ? 'medium' : 'low'}`}>
+                                {pct}% match
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
 
@@ -638,6 +793,14 @@ export default function AdLibraryBrowser({
                         >
                           {isSaved ? '✓ Saved' : '+ Save as Inspiration'}
                         </button>
+                        {semanticMode && resultEmbeddings.has(getResultKey(result)) && (
+                          <button
+                            className="ad-library-find-similar-btn"
+                            onClick={() => handleFindSimilar(result)}
+                          >
+                            Find similar
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

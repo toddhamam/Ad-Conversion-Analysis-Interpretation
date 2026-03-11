@@ -853,3 +853,248 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ─── Creative Fatigue Section ──────────────────────────────────────────────── */
+
+.fatigue-section .section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.fatigue-section .section-header h3 {
+  margin-bottom: 0;
+}
+
+.fatigue-coverage {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.fatigue-content {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+}
+
+.fatigue-gauge-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.fatigue-gauge {
+  position: relative;
+  width: 120px;
+  height: 120px;
+}
+
+.fatigue-ring {
+  width: 100%;
+  height: 100%;
+}
+
+.fatigue-score-inner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.fatigue-score-value {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.fatigue-score-max {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-left: 1px;
+}
+
+.fatigue-label {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.fatigue-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.fatigue-recommendation {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin: 0 0 16px 0;
+}
+
+.fatigue-pairs {
+  display: flex;
+  gap: 16px;
+}
+
+.fatigue-pair {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+}
+
+.fatigue-pair .pair-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.fatigue-pair .pair-similarity {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.most-similar .pair-similarity {
+  color: #ef4444;
+}
+
+.least-similar .pair-similarity {
+  color: #10b981;
+}
+
+.fatigue-pair .pair-headlines {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+@media (max-width: 768px) {
+  .fatigue-content {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .fatigue-pairs {
+    flex-direction: column;
+  }
+}
+
+/* ─── Visual Clusters Section ───────────────────────────────────────────────── */
+
+.clusters-section .section-description {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: -12px 0 20px 0;
+  line-height: 1.5;
+}
+
+.clusters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.cluster-card {
+  position: relative;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+}
+
+.cluster-card.best-cluster {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.cluster-card.worst-cluster {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.04);
+}
+
+.cluster-badge {
+  position: absolute;
+  top: -10px;
+  right: 12px;
+  padding: 2px 10px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.cluster-badge.best {
+  background: #10b981;
+  color: white;
+}
+
+.cluster-badge.worst {
+  background: #ef4444;
+  color: white;
+}
+
+.cluster-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 16px 0;
+}
+
+.cluster-metrics {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.cluster-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cluster-metric-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.cluster-metric-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.cluster-top-headline {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .clusters-grid {
+    grid-template-columns: 1fr;
+  }
+}

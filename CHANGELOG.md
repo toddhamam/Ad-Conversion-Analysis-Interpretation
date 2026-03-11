@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-03-11 — Gemini Multimodal Embeddings Integration
+
+### Added
+- **`src/services/embeddingService.ts`** — Core embedding service wrapping Gemini `gemini-embedding-2-preview` multimodal API. Provides text and image embedding (768-dim normalized vectors), cosine similarity, pairwise similarity matrix, k-means clustering with silhouette score optimization, batch embedding with rate-limit-safe delays, and `isEmbeddingAvailable()` gate for graceful degradation when API key is not configured.
+- **`src/services/embeddingStore.ts`** — IndexedDB persistence layer for embedding vectors (`convertra_embeddings` database). Stores 768-dim vectors separately from localStorage to avoid quota competition with the base64 image cache. Includes model version checking for automatic invalidation when the embedding model changes.
+- **Semantic Reference Image Selection** — When generating new ad creatives, reference images are now ranked by semantic similarity to the generation context (product + audience + concept angle) rather than purely by conversion rate. Falls back to CVR-based selection when insufficient embeddings exist.
+- **Creative Fatigue Detection** — Channel analysis now computes a quantifiable 0-100 fatigue score measuring how similar active ads are using pairwise cosine similarity of multimodal embeddings. Displayed as a circular gauge in the Insights panel with most/least similar pair callouts and recommendations.
+- **Visual Clustering** — Ads with 6+ embedded creatives are grouped by visual/thematic style using k-means clustering on embedding vectors. Each cluster shows style description (GPT-generated), ad count, avg CVR, avg CPA, and best/worst performance badges.
+- **Semantic Ad Copy Search** — Ad Library browser gains a "Semantic Search" toggle that embeds all keyword search results and allows re-ranking by semantic similarity to a natural language description. Includes "Find similar" button on each card and similarity % match badges.
+
+### Changed
+- **`src/services/imageCache.ts`** — Extended `CachedImage` interface with optional `headline` and `bodyText` fields. Added `getSemanticallySimilarImages()`, `computeMissingEmbeddings()`, and `getAverageCVR()` functions. Updated `captureImage()` and `storeImageFromUrl()` signatures to accept text metadata.
+- **`src/services/openaiApi.ts`** — Extended `ChannelAnalysisResult` with `creativeFatigue` and `visualClusters` fields. Modified `analyzeChannelPerformance()` to self-sufficiently acquire images (works without MetaAds page visit), compute embeddings, detect fatigue, and run clustering. Modified `regenerateAllImages()` to use semantic reference selection.
+- **`src/components/ChannelInsightsPanel.tsx`** — Added Creative Fatigue Score section (SVG gauge, pair callouts, recommendations) and Visual Style Performance section (cluster cards with per-style metrics).
+- **`src/components/AdLibraryBrowser.tsx`** — Added semantic search mode with embedding computation, similarity-based re-sorting, match percentage badges, and "Find similar" functionality.
+- **`src/pages/MetaAds.tsx`** — Pass `headline` and `bodySnippet` to `captureImage()` and `storeImageFromUrl()` calls so cached images carry text metadata for embedding computation.
+
+---
+
 ## 2026-03-08 — External Reports API + MCP Server
 
 ### Added

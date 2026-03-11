@@ -2,7 +2,9 @@
 console.log('🤖 openaiApi.ts loaded at', new Date().toISOString());
 
 // Import image cache for using captured reference images
-import { getTopHighQualityCachedImages } from './imageCache';
+import { getTopHighQualityCachedImages, getCachedImage, storeImageFromUrl, getSemanticallySimilarImages, computeMissingEmbeddings, getAverageCVR } from './imageCache';
+import { isEmbeddingAvailable, embedText, embedMultimodal, pairwiseSimilarityMatrix, kMeansClustering, findOptimalK, cosineSimilarity } from './embeddingService';
+import { getEmbedding, setEmbedding } from './embeddingStore';
 import { getAuthToken } from '../lib/authToken';
 import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
 
@@ -1194,6 +1196,30 @@ export interface ChannelAnalysisResult {
     suggestedFix: string;
     imageUrl?: string; // Image URL for reference
   }>;
+
+  // Creative Fatigue Detection (embedding-based)
+  creativeFatigue?: {
+    score: number;              // 0-100 (0 = diverse, 100 = all ads identical)
+    label: 'Low' | 'Moderate' | 'High' | 'Severe';
+    avgPairwiseSimilarity: number;
+    mostSimilarPair?: { adId1: string; adId2: string; similarity: number; headline1: string; headline2: string };
+    leastSimilarPair?: { adId1: string; adId2: string; similarity: number; headline1: string; headline2: string };
+    recommendation: string;
+    adsEmbedded: number;
+    adsSkipped: number;
+  };
+
+  // Visual Clustering (embedding-based)
+  visualClusters?: Array<{
+    clusterId: number;
+    styleDescription: string;
+    adCount: number;
+    adIds: string[];
+    avgConversionRate: number;
+    avgCPA: number;
+    topPerformerHeadline: string;
+    representativeAdId?: string;
+  }>;
 }
 
 // Type for multimodal message content
@@ -1624,6 +1650,253 @@ Return ONLY the JSON object, no additional text.`;
       }));
     }
 
+    // ─── Creative Fatigue Detection & Visual Clustering (Embedding-Based) ────
+    // Runs after GPT analysis. Embeds ad creatives to quantify diversity
+    // and cluster by visual style. Wrapped in try/catch — failures don't break analysis.
+    let creativeFatigue: ChannelAnalysisResult['creativeFatigue'];
+    let visualClusters: ChannelAnalysisResult['visualClusters'];
+
+    if (isEmbeddingAvailable()) {
+      try {
+        console.log('🧬 Computing creative fatigue score via embeddings...');
+
+        // Acquire images for ads that aren't in the cache yet
+        // This makes Insights self-sufficient — works without visiting MetaAds first
+        const embeddableAds: Array<{ ad: AdCreativeData; base64: string; mimeType: string }> = [];
+        let skippedCount = 0;
+
+        for (const ad of ads) {
+          // Check cache first
+          let cached = getCachedImage(ad.id);
+
+          // If not cached and has a non-CDN image URL, try to fetch it
+          if (!cached && ad.imageUrl) {
+            const isFacebookCdn = ad.imageUrl.includes('fbcdn.net') ||
+                                   ad.imageUrl.includes('facebook.com') ||
+                                   ad.imageUrl.includes('fb.com');
+            if (!isFacebookCdn) {
+              cached = await storeImageFromUrl(ad.imageUrl, ad.id, ad.conversionRate, 40, ad.headline, ad.bodyText);
+            }
+          }
+
+          if (cached?.base64Data) {
+            embeddableAds.push({ ad, base64: cached.base64Data, mimeType: cached.mimeType });
+          } else {
+            skippedCount++;
+          }
+        }
+
+        console.log(`🧬 Embeddable ads: ${embeddableAds.length}, skipped: ${skippedCount}`);
+
+        if (embeddableAds.length >= 3) {
+          // Compute embeddings for each ad
+          const adVectors: Array<{ adId: string; headline: string; vector: number[] }> = [];
+
+          for (const { ad, base64, mimeType } of embeddableAds) {
+            // Check IndexedDB cache first
+            let stored = await getEmbedding(ad.id);
+            if (stored?.vector) {
+              adVectors.push({ adId: ad.id, headline: ad.headline, vector: stored.vector });
+              continue;
+            }
+
+            // Compute new embedding
+            const textContent = `${ad.headline}. ${ad.bodyText?.slice(0, 200) || ''}`;
+            const vector = await embedMultimodal(textContent, base64, mimeType, 'SEMANTIC_SIMILARITY');
+            if (vector) {
+              await setEmbedding(ad.id, vector, textContent);
+              adVectors.push({ adId: ad.id, headline: ad.headline, vector });
+            }
+          }
+
+          console.log(`🧬 Computed ${adVectors.length} embeddings for fatigue analysis`);
+
+          if (adVectors.length >= 3) {
+            // ── Fatigue Detection ──
+            const vectors = adVectors.map(v => v.vector);
+            const simMatrix = pairwiseSimilarityMatrix(vectors);
+
+            // Compute average pairwise similarity (upper triangle only)
+            let totalSim = 0;
+            let pairCount = 0;
+            let mostSimilar = { i: 0, j: 1, sim: -Infinity };
+            let leastSimilar = { i: 0, j: 1, sim: Infinity };
+
+            for (let i = 0; i < simMatrix.length; i++) {
+              for (let j = i + 1; j < simMatrix.length; j++) {
+                const sim = simMatrix[i][j];
+                totalSim += sim;
+                pairCount++;
+                if (sim > mostSimilar.sim) mostSimilar = { i, j, sim };
+                if (sim < leastSimilar.sim) leastSimilar = { i, j, sim };
+              }
+            }
+
+            const avgSim = pairCount > 0 ? totalSim / pairCount : 0;
+
+            // Map avg similarity to fatigue score (0-100)
+            let fatigueScore: number;
+            let fatigueLabel: 'Low' | 'Moderate' | 'High' | 'Severe';
+            if (avgSim < 0.3) {
+              fatigueScore = Math.round(avgSim / 0.3 * 25);
+              fatigueLabel = 'Low';
+            } else if (avgSim < 0.5) {
+              fatigueScore = Math.round(25 + ((avgSim - 0.3) / 0.2) * 25);
+              fatigueLabel = 'Moderate';
+            } else if (avgSim < 0.7) {
+              fatigueScore = Math.round(50 + ((avgSim - 0.5) / 0.2) * 25);
+              fatigueLabel = 'High';
+            } else {
+              fatigueScore = Math.round(75 + ((avgSim - 0.7) / 0.3) * 25);
+              fatigueLabel = 'Severe';
+            }
+            fatigueScore = Math.min(100, Math.max(0, fatigueScore));
+
+            // Generate recommendation
+            const recommendations: Record<string, string> = {
+              'Low': 'Your ad creatives show healthy diversity. Keep testing varied visual styles and messaging angles.',
+              'Moderate': 'Your creatives are becoming somewhat similar. Consider introducing new visual styles or messaging angles to maintain audience engagement.',
+              'High': 'Creative fatigue detected. Your ads are visually and thematically clustered. Prioritize generating creatives with fresh visual approaches, different color palettes, and new messaging frameworks.',
+              'Severe': 'Severe creative fatigue. Most of your ads look and sound alike. Audiences are likely experiencing banner blindness. Immediately diversify your creative strategy with fundamentally different visual styles and value propositions.',
+            };
+
+            creativeFatigue = {
+              score: fatigueScore,
+              label: fatigueLabel,
+              avgPairwiseSimilarity: avgSim,
+              mostSimilarPair: {
+                adId1: adVectors[mostSimilar.i].adId,
+                adId2: adVectors[mostSimilar.j].adId,
+                similarity: mostSimilar.sim,
+                headline1: adVectors[mostSimilar.i].headline,
+                headline2: adVectors[mostSimilar.j].headline,
+              },
+              leastSimilarPair: {
+                adId1: adVectors[leastSimilar.i].adId,
+                adId2: adVectors[leastSimilar.j].adId,
+                similarity: leastSimilar.sim,
+                headline1: adVectors[leastSimilar.i].headline,
+                headline2: adVectors[leastSimilar.j].headline,
+              },
+              recommendation: recommendations[fatigueLabel],
+              adsEmbedded: adVectors.length,
+              adsSkipped: ads.length - adVectors.length,
+            };
+
+            console.log(`🧬 Creative Fatigue Score: ${fatigueScore}/100 (${fatigueLabel}) — avg similarity: ${avgSim.toFixed(3)}`);
+
+            // ── Visual Clustering ──
+            if (adVectors.length >= 6) {
+              console.log('🧬 Computing visual style clusters...');
+              const maxK = Math.min(5, Math.floor(adVectors.length / 2));
+              const optimalK = findOptimalK(vectors, 2, maxK);
+              const clusterResult = kMeansClustering(vectors, optimalK, 50, 3);
+
+              // Build cluster data
+              const clusterMap = new Map<number, typeof adVectors>();
+              clusterResult.clusters.forEach((clusterId, idx) => {
+                const existing = clusterMap.get(clusterId) || [];
+                existing.push(adVectors[idx]);
+                clusterMap.set(clusterId, existing);
+              });
+
+              // Build ad metrics lookup
+              const adMetricsMap = new Map<string, AdCreativeData>();
+              ads.forEach(ad => adMetricsMap.set(ad.id, ad));
+
+              const clusters: ChannelAnalysisResult['visualClusters'] = [];
+              let clusterIdx = 0;
+              for (const [clusterId, members] of clusterMap) {
+                if (members.length < 2) continue; // Skip degenerate clusters
+
+                const clusterAds = members
+                  .map(m => adMetricsMap.get(m.adId))
+                  .filter((a): a is AdCreativeData => Boolean(a));
+
+                const avgCVR = clusterAds.reduce((sum, a) => sum + a.conversionRate, 0) / clusterAds.length;
+                const avgCPA = clusterAds.reduce((sum, a) => {
+                  const cpa = a.conversions > 0 ? a.spend / a.conversions : 0;
+                  return sum + cpa;
+                }, 0) / clusterAds.length;
+
+                // Find representative ad (closest to centroid)
+                const centroid = clusterResult.centroids[clusterId];
+                let representativeIdx = 0;
+                let bestSim = -Infinity;
+                members.forEach((m, idx) => {
+                  const sim = cosineSimilarity(m.vector, centroid);
+                  if (sim > bestSim) {
+                    bestSim = sim;
+                    representativeIdx = idx;
+                  }
+                });
+
+                const topPerformer = clusterAds.sort((a, b) => b.conversionRate - a.conversionRate)[0];
+
+                clusters.push({
+                  clusterId: clusterIdx++,
+                  styleDescription: '', // Will be filled by GPT below
+                  adCount: members.length,
+                  adIds: members.map(m => m.adId),
+                  avgConversionRate: avgCVR,
+                  avgCPA,
+                  topPerformerHeadline: topPerformer?.headline || '',
+                  representativeAdId: members[representativeIdx]?.adId,
+                });
+              }
+
+              // Generate style descriptions via a single GPT call
+              if (clusters.length >= 2) {
+                try {
+                  const clusterSummaries = clusters.map((c, i) => {
+                    const clusterAdData = c.adIds
+                      .map(id => adMetricsMap.get(id))
+                      .filter((a): a is AdCreativeData => Boolean(a));
+                    const headlines = clusterAdData.map(a => `"${a.headline}"`).join(', ');
+                    return `Cluster ${i + 1} (${c.adCount} ads, avg CVR ${c.avgConversionRate.toFixed(2)}%): Headlines: ${headlines}`;
+                  }).join('\n');
+
+                  const descResponse = await callOpenAI([
+                    {
+                      role: 'user',
+                      content: `These ad creatives have been grouped by visual/thematic similarity using embeddings. For each cluster, write a SHORT (3-6 word) visual style label that describes the common visual/thematic thread. Return a JSON array of strings, one per cluster.\n\n${clusterSummaries}\n\nReturn ONLY a JSON array like: ["Dark product photography", "Lifestyle outdoor imagery", "Bold text-heavy design"]`
+                    }
+                  ], { maxTokens: 200, reasoningEffort: 'low' as ReasoningEffort });
+
+                  try {
+                    const descriptions = JSON.parse(descResponse.trim());
+                    if (Array.isArray(descriptions)) {
+                      descriptions.forEach((desc: string, i: number) => {
+                        if (clusters[i]) clusters[i].styleDescription = desc;
+                      });
+                    }
+                  } catch {
+                    // Failed to parse descriptions — leave empty
+                    clusters.forEach((c, i) => {
+                      c.styleDescription = `Visual Style ${i + 1}`;
+                    });
+                  }
+                } catch {
+                  clusters.forEach((c, i) => {
+                    c.styleDescription = `Visual Style ${i + 1}`;
+                  });
+                }
+
+                // Sort by avg conversion rate descending
+                clusters.sort((a, b) => b.avgConversionRate - a.avgConversionRate);
+                visualClusters = clusters;
+                console.log(`🧬 Found ${clusters.length} visual style clusters`);
+              }
+            }
+          }
+        }
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        console.warn('🧬 Embedding-based analysis failed (non-fatal):', msg);
+        // creativeFatigue and visualClusters remain undefined — analysis continues
+      }
+    }
+
     return {
       channelName,
       analyzedAt: new Date().toISOString(),
@@ -1638,6 +1911,8 @@ Return ONLY the JSON object, no additional text.`;
         totalConversions,
       },
       ...parsed,
+      creativeFatigue,
+      visualClusters,
     } as ChannelAnalysisResult;
   } catch (error: unknown) {
     console.error('❌ Failed to parse channel analysis:', error);
@@ -3997,7 +4272,42 @@ export async function regenerateAllImages(config: {
 
   if (USE_GEMINI_FOR_IMAGES && isGeminiConfigured()) {
     const MIN_QUALITY_SCORE = 60;
-    const cachedImages = getTopHighQualityCachedImages(3, MIN_QUALITY_SCORE);
+    let cachedImages;
+
+    // Try semantic reference selection first (embedding-based)
+    if (isEmbeddingAvailable()) {
+      try {
+        // Ensure embeddings are computed for cached images
+        await computeMissingEmbeddings();
+
+        // Build query text from generation context
+        const queryParts: string[] = [];
+        if (config.productContext?.name) queryParts.push(`Product: ${config.productContext.name}`);
+        if (config.productContext?.author) queryParts.push(`by ${config.productContext.author}`);
+        if (config.productContext?.description) queryParts.push(config.productContext.description.slice(0, 200));
+        queryParts.push(`Audience: ${config.audienceType}`);
+        const queryText = queryParts.join('. ');
+
+        const queryEmbedding = await embedText(queryText, 'SEMANTIC_SIMILARITY');
+        if (queryEmbedding) {
+          const avgCVR = getAverageCVR();
+          const semanticImages = await getSemanticallySimilarImages(queryEmbedding, 3, MIN_QUALITY_SCORE, avgCVR);
+          if (semanticImages.length >= 2) {
+            cachedImages = semanticImages;
+            console.log(`🧬 Semantic reference selection: ${semanticImages.length} images (similarity-ranked)`);
+          }
+        }
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        console.warn('🧬 Semantic reference selection failed, falling back to CVR-based:', msg);
+      }
+    }
+
+    // Fallback to existing CVR-based selection
+    if (!cachedImages) {
+      cachedImages = getTopHighQualityCachedImages(3, MIN_QUALITY_SCORE);
+    }
+
     const referenceImages: Array<{ data: string; mimeType: string }> = cachedImages.map(cached => ({
       data: cached.base64Data,
       mimeType: cached.mimeType

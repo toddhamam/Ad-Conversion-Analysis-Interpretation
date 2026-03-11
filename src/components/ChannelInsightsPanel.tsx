@@ -1,5 +1,5 @@
 import type { ChannelAnalysisResult } from '../services/openaiApi';
-import { Rocket, CalendarDays, Target, Palette } from 'lucide-react';
+import { Rocket, CalendarDays, Target, Palette, Activity, Layers } from 'lucide-react';
 import './ChannelInsightsPanel.css';
 
 interface ChannelInsightsPanelProps {
@@ -21,6 +21,13 @@ function getScoreColor(score: number): string {
   if (score >= 8) return '#10b981';
   if (score >= 6) return '#f59e0b';
   return '#ef4444';
+}
+
+function getFatigueColor(score: number): string {
+  if (score <= 25) return '#10b981'; // Green — low fatigue
+  if (score <= 50) return '#f59e0b'; // Yellow — moderate
+  if (score <= 75) return '#f97316'; // Orange — high
+  return '#ef4444'; // Red — severe
 }
 
 function formatDate(isoString: string): string {
@@ -58,6 +65,109 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
           </div>
         </div>
       </section>
+
+      {/* Creative Fatigue Score (Embedding-Based) */}
+      {analysis.creativeFatigue && (
+        <section className="insights-section fatigue-section">
+          <div className="section-header">
+            <h3><Activity size={18} strokeWidth={1.5} style={{ marginRight: 8, verticalAlign: 'text-bottom' }} />Creative Fatigue Score</h3>
+            <span className="fatigue-coverage">Based on {analysis.creativeFatigue.adsEmbedded} of {analysis.creativeFatigue.adsEmbedded + analysis.creativeFatigue.adsSkipped} ads</span>
+          </div>
+          <div className="fatigue-content">
+            <div className="fatigue-gauge-container">
+              <div className="fatigue-gauge" style={{ '--fatigue-color': getFatigueColor(analysis.creativeFatigue.score) } as React.CSSProperties}>
+                <svg viewBox="0 0 120 120" className="fatigue-ring">
+                  <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border-primary)" strokeWidth="8" />
+                  <circle
+                    cx="60" cy="60" r="52"
+                    fill="none"
+                    stroke={getFatigueColor(analysis.creativeFatigue.score)}
+                    strokeWidth="8"
+                    strokeLinecap="round"
+                    strokeDasharray={`${(analysis.creativeFatigue.score / 100) * 327} 327`}
+                    transform="rotate(-90 60 60)"
+                    style={{ transition: 'stroke-dasharray 0.6s ease' }}
+                  />
+                </svg>
+                <div className="fatigue-score-inner">
+                  <span className="fatigue-score-value" style={{ color: getFatigueColor(analysis.creativeFatigue.score) }}>
+                    {analysis.creativeFatigue.score}
+                  </span>
+                  <span className="fatigue-score-max">/100</span>
+                </div>
+              </div>
+              <span className="fatigue-label" style={{ color: getFatigueColor(analysis.creativeFatigue.score) }}>
+                {analysis.creativeFatigue.label} Fatigue
+              </span>
+            </div>
+            <div className="fatigue-details">
+              <p className="fatigue-recommendation">{analysis.creativeFatigue.recommendation}</p>
+              <div className="fatigue-pairs">
+                {analysis.creativeFatigue.mostSimilarPair && (
+                  <div className="fatigue-pair most-similar">
+                    <span className="pair-label">Most Similar Pair</span>
+                    <span className="pair-similarity">{(analysis.creativeFatigue.mostSimilarPair.similarity * 100).toFixed(0)}% similar</span>
+                    <p className="pair-headlines">
+                      "{analysis.creativeFatigue.mostSimilarPair.headline1}" &amp; "{analysis.creativeFatigue.mostSimilarPair.headline2}"
+                    </p>
+                  </div>
+                )}
+                {analysis.creativeFatigue.leastSimilarPair && (
+                  <div className="fatigue-pair least-similar">
+                    <span className="pair-label">Most Diverse Pair</span>
+                    <span className="pair-similarity">{(analysis.creativeFatigue.leastSimilarPair.similarity * 100).toFixed(0)}% similar</span>
+                    <p className="pair-headlines">
+                      "{analysis.creativeFatigue.leastSimilarPair.headline1}" &amp; "{analysis.creativeFatigue.leastSimilarPair.headline2}"
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Visual Style Clusters (Embedding-Based) */}
+      {analysis.visualClusters && analysis.visualClusters.length >= 2 && (
+        <section className="insights-section clusters-section">
+          <div className="section-header">
+            <h3><Layers size={18} strokeWidth={1.5} style={{ marginRight: 8, verticalAlign: 'text-bottom' }} />Visual Style Performance</h3>
+          </div>
+          <p className="section-description">
+            Your ads have been grouped by visual and thematic similarity. Here's how each style performs.
+          </p>
+          <div className="clusters-grid">
+            {analysis.visualClusters.map((cluster, i) => {
+              const isBest = i === 0;
+              const isWorst = i === analysis.visualClusters!.length - 1 && analysis.visualClusters!.length > 1;
+              return (
+                <div key={cluster.clusterId} className={`cluster-card ${isBest ? 'best-cluster' : ''} ${isWorst ? 'worst-cluster' : ''}`}>
+                  {isBest && <span className="cluster-badge best">Best Performing</span>}
+                  {isWorst && <span className="cluster-badge worst">Lowest Performing</span>}
+                  <h4 className="cluster-name">{cluster.styleDescription || `Style ${i + 1}`}</h4>
+                  <div className="cluster-metrics">
+                    <div className="cluster-metric">
+                      <span className="cluster-metric-value">{cluster.adCount}</span>
+                      <span className="cluster-metric-label">Ads</span>
+                    </div>
+                    <div className="cluster-metric">
+                      <span className="cluster-metric-value">{formatPercent(cluster.avgConversionRate)}</span>
+                      <span className="cluster-metric-label">Avg CVR</span>
+                    </div>
+                    <div className="cluster-metric">
+                      <span className="cluster-metric-value">{formatCurrency(cluster.avgCPA)}</span>
+                      <span className="cluster-metric-label">Avg CPA</span>
+                    </div>
+                  </div>
+                  {cluster.topPerformerHeadline && (
+                    <p className="cluster-top-headline">Top: "{cluster.topPerformerHeadline}"</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Performance Metrics */}
       <section className="insights-section metrics-overview">
