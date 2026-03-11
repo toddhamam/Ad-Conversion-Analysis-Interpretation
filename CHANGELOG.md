@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-03-11 — Enable RLS on Credit System Tables
+
+### Fixed
+- **`supabase/migrations/013_enable_rls_credit_tables.sql`** — Enables Row Level Security on `credit_transactions` (missing since migration 012) and re-enables on `usage_tracking` (idempotent safety net). Adds SELECT policy on `credit_transactions` scoped to the user's organization. Resolves Supabase security advisor warnings for both tables.
+
+---
+
 ## 2026-03-11 — Gemini Multimodal Embeddings Integration
 
 ### Added
