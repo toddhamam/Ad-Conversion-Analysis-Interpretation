@@ -138,7 +138,10 @@ const MetaAds = () => {
       const cached = await storeImageFromUrl(
         creative.imageUrl,
         creative.id,
-        creative.conversionRate
+        creative.conversionRate,
+        undefined,
+        creative.headline,
+        creative.bodySnippet
       );
       if (cached) {
         refreshCachedIds();
@@ -219,7 +222,9 @@ const MetaAds = () => {
         creative.imageUrl!,
         creative.id,
         creative.conversionRate,
-        MIN_QUALITY_SCORE // Pass the minimum quality threshold
+        MIN_QUALITY_SCORE, // Pass the minimum quality threshold
+        creative.headline,
+        creative.bodySnippet
       );
 
       if (cached && (cached.qualityScore ?? 0) >= MIN_QUALITY_SCORE) {
@@ -486,7 +491,7 @@ const MetaAds = () => {
                     console.log(`✅ Image loaded successfully for ad ${creative.id}`);
                     // Capture the image for use in ad generation
                     const imgElement = e.currentTarget as HTMLImageElement;
-                    const captured = captureImage(imgElement, creative.id, creative.conversionRate);
+                    const captured = captureImage(imgElement, creative.id, creative.conversionRate, creative.headline, creative.bodySnippet);
                     if (captured) {
                       const stats = getCacheStats();
                       console.log(`📸 Image cache now has ${stats.count} images (top: ${stats.topConversionRate.toFixed(1)}% conv rate)`);

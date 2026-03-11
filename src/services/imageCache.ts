@@ -7,6 +7,9 @@
  */
 
 import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
+import { isEmbeddingAvailable, embedMultimodal, cosineSimilarity } from './embeddingService';
+import { getEmbedding, setEmbedding, getEmbeddings, computeImageHash } from './embeddingStore';
+import type { EmbeddingTaskType } from './embeddingService';
 
 const IMAGE_CACHE_KEY = 'conversion_intelligence_image_cache';
 
@@ -21,6 +24,9 @@ export interface CachedImage {
   height?: number;
   fileSize?: number;  // bytes
   qualityScore?: number; // 0-100, calculated from dimensions
+  // Text metadata for embedding computation (embeddings stored in IndexedDB, not here)
+  headline?: string;      // Ad headline at capture time
+  bodyText?: string;      // Ad body snippet (first 200 chars)
 }
 
 /**
@@ -90,7 +96,9 @@ function saveCache(cache: ImageCache): void {
 export function captureImage(
   imageElement: HTMLImageElement,
   adId: string,
-  conversionRate?: number
+  conversionRate?: number,
+  headline?: string,
+  bodyText?: string
 ): CachedImage | null {
   try {
     // Create a canvas to capture the image
@@ -132,6 +140,8 @@ export function captureImage(
       base64Data: matches[2],
       capturedAt: Date.now(),
       conversionRate,
+      headline: headline?.slice(0, 200),
+      bodyText: bodyText?.slice(0, 200),
     };
 
     // Store in cache
@@ -288,7 +298,9 @@ export async function storeImageFromUrl(
   imageUrl: string,
   adId: string,
   conversionRate: number = 5,
-  minQualityScore: number = 40 // Reject thumbnails by default
+  minQualityScore: number = 40, // Reject thumbnails by default
+  headline?: string,
+  bodyText?: string
 ): Promise<CachedImage | null> {
   // Check if already cached
   const existing = getCachedImage(adId);
@@ -358,6 +370,9 @@ export async function storeImageFromUrl(
         height,
         fileSize,
         qualityScore,
+        // Text metadata for embedding
+        headline: headline?.slice(0, 200),
+        bodyText: bodyText?.slice(0, 200),
       };
 
       // Store in cache
@@ -477,4 +492,141 @@ export async function uploadBrandImages(
 
   console.log(`📸 Uploaded ${results.length} brand images total`);
   return results;
+}
+
+// ─── Semantic Image Selection (Embedding-Based) ─────────────────────────────────
+
+/**
+ * Get cached images ranked by semantic similarity to a query embedding.
+ * Falls back to top-CVR images when embeddings are unavailable.
+ *
+ * @param queryEmbedding - The embedding vector to match against
+ * @param count - Number of images to return
+ * @param minQuality - Minimum quality score threshold
+ * @param minCVR - Minimum conversion rate threshold (use average CVR of all cached images)
+ */
+export async function getSemanticallySimilarImages(
+  queryEmbedding: number[],
+  count: number = 3,
+  minQuality: number = 60,
+  minCVR: number = 0
+): Promise<CachedImage[]> {
+  const allImages = getAllCachedImages();
+  const qualifiedImages = allImages.filter(
+    img => (img.qualityScore ?? 0) >= minQuality && (img.conversionRate ?? 0) >= minCVR
+  );
+
+  if (qualifiedImages.length === 0) {
+    return getTopHighQualityCachedImages(count, minQuality);
+  }
+
+  // Look up embeddings from IndexedDB
+  const adIds = qualifiedImages.map(img => img.adId);
+  const embeddingMap = await getEmbeddings(adIds);
+
+  // Score images by semantic similarity
+  const scored: Array<{ image: CachedImage; similarity: number }> = [];
+  const unscored: CachedImage[] = [];
+
+  for (const img of qualifiedImages) {
+    const stored = embeddingMap.get(img.adId);
+    if (stored?.vector) {
+      scored.push({
+        image: img,
+        similarity: cosineSimilarity(queryEmbedding, stored.vector),
+      });
+    } else {
+      unscored.push(img);
+    }
+  }
+
+  // Sort by similarity (highest first)
+  scored.sort((a, b) => b.similarity - a.similarity);
+
+  // Build result: semantic matches first, then fill with top-CVR fallbacks
+  const result: CachedImage[] = scored.slice(0, count).map(s => s.image);
+
+  if (result.length < count) {
+    // Fill remaining slots with highest-CVR images that aren't already selected
+    const selectedIds = new Set(result.map(img => img.adId));
+    const fallbacks = unscored
+      .filter(img => !selectedIds.has(img.adId))
+      .slice(0, count - result.length);
+    result.push(...fallbacks);
+  }
+
+  console.log(`🔍 Semantic selection: ${scored.length} scored, ${unscored.length} unscored, returning ${result.length}`);
+  return result;
+}
+
+/**
+ * Compute embeddings for cached images that don't have them yet.
+ * Stores embeddings in IndexedDB (not localStorage).
+ * Returns the count of newly computed embeddings.
+ */
+export async function computeMissingEmbeddings(
+  onProgress?: (completed: number, total: number) => void
+): Promise<number> {
+  if (!isEmbeddingAvailable()) return 0;
+
+  const allImages = getAllCachedImages();
+  const needsEmbedding: CachedImage[] = [];
+
+  // Check which images need embeddings
+  for (const img of allImages) {
+    const existing = await getEmbedding(img.adId);
+    if (!existing) {
+      needsEmbedding.push(img);
+    } else if (img.base64Data) {
+      // Check if image has changed (cache invalidation)
+      const currentHash = computeImageHash(img.base64Data);
+      if (existing.imageHash && existing.imageHash !== currentHash) {
+        needsEmbedding.push(img);
+      }
+    }
+  }
+
+  if (needsEmbedding.length === 0) return 0;
+
+  console.log(`Computing embeddings for ${needsEmbedding.length} cached images...`);
+  let computed = 0;
+
+  for (let i = 0; i < needsEmbedding.length; i++) {
+    const img = needsEmbedding[i];
+    const textContent = [img.headline, img.bodyText].filter(Boolean).join('. ');
+
+    try {
+      const vector = await embedMultimodal(
+        textContent || `Ad creative ${img.adId}`,
+        img.base64Data,
+        img.mimeType,
+        'SEMANTIC_SIMILARITY' as EmbeddingTaskType
+      );
+
+      if (vector) {
+        const imgHash = computeImageHash(img.base64Data);
+        await setEmbedding(img.adId, vector, textContent, imgHash);
+        computed++;
+      }
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      console.warn(`Failed to compute embedding for ad ${img.adId}:`, msg);
+    }
+
+    onProgress?.(i + 1, needsEmbedding.length);
+  }
+
+  console.log(`Computed ${computed}/${needsEmbedding.length} embeddings`);
+  return computed;
+}
+
+/**
+ * Get average conversion rate across all cached images.
+ * Used as the minimum threshold for semantic selection.
+ */
+export function getAverageCVR(): number {
+  const images = getAllCachedImages();
+  if (images.length === 0) return 0;
+  const total = images.reduce((sum, img) => sum + (img.conversionRate ?? 0), 0);
+  return total / images.length;
 }
