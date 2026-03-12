@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-03-12 — Meta Ad Policy Guard
+
+### Added
+- **`src/services/adPolicyGuard.ts`** — Meta Advertising Standards compliance engine. Contains 16 copy policy rules (personal attribute assertions, health cure claims, negative self-perception, unrealistic promises, profanity, deceptive content, banned financial products, etc.), 6 image prompt rules (nudity, violence, weapons, tobacco/drugs, before/after comparisons, fake UI), prompt injection text for GPT system prompts, and `IMAGE_SAFETY_DIRECTIVE` for Gemini/DALL-E/Veo prompts. Full policy reference extracted from transparency.meta.com/policies.
+
+### Changed
+- **`src/services/openaiApi.ts`** — Integrated policy guard into all AI generation pipelines:
+  - `sanitizeCopyText()` extended with policy-violating pattern removal (same silent strip-and-clean pattern used for existing banned AI phrases)
+  - `generateCopyOptions()`, `regenerateSingleCopy()`, `generateAudienceAdCopy()` — Meta ad policy rules appended as rule 4 in existing COPY QUALITY RULES system prompt block
+  - `generateAdImageWithGemini()`, `generateAdImageWithDallE()`, `generateAdVideoWithVeo()` — `IMAGE_SAFETY_DIRECTIVE` appended to all image/video prompts
+
+### Design
+- **Invisible to users** — no UI changes, no warnings, no badges. The guard works silently via prompt injection (preventive) and regex sanitization (detective). Users get the same high-converting copy that happens to be policy-compliant.
+- **Zero additional API calls** — prompt injection is extra text in existing calls, regex scan is synchronous client-side.
+
+---
+
 ## 2026-03-11 — Enable RLS on Credit System Tables
 
 ### Fixed
