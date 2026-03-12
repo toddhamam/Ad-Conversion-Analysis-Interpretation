@@ -7,6 +7,7 @@ import { isEmbeddingAvailable, embedText, embedMultimodal, pairwiseSimilarityMat
 import { getEmbedding, setEmbedding } from './embeddingStore';
 import { getAuthToken } from '../lib/authToken';
 import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
+import { META_AD_POLICY_PROMPT, IMAGE_SAFETY_DIRECTIVE, POLICY_SANITIZE_PATTERNS } from './adPolicyGuard';
 
 // Dev-mode fallback key (only used when no auth token is available)
 const OPENAI_API_KEY_FALLBACK = import.meta.env.VITE_OPENAI_API_KEY;
@@ -275,6 +276,10 @@ const BANNED_PHRASE_PATTERNS: RegExp[] = [
 function sanitizeCopyText(text: string): string {
   let cleaned = text.replace(/—/g, ',');
   for (const pattern of BANNED_PHRASE_PATTERNS) {
+    cleaned = cleaned.replace(pattern, '');
+  }
+  // Policy compliance: strip phrases that violate Meta Advertising Standards
+  for (const pattern of POLICY_SANITIZE_PATTERNS) {
     cleaned = cleaned.replace(pattern, '');
   }
   cleaned = cleaned.replace(/  +/g, ' ').trim();
@@ -2494,7 +2499,8 @@ NOTE: No analysis data is available. Run Channel Analysis first for data-driven 
   systemPrompt += `\n\nCOPY QUALITY RULES (NON-NEGOTIABLE):
 1. ${BANNED_PHRASES_PROMPT} If you catch yourself writing any of these, delete it and write something original and specific instead.
 2. SPECIFICITY RULE: Generic claims kill conversions. Every headline and body text must contain at least one CONCRETE element: a number, a timeframe, a named outcome, or a specific mechanism. "Improve your results" is weak. "Cut your CPA 40% in 14 days" is strong.
-3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.`;
+3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.
+4. ${META_AD_POLICY_PROMPT}`;
 
   // Inject business type context
   systemPrompt += `\n\nBUSINESS CONTEXT:\n${btConfig.aiConversionLanguage}`;
@@ -2807,7 +2813,8 @@ ${bv.distinctiveTraits?.length ? `Traits: ${bv.distinctiveTraits.join('; ')}` : 
   systemPrompt += `\n\nCOPY QUALITY RULES (NON-NEGOTIABLE):
 1. ${BANNED_PHRASES_PROMPT}
 2. SPECIFICITY: Include at least one concrete element per headline and body text (a number, timeframe, named outcome, or specific mechanism). No vague claims.
-3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.`;
+3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.
+4. ${META_AD_POLICY_PROMPT}`;
 
   // Inject business context for leadgen
   systemPrompt += `\n\nBUSINESS CONTEXT:\n${btConfig.aiConversionLanguage}`;
@@ -3425,6 +3432,7 @@ Explore fresh visual directions while maintaining professional quality.`,
     );
   }
 
+  promptParts.push('', IMAGE_SAFETY_DIRECTIVE);
   const prompt = promptParts.join('\n');
   console.log('📝 Gemini prompt:', prompt.substring(0, 300) + '...');
 
@@ -3676,6 +3684,7 @@ async function generateAdImageWithDallE(config: {
       : `Create a visually striking ${sizeConfig.dimensions} ad image. Do NOT include any text in the image.`
   );
 
+  promptParts.push('', IMAGE_SAFETY_DIRECTIVE);
   const prompt = promptParts.join('\n');
 
   const response = await openaiProxy('images', {
@@ -3734,7 +3743,8 @@ Write copy that feels authentic, not corporate or overly salesy.`;
   systemPrompt += `\n\nCOPY QUALITY RULES (NON-NEGOTIABLE):
 1. ${BANNED_PHRASES_PROMPT}
 2. SPECIFICITY: Include at least one concrete element per headline and body text (a number, timeframe, named outcome, or specific mechanism). No vague claims.
-3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.`;
+3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.
+4. ${META_AD_POLICY_PROMPT}`;
 
   const userPrompt = `Generate ad copy for a ${config.audienceType.toUpperCase()} audience.
 
@@ -4112,6 +4122,7 @@ export async function generateAdVideoWithVeo(config: {
     );
   }
 
+  promptParts.push('', IMAGE_SAFETY_DIRECTIVE);
   const prompt = promptParts.filter(Boolean).join('\n');
   console.log('📝 Veo prompt length:', prompt.length, 'chars');
   if (import.meta.env.DEV) {
