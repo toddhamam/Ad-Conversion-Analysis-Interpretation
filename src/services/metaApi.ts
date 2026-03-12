@@ -4,6 +4,15 @@
 // Falls back to VITE_ env vars in dev mode when Supabase is not configured.
 
 import { getAuthToken } from '../lib/authToken';
+import {
+  guardedFetch,
+  batchProcess,
+  updateRateLimitState,
+  classifyMetaError,
+  invalidateCache,
+  extractRateLimitHeaders,
+  retryWithBackoff,
+} from './metaDevPolicyGuard';
 
 const META_API_VERSION = 'v24.0';
 const META_GRAPH_API = `https://graph.facebook.com/${META_API_VERSION}`;
@@ -276,21 +285,33 @@ export async function fetchAvailablePixels(adAccountId: string): Promise<Array<{
   const token = await getAuthToken();
   if (!token) throw new Error('Not authenticated');
 
-  const res = await fetch('/api/meta/fetch-pixels', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
+  // Route through guard queue — backend calls Meta Graph API (adspixels endpoint)
+  const data: { pixels: Array<{ id: string; name: string }> } = await guardedFetch({
+    endpoint: `${adAccountId}/adspixels`,
+    method: 'GET',
+    adAccountId,
+    fetchFn: async () => {
+      const res = await fetch('/api/meta/fetch-pixels', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ adAccountId }),
+      });
+
+      const rateLimitHeaders = extractRateLimitHeaders(res.headers);
+
+      if (!res.ok) {
+        console.warn('Failed to fetch pixels');
+        return { data: { pixels: [] }, headers: rateLimitHeaders || {} };
+      }
+
+      const json = await res.json();
+      return { data: json, headers: rateLimitHeaders || {} };
     },
-    body: JSON.stringify({ adAccountId }),
   });
 
-  if (!res.ok) {
-    console.warn('Failed to fetch pixels');
-    return [];
-  }
-
-  const data = await res.json();
   return data.pixels || [];
 }
 
@@ -313,49 +334,69 @@ async function metaFetch(
 
   if (token) {
     // Proxy mode — token stays server-side
-    // Retry transient Meta errors (code 2) up to 3 times with exponential backoff
-    const MAX_RETRIES = 3;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      const res = await fetch('/api/meta/proxy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          method: options?.method || 'GET',
-          endpoint,
-          params: options?.params,
-          body: options?.body,
-          formEncoded: options?.formEncoded,
-          // Multi-account: tell the backend which ad account to use
-          adAccountId: _currentAdAccount?.ad_account_id || undefined,
-        }),
-      });
+    // Routes through metaDevPolicyGuard for rate limiting, caching, and error classification
+    const adAccountId = _currentAdAccount?.ad_account_id || undefined;
 
-      const data = await res.json();
+    return guardedFetch({
+      endpoint,
+      method: options?.method,
+      params: options?.params,
+      adAccountId,
+      fetchFn: async () => {
+        // Retry-aware fetch through the policy guard
+        const data = await retryWithBackoff(async () => {
+          const res = await fetch('/api/meta/proxy', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              method: options?.method || 'GET',
+              endpoint,
+              params: options?.params,
+              body: options?.body,
+              formEncoded: options?.formEncoded,
+              adAccountId,
+            }),
+          });
 
-      if (!res.ok) {
-        // Meta error code 2 = transient server error — retry with backoff
-        const isTransient = data.code === 2 || (data.message && data.message.includes('unexpected error'));
-        if (isTransient && attempt < MAX_RETRIES) {
-          const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
-          console.warn(`⚠️ Meta transient error on ${endpoint}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          continue;
-        }
+          // Extract rate limit headers from proxy response
+          const rateLimitHeaders = extractRateLimitHeaders(res.headers);
+          const responseData = await res.json();
 
-        const diagSuffix = data.diagnostics ? ` [${data.diagnostics}]` : '';
-        const msg = (data.message || data.error || `Meta API error (${res.status})`) + diagSuffix;
-        const err = new Error(msg);
-        (err as any).metaCode = data.code;
-        (err as any).metaSubcode = data.subcode;
-        (err as any).fullResponse = data;
-        throw err;
-      }
+          // Also check for rate limit headers embedded in error responses
+          if (responseData._rateLimitHeaders) {
+            updateRateLimitState(responseData._rateLimitHeaders);
+          }
 
-      return data;
-    }
+          if (!res.ok) {
+            // Classify the error for proper retry/backoff handling
+            const errorClass = classifyMetaError(responseData.code, responseData.subcode, res.status);
+            if (errorClass.class === 'rate_limit') {
+              console.warn(
+                `[MetaDevPolicyGuard] Rate limited on ${endpoint}: ${errorClass.description}`
+              );
+            }
+
+            const diagSuffix = responseData.diagnostics ? ` [${responseData.diagnostics}]` : '';
+            const msg = (responseData.message || responseData.error || `Meta API error (${res.status})`) + diagSuffix;
+            const err = new Error(msg);
+            (err as any).metaCode = responseData.code;
+            (err as any).metaSubcode = responseData.subcode;
+            (err as any).fullResponse = responseData;
+            throw err;
+          }
+
+          return { data: responseData, rateLimitHeaders };
+        }, endpoint);
+
+        return {
+          data: data.data,
+          headers: data.rateLimitHeaders || {},
+        };
+      },
+    });
   }
 
   // Dev fallback — direct Meta API call
@@ -418,24 +459,34 @@ async function metaUpload(adAccountId: string, imageBase64: string): Promise<any
   const token = await getAuthToken();
 
   if (token) {
-    const res = await fetch('/api/meta/upload', {
+    // Route through guard queue to respect rate limits
+    return guardedFetch({
+      endpoint: `${adAccountId}/adimages`,
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        imageBase64,
-        // Multi-account: tell the backend which ad account to upload to
-        adAccountId: _currentAdAccount?.ad_account_id || undefined,
-      }),
-    });
+      adAccountId: _currentAdAccount?.ad_account_id || undefined,
+      fetchFn: async () => {
+        const res = await fetch('/api/meta/upload', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            imageBase64,
+            adAccountId: _currentAdAccount?.ad_account_id || undefined,
+          }),
+        });
 
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.message || data.error || 'Image upload failed');
-    }
-    return data;
+        const rateLimitHeaders = extractRateLimitHeaders(res.headers);
+        const data = await res.json();
+        if (!res.ok) {
+          const err = new Error(data.message || data.error || 'Image upload failed');
+          (err as any).metaCode = data.code;
+          throw err;
+        }
+        return { data, headers: rateLimitHeaders || {} };
+      },
+    });
   }
 
   // Dev fallback — direct upload
@@ -752,11 +803,17 @@ export async function fetchAdCreatives(dateOptions?: DateRangeOptions, options?:
   try {
     const insights = await fetchAdInsights(dateOptions);
 
-    const creativeDetailsPromises = insights.map(ad => fetchAdCreativeDetails(ad.ad_id));
-    const creativeDetails = await Promise.all(creativeDetailsPromises);
+    // Use guarded batch processing instead of unbounded Promise.all()
+    // to prevent rate limit violations from parallel API calls.
+    // Max 3 concurrent requests with 200ms inter-request delay.
+    const creativeDetails = await batchProcess(
+      insights,
+      (ad) => fetchAdCreativeDetails(ad.ad_id),
+      { concurrency: 3, delayMs: 200 }
+    );
 
     return insights.map((ad, index) => {
-      const creative = creativeDetails[index];
+      const creative = creativeDetails[index] || {};
       const actionType = options?.primaryActionType || 'offsite_conversion.fb_pixel_purchase';
       const conversions = ad.actions?.find(
         action => action.action_type === actionType
@@ -1273,41 +1330,52 @@ export async function searchAdLibrary(params: AdLibrarySearchParams): Promise<Ad
     throw new Error('Meta API not configured. Connect your Meta account to search the Ad Library.');
   }
 
-  const res = await fetch('/api/meta/ad-library', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      search_terms: params.searchTerms,
-      search_page_ids: params.searchPageIds,
-      ad_reached_countries: params.countries || ['GB'],
-      ad_active_status: params.activeStatus || 'ALL',
-      ad_delivery_date_min: params.dateMin,
-      ad_delivery_date_max: params.dateMax,
-      publisher_platforms: params.platforms,
-      limit: params.limit || 25,
-      after: params.after,
-    }),
-  });
-
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    if (import.meta.env.DEV) {
-      console.warn('Ad Library API error details:', {
-        code: errData.code,
-        type: errData.type,
-        token_type: errData.token_type,
-        meta_message: errData.meta_message,
+  // Route through guard queue to respect rate limits (ads_archive uses Meta Graph API)
+  return guardedFetch({
+    endpoint: 'ads_archive',
+    method: 'GET',
+    fetchFn: async () => {
+      const res = await fetch('/api/meta/ad-library', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          search_terms: params.searchTerms,
+          search_page_ids: params.searchPageIds,
+          ad_reached_countries: params.countries || ['GB'],
+          ad_active_status: params.activeStatus || 'ALL',
+          ad_delivery_date_min: params.dateMin,
+          ad_delivery_date_max: params.dateMax,
+          publisher_platforms: params.platforms,
+          limit: params.limit || 25,
+          after: params.after,
+        }),
       });
-    }
-    // Use the backend's descriptive error message (includes verification hints, geo guidance)
-    const errMsg = errData.message || `Ad Library search failed (${res.status})`;
-    throw new Error(errMsg);
-  }
 
-  return res.json();
+      const rateLimitHeaders = extractRateLimitHeaders(res.headers);
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        if (import.meta.env.DEV) {
+          console.warn('Ad Library API error details:', {
+            code: errData.code,
+            type: errData.type,
+            token_type: errData.token_type,
+            meta_message: errData.meta_message,
+          });
+        }
+        const errMsg = errData.message || `Ad Library search failed (${res.status})`;
+        const err = new Error(errMsg);
+        (err as any).metaCode = errData.code;
+        throw err;
+      }
+
+      const data = await res.json();
+      return { data, headers: rateLimitHeaders || {} };
+    },
+  });
 }
 
 /**
@@ -1517,6 +1585,7 @@ export async function createCampaign(request: CreateCampaignRequest): Promise<st
   });
 
   if (!data.id) throw new Error('Campaign creation returned no ID');
+  invalidateCache('campaigns');
   return data.id;
 }
 
@@ -1593,6 +1662,7 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
   });
 
   if (!data.id) throw new Error('Ad set creation returned no ID');
+  invalidateCache('adsets');
   return data.id;
 }
 
@@ -1685,6 +1755,7 @@ export async function createAdWithCreative(request: {
   });
 
   if (!data.id) throw new Error('Ad creation returned no ID');
+  invalidateCache('ads');
   return { adId: data.id, creativeId: data.creative_id || '' };
 }
 
@@ -1694,21 +1765,36 @@ export async function createAdWithCreative(request: {
  */
 export async function uploadVideoToMeta(veoFileRef: string, title?: string): Promise<string> {
   const token = await getAuthToken();
-  const response = await fetch('/api/meta/video-upload', {
+
+  // Route through guard queue to respect rate limits
+  const data: any = await guardedFetch({
+    endpoint: 'advideos',
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    adAccountId: _currentAdAccount?.ad_account_id || undefined,
+    fetchFn: async () => {
+      const response = await fetch('/api/meta/video-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ veoFileRef, title }),
+      });
+
+      const rateLimitHeaders = extractRateLimitHeaders(response.headers);
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ message: 'Unknown error' }));
+        const error = new Error(err.message || `Video upload failed (${response.status})`);
+        (error as any).metaCode = err.code;
+        throw error;
+      }
+
+      const responseData = await response.json();
+      return { data: responseData, headers: rateLimitHeaders || {} };
     },
-    body: JSON.stringify({ veoFileRef, title }),
   });
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ message: 'Unknown error' }));
-    throw new Error(err.message || `Video upload failed (${response.status})`);
-  }
-
-  const data = await response.json();
   if (!data.video_id) {
     throw new Error('Video upload returned no video_id');
   }
@@ -1786,6 +1872,7 @@ export async function createAdWithVideoCreative(request: {
   });
 
   if (!data.id) throw new Error('Video ad creation returned no ID');
+  invalidateCache('ads');
   return { adId: data.id, creativeId: data.creative_id || '' };
 }
 
@@ -2085,18 +2172,31 @@ export async function refreshAvailableData(): Promise<{
   selectionsCleared: boolean;
 }> {
   const token = await getAuthToken();
-  const res = await fetch('/api/meta/refresh-available', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+
+  // Route through guard queue — backend calls Meta Graph API (me/adaccounts + me/accounts)
+  return guardedFetch({
+    endpoint: 'me/adaccounts',
+    method: 'GET',
+    fetchFn: async () => {
+      const res = await fetch('/api/meta/refresh-available', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      const rateLimitHeaders = extractRateLimitHeaders(res.headers);
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Failed to refresh available data (${res.status})`);
+      }
+
+      const data = await res.json();
+      return { data, headers: rateLimitHeaders || {} };
     },
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Failed to refresh available data (${res.status})`);
-  }
-  return res.json();
 }
 
 /** Fetch activated ad accounts and seat info for the current org */
