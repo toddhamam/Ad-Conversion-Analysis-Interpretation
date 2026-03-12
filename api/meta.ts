@@ -341,6 +341,17 @@ async function handleProxy(req: VercelRequest, res: VercelResponse) {
   const response = await fetch(apiUrl.toString(), fetchOptions);
   const data = await response.json();
 
+  // Forward Meta rate limit headers to the frontend for the DevPolicyGuard
+  const rateLimitHeaderNames = ['x-app-usage', 'x-business-use-case-usage', 'x-fb-ads-insights-throttle'];
+  const rateLimitHeaders: Record<string, string> = {};
+  for (const headerName of rateLimitHeaderNames) {
+    const val = response.headers.get(headerName);
+    if (val) {
+      rateLimitHeaders[headerName] = val;
+      res.setHeader(headerName, val);
+    }
+  }
+
   if (!response.ok) {
     if (data.error?.code === 190) {
       await supabase
@@ -356,6 +367,7 @@ async function handleProxy(req: VercelRequest, res: VercelResponse) {
       code: data.error?.code,
       subcode: data.error?.error_subcode,
       fbtrace_id: data.error?.fbtrace_id,
+      _rateLimitHeaders: Object.keys(rateLimitHeaders).length > 0 ? rateLimitHeaders : undefined,
     });
   }
 
@@ -510,11 +522,19 @@ async function handleUpload(req: VercelRequest, res: VercelResponse) {
 
   const data = await response.json();
 
+  // Forward Meta rate limit headers to the frontend for the DevPolicyGuard
+  const rateLimitHeaderNames = ['x-app-usage', 'x-business-use-case-usage', 'x-fb-ads-insights-throttle'];
+  for (const headerName of rateLimitHeaderNames) {
+    const val = response.headers.get(headerName);
+    if (val) res.setHeader(headerName, val);
+  }
+
   if (!response.ok) {
     console.error('Meta image upload error:', data);
     return res.status(response.status).json({
       error: 'Image upload failed',
       message: data.error?.message || 'Unknown error',
+      code: data.error?.code,
     });
   }
 
@@ -936,6 +956,14 @@ async function handleFetchPixels(req: VercelRequest, res: VercelResponse) {
   pixelsUrl.searchParams.set('fields', 'id,name');
 
   const pixelsResponse = await fetch(pixelsUrl.toString());
+
+  // Forward Meta rate limit headers to the frontend for the DevPolicyGuard
+  const rlHeaderNames = ['x-app-usage', 'x-business-use-case-usage', 'x-fb-ads-insights-throttle'];
+  for (const headerName of rlHeaderNames) {
+    const val = pixelsResponse.headers.get(headerName);
+    if (val) res.setHeader(headerName, val);
+  }
+
   const pixelsData = await pixelsResponse.json();
 
   if (pixelsData.error) {
@@ -1084,6 +1112,13 @@ async function handleAdLibrary(req: VercelRequest, res: VercelResponse) {
     try {
       const response = await fetch(apiUrl);
       const data = await response.json();
+
+      // Forward Meta rate limit headers to the frontend for the DevPolicyGuard
+      const rlHeaderNames = ['x-app-usage', 'x-business-use-case-usage', 'x-fb-ads-insights-throttle'];
+      for (const headerName of rlHeaderNames) {
+        const val = response.headers.get(headerName);
+        if (val) res.setHeader(headerName, val);
+      }
 
       if (!response.ok || data.error) {
         const metaError = data.error || {};
@@ -1590,6 +1625,13 @@ async function handleVideoUpload(req: VercelRequest, res: VercelResponse) {
     const videoId = finishData.video_id;
     console.log('Meta video uploaded, ID:', videoId);
 
+    // Forward Meta rate limit headers from the finish response
+    const rlHeaders = ['x-app-usage', 'x-business-use-case-usage', 'x-fb-ads-insights-throttle'];
+    for (const headerName of rlHeaders) {
+      const val = finishResponse.headers.get(headerName);
+      if (val) res.setHeader(headerName, val);
+    }
+
     // Step 5: Poll for video processing completion (max 2 minutes)
     const maxPollTime = 2 * 60 * 1000;
     const pollStart = Date.now();
@@ -1638,19 +1680,27 @@ interface PaginatedGraphResponse<T> {
   paging?: { cursors?: { after?: string }; next?: string };
 }
 
-async function fetchAllGraphPages<T>(initialUrl: string): Promise<T[]> {
+async function fetchAllGraphPages<T>(initialUrl: string): Promise<{ data: T[]; rateLimitHeaders: Record<string, string> }> {
   const all: T[] = [];
   let url: string | null = initialUrl;
+  const lastRateLimitHeaders: Record<string, string> = {};
 
   while (url) {
     const response = await fetch(url);
     if (!response.ok) break;
+
+    // Capture rate limit headers from each response (last page is most current)
+    for (const key of ['x-app-usage', 'x-business-use-case-usage', 'x-fb-ads-insights-throttle']) {
+      const val = response.headers.get(key);
+      if (val) lastRateLimitHeaders[key] = val;
+    }
+
     const data: PaginatedGraphResponse<T> = await response.json();
     if (data.data) all.push(...data.data);
     url = data.paging?.next || null;
   }
 
-  return all;
+  return { data: all, rateLimitHeaders: lastRateLimitHeaders };
 }
 
 // ─── Route: refresh-available ────────────────────────────────────────────────
@@ -1681,9 +1731,10 @@ async function handleRefreshAvailable(req: VercelRequest, res: VercelResponse) {
     adAccountsUrl.searchParams.set('fields', 'account_id,id,name,account_status,currency');
     adAccountsUrl.searchParams.set('limit', '100');
 
-    const freshAccounts = await fetchAllGraphPages<{
+    const accountsResult = await fetchAllGraphPages<{
       account_id: string; id: string; name: string; account_status: number; currency: string;
     }>(adAccountsUrl.toString());
+    const freshAccounts = accountsResult.data;
 
     // Fetch all pages (paginated)
     const pagesUrl = new URL(`${GRAPH_API_BASE}/me/accounts`);
@@ -1691,7 +1742,14 @@ async function handleRefreshAvailable(req: VercelRequest, res: VercelResponse) {
     pagesUrl.searchParams.set('fields', 'id,name');
     pagesUrl.searchParams.set('limit', '100');
 
-    const freshPages = await fetchAllGraphPages<{ id: string; name: string }>(pagesUrl.toString());
+    const pagesResult = await fetchAllGraphPages<{ id: string; name: string }>(pagesUrl.toString());
+    const freshPages = pagesResult.data;
+
+    // Forward Meta rate limit headers to the frontend for the DevPolicyGuard
+    const mergedRateLimitHeaders = { ...accountsResult.rateLimitHeaders, ...pagesResult.rateLimitHeaders };
+    for (const [headerName, headerValue] of Object.entries(mergedRateLimitHeaders)) {
+      res.setHeader(headerName, headerValue);
+    }
 
     // Load current credential row to reconcile stale selections
     const { data: cred } = await supabase

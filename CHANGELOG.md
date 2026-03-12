@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-03-12 — Meta Developer Policy Guard
+
+### Added
+- **`src/services/metaDevPolicyGuard.ts`** — Meta Developer Platform Policy compliance engine that wraps all Meta API calls. Implements:
+  - **Request queue**: Max 3 concurrent requests with 200ms inter-request delay (2s when approaching limits, 10s when throttled)
+  - **Response cache**: In-memory TTL cache — insights/campaigns (5min), pixels/promote_pages (30min), search (5min). LRU eviction at 100 entries
+  - **Rate limit header monitoring**: Parses `X-App-Usage`, `X-Business-Use-Case-Usage`, `x-fb-ads-insights-throttle` from every Meta response. Warns at 80% capacity, pauses at 95%
+  - **Error classifier**: Maps all Meta error codes (4, 17, 32, 80000-80006, 613, 2, 1, 190, 10, 100) to rate-limit/transient/auth/permission/fatal classes with appropriate backoff strategies
+  - **Batch processor**: `batchProcess()` replaces unbounded `Promise.all()` — concurrency-limited with inter-item delays and jitter
+  - **Retry with backoff**: `retryWithBackoff()` replaces the old code-2-only retry with full error classification and exponential backoff with jitter
+  - **Usage tracking**: Sliding window (1hr) of all API calls with stats for monitoring
+- **`.context/meta-developer-policy-reference.md`** — Comprehensive Meta developer policy reference including rate limit formulas, error codes, header formats, enforcement triggers, token management, data handling requirements, and a prevention checklist for new features
+
+### Changed
+- **`src/services/metaApi.ts`** — Integrated Developer Policy Guard into all Meta API calls:
+  - `metaFetch()` now routes through `guardedFetch()` for queuing, caching, and rate limit compliance
+  - `fetchAdCreatives()` replaced unbounded `Promise.all()` (50-100+ parallel calls) with `batchProcess()` (3 concurrent, 200ms delay) — **this was the primary cause of the account ban**
+  - `metaUpload()`, `searchAdLibrary()`, `uploadVideoToMeta()` rewritten to route through `guardedFetch()` with rate limit header extraction (previously bypassed all safeguards)
+  - `fetchAvailablePixels()` and `refreshAvailableData()` wrapped in `guardedFetch()` — backend calls Meta Graph API (`adspixels`, `me/adaccounts`, `me/accounts`)
+  - `createCampaign()`, `createAdSet()`, `createAdWithCreative()`, `createAdWithVideoCreative()` now invalidate related cache entries after writes
+  - Rate limit headers extracted from every proxy response and fed to the guard
+- **`api/meta.ts`** — Backend proxy now forwards Meta's rate limit headers (`X-App-Usage`, `X-Business-Use-Case-Usage`, `x-fb-ads-insights-throttle`) to the frontend via response headers:
+  - `handleProxy()`, `handleUpload()`, `handleAdLibrary()`, `handleVideoUpload()` — rate limit header forwarding
+  - `handleFetchPixels()` — added rate limit header forwarding from `adspixels` response
+  - `handleRefreshAvailable()` — merges and forwards rate limit headers from paginated `me/adaccounts` + `me/accounts` calls
+  - `fetchAllGraphPages()` — now returns rate limit headers from paginated Meta responses alongside data
+  - Error responses include `_rateLimitHeaders` for frontend guard consumption
+- **`CLAUDE.md`** — Added Developer Policy Guard documentation section and 6 new "Things to Avoid" rules for Meta API integration
+
+### Root Cause Analysis
+The account ban was most likely caused by `fetchAdCreatives()` firing 100+ parallel `Promise.all()` requests with no concurrency control, no rate limit header monitoring, no rate limit error detection, and no response caching. This pattern is indistinguishable from bot/scraping behavior. The guard prevents this by enforcing a controlled pipeline of max 3 concurrent requests with mandatory delays.
+
+---
+
 ## 2026-03-12 — Meta Ad Policy Guard
 
 ### Added

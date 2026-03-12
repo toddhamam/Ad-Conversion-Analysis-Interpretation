@@ -86,6 +86,7 @@ public/
 | `api/_lib/sentry.ts` | Backend Sentry helper — `initSentry()`, `captureError()`, `flushSentry()` shared across all 12 API routes |
 | `src/services/metaApi.ts` | Meta Marketing API — all calls routed through backend proxy (`/api/meta/proxy`), token never reaches browser |
 | `src/services/openaiApi.ts` | AI analysis (GPT-5.2) + creative generation (Gemini/Veo). Model IDs defined as constants at top of file |
+| `src/services/metaDevPolicyGuard.ts` | Meta Developer Policy Guard — rate limiting, request queuing, response caching, error classification for all Meta API calls |
 | `src/services/imageCache.ts` | Client-side image caching with quality scoring |
 | `src/pages/MetaAds.tsx` | Main dashboard - campaign metrics, creative analysis |
 | `src/pages/AdGenerator.tsx` | AI-powered ad creative generation workflow |
@@ -1259,7 +1260,38 @@ Triggers on failed Vercel deployments (`deployment_status` event). Flow:
 - **Permission nuances**: `pages_read_engagement` and `ads_management` are distinct permissions. A token may have sufficient permissions to *create ads* (`ads_management`) even if it lacks permissions to *read page metadata* (`pages_read_engagement`). Don't block publishing solely because a page metadata check fails.
 - **`promote_pages` fallback**: When direct page access validation fails (error codes `10` or `100`), use the `promote_pages` endpoint as a fallback to verify ad account/page linkage via `ads_management` permission.
 - **Progressive validation**: Implement validation in stages. If a direct check fails with a permission-specific error (not an outright access denial), attempt a secondary validation using alternative permissions or endpoints before failing entirely. Log warnings (`console.warn`) for non-critical check failures instead of blocking the operation.
-- **Transient errors (code 2)**: Meta Graph API returns error code 2 ("An unexpected error has occurred. Please retry your request later.") for transient server issues. `metaFetch` automatically retries these up to 3 times with exponential backoff (1s, 2s, 4s). Do not remove this retry logic — it prevents publish failures from intermittent Meta server hiccups.
+- **Transient errors (code 2)**: Meta Graph API returns error code 2 ("An unexpected error has occurred. Please retry your request later.") for transient server issues. `metaFetch` automatically retries these via the `retryWithBackoff()` guard with exponential backoff. Do not remove this retry logic — it prevents publish failures from intermittent Meta server hiccups.
+
+### Meta Developer Policy Guard (`metaDevPolicyGuard.ts`)
+
+All Meta API calls route through the Developer Policy Guard to prevent rate limit violations and account bans. The guard enforces:
+
+1. **Request queue** — max 3 concurrent Meta API requests with 200ms inter-request delay
+2. **Response cache** — in-memory TTL cache (insights 5min, campaigns 5min, pixels 30min) prevents redundant calls
+3. **Rate limit header monitoring** — parses `X-App-Usage`, `X-Business-Use-Case-Usage`, `x-fb-ads-insights-throttle` from every response
+4. **Error classification** — maps Meta error codes to rate-limit (wait 60-300s), transient (retry with backoff), auth (don't retry), or fatal
+5. **Batch processing** — `batchProcess()` replaces unbounded `Promise.all()` for creative detail fetches
+6. **Usage tracking** — tracks calls/hour, warns at 80% capacity, pauses at 95%
+
+**Rate limit formulas (Standard Access):**
+- Ads Insights: `600 + 400 × ActiveAds` calls/hour
+- Ads Management: `300 + 40 × ActiveAds` calls/hour
+
+**Rate limit error codes that trigger backoff:**
+- Code 4: App-level rate limit (60s)
+- Code 17: User-level rate limit (60s)
+- Code 80000: Ads Insights throttled (5 min)
+- Code 80004: Ads Management throttled (5 min)
+- Code 80003: Too many calls to ad account (2 min)
+
+**Integration pattern:**
+- `metaFetch()` wraps calls through `guardedFetch()` which handles queuing, caching, and header extraction
+- `retryWithBackoff()` replaces the old code-2-only retry with full error classification
+- `batchProcess()` replaces `Promise.all()` in `fetchAdCreatives()` — processes 3 at a time with 200ms delays
+- Write operations (`createCampaign`, `createAdSet`, `createAdWithCreative`) invalidate related cache entries
+- Backend proxy (`api/meta.ts`) forwards `X-App-Usage` and other rate limit headers to the frontend
+
+**Full policy reference:** `.context/meta-developer-policy-reference.md`
 
 ### Ad Library API (`ads_archive` endpoint)
 
@@ -1482,6 +1514,11 @@ The Ad Publisher (Step 3: Configure) provides these ad-level settings that are a
 - Don't make `fetch()` calls to Gemini (or any external AI API) without an `AbortController` timeout — without one, a hung connection blocks the UI for up to 5 minutes (browser default). Use 60s for image generation, 45s for text analysis. This caused perpetual loading in production (PR #271)
 - Don't increase `MAX_RETRIES` above 2 for Gemini image generation — higher values (previously 4) caused 58s+ of retry delays per image before errors surfaced, making the UI appear frozen. Keep retry delays short: `[2000, 5000]` ms
 - Don't show static loading messages for multi-step AI operations — use the `onProgress` callback pattern (see `regenerateAllImages`) to update the UI with step-by-step status. A single "Generating..." message for a 60-90s operation feels broken to users
+- Don't use unbounded `Promise.all()` for Meta API calls — this fires 100+ simultaneous requests and triggers Meta's bot detection, leading to account bans. Always use `batchProcess()` from `metaDevPolicyGuard.ts` with concurrency ≤ 5
+- Don't ignore Meta rate limit error codes (4, 17, 80000, 80003, 80004) — these MUST trigger exponential backoff, not immediate failure. Use `classifyMetaError()` from `metaDevPolicyGuard.ts`
+- Don't ignore Meta rate limit response headers (`X-App-Usage`, `X-Business-Use-Case-Usage`, `x-fb-ads-insights-throttle`) — these warn you before enforcement. The guard extracts them automatically
+- Don't bypass the `metaDevPolicyGuard` queue for Meta API calls — all requests must go through `guardedFetch()` to respect rate limits and caching. Direct `fetch()` to Meta endpoints is prohibited
+- Don't make Meta API calls without caching read responses — insights, campaigns, audiences, and pixels should use the guard's TTL cache to prevent redundant calls on page navigation
 
 ---
 
