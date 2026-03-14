@@ -290,7 +290,8 @@ def _build_followup_body(prospect):
     return _clean_email_body(body)
 
 
-def push_leads(campaign_id, stage="ready_to_send", limit=100):
+def push_leads(campaign_id, stage="ready_to_send", limit=100, prospect_ids=None,
+               copy_override=None):
     """Push leads from pipeline to an Instantly campaign.
 
     Reads prospects in the given stage, maps their draft_email to
@@ -300,6 +301,13 @@ def push_leads(campaign_id, stage="ready_to_send", limit=100):
         campaign_id: Instantly campaign UUID
         stage: Pipeline stage to pull from
         limit: Max leads to push
+        prospect_ids: Optional list of specific prospect IDs to push (for A/B split).
+                      When provided, only these prospects are pushed.
+        copy_override: Optional dict with {subject, body, followup_1_body} templates.
+                       When provided, overrides the prospect's draft_email with
+                       standardized experiment copy. Templates contain placeholders
+                       ({first_name}, {company}, {personalization_hook}, {sender_first_name})
+                       that are filled per-prospect.
 
     Returns:
         dict with pushed count, skipped count, and results
@@ -307,11 +315,17 @@ def push_leads(campaign_id, stage="ready_to_send", limit=100):
     result = list_prospects(stage=stage, limit=limit)
     prospects = result.get("prospects", [])
 
+    # Filter to specific prospect IDs if provided (for experiment splitting)
+    if prospect_ids is not None:
+        id_set = set(prospect_ids)
+        prospects = [p for p in prospects if p.get("id") in id_set]
+
     if not prospects:
         return {"pushed": 0, "skipped": 0, "message": f"No prospects in stage '{stage}'"}
 
     config = load_config()
     signature = config.get("email", {}).get("signature", "")
+    sender_name = config.get("email", {}).get("from_name", "Todd")
 
     leads_payload = []
     pushed_ids = []
@@ -319,40 +333,73 @@ def push_leads(campaign_id, stage="ready_to_send", limit=100):
 
     for prospect in prospects:
         email = prospect.get("email", "")
-        draft = prospect.get("draft_email", {})
 
         if not email:
             skipped += 1
             continue
 
-        if not isinstance(draft, dict) or not draft.get("body"):
-            skipped += 1
-            continue
-
-        # Build the email body with signature
-        body = draft["body"]
-        if signature and "STOP" not in body:
-            body = body + signature
-        body = _clean_email_body(body)
-
-        # Build follow-up body (two-touch: 1 opener + 1 follow-up)
-        followup_body = _build_followup_body(prospect)
-
         first_name = prospect.get("name", "").split()[0] if prospect.get("name") else ""
         last_name = " ".join(prospect.get("name", "").split()[1:]) if prospect.get("name") else ""
+        first_name_or_there = first_name or "there"
+        company = prospect.get("company", "")
+
+        if copy_override:
+            # Fill template placeholders per-prospect (never send raw templates)
+            hook = ""
+            hooks = prospect.get("personalization_hooks", [])
+            if hooks:
+                hook = hooks[0] if isinstance(hooks[0], str) else ""
+            if not hook:
+                hook = prospect.get("research", {}).get("hook", "")
+
+            subject = copy_override["subject"]
+            subject = subject.replace("{first_name}", first_name_or_there)
+            subject = subject.replace("{company}", company)
+
+            body = copy_override["body"]
+            body = body.replace("{first_name}", first_name_or_there)
+            body = body.replace("{company}", company)
+            body = body.replace("{personalization_hook}", hook)
+            body = body.replace("{sender_first_name}", sender_name)
+
+            followup_body = copy_override["followup_1_body"]
+            followup_body = followup_body.replace("{first_name}", first_name_or_there)
+            followup_body = followup_body.replace("{company}", company)
+            followup_body = followup_body.replace("{sender_first_name}", sender_name)
+
+            if signature and "STOP" not in body:
+                body = body + signature
+            body = _clean_email_body(body)
+            followup_body = _clean_email_body(followup_body)
+        else:
+            draft = prospect.get("draft_email", {})
+            if not isinstance(draft, dict) or not draft.get("body"):
+                skipped += 1
+                continue
+
+            # Build the email body with signature
+            body = draft["body"]
+            if signature and "STOP" not in body:
+                body = body + signature
+            body = _clean_email_body(body)
+
+            subject = draft.get("subject", "")
+
+            # Build follow-up body (two-touch: 1 opener + 1 follow-up)
+            followup_body = _build_followup_body(prospect)
 
         lead_data = {
             "email": email,
             "first_name": first_name,
             "last_name": last_name,
-            "company_name": prospect.get("company", ""),
+            "company_name": company,
             "website": prospect.get("company_url", ""),
             "custom_variables": {
-                "subject_line": draft.get("subject", ""),
+                "subject_line": subject,
                 "email_body": body,
                 "followup_1_body": followup_body,
                 "prospect_id": prospect.get("id", ""),
-                "company": prospect.get("company", ""),
+                "company": company,
                 "fit_score": str(prospect.get("fit_score", 0)),
             },
         }
@@ -400,6 +447,81 @@ def campaign_analytics(campaign_id):
     try:
         data = _api_get("analytics/campaign", params={"campaign_id": campaign_id})
         return {"status": "ok", "campaign_id": campaign_id, "analytics": data}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+def get_campaign_summary(campaign_id):
+    """Get campaign-level stats for experiment evaluation.
+
+    Returns:
+        dict with keys: sent, opened, replied, bounced, open_rate, reply_rate.
+        Returns None on error.
+    """
+    try:
+        data = _api_get("analytics/campaign", params={"campaign_id": campaign_id})
+        # Instantly returns analytics as a list or dict — normalize
+        stats = data if isinstance(data, dict) else (data[0] if data else {})
+        sent = int(stats.get("sent", 0) or 0)
+        replied = int(stats.get("replied", 0) or 0)
+        opened = int(stats.get("opened", 0) or 0)
+        bounced = int(stats.get("bounced", 0) or 0)
+        return {
+            "sent": sent,
+            "opened": opened,
+            "replied": replied,
+            "bounced": bounced,
+            "open_rate": round(opened / sent * 100, 2) if sent > 0 else 0,
+            "reply_rate": round(replied / sent * 100, 2) if sent > 0 else 0,
+        }
+    except Exception as e:
+        return None
+
+
+def get_campaign_replies(campaign_id):
+    """Fetch reply emails for a campaign.
+
+    Tries the Instantly v2 /emails endpoint first.
+    Returns list of dicts with: lead_email, reply_text, timestamp.
+    Returns empty list on error or if endpoint unavailable.
+    """
+    try:
+        data = _api_get("emails", params={
+            "campaign_id": campaign_id,
+            "email_type": "reply",
+            "limit": 200,
+        })
+        items = data.get("items", []) if isinstance(data, dict) else data
+        replies = []
+        for item in items:
+            replies.append({
+                "lead_email": item.get("lead_email", item.get("to_email", "")),
+                "reply_text": item.get("body", item.get("text", "")),
+                "timestamp": item.get("timestamp", item.get("created_at", "")),
+            })
+        return replies
+    except Exception:
+        # Endpoint may not be available — caller should use fallback
+        return []
+
+
+def delete_campaign(campaign_id):
+    """Delete a completed experiment campaign to keep workspace clean.
+
+    Only call after experiment data is fully recorded in experiments.json.
+
+    Returns:
+        dict with status
+    """
+    try:
+        resp = requests.delete(
+            f"{API_BASE}/campaigns/{campaign_id}",
+            headers=_headers(),
+            timeout=30,
+        )
+        if resp.status_code in (200, 204):
+            return {"status": "deleted", "campaign_id": campaign_id}
+        return {"status": "error", "code": resp.status_code, "message": resp.text[:300]}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

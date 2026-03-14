@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Convertra Leads Orchestrator — cron-driven pipeline automation.
 
-Replaces OpenClaw bot. Five modes:
+Replaces OpenClaw bot. Six modes:
   - daily: inbox -> followups -> send -> report -> notify
   - weekly: health check + red flag detection
   - campaign: discover -> research -> score -> email-find -> draft -> notify
   - prospect: loop discovery until N hot leads, then batch email-find + draft
   - fill: daily cron — hunt leads + push to Instantly (runs before sending window)
+  - optimize: self-optimizing email copy A/B testing (auto-research pattern)
 
 Usage:
   python3 orchestrator.py daily
@@ -14,11 +15,13 @@ Usage:
   python3 orchestrator.py campaign --niches "supplements,skincare" [--include-jobs] [--campaign "feb-2026"]
   python3 orchestrator.py prospect --target 20 [--niches "supplements,skincare"] [--max-rounds 10]
   python3 orchestrator.py fill --target 25 [--campaign-id "8b466981-..."]
+  python3 orchestrator.py optimize [--reset] [--dry-run] [--force-eval] [--from-best]
 """
 
 import argparse
 import json
 import logging
+import random
 import sys
 import os
 import time
@@ -1603,20 +1606,80 @@ def run_fill(target=25, campaign_id=None, niches=None, max_rounds=50,
         log.info(f"Step 2: Skipped — already have {existing_count} leads ready.")
         results["hunt"] = {"skipped": True, "reason": "enough leads in pipeline"}
 
-    # Step 3: Push all ready_to_send leads to Instantly
+    # Step 3: Push leads to Instantly (split 50/50 if experiment active)
     log.info("Step 3: Pushing leads to Instantly...")
     from modules.instantly import push_leads
-    push_result = push_leads(campaign_id=cid, stage="ready_to_send", limit=target + 10)
-    results["push"] = {
-        "pushed": push_result.get("pushed", 0),
-        "skipped": push_result.get("skipped", 0),
-        "errors": push_result.get("errors", 0),
-    }
-    log.info(
-        f"  Pushed: {push_result.get('pushed', 0)}, "
-        f"Skipped: {push_result.get('skipped', 0)}, "
-        f"Errors: {push_result.get('errors', 0)}"
-    )
+    from modules.optimizer import load_experiments as _load_exp, save_experiments as _save_exp
+
+    exp_data = _load_exp()
+    current_exp = exp_data.get("current_experiment")
+
+    if current_exp and current_exp.get("status") == "running":
+        # Experiment active — split 50/50 between baseline and challenger
+        log.info("  Experiment active: splitting leads 50/50")
+        baseline_cid = current_exp["baseline"]["campaign_id"]
+        challenger_cid = current_exp["challenger"]["campaign_id"]
+        baseline_copy = current_exp["baseline"]["copy"]
+        challenger_copy = current_exp["challenger"]["copy"]
+
+        # Use same score_min as normal path to avoid selection bias
+        ready_prospects = _list(stage="ready_to_send", score_min=score_threshold)
+        prospect_list = ready_prospects.get("prospects", [])
+
+        # Deduplication: skip prospects already pushed to this experiment
+        already_pushed = set(current_exp.get("pushed_prospect_ids", []))
+        prospect_list = [p for p in prospect_list if p.get("id") not in already_pushed]
+
+        random.shuffle(prospect_list)  # Randomize to avoid ordering bias
+        mid = len(prospect_list) // 2
+
+        baseline_ids = [p["id"] for p in prospect_list[:mid]]
+        challenger_ids = [p["id"] for p in prospect_list[mid:]]
+
+        push_result_b = push_leads(
+            baseline_cid, prospect_ids=baseline_ids, copy_override=baseline_copy,
+        )
+        push_result_c = push_leads(
+            challenger_cid, prospect_ids=challenger_ids, copy_override=challenger_copy,
+        )
+
+        # Track only SUCCESSFULLY pushed prospect IDs for dedup
+        # (failed/skipped leads should remain eligible for future fills)
+        successful_b = [l["id"] for l in (push_result_b.get("leads") or [])]
+        successful_c = [l["id"] for l in (push_result_c.get("leads") or [])]
+        current_exp.setdefault("pushed_prospect_ids", []).extend(successful_b + successful_c)
+        _save_exp(exp_data)
+
+        total_pushed = push_result_b.get("pushed", 0) + push_result_c.get("pushed", 0)
+        total_skipped = push_result_b.get("skipped", 0) + push_result_c.get("skipped", 0)
+        total_errors = push_result_b.get("errors", 0) + push_result_c.get("errors", 0)
+
+        results["push"] = {
+            "pushed": total_pushed,
+            "skipped": total_skipped,
+            "errors": total_errors,
+            "split": True,
+            "baseline_pushed": push_result_b.get("pushed", 0),
+            "challenger_pushed": push_result_c.get("pushed", 0),
+        }
+        log.info(
+            f"  Baseline: {push_result_b.get('pushed', 0)}, "
+            f"Challenger: {push_result_c.get('pushed', 0)}, "
+            f"Skipped: {total_skipped}, Errors: {total_errors}"
+        )
+    else:
+        # No experiment — push all to default campaign
+        push_result = push_leads(campaign_id=cid, stage="ready_to_send", limit=target + 10)
+        results["push"] = {
+            "pushed": push_result.get("pushed", 0),
+            "skipped": push_result.get("skipped", 0),
+            "errors": push_result.get("errors", 0),
+        }
+        log.info(
+            f"  Pushed: {push_result.get('pushed', 0)}, "
+            f"Skipped: {push_result.get('skipped', 0)}, "
+            f"Errors: {push_result.get('errors', 0)}"
+        )
 
     # Step 4: Telegram notification with full stats
     log.info("Step 4: Sending Telegram notification...")
@@ -1643,10 +1706,18 @@ def run_fill(target=25, campaign_id=None, niches=None, max_rounds=50,
             f"- Target {'MET' if hunt_info.get('target_met') else 'NOT MET'}\n"
         )
 
-    message += (
-        f"\n*Instantly Push:*\n"
-        f"- {pushed} leads pushed to campaign\n"
-    )
+    push_info = results["push"]
+    if push_info.get("split"):
+        message += (
+            f"\n*Instantly Push (A/B Split):*\n"
+            f"- {push_info.get('baseline_pushed', 0)} to baseline campaign\n"
+            f"- {push_info.get('challenger_pushed', 0)} to challenger campaign\n"
+        )
+    else:
+        message += (
+            f"\n*Instantly Push:*\n"
+            f"- {pushed} leads pushed to campaign\n"
+        )
     if errors:
         message += f"- {errors} errors\n"
 
@@ -1661,6 +1732,192 @@ def run_fill(target=25, campaign_id=None, niches=None, max_rounds=50,
     status = "TARGET MET" if pushed >= target else f"pushed {pushed}/{target}"
     log.info(f"=== DAILY FILL COMPLETE ({status}) ===")
     return results
+
+
+# ──────────────────────────────────────────────────────────────────────
+# SELF-OPTIMIZING EMAIL COPY — Auto-Research Pattern
+# ──────────────────────────────────────────────────────────────────────
+
+
+def run_optimize(force_eval=False, dry_run=False, reset=False, from_best=False):
+    """Self-optimizing email copy — Karpathy auto-research pattern for cold email.
+
+    Called every 30 minutes by cron. Most runs are no-ops (thresholds not met).
+
+    Flow:
+    0. Warmup guard: exit early if warmup week < 3
+    1. Load current experiment
+    1b. Recovery guard: resume if status == "evaluating"
+    2. If no experiment (or --reset): bootstrap
+    3. Fetch latest stats from Instantly
+    4. Run safety check (every heartbeat)
+    5. Check evaluation thresholds
+    6. If ready: evaluate → promote → learnings → new round
+    7. Telegram notification on completion
+    """
+    from modules.optimizer import (
+        load_experiments, save_experiments, get_experiment_status,
+        start_first_experiment, check_thresholds, run_safety_check,
+        evaluate_experiment, promote_winner, deploy_new_round,
+        kill_challenger, append_learnings, refresh_variant_classifications,
+    )
+    from modules.instantly import get_campaign_summary
+    from modules.notifier import send_notification
+
+    log.info("=== OPTIMIZE HEARTBEAT ===")
+
+    # Step 0: Warmup guard
+    config = load_config()
+    current_week = config.get("warmup", {}).get("current_week", 5)
+    if current_week < 3 and not reset and not force_eval:
+        log.info(f"Warmup week {current_week} — experiments disabled until week 3+")
+        return {"status": "warmup_guard", "current_week": current_week}
+
+    # Step 1: Load experiment state
+    data = load_experiments()
+    experiment = data.get("current_experiment")
+
+    # Step 1b: Recovery guard
+    if experiment and experiment.get("status") == "evaluating" and not dry_run:
+        log.info("Recovering experiment stuck in 'evaluating' status...")
+        eval_result = evaluate_experiment(experiment)
+        winner = eval_result["winner"]
+        append_learnings(experiment, winner)
+        promote_result = promote_winner(experiment, data)
+        new_exp = deploy_new_round(data)
+        _notify_experiment_complete(send_notification, experiment, eval_result, data)
+        log.info("=== OPTIMIZE RECOVERY COMPLETE ===")
+        return {"status": "recovered", "winner": winner, "new_round": new_exp["round"]}
+
+    # Step 2: Bootstrap if needed
+    if not experiment or reset:
+        if dry_run:
+            status = get_experiment_status()
+            baseline_info = "(from best_ever)" if from_best else "(from templates.json)"
+            log.info(f"DRY RUN: Would start experiment {baseline_info}")
+            return {"status": "dry_run", "would_start": True, "baseline_source": baseline_info, **status}
+
+        log.info("Starting new experiment..." + (" (from best_ever)" if from_best else ""))
+        experiment = start_first_experiment(from_best=from_best)
+        _notify_experiment_started(send_notification, experiment)
+        log.info("=== OPTIMIZE BOOTSTRAP COMPLETE ===")
+        return {"status": "started", "experiment": experiment["id"], "round": experiment["round"]}
+
+    # Step 3: Fetch latest stats + classify replies
+    for variant_key in ("baseline", "challenger"):
+        variant = experiment[variant_key]
+        cid = variant["campaign_id"]
+        summary = get_campaign_summary(cid)
+        if summary:
+            variant["sends"] = summary["sent"]
+            variant["replies_total"] = summary["replied"]
+    # Classify replies so safety check has real data
+    refresh_variant_classifications(experiment)
+    save_experiments(data)
+
+    if dry_run:
+        status = get_experiment_status()
+        threshold = check_thresholds(experiment)
+        log.info(f"DRY RUN: threshold={threshold}")
+        return {"status": "dry_run", "threshold": threshold, **status}
+
+    # Step 4: Safety check (every heartbeat)
+    kill_reason = run_safety_check(experiment)
+    if kill_reason:
+        kill_result = kill_challenger(experiment, data, kill_reason)
+        _notify_safety_kill(send_notification, experiment, kill_reason)
+        log.info("=== OPTIMIZE SAFETY KILL ===")
+        return {"status": "killed", **kill_result}
+
+    # Step 5: Check thresholds (--force-eval bypasses)
+    if force_eval:
+        threshold = "forced"
+        log.info("--force-eval: bypassing threshold check")
+    else:
+        threshold = check_thresholds(experiment)
+        if threshold == "not_ready":
+            elapsed = get_experiment_status().get("elapsed_hours", 0)
+            log.info(
+                f"Not ready — B:{experiment['baseline']['sends']} sends, "
+                f"C:{experiment['challenger']['sends']} sends, {elapsed:.0f}h elapsed"
+            )
+            return {"status": "not_ready", "experiment": experiment["id"]}
+
+    # Step 6: Evaluate → promote → learnings → new round
+    log.info(f"Threshold '{threshold}' met — evaluating...")
+    eval_result = evaluate_experiment(experiment)
+    winner = eval_result["winner"]
+
+    append_learnings(experiment, winner)
+    promote_result = promote_winner(experiment, data)
+    new_exp = deploy_new_round(data)
+
+    # Step 7: Telegram notification
+    _notify_experiment_complete(send_notification, experiment, eval_result, data)
+
+    log.info(f"=== OPTIMIZE COMPLETE — {winner.upper()} wins, round {new_exp['round']} deployed ===")
+    return {
+        "status": "completed",
+        "winner": winner,
+        "margin": eval_result["margin"],
+        "confidence": eval_result["confidence"],
+        "new_round": new_exp["round"],
+    }
+
+
+def _notify_experiment_started(send_notification, experiment):
+    """Send Telegram notification when a new experiment starts."""
+    msg = (
+        f"*Experiment Round {experiment['round']} Started*\n\n"
+        f"Hypothesis: \"{experiment['challenger'].get('hypothesis', 'N/A')}\"\n"
+        f"Baseline subject: {experiment['baseline']['copy'].get('subject', '')}\n"
+        f"Challenger subject: {experiment['challenger']['copy'].get('subject', '')}\n\n"
+        f"Evaluating after 250 sends/variant + 48h floor."
+    )
+    try:
+        send_notification(msg)
+    except Exception as e:
+        log.warning(f"Notification failed: {e}")
+
+
+def _notify_experiment_complete(send_notification, experiment, eval_result, data):
+    """Send Telegram notification when experiment completes."""
+    p_val = eval_result.get("confidence", 1.0)
+    sig = "significant" if p_val < 0.05 else "not significant"
+    metrics = data.get("aggregate_metrics", {})
+
+    msg = (
+        f"*Experiment Round {experiment['round']} Complete -- "
+        f"{datetime.now().strftime('%Y-%m-%d')}*\n\n"
+        f"Baseline: {experiment['baseline'].get('positive_rate', 0)}% positive "
+        f"({experiment['baseline'].get('sends', 0)} sends)\n"
+        f"Challenger: {experiment['challenger'].get('positive_rate', 0)}% positive "
+        f"({experiment['challenger'].get('sends', 0)} sends)\n\n"
+        f"Winner: *{eval_result['winner'].upper()}* ({eval_result['margin']:+.2f}%)\n"
+        f"Confidence: p={p_val:.4f} ({sig})\n"
+        f"Hypothesis: \"{experiment['challenger'].get('hypothesis', '')}\"\n\n"
+        f"Cumulative: {metrics.get('total_experiments', 0)} experiments, "
+        f"best rate: {metrics.get('best_positive_rate', 0)}%"
+    )
+    try:
+        send_notification(msg)
+    except Exception as e:
+        log.warning(f"Notification failed: {e}")
+
+
+def _notify_safety_kill(send_notification, experiment, reason):
+    """Send Telegram notification when safety guard kills a challenger."""
+    msg = (
+        f"*SAFETY KILL -- Round {experiment['round']}*\n\n"
+        f"Challenger paused: {reason['reason']}\n"
+        f"{reason.get('negative_ratio', 0):.1%} negative / "
+        f"{reason.get('unsubscribe_rate', 0):.1%} unsub\n"
+        f"Baseline continues as sole campaign."
+    )
+    try:
+        send_notification(msg)
+    except Exception as e:
+        log.warning(f"Notification failed: {e}")
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -1705,6 +1962,16 @@ def main():
     fill.add_argument("--verified-only", action="store_true", dest="verified_only",
                       help="Only push leads with verified emails (Apollo or Hunter)")
 
+    opt = sub.add_parser("optimize", help="Self-optimizing email copy A/B test loop")
+    opt.add_argument("--force-eval", action="store_true", dest="force_eval",
+                     help="Force evaluation regardless of thresholds")
+    opt.add_argument("--dry-run", action="store_true", dest="dry_run",
+                     help="Check status without taking action (no GPT calls, no campaigns)")
+    opt.add_argument("--reset", action="store_true",
+                     help="Start fresh: create round 1 experiment from templates")
+    opt.add_argument("--from-best", action="store_true", dest="from_best",
+                     help="With --reset: use best_ever copy as baseline instead of templates")
+
     imp = sub.add_parser("import", help="Import Sales Nav CSV → enrich → score → draft → push")
     imp.add_argument("--file", required=True, dest="csv_file", help="Path to Sales Navigator CSV")
     imp.add_argument("--campaign", type=str, default="sales-nav", dest="import_campaign")
@@ -1741,6 +2008,13 @@ def main():
             max_rounds=args.max_rounds,
             score_threshold=args.score_threshold,
             include_jobs=args.fill_include_jobs,
+        )
+    elif args.mode == "optimize":
+        result = run_optimize(
+            force_eval=args.force_eval,
+            dry_run=args.dry_run,
+            reset=args.reset,
+            from_best=args.from_best,
         )
     elif args.mode == "import":
         result = run_import(
