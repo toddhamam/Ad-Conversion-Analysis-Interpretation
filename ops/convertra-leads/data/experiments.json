@@ -1,0 +1,13 @@
+{
+  "current_experiment": null,
+  "round_number": 0,
+  "history": [],
+  "best_ever": null,
+  "aggregate_metrics": {
+    "total_experiments": 0,
+    "total_sends": 0,
+    "total_positive_replies": 0,
+    "best_positive_rate": 0,
+    "best_copy_summary": ""
+  }
+}

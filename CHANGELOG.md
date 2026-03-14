@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-03-14 — Self-Optimizing Cold Email A/B Testing
+
+### Added
+- **`ops/convertra-leads/modules/optimizer.py`** — Core optimization engine implementing Karpathy's auto-research pattern for cold email. Manages experiment lifecycle: bootstrap, threshold checking, safety guards, evaluation, winner promotion, challenger generation via GPT-5.4, and compounding learnings in `resources.md`
+- **`ops/convertra-leads/modules/classifier.py`** — AI reply classifier using GPT-4.1-mini with binary eval pattern (INTERESTED/UNSUBSCRIBE/NEGATIVE). Priority: UNSUBSCRIBE > NEGATIVE > POSITIVE > NEUTRAL. Falls back to deterministic keyword matching when API unavailable
+- **`ops/convertra-leads/data/experiments.json`** — Experiment state tracking: current experiment, history, best_ever, aggregate metrics
+- **`ops/convertra-leads/data/resources.md`** — Compounding learnings document (append-only raw log + periodic AI summary regeneration)
+
+### Changed
+- **`ops/convertra-leads/orchestrator.py`** — Added `optimize` mode with `run_optimize()` heartbeat function (30-min cron). Modified `run_fill()` to split leads 50/50 between baseline/challenger campaigns when experiment is active, with per-prospect template personalization and deduplication. Added Telegram notifications for experiment start, completion, and safety kills
+- **`ops/convertra-leads/modules/instantly.py`** — Added `get_campaign_summary()`, `get_campaign_replies()`, `delete_campaign()`. Extended `push_leads()` with `prospect_ids` (A/B split filtering) and `copy_override` (template personalization with `{first_name}`, `{company}`, `{personalization_hook}`, `{sender_first_name}` placeholder filling)
+- **`ops/convertra-leads/config.py`** — Added `EXPERIMENTS_PATH` and `RESOURCES_PATH` constants
+- **`ops/convertra-leads/crontab.example`** — Added optimization heartbeat: `*/30 * * * 1-5`
+
+### Fixed (Codex Review)
+- **Safety kill now fires during heartbeat** — Reply classification runs every 30-min heartbeat via `refresh_variant_classifications()`, not just at final evaluation. Previously `replies_negative`/`replies_unsubscribe` stayed at 0 until evaluation, making the safety guard inert
+- **No longer assumes all replies are positive** — When reply text is unavailable, existing heartbeat-populated classification counts are preserved instead of overwriting with `positive = total`
+- **Failed leads no longer permanently excluded** — Only successfully pushed prospect IDs are recorded in `pushed_prospect_ids` (via `push_result.leads`), so failed/skipped leads remain eligible for future fills
+- **`--force-eval` now actually forces evaluation** — Bypasses both warmup guard AND threshold check (previously only bypassed warmup)
+
 ## 2026-03-12 — Meta Developer Policy Guard
 
 ### Added

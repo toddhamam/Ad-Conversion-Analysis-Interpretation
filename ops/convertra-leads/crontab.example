@@ -36,6 +36,16 @@
 0 0 * * 0 cd /home/ubuntu/convertra-leads && python3 cli.py pipeline backup >> /home/ubuntu/convertra-leads/logs/backup.log 2>&1
 
 # ─────────────────────────────────────────
+# SELF-OPTIMIZING: Email copy A/B testing
+# ─────────────────────────────────────────
+
+# Optimization heartbeat: every 30 min on weekdays
+# Most runs are no-ops — checks thresholds (250 sends + 48h floor), exits if not ready
+# When thresholds met: evaluates experiment, promotes winner, generates new challenger
+# Disabled during warmup weeks 1-2 (auto-skips via warmup guard)
+*/30 * * * 1-5 cd /home/ubuntu/convertra-leads && python3 orchestrator.py optimize >> /home/ubuntu/convertra-leads/logs/optimize.log 2>&1
+
+# ─────────────────────────────────────────
 # OPTIONAL: Adjust fill target
 # ─────────────────────────────────────────
 

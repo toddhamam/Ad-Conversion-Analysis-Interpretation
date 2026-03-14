@@ -10,6 +10,8 @@ DATA_DIR = BASE_DIR / "data"
 PIPELINE_PATH = DATA_DIR / "pipeline.json"
 CONFIG_PATH = DATA_DIR / "config.json"
 TEMPLATES_PATH = DATA_DIR / "templates.json"
+EXPERIMENTS_PATH = DATA_DIR / "experiments.json"
+RESOURCES_PATH = DATA_DIR / "resources.md"
 ENV_PATH = BASE_DIR / ".env"
 
 # Meta Graph API
