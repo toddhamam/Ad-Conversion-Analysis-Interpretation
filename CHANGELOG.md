@@ -6,6 +6,7 @@
 - **`ops/convertra-leads/orchestrator.py`** — Optimizer now runs automatically at the end of each `fill` command (after leads are pushed to Instantly) instead of as a standalone 30-minute cron. Only fires when an active experiment exists. Wrapped in try/catch so optimizer errors never break the fill pipeline
 - **`ops/convertra-leads/crontab.example`** — Removed standalone `*/30 * * * 1-5` optimizer cron entry. The optimizer piggybacks on the daily fill — no separate cron needed
 
+
 ## 2026-03-14 — Self-Optimizing Cold Email A/B Testing
 
 ### Added
