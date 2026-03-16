@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-03-16 — Optimizer Triggered by Fill, Not Cron
+
+### Changed
+- **`ops/convertra-leads/orchestrator.py`** — Optimizer now runs automatically at the end of each `fill` command (after leads are pushed to Instantly) instead of as a standalone 30-minute cron. Only fires when an active experiment exists. Wrapped in try/catch so optimizer errors never break the fill pipeline
+- **`ops/convertra-leads/crontab.example`** — Removed standalone `*/30 * * * 1-5` optimizer cron entry. The optimizer piggybacks on the daily fill — no separate cron needed
+
+
 ## 2026-03-14 — Self-Optimizing Cold Email A/B Testing
 
 ### Added
@@ -9,14 +16,14 @@
 - **`ops/convertra-leads/data/resources.md`** — Compounding learnings document (append-only raw log + periodic AI summary regeneration)
 
 ### Changed
-- **`ops/convertra-leads/orchestrator.py`** — Added `optimize` mode with `run_optimize()` heartbeat function (30-min cron). Modified `run_fill()` to split leads 50/50 between baseline/challenger campaigns when experiment is active, with per-prospect template personalization and deduplication. Added Telegram notifications for experiment start, completion, and safety kills
+- **`ops/convertra-leads/orchestrator.py`** — Added `optimize` mode with `run_optimize()` function. Modified `run_fill()` to split leads 50/50 between baseline/challenger campaigns when experiment is active, with per-prospect template personalization and deduplication. Added Telegram notifications for experiment start, completion, and safety kills
 - **`ops/convertra-leads/modules/instantly.py`** — Added `get_campaign_summary()`, `get_campaign_replies()`, `delete_campaign()`. Extended `push_leads()` with `prospect_ids` (A/B split filtering) and `copy_override` (template personalization with `{first_name}`, `{company}`, `{personalization_hook}`, `{sender_first_name}` placeholder filling)
 - **`ops/convertra-leads/config.py`** — Added `EXPERIMENTS_PATH` and `RESOURCES_PATH` constants
-- **`ops/convertra-leads/crontab.example`** — Added optimization heartbeat: `*/30 * * * 1-5`
+- **`ops/convertra-leads/crontab.example`** — Optimizer runs via fill, not standalone cron
 
 ### Fixed (Codex Review)
-- **Safety kill now fires during heartbeat** — Reply classification runs every 30-min heartbeat via `refresh_variant_classifications()`, not just at final evaluation. Previously `replies_negative`/`replies_unsubscribe` stayed at 0 until evaluation, making the safety guard inert
-- **No longer assumes all replies are positive** — When reply text is unavailable, existing heartbeat-populated classification counts are preserved instead of overwriting with `positive = total`
+- **Safety kill now fires on each fill** — Reply classification runs via `refresh_variant_classifications()` on every fill, not just at final evaluation. Previously `replies_negative`/`replies_unsubscribe` stayed at 0 until evaluation, making the safety guard inert
+- **No longer assumes all replies are positive** — When reply text is unavailable, existing classification counts are preserved instead of overwriting with `positive = total`
 - **Failed leads no longer permanently excluded** — Only successfully pushed prospect IDs are recorded in `pushed_prospect_ids` (via `push_result.leads`), so failed/skipped leads remain eligible for future fills
 - **`--force-eval` now actually forces evaluation** — Bypasses both warmup guard AND threshold check (previously only bypassed warmup)
 

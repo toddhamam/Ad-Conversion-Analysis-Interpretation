@@ -39,11 +39,15 @@
 # SELF-OPTIMIZING: Email copy A/B testing
 # ─────────────────────────────────────────
 
-# Optimization heartbeat: every 30 min on weekdays
-# Most runs are no-ops — checks thresholds (250 sends + 48h floor), exits if not ready
-# When thresholds met: evaluates experiment, promotes winner, generates new challenger
-# Disabled during warmup weeks 1-2 (auto-skips via warmup guard)
-*/30 * * * 1-5 cd /home/ubuntu/convertra-leads && python3 orchestrator.py optimize >> /home/ubuntu/convertra-leads/logs/optimize.log 2>&1
+# No separate cron needed — the optimizer runs automatically at the end of each
+# daily fill (after leads are pushed to Instantly). It checks thresholds
+# (250 sends + 48h floor) and only acts when ready.
+#
+# To bootstrap the first experiment manually:
+#   python3 orchestrator.py optimize --reset
+#
+# To force evaluation (skip thresholds):
+#   python3 orchestrator.py optimize --force-eval
 
 # ─────────────────────────────────────────
 # OPTIONAL: Adjust fill target
