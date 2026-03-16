@@ -1731,6 +1731,20 @@ def run_fill(target=25, campaign_id=None, niches=None, max_rounds=50,
 
     status = "TARGET MET" if pushed >= target else f"pushed {pushed}/{target}"
     log.info(f"=== DAILY FILL COMPLETE ({status}) ===")
+
+    # Step 5: Run optimizer — evaluate experiment if thresholds met, deploy next round
+    # Only runs when an experiment exists and is active. No-ops otherwise.
+    if current_exp and current_exp.get("status") == "running":
+        log.info("Step 5: Running optimizer after fill...")
+        try:
+            opt_result = run_optimize()
+            opt_status = opt_result.get("status", "unknown")
+            results["optimize"] = opt_result
+            log.info(f"  Optimizer result: {opt_status}")
+        except Exception as e:
+            log.error(f"  Optimizer error (non-fatal): {e}")
+            results["optimize"] = {"status": "error", "error": str(e)}
+
     return results
 
 
@@ -1742,7 +1756,11 @@ def run_fill(target=25, campaign_id=None, niches=None, max_rounds=50,
 def run_optimize(force_eval=False, dry_run=False, reset=False, from_best=False):
     """Self-optimizing email copy — Karpathy auto-research pattern for cold email.
 
-    Called every 30 minutes by cron. Most runs are no-ops (thresholds not met).
+    Called automatically at the end of each daily fill (after leads are pushed).
+    Can also be run manually via `orchestrator.py optimize`.
+
+    Most runs are no-ops — thresholds not met yet (250 sends + 48h floor).
+    When thresholds ARE met: evaluate → promote winner → generate new challenger → deploy.
 
     Flow:
     0. Warmup guard: exit early if warmup week < 3
@@ -1750,7 +1768,7 @@ def run_optimize(force_eval=False, dry_run=False, reset=False, from_best=False):
     1b. Recovery guard: resume if status == "evaluating"
     2. If no experiment (or --reset): bootstrap
     3. Fetch latest stats from Instantly
-    4. Run safety check (every heartbeat)
+    4. Run safety check
     5. Check evaluation thresholds
     6. If ready: evaluate → promote → learnings → new round
     7. Telegram notification on completion
@@ -1764,7 +1782,7 @@ def run_optimize(force_eval=False, dry_run=False, reset=False, from_best=False):
     from modules.instantly import get_campaign_summary
     from modules.notifier import send_notification
 
-    log.info("=== OPTIMIZE HEARTBEAT ===")
+    log.info("=== OPTIMIZE CHECK ===")
 
     # Step 0: Warmup guard
     config = load_config()
