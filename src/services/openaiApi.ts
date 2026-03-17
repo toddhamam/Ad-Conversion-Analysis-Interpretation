@@ -67,11 +67,12 @@ const DEFAULT_CHAT_MODEL = 'gpt-5.4'; // Latest GPT-5.4 with reasoning capabilit
 const DEFAULT_VISION_MODEL = 'gpt-5.4'; // GPT-5.4 has multimodal vision support
 
 // Reasoning configuration for GPT-5.4
-// 'high' for both generation and analysis — 'xhigh' causes Vercel Hobby plan
-// FUNCTION_INVOCATION_TIMEOUT (10s limit) because reasoning tokens take too long
+// 'medium' for analysis — 'high' causes FUNCTION_INVOCATION_TIMEOUT when combined
+// with Policy Guard queuing delays (~10-20s) that eat into the 60s serverless limit.
+// 'xhigh' causes immediate timeout even without guard delays.
 type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'high';
-const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'high';
+const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'medium';
 
 // Image Generation - Gemini models with automatic fallback
 // Primary: gemini-3-pro-image-preview (highest quality)

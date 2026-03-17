@@ -1392,22 +1392,39 @@ async function handleAIChat(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Request body with messages is required' });
   }
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify(body),
-  });
+  // 55s timeout — fail fast with a clear message instead of letting Vercel
+  // kill the function at 60s with a cryptic FUNCTION_INVOCATION_TIMEOUT
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 55_000);
 
-  const data = await response.json();
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
 
-  if (!response.ok) {
-    return res.status(response.status).json(data);
+    clearTimeout(timeout);
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json(data);
+    }
+
+    return res.status(200).json(data);
+  } catch (err: unknown) {
+    clearTimeout(timeout);
+    if (err instanceof Error && err.name === 'AbortError') {
+      return res.status(504).json({
+        error: { message: 'AI analysis timed out. Try reducing the number of ads or lowering the ConversionIQ reasoning level.' },
+      });
+    }
+    throw err;
   }
-
-  return res.status(200).json(data);
 }
 
 // ─── Route: ai-images ───────────────────────────────────────────────────────
