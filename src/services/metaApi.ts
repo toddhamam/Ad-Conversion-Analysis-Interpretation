@@ -571,6 +571,8 @@ interface MetaAdInsight {
   actions?: Array<{ action_type: string; value: string }>;
 }
 
+export type DetectedConversionType = 'purchase' | 'lead' | 'both' | 'none';
+
 export interface AdCreative {
   id: string;
   headline: string;
@@ -589,6 +591,7 @@ export interface AdCreative {
   campaignName: string;
   adsetName: string;
   roas?: number;
+  detectedConversionType?: DetectedConversionType;
 }
 
 export interface TrafficType {
@@ -792,6 +795,8 @@ export interface FetchCreativeOptions {
   fatiguedCVRThreshold?: number;
   winningConversionMin?: number;
   fatiguedSpendMin?: number;
+  leadWinningCVRThreshold?: number;
+  leadFatiguedCVRThreshold?: number;
 }
 
 /**
@@ -815,12 +820,39 @@ export async function fetchAdCreatives(dateOptions?: DateRangeOptions, options?:
     return insights.map((ad, index) => {
       const creative = creativeDetails[index] || {};
       const actionType = options?.primaryActionType || 'offsite_conversion.fb_pixel_purchase';
-      const conversions = ad.actions?.find(
-        action => action.action_type === actionType
-      )?.value || '0';
+
+      let conversionCount: number;
+      let detectedConversionType: DetectedConversionType | undefined;
+
+      if (actionType === 'hybrid') {
+        // Hybrid: look for both purchase and lead conversions
+        const purchases = parseInt(
+          ad.actions?.find((a: any) => a.action_type === 'offsite_conversion.fb_pixel_purchase')?.value || '0', 10
+        );
+        const leads = parseInt(
+          ad.actions?.find((a: any) => a.action_type === 'lead')?.value || '0', 10
+        );
+
+        if (purchases > 0 && leads > 0) {
+          detectedConversionType = 'both';
+          conversionCount = Math.max(purchases, leads); // Use the primary conversion type
+        } else if (purchases > 0) {
+          detectedConversionType = 'purchase';
+          conversionCount = purchases;
+        } else if (leads > 0) {
+          detectedConversionType = 'lead';
+          conversionCount = leads;
+        } else {
+          detectedConversionType = 'none';
+          conversionCount = 0;
+        }
+      } else {
+        conversionCount = parseInt(
+          ad.actions?.find((action: any) => action.action_type === actionType)?.value || '0', 10
+        );
+      }
 
       const spend = parseFloat(ad.spend || '0');
-      const conversionCount = parseInt(conversions, 10);
       const clicks = parseInt(ad.clicks || '0', 10);
       const impressions = parseInt(ad.impressions || '0', 10);
 
@@ -828,10 +860,16 @@ export async function fetchAdCreatives(dateOptions?: DateRangeOptions, options?:
       const costPerConversion = conversionCount > 0 ? spend / conversionCount : 0;
       const clickThroughRate = impressions > 0 ? (clicks / impressions) * 100 : 0;
 
-      const winCVR = options?.winningCVRThreshold ?? 5;
+      // Use type-aware thresholds for hybrid accounts
+      const isLeadAd = detectedConversionType === 'lead';
+      const winCVR = isLeadAd
+        ? (options?.leadWinningCVRThreshold ?? 15)
+        : (options?.winningCVRThreshold ?? 5);
+      const fatigueCVR = isLeadAd
+        ? (options?.leadFatiguedCVRThreshold ?? 3)
+        : (options?.fatiguedCVRThreshold ?? 1);
       const winMin = options?.winningConversionMin ?? 10;
       const fatigueSpend = options?.fatiguedSpendMin ?? 50;
-      const fatigueCVR = options?.fatiguedCVRThreshold ?? 1;
 
       let status: 'Winning' | 'Testing' | 'Fatigued' = 'Testing';
       if (conversionRate > winCVR && conversionCount > winMin) status = 'Winning';
@@ -858,6 +896,7 @@ export async function fetchAdCreatives(dateOptions?: DateRangeOptions, options?:
         clicks,
         campaignName: ad.campaign_name,
         adsetName: ad.adset_name,
+        ...(detectedConversionType !== undefined && { detectedConversionType }),
       };
     });
   } catch (error) {
@@ -884,15 +923,28 @@ export async function fetchTrafficTypes(dateOptions?: DateRangeOptions, options?
     });
 
     const trafficActionType = options?.primaryActionType || 'offsite_conversion.fb_pixel_purchase';
-    return (data.data || []).map((campaign: any, index: number) => ({
-      id: campaign.campaign_id || `traffic-${index}`,
-      name: campaign.campaign_name || 'Unknown',
-      spend: parseFloat(campaign.spend || '0'),
-      conversions: parseInt(
-        campaign.actions?.find((a: any) => a.action_type === trafficActionType)?.value || '0',
-        10
-      ),
-    }));
+    return (data.data || []).map((campaign: any, index: number) => {
+      let conversions: number;
+      if (trafficActionType === 'hybrid') {
+        const purchases = parseInt(
+          campaign.actions?.find((a: any) => a.action_type === 'offsite_conversion.fb_pixel_purchase')?.value || '0', 10
+        );
+        const leads = parseInt(
+          campaign.actions?.find((a: any) => a.action_type === 'lead')?.value || '0', 10
+        );
+        conversions = purchases + leads;
+      } else {
+        conversions = parseInt(
+          campaign.actions?.find((a: any) => a.action_type === trafficActionType)?.value || '0', 10
+        );
+      }
+      return {
+        id: campaign.campaign_id || `traffic-${index}`,
+        name: campaign.campaign_name || 'Unknown',
+        spend: parseFloat(campaign.spend || '0'),
+        conversions,
+      };
+    });
   } catch (error) {
     console.error('Error fetching traffic types:', error);
     return [];
@@ -1065,10 +1117,11 @@ export async function fetchAccountLevelInsights(dateOptions?: DateRangeOptions):
  */
 export function aggregateByType(
   campaigns: CampaignSummary[],
-  options?: { primaryConversionField?: 'purchases' | 'leads' }
+  options?: { primaryConversionField?: 'purchases' | 'leads'; includeLeadsInTotal?: boolean }
 ): CampaignTypeMetrics[] {
   const typeMap = new Map<CampaignType, CampaignTypeMetrics>();
   const useLeads = options?.primaryConversionField === 'leads';
+  const includeLeadsInTotal = options?.includeLeadsInTotal ?? false;
 
   const types: CampaignType[] = ['Prospecting', 'Retargeting', 'Retention', 'Other'];
   types.forEach(type => {
@@ -1100,7 +1153,12 @@ export function aggregateByType(
     metrics.totalLeads += campaign.leads;
     metrics.campaignCount += 1;
     // Business-type-agnostic: use the correct conversion field
-    metrics.totalConversions += useLeads ? campaign.leads : campaign.purchases;
+    // For hybrid, combine purchases + leads (avoiding double-counting)
+    if (includeLeadsInTotal) {
+      metrics.totalConversions += campaign.purchases + campaign.leads;
+    } else {
+      metrics.totalConversions += useLeads ? campaign.leads : campaign.purchases;
+    }
   });
 
   typeMap.forEach(metrics => {

@@ -281,6 +281,10 @@ const MetaAds = () => {
           fatiguedCVRThreshold: btConfig.fatiguedCVRThreshold,
           winningConversionMin: btConfig.winningConversionMin,
           fatiguedSpendMin: btConfig.fatiguedSpendMin,
+          ...(businessType === 'hybrid' ? {
+            leadWinningCVRThreshold: 15,
+            leadFatiguedCVRThreshold: 3,
+          } : {}),
         }),
         fetchCampaignSummaries(dateOptions)
       ]);
@@ -291,6 +295,7 @@ const MetaAds = () => {
       // Aggregate campaign data by type
       const aggregatedMetrics = aggregateByType(campaignSummaries, {
         primaryConversionField: businessType === 'leadgen' ? 'leads' : 'purchases',
+        includeLeadsInTotal: businessType === 'hybrid',
       });
       console.log('✅ Aggregated metrics by type:', aggregatedMetrics);
 

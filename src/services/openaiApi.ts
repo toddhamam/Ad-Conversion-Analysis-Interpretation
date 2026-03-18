@@ -6,7 +6,7 @@ import { getTopHighQualityCachedImages, getCachedImage, storeImageFromUrl, getSe
 import { isEmbeddingAvailable, embedText, embedMultimodal, pairwiseSimilarityMatrix, kMeansClustering, findOptimalK, cosineSimilarity } from './embeddingService';
 import { getEmbedding, setEmbedding } from './embeddingStore';
 import { getAuthToken } from '../lib/authToken';
-import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
+import { getBusinessTypeConfig, getCampaignIntentConfig } from '../lib/businessTypeConfig';
 import { META_AD_POLICY_PROMPT, IMAGE_SAFETY_DIRECTIVE, POLICY_SANITIZE_PATTERNS } from './adPolicyGuard';
 
 // Dev-mode fallback key (only used when no auth token is available)
@@ -413,6 +413,7 @@ export interface AdCreativeData {
   impressions: number;
   ctr: number;
   roas?: number;
+  detectedConversionType?: 'purchase' | 'lead' | 'both' | 'none';
 }
 
 export interface AdAnalysisResult {
@@ -657,6 +658,7 @@ export interface GeneratedAdPackage {
   imageHeadlines?: string[]; // Headlines rendered into images, indexed by variation
   variationCount?: number; // Original requested variation count (for retry)
   textAdConfig?: TextAdConfig; // Config used for text ad generation (for regeneration)
+  campaignIntent?: import('../types/organization').CampaignIntent; // Hybrid: purchase or lead intent
 }
 
 // Copy Options for multi-step generation
@@ -1262,6 +1264,7 @@ export async function analyzeChannelPerformance(
   }
 
   // Calculate aggregated statistics
+  const isHybrid = options?.businessType === 'hybrid';
   const totalSpend = ads.reduce((sum, ad) => sum + ad.spend, 0);
   const totalConversions = ads.reduce((sum, ad) => sum + ad.conversions, 0);
   const avgConversionRate = ads.reduce((sum, ad) => sum + ad.conversionRate, 0) / ads.length;
@@ -1269,6 +1272,18 @@ export async function analyzeChannelPerformance(
 
   // Sort ads by conversion rate
   const sortedAds = [...ads].sort((a, b) => b.conversionRate - a.conversionRate);
+
+  // For hybrid: split into per-intent cohorts to avoid CVR scale bias
+  // (lead ads ~15% CVR vs purchase ads ~5% CVR would bias rankings)
+  let purchaseAds: AdCreativeData[] = [];
+  let leadAds: AdCreativeData[] = [];
+  if (isHybrid) {
+    purchaseAds = ads.filter(ad => ad.detectedConversionType === 'purchase' || ad.detectedConversionType === 'both');
+    leadAds = ads.filter(ad => ad.detectedConversionType === 'lead');
+    // Ads with no detected type go into purchase cohort (conservative default)
+    const untyped = ads.filter(ad => !ad.detectedConversionType || ad.detectedConversionType === 'none');
+    purchaseAds = [...purchaseAds, ...untyped];
+  }
 
   // Classify performance tiers
   const highPerformers = sortedAds.filter(ad => ad.conversionRate > avgConversionRate * 1.5);
@@ -1278,8 +1293,23 @@ export async function analyzeChannelPerformance(
   );
 
   // Get top 5 and bottom 5 for detailed analysis
-  const top5 = sortedAds.slice(0, Math.min(5, sortedAds.length));
-  const bottom5 = sortedAds.slice(-Math.min(5, sortedAds.length)).reverse();
+  // For hybrid: rank within each cohort separately to avoid CVR scale bias
+  let top5: AdCreativeData[];
+  let bottom5: AdCreativeData[];
+  if (isHybrid && (purchaseAds.length > 0 || leadAds.length > 0)) {
+    const sortedPurchase = [...purchaseAds].sort((a, b) => b.conversionRate - a.conversionRate);
+    const sortedLead = [...leadAds].sort((a, b) => b.conversionRate - a.conversionRate);
+    // Take top from each cohort proportionally
+    const purchaseTop = sortedPurchase.slice(0, Math.min(5, sortedPurchase.length));
+    const leadTop = sortedLead.slice(0, Math.min(5, sortedLead.length));
+    top5 = [...purchaseTop, ...leadTop].slice(0, 10); // Up to 10 total for hybrid
+    const purchaseBottom = sortedPurchase.slice(-Math.min(3, sortedPurchase.length)).reverse();
+    const leadBottom = sortedLead.slice(-Math.min(3, sortedLead.length)).reverse();
+    bottom5 = [...purchaseBottom, ...leadBottom].slice(0, 10);
+  } else {
+    top5 = sortedAds.slice(0, Math.min(5, sortedAds.length));
+    bottom5 = sortedAds.slice(-Math.min(5, sortedAds.length)).reverse();
+  }
 
   // CRITICAL: Group ads by headline to identify where IMAGE is the differentiator
   const headlineGroups = new Map<string, AdCreativeData[]>();
@@ -1390,37 +1420,89 @@ likely show transformation/resolution imagery").`;
   }
 
   // Add the analysis request
+  // Build hybrid-specific context block
+  const hybridContext = isHybrid ? `
+HYBRID BUSINESS MODEL:
+This ad account runs BOTH e-commerce purchase campaigns AND lead generation campaigns.
+- Purchase campaigns (${purchaseAds.length} ads): Optimize for completed sales. Benchmark winning CVR: ~5%+
+- Lead gen campaigns (${leadAds.length} ads): Optimize for form fills, booked calls, opt-ins. Benchmark winning CVR: ~15%+
+
+IMPORTANT: Ads are ranked within their own cohort (purchase vs lead) to avoid CVR scale bias.
+Analyze each cohort against its own benchmarks. Identify:
+1. Cross-cutting patterns that work across BOTH funnels
+2. Patterns unique to purchase campaigns
+3. Patterns unique to lead gen campaigns
+` : '';
+
+  // Format per-ad line with optional conversion type for hybrid
+  const formatAdLine = (ad: AdCreativeData) => {
+    const typeLabel = isHybrid && ad.detectedConversionType
+      ? ` | Type: ${ad.detectedConversionType}`
+      : '';
+    return `- "${ad.headline}" | CVR: ${ad.conversionRate.toFixed(2)}% | Ad ${ad.id} | AdSet: ${ad.adsetName}${typeLabel}`;
+  };
+
+  const formatAdDetail = (ad: AdCreativeData, i: number) => {
+    const typeLabel = isHybrid && ad.detectedConversionType
+      ? `\n   Conversion Type: ${ad.detectedConversionType}`
+      : '';
+    return `
+${i + 1}. Ad ID: ${ad.id}
+   Headline: "${ad.headline}"
+   Body: "${ad.bodyText}"
+   Campaign: ${ad.campaignName}
+   Ad Set: ${ad.adsetName}${typeLabel}
+   CVR: ${ad.conversionRate.toFixed(2)}% | Spend: $${ad.spend.toFixed(2)} | Conversions: ${ad.conversions}
+`;
+  };
+
+  // For hybrid: build cohort-separated top/bottom sections
+  let topBottomSection: string;
+  if (isHybrid && purchaseAds.length > 0 && leadAds.length > 0) {
+    const sortedPurchase = [...purchaseAds].sort((a, b) => b.conversionRate - a.conversionRate);
+    const sortedLead = [...leadAds].sort((a, b) => b.conversionRate - a.conversionRate);
+    const purchaseTop5 = sortedPurchase.slice(0, Math.min(5, sortedPurchase.length));
+    const purchaseBottom5 = sortedPurchase.slice(-Math.min(3, sortedPurchase.length)).reverse();
+    const leadTop5 = sortedLead.slice(0, Math.min(5, sortedLead.length));
+    const leadBottom5 = sortedLead.slice(-Math.min(3, sortedLead.length)).reverse();
+
+    topBottomSection = `
+**=== PURCHASE CAMPAIGN PERFORMANCE ===**
+
+**TOP PURCHASE ADS (ranked by purchase CVR):**
+${purchaseTop5.map((ad, i) => formatAdDetail(ad, i)).join('')}
+
+**BOTTOM PURCHASE ADS:**
+${purchaseBottom5.map((ad, i) => formatAdDetail(ad, i)).join('')}
+
+**=== LEAD GEN CAMPAIGN PERFORMANCE ===**
+
+**TOP LEAD GEN ADS (ranked by lead CVR):**
+${leadTop5.map((ad, i) => formatAdDetail(ad, i)).join('')}
+
+**BOTTOM LEAD GEN ADS:**
+${leadBottom5.map((ad, i) => formatAdDetail(ad, i)).join('')}`;
+  } else {
+    topBottomSection = `
+**TOP ${isHybrid ? '' : '5 '}ADS - DETAILED:**
+${top5.map((ad, i) => formatAdDetail(ad, i)).join('')}
+
+**BOTTOM ${isHybrid ? '' : '5 '}ADS - DETAILED:**
+${bottom5.map((ad, i) => formatAdDetail(ad, i)).join('')}`;
+  }
+
   const analysisPrompt = `
 BUSINESS CONTEXT:
 ${btConfig.aiConversionLanguage}
-
+${hybridContext}
 **ACCOUNT OVERVIEW:**
 - Total Ads: ${ads.length}
 - Total Spend: $${totalSpend.toFixed(2)}
-- Total Conversions: ${totalConversions}
+- Total Conversions: ${totalConversions}${isHybrid ? ` (${purchaseAds.filter(a => a.conversions > 0).length} purchase ads, ${leadAds.filter(a => a.conversions > 0).length} lead ads)` : ''}
 - Average CVR: ${avgConversionRate.toFixed(2)}%
 - High Performers: ${highPerformers.length} | Mid: ${midPerformers.length} | Low: ${lowPerformers.length}
 ${!hasAccessibleImages ? '\n⚠️ NOTE: Ad images are on Facebook CDN (requires auth). Provide analysis based on copy patterns and inferred visual strategies.' : ''}
-
-**TOP 5 ADS - DETAILED:**
-${top5.map((ad, i) => `
-${i + 1}. Ad ID: ${ad.id}
-   Headline: "${ad.headline}"
-   Body: "${ad.bodyText}"
-   Campaign: ${ad.campaignName}
-   Ad Set: ${ad.adsetName}
-   CVR: ${ad.conversionRate.toFixed(2)}% | Spend: $${ad.spend.toFixed(2)} | Conversions: ${ad.conversions}
-`).join('')}
-
-**BOTTOM 5 ADS - DETAILED:**
-${bottom5.map((ad, i) => `
-${i + 1}. Ad ID: ${ad.id}
-   Headline: "${ad.headline}"
-   Body: "${ad.bodyText}"
-   Campaign: ${ad.campaignName}
-   Ad Set: ${ad.adsetName}
-   CVR: ${ad.conversionRate.toFixed(2)}% | Spend: $${ad.spend.toFixed(2)} | Conversions: ${ad.conversions}
-`).join('')}
+${topBottomSection}
 
 **SAME HEADLINE, DIFFERENT PERFORMANCE (IMAGE/TARGETING IS THE DIFFERENTIATOR):**
 ${sameHeadlineDifferentPerformance.length > 0 ? sameHeadlineDifferentPerformance.map(group => `
@@ -1431,7 +1513,7 @@ Headline: "${group.headline}"
 `).join('') : 'No headlines with multiple variations found.'}
 
 **ALL ADS PERFORMANCE:**
-${sortedAds.map(ad => `- "${ad.headline}" | CVR: ${ad.conversionRate.toFixed(2)}% | Ad ${ad.id} | AdSet: ${ad.adsetName}`).join('\n')}
+${sortedAds.map(ad => formatAdLine(ad)).join('\n')}
 
 ${hasAccessibleImages ? 'Based on your VISUAL ANALYSIS of the ad images above' : 'Based on the performance data, copy patterns, and campaign context'}, provide comprehensive insights in this JSON format:
 {
@@ -1538,7 +1620,12 @@ ${hasAccessibleImages ? 'Based on your VISUAL ANALYSIS of the ad images above' :
       "imageIssues": "<issues>",
       "suggestedFix": "<fix>"
     }
-  ]
+  ]${isHybrid ? `,
+  "hybridInsights": {
+    "purchasePatterns": "<patterns specific to purchase/e-commerce campaigns — what headlines, visuals, and psychology drive sales>",
+    "leadPatterns": "<patterns specific to lead gen campaigns — what drives form fills, call bookings, opt-ins>",
+    "crossCuttingPatterns": "<patterns that work across BOTH purchase and lead gen funnels>"
+  }` : ''}
 }
 
 Return ONLY the JSON object, no additional text.`;
@@ -2172,6 +2259,7 @@ export async function generateCopyOptions(config: {
   productContext?: ProductContext;
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
   businessType?: import('../types/organization').BusinessType;
+  campaignIntent?: import('../types/organization').CampaignIntent;
 }): Promise<CopyOptionsResult> {
   if (!isOpenAIConfigured()) {
     throw new Error('AI API not configured. Please contact support.');
@@ -2182,6 +2270,10 @@ export async function generateCopyOptions(config: {
   const copyVariation = config.copyVariationLevel ?? 30;
   const copyLengthConfig = COPY_LENGTH_OPTIONS.find(opt => opt.id === copyLength) ?? COPY_LENGTH_OPTIONS[0];
   const btConfig = getBusinessTypeConfig(config.businessType || 'ecommerce');
+  // For hybrid accounts, use intent-specific AI context
+  const intentConfig = (config.businessType === 'hybrid' && config.campaignIntent)
+    ? getCampaignIntentConfig(config.campaignIntent)
+    : null;
   console.log(`📝 Generating copy options for ${config.audienceType} audience with ${config.conceptType} concept | IQ Level: ${reasoningEffort} | Copy Length: ${copyLength} | Copy Variation: ${copyVariation}%`);
   console.log('📊 Analysis data available:', !!config.analysisData);
   console.log('📦 Product context:', config.productContext ? config.productContext.name : 'Not provided');
@@ -2503,8 +2595,14 @@ NOTE: No analysis data is available. Run Channel Analysis first for data-driven 
 3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.
 4. ${META_AD_POLICY_PROMPT}`;
 
-  // Inject business type context
-  systemPrompt += `\n\nBUSINESS CONTEXT:\n${btConfig.aiConversionLanguage}`;
+  // Inject business type context (use intent-specific language for hybrid)
+  const effectiveConversionLanguage = intentConfig?.aiConversionLanguage || btConfig.aiConversionLanguage;
+  const effectivePsychologyShifts = intentConfig?.aiPsychologyShifts || btConfig.aiPsychologyShifts;
+  const effectiveRetentionContext = intentConfig?.aiRetentionContext || btConfig.aiRetentionContext;
+  systemPrompt += `\n\nBUSINESS CONTEXT:\n${effectiveConversionLanguage}`;
+  if (config.businessType === 'hybrid' && config.campaignIntent) {
+    systemPrompt += `\n\nCAMPAIGN INTENT: This creative is for a "${intentConfig?.label}" campaign. Focus copy on driving ${config.campaignIntent === 'purchase' ? 'purchases and sales' : 'lead submissions, call bookings, or opt-ins'}. Use the relevant patterns from the analysis for this intent type.`;
+  }
 
   // Build product context section
   let productSection = '';
@@ -2529,7 +2627,7 @@ ${productSection}
 
 AWARENESS LEVEL: ${audienceAngle.awarenessLevel}
 ${audienceAngle.awarenessDescription}
-${config.businessType === 'leadgen' && config.audienceType === 'retention' ? `\nIMPORTANT OVERRIDE FOR THIS BUSINESS: ${btConfig.aiRetentionContext}` : ''}
+${(config.businessType === 'leadgen' || config.businessType === 'hybrid') && config.audienceType === 'retention' ? `\nIMPORTANT OVERRIDE FOR THIS BUSINESS: ${effectiveRetentionContext}` : ''}
 
 WHAT THE READER ALREADY KNOWS:
 ${audienceAngle.readerKnows.map((k: string) => `- ${k}`).join('\n')}
@@ -2548,7 +2646,7 @@ ${audienceAngle.ctaApproach}
 
 CRITICAL -- DO NOT DO ANY OF THESE:
 ${audienceAngle.antiPatterns.map((p: string) => `- ${p}`).join('\n')}
-${config.businessType === 'leadgen' ? `\nBUSINESS-SPECIFIC PSYCHOLOGY:\n${btConfig.aiPsychologyShifts}` : ''}
+${(config.businessType === 'leadgen' || config.businessType === 'hybrid') ? `\nBUSINESS-SPECIFIC PSYCHOLOGY:\n${effectivePsychologyShifts}` : ''}
 
 ${conceptModifier ? `CONCEPT ADAPTATION FOR ${config.audienceType.toUpperCase()} AUDIENCE:\n${conceptModifier}` : ''}
 
@@ -2699,6 +2797,7 @@ export async function regenerateSingleCopy(config: {
   productContext?: ProductContext;
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
   businessType?: import('../types/organization').BusinessType;
+  campaignIntent?: import('../types/organization').CampaignIntent;
 }): Promise<CopyOption> {
   if (!isOpenAIConfigured()) {
     throw new Error('AI API not configured. Please contact support.');
@@ -2817,13 +2916,22 @@ ${bv.distinctiveTraits?.length ? `Traits: ${bv.distinctiveTraits.join('; ')}` : 
 3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.
 4. ${META_AD_POLICY_PROMPT}`;
 
-  // Inject business context for leadgen
-  systemPrompt += `\n\nBUSINESS CONTEXT:\n${btConfig.aiConversionLanguage}`;
-  if (config.businessType === 'leadgen') {
-    systemPrompt += `\n${btConfig.aiPsychologyShifts}`;
+  // Inject business context (use intent-specific language for hybrid)
+  const regenIntentConfig = (config.businessType === 'hybrid' && config.campaignIntent)
+    ? getCampaignIntentConfig(config.campaignIntent)
+    : null;
+  const regenConversionLanguage = regenIntentConfig?.aiConversionLanguage || btConfig.aiConversionLanguage;
+  const regenPsychologyShifts = regenIntentConfig?.aiPsychologyShifts || btConfig.aiPsychologyShifts;
+  const regenRetentionContext = regenIntentConfig?.aiRetentionContext || btConfig.aiRetentionContext;
+  systemPrompt += `\n\nBUSINESS CONTEXT:\n${regenConversionLanguage}`;
+  if (config.businessType === 'leadgen' || config.businessType === 'hybrid') {
+    systemPrompt += `\n${regenPsychologyShifts}`;
     if (config.audienceType === 'retention') {
-      systemPrompt += `\n\nRETENTION CONTEXT: ${btConfig.aiRetentionContext}`;
+      systemPrompt += `\n\nRETENTION CONTEXT: ${regenRetentionContext}`;
     }
+  }
+  if (config.businessType === 'hybrid' && config.campaignIntent) {
+    systemPrompt += `\n\nCAMPAIGN INTENT: This creative is for a "${regenIntentConfig?.label}" campaign. Focus on driving ${config.campaignIntent === 'purchase' ? 'purchases and sales' : 'lead submissions, call bookings, or opt-ins'}.`;
   }
 
   // Build product context
@@ -3146,6 +3254,9 @@ export async function generateAdImage(config: {
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
   // Headline to render directly into the generated image
   headlineText?: string;
+  // Business type + campaign intent for hybrid accounts
+  businessType?: import('../types/organization').BusinessType;
+  campaignIntent?: import('../types/organization').CampaignIntent;
 }): Promise<GeneratedImageResult> {
   // Check if we should use Gemini or fall back to DALL-E
   if (USE_GEMINI_FOR_IMAGES && isGeminiConfigured()) {
@@ -3178,6 +3289,9 @@ async function generateAdImageWithGemini(config: {
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
   // Headline to render directly into the generated image
   headlineText?: string;
+  // Business type + campaign intent for hybrid accounts
+  businessType?: import('../types/organization').BusinessType;
+  campaignIntent?: import('../types/organization').CampaignIntent;
 }): Promise<GeneratedImageResult> {
   const similarity = config.similarityLevel ?? 30; // Default to 30% variation
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
@@ -3349,6 +3463,19 @@ Explore fresh visual directions while maintaining professional quality.`,
       : 'Image should feel exclusive and premium -- VIP treatment, insider access'}`,
     ''
   );
+
+  // Inject campaign intent visual direction for hybrid accounts
+  if (config.businessType === 'hybrid' && config.campaignIntent) {
+    const imgIntentConfig = getCampaignIntentConfig(config.campaignIntent);
+    promptParts.push(
+      `CAMPAIGN INTENT: ${imgIntentConfig.label}`,
+      `- ${imgIntentConfig.description}`,
+      `- ${config.campaignIntent === 'purchase'
+        ? 'Visual should emphasize the product, its value, and the purchase outcome — show what the buyer gets'
+        : 'Visual should emphasize the transformation, the result of taking action — consultation, freedom, next step'}`,
+      ''
+    );
+  }
 
   if (visualAnalysis) {
     promptParts.push('VISUAL ANALYSIS FROM HIGH-CONVERTING ADS:');
@@ -3853,6 +3980,8 @@ Return JSON only:
 export async function generateVideoStoryboard(config: {
   audienceType: AudienceType;
   analysisData: ChannelAnalysisResult | null;
+  businessType?: import('../types/organization').BusinessType;
+  campaignIntent?: import('../types/organization').CampaignIntent;
 }): Promise<VideoStoryboard> {
   if (!isOpenAIConfigured()) {
     throw new Error('AI API not configured. Please contact support.');
@@ -3864,9 +3993,17 @@ export async function generateVideoStoryboard(config: {
   const visualAnalysis = config.analysisData?.visualAnalysis;
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
 
+  // Build intent-aware system prompt for hybrid accounts
+  const storyboardIntentConfig = (config.businessType === 'hybrid' && config.campaignIntent)
+    ? getCampaignIntentConfig(config.campaignIntent)
+    : null;
+  const storyboardIntentContext = storyboardIntentConfig
+    ? `\nThis is a ${storyboardIntentConfig.label.toUpperCase()} campaign. ${storyboardIntentConfig.aiConversionLanguage}`
+    : '';
+
   const systemPrompt = `You are an expert video ad creative director specializing in short-form social media ads.
 Create compelling video ad storyboards that follow the proven AIDA (Attention, Interest, Desire, Action) framework.
-Your storyboards should be production-ready with clear visual direction.`;
+Your storyboards should be production-ready with clear visual direction.${storyboardIntentContext}`;
 
   const userPrompt = `Create a 15-second video ad storyboard for a ${config.audienceType.toUpperCase()} audience.
 
@@ -3971,6 +4108,9 @@ export async function generateAdVideoWithVeo(config: {
   // Which variation this is (for prompt variety)
   variationIndex?: number;
   totalVariations?: number;
+  // Business type + campaign intent for hybrid accounts
+  businessType?: import('../types/organization').BusinessType;
+  campaignIntent?: import('../types/organization').CampaignIntent;
 }): Promise<GeneratedVideoResult> {
   if (!isGeminiConfigured()) {
     throw new Error('Video generation API not configured. Please contact support.');
@@ -4039,6 +4179,17 @@ export async function generateAdVideoWithVeo(config: {
       : 'Treat the viewer as an insider -- VIP reveal, exclusive access framing'}`,
     ''
   );
+
+  // Inject campaign intent for hybrid accounts
+  if (config.businessType === 'hybrid' && config.campaignIntent) {
+    const veoIntentConfig = getCampaignIntentConfig(config.campaignIntent);
+    promptParts.push(
+      `CAMPAIGN INTENT: ${veoIntentConfig.label}`,
+      `- ${veoIntentConfig.description}`,
+      `- ${veoIntentConfig.aiConversionLanguage}`,
+      ''
+    );
+  }
 
   // Concept angle
   if (conceptAngle && config.conceptType !== 'auto') {
@@ -4272,6 +4423,8 @@ export async function regenerateAllImages(config: {
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
   imageHeadlines?: string[];
   onProgress?: (message: string) => void;
+  businessType?: import('../types/organization').BusinessType;
+  campaignIntent?: import('../types/organization').CampaignIntent;
 }): Promise<{ images: GeneratedImageResult[]; indexedResults: (GeneratedImageResult | null)[]; imageError?: string }> {
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
   console.log(`🖼️ Regenerating ${config.variationCount} image(s) for ${config.audienceType} audience`);
@@ -4361,6 +4514,8 @@ export async function regenerateAllImages(config: {
         precomputedRefs,
         adLibraryInspirations: config.adLibraryInspirations,
         headlineText,
+        businessType: config.businessType,
+        campaignIntent: config.campaignIntent,
       });
     });
     const batchResults = await Promise.allSettled(batchPromises);
@@ -4440,6 +4595,9 @@ export async function generateAdPackage(config: {
   textAdConfig?: TextAdConfig;
   // Progress callback for UI updates during generation
   onProgress?: (message: string) => void;
+  // Business type + campaign intent for hybrid accounts
+  businessType?: import('../types/organization').BusinessType;
+  campaignIntent?: import('../types/organization').CampaignIntent;
 }): Promise<GeneratedAdPackage> {
   const conceptName = config.conceptType ? CONCEPT_ANGLES[config.conceptType].name : 'general';
   const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
@@ -4486,6 +4644,8 @@ export async function generateAdPackage(config: {
       adLibraryInspirations: config.adLibraryInspirations,
       imageHeadlines: config.imageHeadlines,
       onProgress: config.onProgress,
+      businessType: config.businessType,
+      campaignIntent: config.campaignIntent,
     });
     images = imageResult.images;
     imageError = imageResult.imageError;
@@ -4540,6 +4700,8 @@ export async function generateAdPackage(config: {
             adLibraryInspirations: config.adLibraryInspirations,
             variationIndex: i,
             totalVariations: variationCount,
+            businessType: config.businessType,
+            campaignIntent: config.campaignIntent,
           });
           videos.push(result);
         } catch (error: unknown) {
@@ -4555,6 +4717,8 @@ export async function generateAdPackage(config: {
     storyboard = await generateVideoStoryboard({
       audienceType: config.audienceType,
       analysisData: config.analysisData,
+      businessType: config.businessType,
+      campaignIntent: config.campaignIntent,
     });
 
     const video = videos[0]; // Backwards compat
@@ -4583,6 +4747,7 @@ export async function generateAdPackage(config: {
       videoError,
       imageHeadlines: config.imageHeadlines,
       variationCount: config.variationCount,
+      campaignIntent: config.campaignIntent,
     };
   }
 
@@ -4602,6 +4767,7 @@ export async function generateAdPackage(config: {
     imageHeadlines: config.imageHeadlines,
     variationCount: config.variationCount,
     textAdConfig: config.adType === 'text' ? config.textAdConfig : undefined,
+    campaignIntent: config.campaignIntent,
   };
 }
 
@@ -4627,6 +4793,7 @@ export async function generateTextAdCopy(config: {
   reasoningEffort?: ReasoningEffort;
   productContext?: ProductContext;
   businessType?: import('../types/organization').BusinessType;
+  campaignIntent?: import('../types/organization').CampaignIntent;
 }): Promise<TextAdCopyResult> {
   if (!isOpenAIConfigured()) {
     throw new Error('AI API not configured. Please contact support.');
@@ -4635,6 +4802,12 @@ export async function generateTextAdCopy(config: {
   const reasoningEffort = config.reasoningEffort ?? 'medium';
   const btConfig = getBusinessTypeConfig(config.businessType || 'ecommerce');
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
+
+  // Intent-specific context for hybrid accounts
+  const textIntentConfig = (config.businessType === 'hybrid' && config.campaignIntent)
+    ? getCampaignIntentConfig(config.campaignIntent)
+    : null;
+  const textConversionLanguage = textIntentConfig?.aiConversionLanguage || btConfig.aiConversionLanguage;
   const analysis = config.analysisData;
 
   let contextSection = '';
@@ -4688,7 +4861,7 @@ Your job is to generate text suggestions for three sections of a text-only ad im
    - Example: "GUARANTEED" or "RISK-FREE" or "LIMITED SPOTS"
 
 IMPORTANT RULES:
-- This is for ${btConfig.conversionNoun.toLowerCase()} generation (${btConfig.aiConversionLanguage})
+- This is for ${btConfig.conversionNoun.toLowerCase()} generation (${textConversionLanguage})
 - Write for ${audienceAngle.awarenessLevel} audiences (${audienceAngle.focus})
 - Be SPECIFIC with numbers, timeframes, and outcomes — vague promises don't stop the scroll
 - Avoid AI-sounding phrases: no "unlock", "revolutionize", "game-changer", "transform your"

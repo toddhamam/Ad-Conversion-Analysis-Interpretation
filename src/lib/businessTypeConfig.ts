@@ -1,4 +1,4 @@
-import type { BusinessType } from '../types/organization';
+import type { BusinessType, CampaignIntent } from '../types/organization';
 
 export interface BusinessTypeConfig {
   // Labels
@@ -103,9 +103,92 @@ const LEADGEN_CONFIG: BusinessTypeConfig = {
   aiRetentionContext: 'This person has ALREADY OPTED IN or BOOKED A CALL. They have expressed interest and taken action. They are familiar with the brand and have shown intent. Your job is to nurture the relationship and move them to the next step.',
 };
 
+const HYBRID_CONFIG: BusinessTypeConfig = {
+  conversionNoun: 'Conversion',
+  conversionNounPlural: 'Conversions',
+  conversionVerb: 'converted',
+  costPerConversionLabel: 'Cost Per Conversion',
+  conversionRateLabel: 'Conversion Rate',
+  primaryKPI: 'Overall Performance',
+  valueMetricLabel: 'AOV / CPL',
+
+  primaryActionType: 'hybrid',
+
+  // Use conservative (e-commerce) defaults; overridden per-ad for leads in fetchAdCreatives
+  winningCVRThreshold: 5,
+  fatiguedCVRThreshold: 1,
+  winningConversionMin: 10,
+  fatiguedSpendMin: 50,
+
+  // Show ALL metrics — union of e-com and lead gen
+  defaultVisibleMetrics: [
+    'totalRevenue', 'totalPurchases', 'conversionRate', 'aov',
+    'uniqueCustomers', 'adSpend', 'roas', 'cac',
+    'transactionFees', 'cogs', 'grossProfit', 'netProfit',
+    'leads', 'costPerLead', 'leadRate',
+    'results', 'costPerResult', 'resultRate', 'leadToResultRate',
+    'linkClicks', 'impressions', 'reach',
+  ],
+  hiddenMetrics: [],
+
+  // Base defaults — overridden by campaign intent at creation time
+  defaultObjective: 'OUTCOME_SALES',
+  defaultConversionEvent: 'PURCHASE',
+  defaultCTAType: 'SHOP_NOW',
+
+  aiConversionLanguage: 'This ad account runs BOTH e-commerce purchase campaigns AND lead generation campaigns. Some campaigns optimize for completed purchases (tracked via pixel purchase events, measured by ROAS and AOV). Others optimize for lead submissions — form fills, booked calls, or opt-ins (measured by Cost Per Lead and Lead Rate). Analyze all campaign types together. Identify patterns that work across both funnels, as well as patterns unique to each.',
+  aiPsychologyShifts: 'fear_elimination should be adapted to the campaign type. For purchase campaigns: focus on buyer fears (waste of money, product doesn\'t work, buyer\'s remorse). For lead gen campaigns: focus on commitment fears (sharing personal info, getting spammed, wasting time on a call).',
+  aiRetentionContext: 'This person has ALREADY CONVERTED — they may have purchased a product OR opted in / booked a call. Adapt retention messaging to match their conversion type. For past purchasers: deepen the relationship and present the next product. For past leads: nurture toward the next step in the funnel.',
+};
+
+// --- Campaign Intent Config (used at creative generation / publish time for hybrid accounts) ---
+
+export interface CampaignIntentConfig {
+  label: string;
+  description: string;
+  defaultObjective: string;
+  defaultConversionEvent: string;
+  defaultCTAType: string;
+  aiConversionLanguage: string;
+  aiPsychologyShifts: string;
+  aiRetentionContext: string;
+}
+
+const PURCHASE_INTENT_CONFIG: CampaignIntentConfig = {
+  label: 'Sell a Product',
+  description: 'E-commerce purchase campaign — optimize for sales',
+  defaultObjective: ECOMMERCE_CONFIG.defaultObjective,
+  defaultConversionEvent: ECOMMERCE_CONFIG.defaultConversionEvent,
+  defaultCTAType: ECOMMERCE_CONFIG.defaultCTAType,
+  aiConversionLanguage: ECOMMERCE_CONFIG.aiConversionLanguage,
+  aiPsychologyShifts: ECOMMERCE_CONFIG.aiPsychologyShifts,
+  aiRetentionContext: ECOMMERCE_CONFIG.aiRetentionContext,
+};
+
+const LEAD_INTENT_CONFIG: CampaignIntentConfig = {
+  label: 'Generate Leads',
+  description: 'Lead gen campaign — optimize for leads, calls, or opt-ins',
+  defaultObjective: LEADGEN_CONFIG.defaultObjective,
+  defaultConversionEvent: LEADGEN_CONFIG.defaultConversionEvent,
+  defaultCTAType: LEADGEN_CONFIG.defaultCTAType,
+  aiConversionLanguage: LEADGEN_CONFIG.aiConversionLanguage,
+  aiPsychologyShifts: LEADGEN_CONFIG.aiPsychologyShifts,
+  aiRetentionContext: LEADGEN_CONFIG.aiRetentionContext,
+};
+
+const INTENT_CONFIGS: Record<CampaignIntent, CampaignIntentConfig> = {
+  purchase: PURCHASE_INTENT_CONFIG,
+  lead: LEAD_INTENT_CONFIG,
+};
+
+export function getCampaignIntentConfig(intent: CampaignIntent): CampaignIntentConfig {
+  return INTENT_CONFIGS[intent];
+}
+
 const CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
   ecommerce: ECOMMERCE_CONFIG,
   leadgen: LEADGEN_CONFIG,
+  hybrid: HYBRID_CONFIG,
 };
 
 export function getBusinessTypeConfig(businessType: BusinessType): BusinessTypeConfig {

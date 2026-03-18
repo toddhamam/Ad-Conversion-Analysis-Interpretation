@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-03-18 — Hybrid Business Type + Campaign Intent
+
+### Added
+- **`src/types/organization.ts`** — Added `'hybrid'` to `BusinessType` union, added `CampaignIntent` type (`'purchase' | 'lead'`)
+- **`src/lib/businessTypeConfig.ts`** — Added `HYBRID_CONFIG` (union of all e-com + lead gen metrics, comprehensive AI language), `CampaignIntentConfig` interface, `PURCHASE_INTENT_CONFIG`, `LEAD_INTENT_CONFIG`, and `getCampaignIntentConfig()` helper
+- **`src/services/metaApi.ts`** — Dual action type support: when `primaryActionType === 'hybrid'`, checks BOTH purchase AND lead actions per ad, detects `detectedConversionType` (`'purchase' | 'lead' | 'both' | 'none'`), uses type-aware CVR thresholds (15%/3% for leads, 5%/1% for purchases). Added `leadWinningCVRThreshold`/`leadFatiguedCVRThreshold` to `FetchCreativeOptions`
+- **`src/services/openaiApi.ts`** — Cohort-aware channel analysis for hybrid (purchase vs lead ads ranked separately to prevent CVR scale bias). Added `campaignIntent` parameter to ALL generation functions: `generateCopyOptions`, `regenerateSingleCopyOption`, `generateAdImageWithGemini`, `generateTextAdCopy`, `generateVideoStoryboard`, `generateAdVideoWithVeo`, `generateAdPackage`, `regenerateAllImages`. Each function injects intent-specific AI context (conversion language, psychology shifts, retention context, visual direction) when hybrid
+- **`src/pages/AdGenerator.tsx`** — Campaign intent selector UI in Step 1 (two styled cards: "Sell a Product" / "Generate Leads", hybrid accounts only). Computed `effectiveIntent` threaded through all 6 generation call sites. Cache validation now checks `businessType` match
+- **`src/services/publishStore.ts`** — Added `campaignIntent` to publish store: `setPublishData()` accepts optional intent, added `getPublishIntent()` and `clearPublishIntent()` exports
+- **`src/pages/AdPublisher.tsx`** — Intent loading from publish store on mount, intent-specific defaults (objective, conversion event, CTA) for hybrid accounts, mixed-intent validation with console warning, intent badge UI (green "Purchase Campaign" / violet "Lead Gen Campaign")
+- **`src/pages/AdPublisher.css`** — Styles for campaign intent badge (position, colors, animations)
+- **`src/pages/admin/CreateOrganization.tsx`** — Added "Hybrid" radio button option to business type selector
+- **`src/pages/admin/OrganizationDetail.tsx`** — Added "Hybrid" badge display with blue color scheme
+
+### Changed
+- **`src/pages/Insights.tsx`** — Cache envelope now includes `_businessType`; cache reads validate business type match (switching type invalidates stale analysis). Passes hybrid-specific thresholds to `fetchAdCreatives`
+- **`src/pages/Dashboard.tsx`** — Updated metric migration logic to handle hybrid alongside leadgen
+- **`src/pages/MetaAds.tsx`** — Passes `leadWinningCVRThreshold: 15` and `leadFatiguedCVRThreshold: 3` for hybrid accounts, `includeLeadsInTotal` flag for campaign aggregation
+- **`src/components/CampaignTypeDashboard.tsx`** — Hybrid campaign breakdown semantics: uses total conversions (not just purchases) for hybrid, correct per-row conversion display
+- **`src/pages/Integrations.tsx`** — Added "Hybrid (E-Commerce + Lead Gen)" option to business type dropdown and display label
+
+### Design Decisions
+- **Cohort-aware analysis**: Purchase and lead ads ranked within separate cohorts to prevent CVR scale bias (5% purchase CVR vs 15% lead CVR). Both cohorts presented to AI in one prompt for cross-cutting pattern detection
+- **Intent is creation-time only**: `CampaignIntent` flows through `GeneratedAdPackage.campaignIntent` and publish store — not stored in database
+- **Single-intent publish sessions**: A publish batch must be all-purchase or all-lead, enforced by validation on load
+- **No breaking changes**: Existing ecommerce and leadgen accounts work identically; `CampaignIntent` is optional everywhere
+
 ## 2026-03-18 — PR-Level Meta Developer Policy Guard
 
 ### Added

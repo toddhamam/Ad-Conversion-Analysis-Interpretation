@@ -399,14 +399,14 @@ function loadMetricsConfig(businessType: BusinessType): MetricConfig[] {
             merged.push(defaultMetric);
           }
         }
-        // Migration: if businessType is leadgen but no lead metrics are visible,
-        // this is a stale e-commerce config — reset to leadgen defaults
-        if (businessType === 'leadgen') {
+        // Migration: if businessType is leadgen/hybrid but no lead metrics are visible,
+        // this is a stale e-commerce config — reset to correct defaults
+        if (businessType === 'leadgen' || businessType === 'hybrid') {
           const hasAnyLeadMetricVisible = merged.some(
             (m: MetricConfig) => LEAD_METRIC_IDS.includes(m.id) && m.visible
           );
           if (!hasAnyLeadMetricVisible) {
-            return getDefaultMetricsForBusinessType('leadgen');
+            return getDefaultMetricsForBusinessType(businessType);
           }
         }
         return merged;

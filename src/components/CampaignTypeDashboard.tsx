@@ -44,6 +44,7 @@ export default function CampaignTypeDashboard({ metrics, loading, businessType }
   const [selectedType, setSelectedType] = useState<CampaignType | 'all'>('all');
   const btConfig = getBusinessTypeConfig(businessType || 'ecommerce');
   const isLeadgen = businessType === 'leadgen';
+  const isHybrid = businessType === 'hybrid';
 
   // Filter metrics based on selection
   const filteredMetrics = selectedType === 'all'
@@ -62,7 +63,7 @@ export default function CampaignTypeDashboard({ metrics, loading, businessType }
     { totalSpend: 0, totalPurchases: 0, totalPurchaseValue: 0, totalClicks: 0, totalConversions: 0 }
   );
 
-  const displayConversions = isLeadgen ? totals.totalConversions : totals.totalPurchases;
+  const displayConversions = isLeadgen ? totals.totalConversions : isHybrid ? totals.totalConversions : totals.totalPurchases;
   const totalRoas = totals.totalSpend > 0 ? totals.totalPurchaseValue / totals.totalSpend : 0;
   const totalCpp = displayConversions > 0 ? totals.totalSpend / displayConversions : 0;
   const totalCr = totals.totalClicks > 0 ? (displayConversions / totals.totalClicks) * 100 : 0;
@@ -154,7 +155,7 @@ export default function CampaignTypeDashboard({ metrics, loading, businessType }
           <div className="type-breakdown">
             {filteredMetrics.map(m => {
               const { Icon, label, color } = CAMPAIGN_TYPE_LABELS[m.campaignType];
-              const rowConversions = isLeadgen ? (m.totalConversions || 0) : m.totalPurchases;
+              const rowConversions = (isLeadgen || isHybrid) ? (m.totalConversions || 0) : m.totalPurchases;
               const rowCpp = rowConversions > 0 ? m.totalSpend / rowConversions : 0;
               const rowCr = m.totalClicks > 0 ? (rowConversions / m.totalClicks) * 100 : 0;
               return (
@@ -211,7 +212,7 @@ export default function CampaignTypeDashboard({ metrics, loading, businessType }
         /* Single type detail view */
         <div className="single-type-view">
           {filteredMetrics.map(m => {
-            const rowConversions = isLeadgen ? (m.totalConversions || 0) : m.totalPurchases;
+            const rowConversions = (isLeadgen || isHybrid) ? (m.totalConversions || 0) : m.totalPurchases;
             const rowCpp = rowConversions > 0 ? m.totalSpend / rowConversions : 0;
             const rowCr = m.totalClicks > 0 ? (rowConversions / m.totalClicks) * 100 : 0;
             return (
