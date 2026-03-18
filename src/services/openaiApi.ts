@@ -67,12 +67,12 @@ const DEFAULT_CHAT_MODEL = 'gpt-5.4'; // Latest GPT-5.4 with reasoning capabilit
 const DEFAULT_VISION_MODEL = 'gpt-5.4'; // GPT-5.4 has multimodal vision support
 
 // Reasoning configuration for GPT-5.4
-// 'medium' for analysis — 'high' causes FUNCTION_INVOCATION_TIMEOUT when combined
-// with Policy Guard queuing delays (~10-20s) that eat into the 60s serverless limit.
-// 'xhigh' causes immediate timeout even without guard delays.
+// 'high' for analysis — previously 'medium' to avoid FUNCTION_INVOCATION_TIMEOUT,
+// but the prompt now caps ads at top/bottom 25 instead of sending all 100+,
+// keeping token count within the 55s serverless timeout budget.
 type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'high';
-const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'medium';
+const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'high';
 
 // Image Generation - Gemini models with automatic fallback
 // Primary: gemini-3-pro-image-preview (highest quality)
@@ -1512,8 +1512,33 @@ Headline: "${group.headline}"
 - Gap: ${group.performanceDiff.toFixed(2)}% difference across ${group.ads.length} variations
 `).join('') : 'No headlines with multiple variations found.'}
 
-**ALL ADS PERFORMANCE:**
-${sortedAds.map(ad => formatAdLine(ad)).join('\n')}
+**ADS PERFORMANCE (sorted by CVR):**
+${(() => {
+    // Send top 25 + bottom 25 to keep prompt within timeout budget.
+    // Middle-tier ads add noise without adding analytical signal — aggregate stats suffice.
+    // Combined with 'high' reasoning effort, this gives deep analysis without timeout.
+    const MAX_ADS_PER_TAIL = 25;
+    if (sortedAds.length <= MAX_ADS_PER_TAIL * 2) {
+      // Small enough to send everything
+      return sortedAds.map(ad => formatAdLine(ad)).join('\n');
+    }
+    const topSlice = sortedAds.slice(0, MAX_ADS_PER_TAIL);
+    const bottomSlice = sortedAds.slice(-MAX_ADS_PER_TAIL);
+    const middleSlice = sortedAds.slice(MAX_ADS_PER_TAIL, -MAX_ADS_PER_TAIL);
+    const middleAvgCVR = middleSlice.reduce((s, a) => s + a.conversionRate, 0) / middleSlice.length;
+    const middleTotalSpend = middleSlice.reduce((s, a) => s + a.spend, 0);
+    const middleTotalConversions = middleSlice.reduce((s, a) => s + a.conversions, 0);
+    return [
+      '--- TOP 25 ---',
+      ...topSlice.map(ad => formatAdLine(ad)),
+      '',
+      `--- MIDDLE TIER (${middleSlice.length} ads omitted for brevity) ---`,
+      `Avg CVR: ${middleAvgCVR.toFixed(2)}% | Total Spend: $${middleTotalSpend.toFixed(2)} | Total Conversions: ${middleTotalConversions}`,
+      '',
+      '--- BOTTOM 25 ---',
+      ...bottomSlice.map(ad => formatAdLine(ad)),
+    ].join('\n');
+  })()}
 
 ${hasAccessibleImages ? 'Based on your VISUAL ANALYSIS of the ad images above' : 'Based on the performance data, copy patterns, and campaign context'}, provide comprehensive insights in this JSON format:
 {

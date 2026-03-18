@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-03-18 — Fix ConversionIQ Analysis Timeout on Large Ad Accounts
+
+### Problem
+Channel analysis timed out with "AI analysis timed out" error when processing 100+ ads. The "ALL ADS PERFORMANCE" prompt section sent every ad to GPT-5.4, creating a massive prompt that exceeded the 55-second serverless timeout — especially combined with Policy Guard queuing delays.
+
+### Fixed
+- **`src/services/openaiApi.ts`** — Capped the ads-performance prompt section to top 25 + bottom 25 (by CVR), with an aggregate summary for the omitted middle tier. Accounts with ≤50 ads still send all ads. This reduces prompt token count by ~50% for large accounts without losing analytical signal — the top and bottom quartiles contain the actionable patterns
+
+### Changed
+- **`src/services/openaiApi.ts`** — Restored `ANALYSIS_REASONING_EFFORT` from `'medium'` back to `'high'`. The smaller prompt now fits within the timeout budget, so deeper reasoning is possible again. The `'medium'` setting was a compromise forced by the old full-ads prompt
+
 ## 2026-03-18 — Hybrid Business Type + Campaign Intent
 
 ### Added
