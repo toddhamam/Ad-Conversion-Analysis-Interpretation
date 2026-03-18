@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-03-18 — Stream AI proxy to fix ConversionIQ analysis timeout
+
+### Problem
+ConversionIQ channel analysis consistently timed out with "AI analysis timed out" error. The `handleAIChat` serverless proxy made a **blocking, non-streaming** request to OpenAI and waited for the entire response before sending a single byte back. GPT-5.4 with `reasoning_effort: 'high'` + up to 10 images regularly exceeded the 55-second abort timeout (and the 60-second Vercel Hobby plan hard limit).
+
+### Root Cause
+The AI proxy (`api/meta.ts` → `handleAIChat`) used a standard `fetch()` with a 55s `AbortController`. For reasoning models with images, OpenAI often needs 55-120 seconds total. The function would abort before receiving any response.
+
+### Fixed
+- **`api/meta.ts`** — `handleAIChat` now streams OpenAI responses as SSE. Adds `stream: true` and `stream_options: { include_usage: true }` to all chat requests, pipes tokens directly through to the frontend as they arrive. Removes the 55s `AbortController` timeout. Error responses (non-200 from OpenAI) are still returned as JSON
+- **`src/services/openaiApi.ts`** — Added `collectStreamResponse()` which detects SSE responses from the backend, reads all chunks, and reconstructs a standard chat completion JSON response. Existing callers (`callOpenAI`, `callOpenAIWithVision`) work unchanged. Detects interrupted streams (no `[DONE]` marker and no `finish_reason`) and returns a 504 error instead of silently accepting partial content
+- **`src/services/openaiApi.ts`** — Lowered `DEFAULT_REASONING_EFFORT` and `ANALYSIS_REASONING_EFFORT` from `'high'` to `'medium'` as a safety net to stay within 60s Hobby plan limits
+
 ## 2026-03-18 — Fix Credits Showing as Zero for All Users
 
 ### Problem
