@@ -18,6 +18,12 @@
 - **`api/billing/subscription.ts`** — Seat add-on checkout now sets `subscription_data.metadata` with org identity, so Stripe webhook lifecycle events (cancel, update, payment failure) can resolve the organization
 - **`api/billing/webhook.ts`** — `customer.subscription.deleted` now handles `account_block` subscriptions by decrementing `ad_account_seats` instead of marking the entire org as canceled
 
+## 2026-03-17 — Fix ConversionIQ Channel Analysis Timeout
+
+### Fixed
+- **`src/services/openaiApi.ts`** — Lowered `ANALYSIS_REASONING_EFFORT` from `'high'` to `'medium'` to prevent `FUNCTION_INVOCATION_TIMEOUT` errors. Policy Guard queuing delays (~10-20s) combined with GPT-5.4 high reasoning (~30-50s) exceeded the 60s serverless function limit
+- **`api/meta.ts`** — Added 55s `AbortController` timeout on the OpenAI fetch in `handleAIChat()`. Returns a clear user-facing error message ("AI analysis timed out. Try reducing the number of ads or lowering the ConversionIQ reasoning level.") instead of the cryptic Vercel `FUNCTION_INVOCATION_TIMEOUT` error. Error response uses `{ error: { message } }` shape to match the frontend's error parsers
+
 ## 2026-03-16 — Optimizer Triggered by Fill, Not Cron
 
 ### Changed
