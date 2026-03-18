@@ -603,7 +603,6 @@ async function handleReserveCredits(req: VercelRequest, res: VercelResponse) {
     .single();
 
   const finalCreditsUsed = finalUsage?.credits_used || 0;
-  const totalAvailable = creditsLimit + (org.bonus_credits || 0);
   const creditsRemaining = Math.max(0, totalAvailable - finalCreditsUsed);
 
   return res.status(200).json({

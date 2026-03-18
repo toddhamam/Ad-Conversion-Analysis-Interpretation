@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-03-18 — Fix Credits Showing as Zero for All Users
+
+### Problem
+All users saw 0 credits remaining in the UI, regardless of plan tier. Enterprise self-service users (5000 credits/month) were completely blocked from generating ads or running analyses.
+
+### Root Cause
+Commit `a95185d` (#338) refactored `handleReserveCredits` in `api/billing/subscription.ts` and introduced a duplicate `const totalAvailable` declaration at function scope (lines 489 and 606). Since Vercel uses esbuild to compile API routes, and `const` redeclaration is a syntax error, the **entire serverless function failed to compile**. This broke all 7 routes handled by `subscription.ts` — including the status endpoint that returns credit counts. The frontend caught the 500 error and fell back to `getDefaultBillingData()` which returns `creditsLimit: 0`.
+
+### Fixed
+- **`api/billing/subscription.ts`** — Removed the duplicate `const totalAvailable` declaration on line 606. The variable from line 489 is already in scope and computes the identical value (`creditsLimit + (org.bonus_credits || 0)`)
+
 ## 2026-03-18 — Fix ConversionIQ Analysis Timeout on Large Ad Accounts
 
 ### Problem
