@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-03-18 — Fix ConversionIQ analysis timeout & show business type context in AdGenerator
+
+### Problem 1: Channel analysis always fails with "AI analysis stream was interrupted"
+The streaming AI proxy (PR #343) solved the initial connection timeout but introduced a new failure mode. GPT-5.4 reasoning + 10 high-detail images regularly exceeded Vercel's 60s `maxDuration` hard limit. When Vercel killed the function mid-stream, the `[DONE]` SSE marker was never sent, causing the frontend to report "AI analysis stream was interrupted" on every attempt.
+
+### Problem 2: Business type context invisible in AdGenerator
+The hybrid business type campaign intent system (PR #340) was fully wired through copy generation, image generation, and publisher defaults — but for non-hybrid accounts (pure ecommerce or leadgen), there was no visible UI indicator showing which business type context the AI was using. Users couldn't tell if lead gen vs ecom-specific prompts were active.
+
+### Fixed
+- **`src/services/openaiApi.ts`** — Reduced image detail from `high` to `low` (~85 tokens/image vs ~765), cutting image processing time by ~80%
+- **`src/services/openaiApi.ts`** — Reduced max analysis images from 10 to 5, interleaving top and bottom performers to ensure both winners and losers are represented in visual comparison
+- **`src/services/openaiApi.ts`** — Reduced ads-in-prompt from top/bottom 25 to top/bottom 15 for smaller prompt size
+- **`src/services/openaiApi.ts`** — Added 55s `AbortController` timeout on frontend `openaiProxy` fetch (stays active through SSE stream collection) so users get a clean error instead of waiting for the browser's ~5 min default
+- **`src/services/openaiApi.ts`** — Added partial response salvaging: if the stream is interrupted but >500 chars of JSON content was received, attempts to repair truncated JSON by closing open braces/brackets and returns it with `finish_reason: 'stop'` (not `'length'`, which would trigger truncation exceptions in JSON-mode callers)
+- **`src/services/openaiApi.ts`** — Improved error message from generic "stream was interrupted" to actionable "AI analysis timed out — the server function was terminated"
+- **`src/pages/AdGenerator.tsx`** — Added "Campaign Context" read-only indicator in Step 1 for ecommerce and leadgen accounts, showing which business type context is active (e.g., "Lead Generation — AI copy is optimized for lead submissions, calls & opt-ins") with a "Set in Integrations" badge
+
 ## 2026-03-18 — Stream AI proxy to fix ConversionIQ analysis timeout
 
 ### Problem
