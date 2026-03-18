@@ -1400,10 +1400,16 @@ async function handleAIChat(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Request body with messages is required' });
   }
 
-  // 55s timeout — fail fast with a clear message instead of letting Vercel
-  // kill the function at 60s with a cryptic FUNCTION_INVOCATION_TIMEOUT
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 55_000);
+  // Stream the response to keep the serverless function alive.
+  // Without streaming, GPT-5.4 reasoning + images exceeds the 60s
+  // function limit because the ENTIRE response must complete before
+  // any data is sent back. With streaming, tokens start flowing within
+  // seconds and the connection stays active throughout.
+  const streamBody = {
+    ...body,
+    stream: true,
+    stream_options: { include_usage: true },
+  };
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -1412,26 +1418,45 @@ async function handleAIChat(req: VercelRequest, res: VercelResponse) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
       },
-      body: JSON.stringify(body),
-      signal: controller.signal,
+      body: JSON.stringify(streamBody),
     });
 
-    clearTimeout(timeout);
-    const data = await response.json();
-
+    // Non-OK responses come as JSON (not streamed) — pass through directly
     if (!response.ok) {
-      return res.status(response.status).json(data);
+      const errorData = await response.json();
+      return res.status(response.status).json(errorData);
     }
 
-    return res.status(200).json(data);
+    if (!response.body) {
+      return res.status(500).json({ error: 'Failed to read AI response stream' });
+    }
+
+    // Pipe the SSE stream from OpenAI directly to the frontend
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const reader = (response.body as any).getReader();
+    const decoder = new TextDecoder();
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        res.write(decoder.decode(value, { stream: true }));
+      }
+    } finally {
+      res.end();
+    }
   } catch (err: unknown) {
-    clearTimeout(timeout);
-    if (err instanceof Error && err.name === 'AbortError') {
-      return res.status(504).json({
-        error: { message: 'AI analysis timed out. Try reducing the number of ads or lowering the ConversionIQ reasoning level.' },
+    // If headers haven't been sent yet, return JSON error
+    if (!res.headersSent) {
+      return res.status(500).json({
+        error: { message: err instanceof Error ? err.message : 'AI service error' },
       });
     }
-    throw err;
+    // If mid-stream, just close the connection
+    res.end();
   }
 }
 

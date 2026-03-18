@@ -34,6 +34,15 @@ async function openaiProxy(
       },
       body: JSON.stringify(body),
     });
+
+    // Backend streams chat responses as SSE to avoid the 60s serverless
+    // timeout. Collect the stream and reconstruct a standard JSON response
+    // so callOpenAI/callOpenAIWithVision callers don't need to change.
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('text/event-stream') && res.body) {
+      return collectStreamResponse(res);
+    }
+
     return res;
   }
 
@@ -54,6 +63,97 @@ async function openaiProxy(
   return res;
 }
 
+/**
+ * Collect an SSE stream from the backend AI proxy and reconstruct a
+ * standard OpenAI chat completion JSON response. This lets the serverless
+ * proxy stream (avoiding timeout) while keeping existing callers unchanged.
+ */
+async function collectStreamResponse(streamRes: Response): Promise<Response> {
+  const reader = streamRes.body!.getReader();
+  const decoder = new TextDecoder();
+
+  let content = '';
+  let finishReason = '';
+  let usage: Record<string, unknown> | null = null;
+  let model = '';
+  let id = '';
+  let buffer = '';
+  let receivedDone = false;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // Process complete SSE lines
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data: ')) continue;
+        const data = trimmed.slice(6);
+        if (data === '[DONE]') {
+          receivedDone = true;
+          continue;
+        }
+
+        try {
+          const chunk = JSON.parse(data);
+          if (chunk.id) id = chunk.id;
+          if (chunk.model) model = chunk.model;
+
+          const delta = chunk.choices?.[0]?.delta;
+          if (delta?.content) content += delta.content;
+
+          const chunkFinish = chunk.choices?.[0]?.finish_reason;
+          if (chunkFinish) finishReason = chunkFinish;
+
+          // usage is sent in the final chunk (stream_options.include_usage)
+          if (chunk.usage) usage = chunk.usage;
+        } catch {
+          // Skip malformed chunks
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  // If the stream ended without [DONE], it was interrupted (network drop,
+  // serverless function killed, etc.). Return an error response so the
+  // caller's existing error handling kicks in instead of silently accepting
+  // partial/truncated content.
+  if (!receivedDone && !finishReason) {
+    return new Response(JSON.stringify({
+      error: { message: 'AI analysis stream was interrupted. The response was incomplete. Please try again.' },
+    }), {
+      status: 504,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Reconstruct standard chat completion response format
+  const reconstructed = {
+    id,
+    object: 'chat.completion',
+    model,
+    choices: [{
+      index: 0,
+      message: { role: 'assistant', content },
+      finish_reason: finishReason || 'stop',
+    }],
+    usage,
+  };
+
+  return new Response(JSON.stringify(reconstructed), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
 // Google Gemini API Configuration
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -67,12 +167,13 @@ const DEFAULT_CHAT_MODEL = 'gpt-5.4'; // Latest GPT-5.4 with reasoning capabilit
 const DEFAULT_VISION_MODEL = 'gpt-5.4'; // GPT-5.4 has multimodal vision support
 
 // Reasoning configuration for GPT-5.4
-// 'high' for analysis — previously 'medium' to avoid FUNCTION_INVOCATION_TIMEOUT,
-// but the prompt now caps ads at top/bottom 25 instead of sending all 100+,
-// keeping token count within the 55s serverless timeout budget.
+// 'medium' for analysis — balances depth with serverless timeout budget.
+// The AI proxy now streams responses to avoid the 60s hard limit, but
+// 'medium' reasoning keeps the total well within bounds on Hobby plan.
+// Prompt caps ads at top/bottom 25 to limit token count.
 type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
-const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'high';
-const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'high';
+const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'medium';
+const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'medium';
 
 // Image Generation - Gemini models with automatic fallback
 // Primary: gemini-3-pro-image-preview (highest quality)
