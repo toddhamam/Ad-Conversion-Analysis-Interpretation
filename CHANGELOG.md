@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-03-18 — PR-Level Meta Developer Policy Guard
+
+### Added
+- **`scripts/check-meta-policy.sh`** — Static analysis script that catches Meta API policy violations before merge. Runs 8 checks: direct Graph API calls from frontend (proxy bypass), hardcoded access tokens, unbounded `Promise.all()` with Meta API calls, missing `AbortController` timeouts, `transition: all` in CSS, Vercel serverless function count (12 max), `catch (error: any)`, and guard bypass patterns. Supports `--all` (full scan), `--diff REF` (PR diff), and default (staged changes) modes
+- **`meta-policy-check` CI job** in `claude-pr-review.yml` — Runs `check-meta-policy.sh --diff` on every PR as a separate GitHub status check. Can be made a required check in branch protection to hard-block merges on Meta policy violations
+- **`.context/meta-developer-policy-reference.md`** — Comprehensive Meta Developer Platform Policy reference covering rate limit formulas, error codes, token security rules, request pattern requirements, enforcement triggers, and a PR review checklist. Referenced by `metaDevPolicyGuard.ts` and the PR review workflow
+- **`npm run check:meta-policy`** — npm script for running the full policy scan locally
+
+### Changed
+- **`claude-pr-review.yml`** — Rewrote the Claude auto-review prompt with 3 priority categories: Category A (Meta API Compliance, 8 rules A1-A8 covering proxy bypass, token exposure, rate limits, cache invalidation, error handling, batch processing, ad creation safety, data handling), Category B (Security & Correctness), Category C (Performance). Meta compliance rules are now the highest-priority review category with specific rule IDs for easy triage
+
 ## 2026-03-18 — Meta API Compliance Hardening & Billing Fixes
 
 ### Added
