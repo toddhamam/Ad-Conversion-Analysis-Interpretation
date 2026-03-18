@@ -25,6 +25,13 @@ import {
   FUNNEL_ONLY_METRICS,
 } from './metrics.js';
 import type { DashboardStats, RawMetaData, AccountLevelData } from './metrics.js';
+import {
+  MetaRateLimitError,
+  MetaBudgetExhaustedError,
+  getUsageLevel,
+  resetState as resetMetaGuardState,
+  sleep,
+} from './meta-api-guard.js';
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
 
@@ -41,7 +48,7 @@ const FROM_EMAIL = 'ConversionIQ <reports@convertraiq.com>';
 
 const MAX_RECIPIENTS = 10;
 const MAX_SCHEDULES_PER_ORG = 5;
-const CRON_BATCH_LIMIT = 10;
+const CRON_BATCH_LIMIT = 5;
 const SEND_LOCK_MINUTES = 5;
 const MANUAL_SEND_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -594,6 +601,9 @@ export async function handleReportExport(req: VercelRequest, res: VercelResponse
   if (!metricIds || !Array.isArray(metricIds)) return res.status(400).json({ error: 'metrics array is required.' });
 
   try {
+    // Reset Meta API guard for a fresh call budget
+    resetMetaGuardState();
+
     const accessToken = await loadAccessToken(auth.organizationId);
     if (!accessToken) return res.status(400).json({ error: 'Meta credentials not configured or expired.' });
 
@@ -654,6 +664,9 @@ export async function handleReportSend(req: VercelRequest, res: VercelResponse) 
   }
 
   try {
+    // Reset Meta API guard for a fresh call budget
+    resetMetaGuardState();
+
     await processAndSendReport(schedule);
     return res.status(200).json({ success: true, message: 'Report sent successfully.' });
   } catch (err: unknown) {
@@ -710,10 +723,32 @@ export async function handleReportCron(req: VercelRequest, res: VercelResponse) 
       return res.status(200).json({ message: 'No reports due', sent: 0, failed: 0 });
     }
 
+    // Reset the Meta API guard state for a fresh call budget this execution
+    resetMetaGuardState();
+
     let sent = 0;
     let failed = 0;
+    let circuitBroken = false;
 
-    for (const schedule of dueSchedules) {
+    for (let i = 0; i < dueSchedules.length; i++) {
+      const schedule = dueSchedules[i];
+
+      // Circuit breaker: stop processing if rate limited or budget exhausted
+      if (circuitBroken) {
+        // Clear lock on remaining schedules so they retry next cron run
+        await supabase.from('report_schedules').update({
+          send_lock_until: null,
+          last_error: 'Skipped: Meta API rate limit circuit breaker activated',
+          updated_at: new Date().toISOString(),
+        }).eq('id', schedule.id);
+        continue;
+      }
+
+      // Inter-schedule delay (1s between schedules)
+      if (i > 0) {
+        await sleep(1000);
+      }
+
       try {
         await processAndSendReport(schedule);
 
@@ -736,13 +771,20 @@ export async function handleReportCron(req: VercelRequest, res: VercelResponse) 
         sent++;
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+
+        // Circuit breaker: rate limit or budget errors halt remaining schedules
+        if (err instanceof MetaRateLimitError || err instanceof MetaBudgetExhaustedError) {
+          circuitBroken = true;
+          console.warn(`[report-cron] Circuit breaker activated: ${errorMsg}`);
+        }
+
         captureError(err, {
           route: 'meta/report-cron',
           organizationId: schedule.organization_id,
-          extra: { scheduleId: schedule.id },
+          extra: { scheduleId: schedule.id, circuitBroken },
         });
 
-        // Clear lock so it can retry next hour
+        // Clear lock so it can retry next cron run
         await supabase.from('report_schedules').update({
           send_lock_until: null,
           last_error: errorMsg,
@@ -854,7 +896,16 @@ async function processAndSendReport(schedule: any): Promise<void> {
     // Note: reach/uniqueLinkClicks cannot be accurately aggregated cross-account
     const aggregateAccount: AccountLevelData = { reach: 0, uniqueLinkClicks: 0 };
 
-    for (const account of accounts) {
+    for (let i = 0; i < accounts.length; i++) {
+      const account = accounts[i];
+
+      // Inter-account delay to avoid rapid-fire Meta API calls
+      if (i > 0) {
+        const usage = getUsageLevel();
+        const delay = usage > 60 ? 2000 : 500;
+        await sleep(delay);
+      }
+
       try {
         const result = await fetchMetricsForAccount(accessToken, account.ad_account_id, datePreset);
         multiAccountBreakdown.push({
@@ -879,6 +930,10 @@ async function processAndSendReport(schedule: any): Promise<void> {
         aggregateAccount.reach += result.accountLevel.reach;
         aggregateAccount.uniqueLinkClicks += result.accountLevel.uniqueLinkClicks;
       } catch (err: unknown) {
+        // Re-throw rate limit and budget errors — these should halt the entire cron
+        if (err instanceof MetaRateLimitError || err instanceof MetaBudgetExhaustedError) {
+          throw err;
+        }
         // Skip failed accounts but continue with others
         console.warn(`Failed to fetch metrics for ${account.ad_account_id}:`, err instanceof Error ? err.message : err);
       }
@@ -889,10 +944,11 @@ async function processAndSendReport(schedule: any): Promise<void> {
   }
 
   // Fetch previous period if comparison enabled
-  if (schedule.include_comparison) {
+  // Skip comparison when rate limit usage is already >50% — better to send
+  // a report without comparison than to trigger rate limits
+  if (schedule.include_comparison && getUsageLevel() <= 50) {
     try {
       const prevDates = getPreviousPeriodDates(datePreset);
-      const prevDateParams = { time_range: JSON.stringify(prevDates) };
 
       if (schedule.ad_account_id) {
         const prevRows = await fetchAllCampaignInsights(
@@ -907,8 +963,12 @@ async function processAndSendReport(schedule: any): Promise<void> {
         previousStats = computeMetrics(prevMeta, prevAccount);
       }
       // Skip comparison for cross-account (too many API calls)
-    } catch {
-      // Comparison is best-effort — skip on error
+    } catch (err: unknown) {
+      // Re-throw rate limit errors so the circuit breaker can catch them
+      if (err instanceof MetaRateLimitError || err instanceof MetaBudgetExhaustedError) {
+        throw err;
+      }
+      // Comparison is best-effort — skip on other errors
     }
   }
 

@@ -281,6 +281,8 @@ export function formatMetricValue(metricId: string, value: number): string {
 
 // ─── Meta API Data Fetching (Server-Side) ─────────────────────────────────────
 
+import { guardedMetaFetchJson } from './meta-api-guard.js';
+
 /** Fields requested from Meta Graph API for campaign-level insights. */
 export const META_INSIGHTS_FIELDS =
   'campaign_id,campaign_name,spend,impressions,clicks,ctr,actions,action_values,reach,unique_actions';
@@ -360,6 +362,8 @@ export function parseAccountInsights(row: any): AccountLevelData {
 /**
  * Fetch all campaign insight rows from Meta Graph API with pagination.
  * Follows `paging.next` links to get complete data for accounts with >100 campaigns.
+ *
+ * Uses guardedMetaFetchJson for rate limiting, error classification, and retry.
  */
 export async function fetchAllCampaignInsights(
   adAccountId: string,
@@ -378,13 +382,7 @@ export async function fetchAllCampaignInsights(
   let url: string | null = `https://graph.facebook.com/v24.0/${adAccountId}/insights?${params.toString()}`;
 
   while (url) {
-    const response = await fetch(url);
-    const json = await response.json();
-
-    if (json.error) {
-      throw new Error(json.error.message || `Meta API error: ${JSON.stringify(json.error)}`);
-    }
-
+    const json = await guardedMetaFetchJson(url);
     allData = allData.concat(json.data || []);
     url = json.paging?.next || null;
   }
@@ -394,6 +392,8 @@ export async function fetchAllCampaignInsights(
 
 /**
  * Fetch account-level insights (reach, unique link clicks) from Meta Graph API.
+ *
+ * Uses guardedMetaFetchJson for rate limiting, error classification, and retry.
  */
 export async function fetchAccountInsights(
   adAccountId: string,
@@ -406,14 +406,9 @@ export async function fetchAccountInsights(
     ...dateParams,
   });
 
-  const response = await fetch(
+  const json = await guardedMetaFetchJson(
     `https://graph.facebook.com/v24.0/${adAccountId}/insights?${params.toString()}`,
   );
-  const json = await response.json();
-
-  if (json.error) {
-    throw new Error(json.error.message || `Meta API error: ${JSON.stringify(json.error)}`);
-  }
 
   return parseAccountInsights(json.data?.[0]);
 }
