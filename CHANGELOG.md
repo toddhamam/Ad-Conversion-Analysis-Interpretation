@@ -27,6 +27,35 @@
 - **Single-intent publish sessions**: A publish batch must be all-purchase or all-lead, enforced by validation on load
 - **No breaking changes**: Existing ecommerce and leadgen accounts work identically; `CampaignIntent` is optional everywhere
 
+## 2026-03-18 — PR-Level Meta Developer Policy Guard
+
+### Added
+- **`scripts/check-meta-policy.sh`** — Static analysis script that catches Meta API policy violations before merge. Runs 8 checks: direct Graph API calls from frontend (proxy bypass), hardcoded access tokens, unbounded `Promise.all()` with Meta API calls, missing `AbortController` timeouts, `transition: all` in CSS, Vercel serverless function count (12 max), `catch (error: any)`, and guard bypass patterns. Supports `--all` (full scan), `--diff REF` (PR diff), and default (staged changes) modes
+- **`meta-policy-check` CI job** in `claude-pr-review.yml` — Runs `check-meta-policy.sh --diff` on every PR as a separate GitHub status check. Can be made a required check in branch protection to hard-block merges on Meta policy violations
+- **`.context/meta-developer-policy-reference.md`** — Comprehensive Meta Developer Platform Policy reference covering rate limit formulas, error codes, token security rules, request pattern requirements, enforcement triggers, and a PR review checklist. Referenced by `metaDevPolicyGuard.ts` and the PR review workflow
+- **`npm run check:meta-policy`** — npm script for running the full policy scan locally
+
+### Changed
+- **`claude-pr-review.yml`** — Rewrote the Claude auto-review prompt with 3 priority categories: Category A (Meta API Compliance, 8 rules A1-A8 covering proxy bypass, token exposure, rate limits, cache invalidation, error handling, batch processing, ad creation safety, data handling), Category B (Security & Correctness), Category C (Performance). Meta compliance rules are now the highest-priority review category with specific rule IDs for easy triage
+
+## 2026-03-18 — Meta API Compliance Hardening & Billing Fixes
+
+### Added
+- **`api/_lib/meta-api-guard.ts`** — Server-side Meta API rate limit guard for backend serverless functions. Provides 200ms inter-request delays (500ms when usage >60%), rate limit header extraction from all 3 Meta headers (`X-App-Usage`, `X-Business-Use-Case-Usage`, `x-fb-ads-insights-throttle`), error classification for all Meta error codes with appropriate backoff, automatic retry for transient errors (max 2 retries), and a 50-call hard budget per execution
+
+### Changed
+- **`api/_lib/metrics.ts`** — `fetchAllCampaignInsights()` and `fetchAccountInsights()` now use `guardedMetaFetchJson()` instead of bare `fetch()`, adding rate limiting, delays between pagination pages, error classification, and retry to all server-side Meta API calls
+- **`api/_lib/report-handlers.ts`** — Report cron hardened: batch limit reduced 10→5, 1s inter-schedule delay, 500ms–2s inter-account delay, circuit breaker (halts remaining schedules on rate limit or budget exhaustion), comparison data skipped when usage >50%, state reset at start of each execution
+- **`api/meta.ts`** — `external-summary` and `reports-external-summary` routes now return HTTP 410 (disabled for Meta Platform Policy compliance — external API access to Meta data was not covered by approved App Review use cases)
+- **`mcp-server/src/index.ts`** — Server exits immediately with policy compliance message instead of registering tools that call disabled endpoints
+- **`vercel.json`** — Restored `/api/reports/` rewrite so the 410 handler is reachable
+
+### Fixed
+- **`api/billing/subscription.ts`** — Credit reservation no longer overwrites accumulated usage. Replaced broken upsert+re-read pattern (which set `credits_used` to the new request amount on conflict, erasing prior usage) with a clean read-then-insert/update flow
+- **`api/billing/subscription.ts`** — Subscription status lookup now filters out `account_block` add-on subscriptions (`limit: 10` with `.find()`) so the billing endpoint always returns the base plan, not a seat add-on
+- **`api/billing/subscription.ts`** — Seat add-on checkout now sets `subscription_data.metadata` with org identity, so Stripe webhook lifecycle events (cancel, update, payment failure) can resolve the organization
+- **`api/billing/webhook.ts`** — `customer.subscription.deleted` now handles `account_block` subscriptions by decrementing `ad_account_seats` instead of marking the entire org as canceled
+
 ## 2026-03-17 — Fix ConversionIQ Channel Analysis Timeout
 
 ### Fixed

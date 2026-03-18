@@ -15,6 +15,21 @@ permissions:
   id-token: write
 
 jobs:
+  # Static Meta policy check — runs in parallel with Claude review.
+  # This is a separate status check that can be required in branch protection
+  # to block merge on Meta policy violations independently of Claude's review.
+  meta-policy-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Meta Developer Policy checks
+        run: bash scripts/check-meta-policy.sh --diff ${{ github.event.pull_request.base.sha }}
+
   # Auto-review on PR open/update
   auto-review:
     if: github.event_name == 'pull_request'
@@ -28,17 +43,93 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Review this PR. Focus on:
-            1. Security vulnerabilities (XSS, injection, token exposure, OWASP top 10)
-            2. Logic errors and definite bugs
-            3. Performance issues (transition: all, missing AbortController timeouts, memory leaks from base64 data)
-            4. Vercel serverless function count (must stay at 12 or fewer api/*.ts files)
-            5. CSS variables used instead of hardcoded colors
-            6. Meta access tokens never sent to browser
-            7. No catch (error: any) — must use catch (error: unknown)
+            Review this PR. Focus on the categories below in priority order.
 
-            Do NOT flag: style preferences, formatting, missing comments, pre-existing issues, or anything a linter would catch.
-            Only comment on high-signal issues that could cause production problems.
+            ═══════════════════════════════════════════════════════
+            CATEGORY A — META API COMPLIANCE (account ban risk)
+            ═══════════════════════════════════════════════════════
+
+            These are the highest-priority checks. Meta can restrict or ban our ad account
+            if any of these are violated. Flag every instance — no exceptions.
+
+            A1. PROXY BYPASS — All Meta Graph API calls from frontend code MUST go through
+                metaProxy() in metaApi.ts → /api/meta/proxy. Direct fetch() to
+                graph.facebook.com from src/ is a hard violation. Backend (api/) is allowed.
+
+            A2. TOKEN EXPOSURE — Meta access tokens must NEVER appear in frontend code,
+                browser console logs, URL query params, or API responses sent to the browser.
+                Tokens are encrypted at rest (AES-256-GCM) and decrypted only server-side.
+                - No hardcoded tokens (EAA... pattern)
+                - No access_token= in query strings from frontend
+                - No console.log of tokens (even partial)
+                - No token data in error messages sent to the client
+
+            A3. RATE LIMIT COMPLIANCE — All Meta API calls must be rate-limit safe:
+                - No unbounded Promise.all() with Meta API calls — use batchProcess()
+                  from metaDevPolicyGuard.ts (max concurrency 3, 200ms delay)
+                - All Meta fetches must go through guardedFetch() which enforces:
+                  • Request queue (max 3 concurrent, 200ms inter-request delay)
+                  • Response caching (TTL per endpoint type)
+                  • Rate limit header extraction (X-App-Usage, X-Business-Use-Case-Usage)
+                  • Error classification with backoff (codes 4, 17, 80000, 80003, 80004)
+                - New Meta API endpoints added to api/meta.ts must forward rate limit
+                  response headers to the frontend for the guard to monitor
+
+            A4. CACHE INVALIDATION — Write operations (POST/DELETE to Meta) must
+                invalidate related cache entries. Missing this causes stale reads
+                which can lead to duplicate creates (double-spending budget).
+
+            A5. ERROR HANDLING — Meta error codes MUST be classified via classifyMetaError():
+                - Rate limit codes (4, 17, 32, 80000-80006, 613) → backoff, retry
+                - Transient codes (1, 2) → retry with exponential backoff
+                - Auth codes (190) → no retry, re-authenticate
+                - Permission codes (10, 200, 294) → no retry
+                Do NOT catch-and-swallow Meta errors without classification.
+
+            A6. BATCH PROCESSING — When fetching details for multiple ads/creatives,
+                use batchProcess() with concurrency ≤ 5. Direct Promise.all() on
+                arrays of Meta API calls triggers bot detection (100+ simultaneous
+                requests from one IP).
+
+            A7. AD CREATION SAFETY — All ads must be created with status: 'PAUSED'.
+                Never create ads in ACTIVE status via the API. The user must
+                manually activate them in Meta Ads Manager after review.
+
+            A8. DATA HANDLING — Per Meta Platform Terms:
+                - Never log, cache, or persist Platform Data beyond what's needed
+                - Never sell or transfer Platform Data to third parties
+                - Delete Platform Data when requested or no longer needed
+                - Service providers (Supabase, Vercel, OpenAI, Google) are listed
+                  as data processors in our App Review submission
+
+            ═══════════════════════════════════════════════════════
+            CATEGORY B — SECURITY & CORRECTNESS
+            ═══════════════════════════════════════════════════════
+
+            B1. Security vulnerabilities (XSS, injection, token exposure, OWASP top 10)
+            B2. Logic errors and definite bugs
+            B3. No catch (error: any) — must use catch (error: unknown)
+            B4. API routes must authenticate via JWT and derive org ID from token, never from client input
+            B5. Vercel serverless function count must stay at 12 or fewer (currently at 12/12)
+
+            ═══════════════════════════════════════════════════════
+            CATEGORY C — PERFORMANCE
+            ═══════════════════════════════════════════════════════
+
+            C1. No transition: all in CSS — causes browser crashes when base64 images render.
+                List specific properties: transition: background-color 0.2s ease, border-color 0.2s ease
+            C2. External API fetch() calls (Gemini, OpenAI) must have AbortController timeouts
+            C3. Base64 image data must be nulled after use (precomputedRefs, requestParts)
+            C4. CSS variables used instead of hardcoded colors
+
+            ═══════════════════════════════════════════════════════
+
+            Do NOT flag: style preferences, formatting, missing comments, pre-existing issues,
+            or anything a linter would catch. Only comment on high-signal issues that could
+            cause production problems or Meta account restrictions.
+
+            When flagging Meta compliance issues, reference the specific policy rule (A1-A8)
+            so fixes are easy to prioritize.
           claude_args: "--max-turns 5"
 
   # Respond to @claude mentions in PR/issue comments

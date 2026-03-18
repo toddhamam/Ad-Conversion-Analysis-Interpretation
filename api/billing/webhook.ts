@@ -352,20 +352,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           subscriptionId: subscription.id,
           customerId: subscription.customer,
           organizationId,
+          type: subscription.metadata?.type || 'base_plan',
         });
 
-        // Mark subscription as canceled (keep plan_tier so user sees "resubscribe")
         if (supabase && organizationId) {
-          await supabase
-            .from('organizations')
-            .update({
-              subscription_status: 'canceled',
-              subscription_id: null,
-              current_period_start: null,
-              current_period_end: null,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', organizationId);
+          // Handle account_block add-on cancellation — decrement seats
+          if (subscription.metadata?.type === 'account_block') {
+            const addOnSeats = parseInt(subscription.metadata.seats || '0', 10);
+            if (addOnSeats > 0) {
+              const { data: currentOrg } = await supabase
+                .from('organizations')
+                .select('ad_account_seats')
+                .eq('id', organizationId)
+                .single();
+
+              const currentSeats = currentOrg?.ad_account_seats ?? 1;
+              const newSeats = Math.max(1, currentSeats - addOnSeats); // Never go below 1
+              await supabase
+                .from('organizations')
+                .update({
+                  ad_account_seats: newSeats,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', organizationId);
+
+              console.log('[Billing Webhook] Account block canceled — seats decremented:', {
+                organizationId, removedSeats: addOnSeats, newTotal: newSeats,
+              });
+            }
+          } else {
+            // Base plan canceled — mark subscription as canceled (keep plan_tier so user sees "resubscribe")
+            await supabase
+              .from('organizations')
+              .update({
+                subscription_status: 'canceled',
+                subscription_id: null,
+                current_period_start: null,
+                current_period_end: null,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', organizationId);
+          }
         }
         break;
       }
