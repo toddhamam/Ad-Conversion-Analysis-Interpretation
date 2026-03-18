@@ -500,7 +500,7 @@ function Integrations() {
                             <span className="ad-account-row-detail">
                               {account.ad_account_id}
                               {account.currency ? ` · ${account.currency}` : ''}
-                              {account.business_type ? ` · ${account.business_type === 'leadgen' ? 'Lead Gen' : 'E-Commerce'}` : ''}
+                              {account.business_type ? ` · ${account.business_type === 'leadgen' ? 'Lead Gen' : account.business_type === 'hybrid' ? 'Hybrid' : 'E-Commerce'}` : ''}
                               {account.page_id ? '' : ' · Needs page setup'}
                               {account.pixel_id ? '' : ' · Needs pixel setup'}
                             </span>
@@ -593,9 +593,10 @@ function Integrations() {
                                 value={configBusinessType}
                                 onChange={(e) => setConfigBusinessType(e.target.value as BusinessType | '')}
                               >
-                                <option value="">Use organization default ({organization?.business_type === 'leadgen' ? 'Lead Gen' : 'E-Commerce'})</option>
+                                <option value="">Use organization default ({organization?.business_type === 'leadgen' ? 'Lead Gen' : organization?.business_type === 'hybrid' ? 'Hybrid' : 'E-Commerce'})</option>
                                 <option value="ecommerce">E-Commerce</option>
                                 <option value="leadgen">Lead Generation</option>
+                                <option value="hybrid">Hybrid (E-Commerce + Lead Gen)</option>
                               </select>
                               <p className="config-hint">
                                 Controls ConversionIQ™ metrics, labels, and AI analysis for this account

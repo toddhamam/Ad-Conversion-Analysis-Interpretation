@@ -573,8 +573,8 @@ function OrganizationDetail() {
           <span className={`admin-badge-pill ${organization.subscription_status === 'active' ? 'active' : 'inactive'}`}>
             {organization.subscription_status}
           </span>
-          <span className="admin-badge-pill" style={{ background: organization.business_type === 'leadgen' ? 'rgba(168, 85, 247, 0.1)' : 'rgba(34, 197, 94, 0.1)', color: organization.business_type === 'leadgen' ? '#a855f7' : '#16a34a' }}>
-            {organization.business_type === 'leadgen' ? 'Lead Gen' : 'E-Commerce'}
+          <span className="admin-badge-pill" style={{ background: organization.business_type === 'leadgen' ? 'rgba(168, 85, 247, 0.1)' : organization.business_type === 'hybrid' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(34, 197, 94, 0.1)', color: organization.business_type === 'leadgen' ? '#a855f7' : organization.business_type === 'hybrid' ? '#3b82f6' : '#16a34a' }}>
+            {organization.business_type === 'leadgen' ? 'Lead Gen' : organization.business_type === 'hybrid' ? 'Hybrid' : 'E-Commerce'}
           </span>
         </div>
       </div>

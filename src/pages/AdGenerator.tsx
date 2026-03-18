@@ -47,7 +47,7 @@ import type { AdLibraryInspiration } from '../types';
 import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
 import { useAdAccount } from '../contexts/AdAccountContext';
 import { reserveCredits, confirmCredits, refundCredits, InsufficientCreditsError, checkCredits } from '../services/stripeApi';
-import type { CreditActionType } from '../types/organization';
+import type { CreditActionType, CampaignIntent } from '../types/organization';
 import CreditExhaustionModal from '../components/CreditExhaustionModal';
 import './AdGenerator.css';
 
@@ -110,11 +110,16 @@ const CONCEPT_OPTIONS = Object.entries(CONCEPT_ANGLES).map(([id, config]) => ({
   ...config,
 }));
 
-function getCachedAnalysis(): ChannelAnalysisResult | null {
+function getCachedAnalysis(currentBusinessType: string): ChannelAnalysisResult | null {
   try {
     const cache = getScopedItem(CACHE_KEY);
     if (cache) {
       const parsed = JSON.parse(cache);
+      // Invalidate cache if businessType has changed
+      if (parsed._businessType && parsed._businessType !== currentBusinessType) {
+        console.log('⚠️ Cached analysis businessType mismatch — invalidating');
+        return null;
+      }
       const analysis = parsed['meta'] || null;
       if (analysis) {
         console.log('📊 Loaded cached analysis data:');
@@ -160,6 +165,12 @@ const IMPORT_DATE_OPTIONS: { id: DatePreset; label: string }[] = [
 const AdGenerator = () => {
   const navigate = useNavigate();
   const { accountBusinessType: businessType } = useAdAccount();
+
+  // Campaign intent for hybrid accounts — controls AI prompts + publisher defaults
+  const [campaignIntent, setCampaignIntent] = useState<CampaignIntent>('purchase');
+  const effectiveIntent: CampaignIntent = businessType === 'hybrid'
+    ? campaignIntent
+    : (businessType === 'leadgen' ? 'lead' : 'purchase');
 
   // Render tracking for debugging Chrome crashes
   const renderCountRef = useRef(0);
@@ -389,7 +400,7 @@ const AdGenerator = () => {
   useEffect(() => {
     debugLog('Mount effect starting');
 
-    const cached = getCachedAnalysis();
+    const cached = getCachedAnalysis(businessType);
     setAnalysisData(cached);
 
     // Check image cache status
@@ -540,7 +551,7 @@ const AdGenerator = () => {
     if (generatedAds.length === 0) return;
 
     // PRIMARY: Set in-memory store (always works, no size limits)
-    setPublishData(generatedAds);
+    setPublishData(generatedAds, effectiveIntent);
 
     // BACKUP: Also write to localStorage for persistence across page refreshes
     try {
@@ -666,6 +677,7 @@ const AdGenerator = () => {
         productContext: selectedProduct || undefined,
         adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
         businessType,
+        campaignIntent: effectiveIntent,
       });
 
       // Replace the old item with the new one
@@ -741,6 +753,7 @@ const AdGenerator = () => {
         productContext: selectedProduct || undefined,
         adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
         businessType,
+        campaignIntent: effectiveIntent,
       });
 
       setCopyOptions(result);
@@ -868,6 +881,8 @@ const AdGenerator = () => {
           styleIds: selectedTextStyles,
         } : undefined,
         onProgress: setGenerationProgress,
+        businessType,
+        campaignIntent: effectiveIntent,
       });
 
       // Confirm credit consumption on success
@@ -1032,6 +1047,8 @@ const AdGenerator = () => {
         imageSize,
         productContext: selectedProduct || undefined,
         headlineText,
+        businessType,
+        campaignIntent: adToUpdate.campaignIntent || effectiveIntent,
       });
 
       // Update the ad with the new image
@@ -1149,6 +1166,8 @@ const AdGenerator = () => {
         productContext: selectedProduct || undefined,
         variationIndex: videoIndex,
         totalVariations: videos.length,
+        businessType,
+        campaignIntent: adToUpdate.campaignIntent || effectiveIntent,
       });
 
       const updatedAds = generatedAds.map(ad => {
@@ -1360,6 +1379,30 @@ const AdGenerator = () => {
       {currentStep === 'config' && (
         <section className="config-panel">
           <h3 className="config-title">Step 1: {copySource === 'generate' ? 'Audience & Concept' : 'Audience & Copy'}</h3>
+
+          {/* Campaign Intent Selector — hybrid accounts only */}
+          {businessType === 'hybrid' && (
+            <div className="config-section">
+              <label className="config-label">Campaign Goal</label>
+              <p className="config-hint">What is this campaign optimizing for?</p>
+              <div className="campaign-intent-options" style={{ display: 'flex', gap: '12px' }}>
+                {([
+                  { id: 'purchase' as CampaignIntent, label: 'Sell a Product', desc: 'Optimize for purchases & ROAS', icon: '🛒' },
+                  { id: 'lead' as CampaignIntent, label: 'Generate Leads', desc: 'Optimize for leads, calls & opt-ins', icon: '📞' },
+                ] as const).map(option => (
+                  <button
+                    key={option.id}
+                    className={`copy-source-btn ${campaignIntent === option.id ? 'active' : ''}`}
+                    onClick={() => setCampaignIntent(option.id)}
+                    style={{ flex: 1 }}
+                  >
+                    <span className="copy-source-name">{option.icon} {option.label}</span>
+                    <span className="copy-source-desc">{option.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Copy Source Selection */}
           <div className="config-section">
@@ -1946,6 +1989,7 @@ const AdGenerator = () => {
                         analysisData,
                         productContext: selectedProduct || undefined,
                         businessType,
+                        campaignIntent: effectiveIntent,
                       });
                       setTextAdCopySuggestions(result);
                     } catch (err: unknown) {

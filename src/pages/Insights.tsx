@@ -65,11 +65,15 @@ function convertToAdCreativeData(creative: AdCreative): AdCreativeData {
 // Local storage key for caching analysis (scoped per ad account)
 const CACHE_KEY = 'channel_analysis_cache';
 
-function getCachedAnalysis(channel: Channel): ChannelAnalysisResult | null {
+function getCachedAnalysis(channel: Channel, businessType: string): ChannelAnalysisResult | null {
   try {
     const cache = getScopedItem(CACHE_KEY);
     if (cache) {
       const parsed = JSON.parse(cache);
+      // Invalidate cache if businessType has changed
+      if (parsed._businessType && parsed._businessType !== businessType) {
+        return null;
+      }
       return parsed[channel] || null;
     }
   } catch {
@@ -78,11 +82,12 @@ function getCachedAnalysis(channel: Channel): ChannelAnalysisResult | null {
   return null;
 }
 
-function setCachedAnalysis(channel: Channel, analysis: ChannelAnalysisResult): void {
+function setCachedAnalysis(channel: Channel, analysis: ChannelAnalysisResult, businessType: string): void {
   try {
     const cache = getScopedItem(CACHE_KEY);
     const parsed = cache ? JSON.parse(cache) : {};
     parsed[channel] = analysis;
+    parsed._businessType = businessType;
     setScopedItem(CACHE_KEY, JSON.stringify(parsed));
   } catch {
     // Ignore cache errors
@@ -99,14 +104,14 @@ const Insights = () => {
   const [adsCount, setAdsCount] = useState(0);
   // Load cached analysis when channel changes
   useEffect(() => {
-    const cached = getCachedAnalysis(selectedChannel);
+    const cached = getCachedAnalysis(selectedChannel, businessType);
     if (cached) {
       setAnalysis(cached);
     } else {
       setAnalysis(null);
     }
     setError(null);
-  }, [selectedChannel]);
+  }, [selectedChannel, businessType]);
 
   // Credit exhaustion modal state
   const [showCreditModal, setShowCreditModal] = useState(false);
@@ -178,7 +183,7 @@ const Insights = () => {
       if (transactionId) confirmCredits(transactionId);
 
       // Cache the result
-      setCachedAnalysis(selectedChannel, result);
+      setCachedAnalysis(selectedChannel, result, businessType);
 
       setAnalysis(result);
     } catch (err: any) {

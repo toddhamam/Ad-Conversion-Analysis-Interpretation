@@ -507,7 +507,7 @@ function CreateOrganization() {
             <div className="admin-form-group">
               <label className="admin-form-label">Business Type *</label>
               <div style={{ display: 'flex', gap: '12px' }}>
-                {([{ id: 'ecommerce' as BusinessType, label: 'E-Commerce', desc: 'Purchases, revenue, ROAS' }, { id: 'leadgen' as BusinessType, label: 'Lead Generation', desc: 'Leads, CPL, lead rate' }]).map((bt) => (
+                {([{ id: 'ecommerce' as BusinessType, label: 'E-Commerce', desc: 'Purchases, revenue, ROAS' }, { id: 'leadgen' as BusinessType, label: 'Lead Generation', desc: 'Leads, CPL, lead rate' }, { id: 'hybrid' as BusinessType, label: 'Hybrid (E-Commerce + Lead Gen)', desc: 'Both purchases and leads' }]).map((bt) => (
                   <label
                     key={bt.id}
                     style={{
@@ -708,8 +708,8 @@ function CreateOrganization() {
                   <span className={`admin-badge-pill ${formData.planTier}`}>
                     {formData.planTier.charAt(0).toUpperCase() + formData.planTier.slice(1)}
                   </span>
-                  <span className="admin-badge-pill" style={{ background: formData.businessType === 'leadgen' ? 'rgba(168, 85, 247, 0.1)' : 'rgba(34, 197, 94, 0.1)', color: formData.businessType === 'leadgen' ? '#a855f7' : '#16a34a' }}>
-                    {formData.businessType === 'leadgen' ? 'Lead Gen' : 'E-Commerce'}
+                  <span className="admin-badge-pill" style={{ background: formData.businessType === 'leadgen' ? 'rgba(168, 85, 247, 0.1)' : formData.businessType === 'hybrid' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(34, 197, 94, 0.1)', color: formData.businessType === 'leadgen' ? '#a855f7' : formData.businessType === 'hybrid' ? '#3b82f6' : '#16a34a' }}>
+                    {formData.businessType === 'leadgen' ? 'Lead Gen' : formData.businessType === 'hybrid' ? 'Hybrid' : 'E-Commerce'}
                   </span>
                 </div>
               </div>

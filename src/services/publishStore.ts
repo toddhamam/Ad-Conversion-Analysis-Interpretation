@@ -12,12 +12,15 @@
  */
 
 import type { GeneratedAdPackage } from './openaiApi';
+import type { CampaignIntent } from '../types/organization';
 
 let _pendingAds: GeneratedAdPackage[] | null = null;
+let _pendingIntent: CampaignIntent | null = null;
 
-/** Store ads for the publisher to pick up. */
-export function setPublishData(ads: GeneratedAdPackage[]): void {
+/** Store ads and campaign intent for the publisher to pick up. */
+export function setPublishData(ads: GeneratedAdPackage[], intent?: CampaignIntent): void {
   _pendingAds = ads;
+  _pendingIntent = intent || null;
 }
 
 /**
@@ -28,4 +31,14 @@ export function getPublishData(): GeneratedAdPackage[] | null {
   const data = _pendingAds;
   _pendingAds = null;
   return data;
+}
+
+/** Retrieve the campaign intent set by AdGenerator. */
+export function getPublishIntent(): CampaignIntent | null {
+  return _pendingIntent;
+}
+
+/** Clear the pending intent (called after publisher reads it). */
+export function clearPublishIntent(): void {
+  _pendingIntent = null;
 }

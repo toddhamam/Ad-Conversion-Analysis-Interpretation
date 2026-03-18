@@ -26,10 +26,11 @@ import {
   type FullTargetingSpec,
   type PublishPreset,
 } from '../services/metaApi';
-import { getPublishData } from '../services/publishStore';
+import { getPublishData, getPublishIntent, clearPublishIntent } from '../services/publishStore';
 import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
 import { useAdAccount } from '../contexts/AdAccountContext';
-import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
+import { getBusinessTypeConfig, getCampaignIntentConfig } from '../lib/businessTypeConfig';
+import type { CampaignIntent } from '../types/organization';
 import './AdPublisher.css';
 
 // Debug flag - set to true to enable verbose logging
@@ -446,6 +447,10 @@ const AdPublisher = () => {
   const [ctaButtonType, setCtaButtonType] = useState<CallToActionType>(btConfig.defaultCTAType as CallToActionType);
   const [urlParameters, setUrlParameters] = useState('');
 
+  // Campaign intent (from AdGenerator for hybrid accounts)
+  const [campaignIntent, setCampaignIntent] = useState<CampaignIntent | null>(null);
+  const [mixedIntentWarning, setMixedIntentWarning] = useState<string | null>(null);
+
   // Presets
   const [presets, setPresets] = useState<PublishPreset[]>(() => {
     try {
@@ -457,16 +462,25 @@ const AdPublisher = () => {
   const [presetName, setPresetName] = useState('');
   const [showSavePreset, setShowSavePreset] = useState(false);
 
-  // Sync defaults when businessType resolves after initial render
+  // Sync defaults when businessType resolves after initial render.
+  // For hybrid accounts with a campaign intent, use intent-specific defaults instead.
   const btSyncedRef = useRef(businessType);
   useEffect(() => {
     if (businessType !== btSyncedRef.current) {
       btSyncedRef.current = businessType;
-      setCampaignObjective(btConfig.defaultObjective as CampaignObjective);
-      setConversionEvent(btConfig.defaultConversionEvent as ConversionEvent);
-      setCtaButtonType(btConfig.defaultCTAType as CallToActionType);
+
+      if (businessType === 'hybrid' && campaignIntent) {
+        const intentCfg = getCampaignIntentConfig(campaignIntent);
+        setCampaignObjective(intentCfg.defaultObjective as CampaignObjective);
+        setConversionEvent(intentCfg.defaultConversionEvent as ConversionEvent);
+        setCtaButtonType(intentCfg.defaultCTAType as CallToActionType);
+      } else {
+        setCampaignObjective(btConfig.defaultObjective as CampaignObjective);
+        setConversionEvent(btConfig.defaultConversionEvent as ConversionEvent);
+        setCtaButtonType(btConfig.defaultCTAType as CallToActionType);
+      }
     }
-  }, [businessType, btConfig]);
+  }, [businessType, btConfig, campaignIntent]);
 
   // Derive the effective campaign objective based on mode
   // For new_adset: inherit from the selected existing campaign
@@ -495,7 +509,7 @@ const AdPublisher = () => {
     });
   }, []);
 
-  // Load metadata on mount
+  // Load metadata and campaign intent on mount
   useEffect(() => {
     if (mountedRef.current) return;
     mountedRef.current = true;
@@ -506,6 +520,21 @@ const AdPublisher = () => {
     setCampaignName(`CI Campaign - ${dateStr}`);
     setAdsetName(`CI Ad Set - ${dateStr}`);
 
+    // Read campaign intent from publish store (set by AdGenerator for hybrid accounts)
+    const intent = getPublishIntent();
+    if (intent) {
+      setCampaignIntent(intent);
+      clearPublishIntent();
+
+      // Apply intent-specific defaults when businessType is hybrid
+      if (businessType === 'hybrid') {
+        const intentCfg = getCampaignIntentConfig(intent);
+        setCampaignObjective(intentCfg.defaultObjective as CampaignObjective);
+        setConversionEvent(intentCfg.defaultConversionEvent as ConversionEvent);
+        setCtaButtonType(intentCfg.defaultCTAType as CallToActionType);
+      }
+    }
+
     if (SKIP_LOCALSTORAGE) {
       setAdMetadata([]);
       setIsLoading(false);
@@ -513,12 +542,28 @@ const AdPublisher = () => {
       try {
         const metadata = extractMetadata();
         setAdMetadata(metadata.slice(0, MAX_TOTAL_ADS));
+
+        // Mixed-intent validation: warn if packages have different audience types
+        // that suggest conflicting campaign intents (e.g. mixing purchase + lead ads)
+        if (intent && _cachedPackages && _cachedPackages.length > 1) {
+          const intents = new Set<string>();
+          for (const pkg of _cachedPackages) {
+            if (pkg?.campaignIntent) {
+              intents.add(pkg.campaignIntent);
+            }
+          }
+          if (intents.size > 1) {
+            setMixedIntentWarning(
+              `These ad packages were generated with mixed campaign intents (${Array.from(intents).join(', ')}). Publishing them in a single campaign may cause suboptimal delivery. Consider publishing each intent separately.`
+            );
+          }
+        }
       } catch (err) {
         console.error('[AdPublisher] Load error:', err);
       }
       setIsLoading(false);
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced targeting search
   useEffect(() => {
@@ -962,6 +1007,35 @@ const AdPublisher = () => {
           All ads will be created in <strong>DRAFT/PAUSED</strong> mode.
         </span>
       </div>
+
+      {/* Campaign Intent Badge (shown for hybrid accounts with an intent) */}
+      {businessType === 'hybrid' && campaignIntent && (
+        <div className="publisher-intent-badge-bar">
+          <span
+            className={`publisher-intent-badge ${campaignIntent === 'purchase' ? 'intent-purchase' : 'intent-lead'}`}
+          >
+            {campaignIntent === 'purchase' ? 'Purchase Campaign' : 'Lead Gen Campaign'}
+          </span>
+          <span className="intent-badge-hint">
+            Defaults configured for {getCampaignIntentConfig(campaignIntent).description}
+          </span>
+        </div>
+      )}
+
+      {/* Mixed Intent Warning */}
+      {mixedIntentWarning && (
+        <div className="publisher-mixed-intent-warning">
+          <span className="warning-icon">⚠️</span>
+          <span className="warning-text">{mixedIntentWarning}</span>
+          <button
+            className="dismiss-warning-btn"
+            onClick={() => setMixedIntentWarning(null)}
+            aria-label="Dismiss warning"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* Step Indicator */}
       <div className="publisher-steps">
