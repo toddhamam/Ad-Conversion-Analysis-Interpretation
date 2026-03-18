@@ -26,23 +26,55 @@ async function openaiProxy(
 
   if (token) {
     // Production: proxy through backend
-    const res = await fetch(`/api/ai/${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify(body),
-    });
+    // 55s timeout — must finish before Vercel's 60s maxDuration kills the function.
+    // Without this, the browser waits its default ~5 min, making the UI feel frozen.
+    // NOTE: For streaming (SSE) responses, fetch() resolves on headers but the body
+    // is read incrementally. The AbortController stays active until stream collection
+    // completes, so aborting will cancel the reader.read() in collectStreamResponse.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 55_000);
+    let res: Response;
+    try {
+      res = await fetch(`/api/ai/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch (err: unknown) {
+      clearTimeout(timeoutId);
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return new Response(JSON.stringify({
+          error: { message: 'AI analysis timed out (55s). Try running the analysis with fewer ads or a lower ConversionIQ™ reasoning level.' },
+        }), { status: 504, headers: { 'Content-Type': 'application/json' } });
+      }
+      throw err;
+    }
 
     // Backend streams chat responses as SSE to avoid the 60s serverless
     // timeout. Collect the stream and reconstruct a standard JSON response
     // so callOpenAI/callOpenAIWithVision callers don't need to change.
     const contentType = res.headers.get('content-type') || '';
     if (contentType.includes('text/event-stream') && res.body) {
-      return collectStreamResponse(res);
+      try {
+        return await collectStreamResponse(res);
+      } catch (err: unknown) {
+        clearTimeout(timeoutId);
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          return new Response(JSON.stringify({
+            error: { message: 'AI analysis timed out (55s). Try running the analysis with fewer ads or a lower ConversionIQ™ reasoning level.' },
+          }), { status: 504, headers: { 'Content-Type': 'application/json' } });
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeoutId);
+      }
     }
 
+    clearTimeout(timeoutId);
     return res;
   }
 
@@ -127,12 +159,40 @@ async function collectStreamResponse(streamRes: Response): Promise<Response> {
   // caller's existing error handling kicks in instead of silently accepting
   // partial/truncated content.
   if (!receivedDone && !finishReason) {
-    return new Response(JSON.stringify({
-      error: { message: 'AI analysis stream was interrupted. The response was incomplete. Please try again.' },
-    }), {
-      status: 504,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    // If we got partial content, the analysis exceeded Vercel's 60s function timeout.
+    // Return the partial content if we have enough for a usable response.
+    if (content.length > 500) {
+      // Try to salvage partial JSON by closing any open braces
+      let salvaged = content.trim();
+      // Count open vs close braces to close the JSON
+      const openBraces = (salvaged.match(/{/g) || []).length;
+      const closeBraces = (salvaged.match(/}/g) || []).length;
+      const openBrackets = (salvaged.match(/\[/g) || []).length;
+      const closeBrackets = (salvaged.match(/\]/g) || []).length;
+      // Close any open arrays then objects
+      for (let i = 0; i < openBrackets - closeBrackets; i++) salvaged += ']';
+      for (let i = 0; i < openBraces - closeBraces; i++) salvaged += '}';
+      try {
+        JSON.parse(salvaged);
+        // Valid JSON after repair — return it as a successful (partial) response.
+        // Use 'stop' (not 'length') so callers don't throw the truncation exception
+        // that fires for finish_reason=length + json_object response_format.
+        console.warn('⚠️ Stream interrupted but partial response was salvageable');
+        content = salvaged;
+        finishReason = 'stop';
+      } catch {
+        // Couldn't repair — fall through to error
+      }
+    }
+
+    if (!finishReason) {
+      return new Response(JSON.stringify({
+        error: { message: 'AI analysis timed out — the server function was terminated before the response completed. This usually happens with large ad accounts. Please try again.' },
+      }), {
+        status: 504,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
   }
 
   // Reconstruct standard chat completion response format
@@ -1436,23 +1496,34 @@ export async function analyzeChannelPerformance(
 
   console.log(`🔍 Found ${sameHeadlineDifferentPerformance.length} headlines with varying image performance`);
 
-  // Collect ads with images for visual analysis (prioritize top/bottom performers)
-  // Filter out Facebook CDN URLs that require authentication
-  const adsWithImages = [...top5, ...bottom5]
-    .filter(ad => {
-      if (!ad.imageUrl) return false;
-      // Skip Facebook CDN URLs as they require authentication
-      // OpenAI cannot download these directly
-      const isFacebookCdn = ad.imageUrl.includes('fbcdn.net') ||
-                            ad.imageUrl.includes('facebook.com') ||
-                            ad.imageUrl.includes('fb.com');
-      if (isFacebookCdn) {
-        console.log(`⚠️ Skipping Facebook CDN image for ad ${ad.id} - requires auth`);
-        return false;
-      }
-      return true;
-    })
-    .slice(0, 10); // Limit to 10 images for API efficiency
+  // Collect ads with images for visual analysis — interleave top and bottom performers
+  // so the cap always includes both winners AND losers for comparison.
+  // Filter out Facebook CDN URLs that require authentication.
+  const filterAccessibleImages = (ad: AdCreativeData) => {
+    if (!ad.imageUrl) return false;
+    const isFacebookCdn = ad.imageUrl.includes('fbcdn.net') ||
+                          ad.imageUrl.includes('facebook.com') ||
+                          ad.imageUrl.includes('fb.com');
+    if (isFacebookCdn) {
+      console.log(`⚠️ Skipping Facebook CDN image for ad ${ad.id} - requires auth`);
+      return false;
+    }
+    return true;
+  };
+  const topWithImages = top5.filter(filterAccessibleImages);
+  const bottomWithImages = bottom5.filter(filterAccessibleImages);
+  // Interleave: top1, bottom1, top2, bottom2, top3 — ensures both tiers represented
+  const MAX_ANALYSIS_IMAGES = 5;
+  const adsWithImages: AdCreativeData[] = [];
+  const maxLen = Math.max(topWithImages.length, bottomWithImages.length);
+  for (let i = 0; i < maxLen && adsWithImages.length < MAX_ANALYSIS_IMAGES; i++) {
+    if (i < topWithImages.length && adsWithImages.length < MAX_ANALYSIS_IMAGES) {
+      adsWithImages.push(topWithImages[i]);
+    }
+    if (i < bottomWithImages.length && adsWithImages.length < MAX_ANALYSIS_IMAGES) {
+      adsWithImages.push(bottomWithImages[i]);
+    }
+  }
 
   console.log(`🖼️ Analyzing ${adsWithImages.length} ad images visually`);
 
@@ -1514,7 +1585,7 @@ likely show transformation/resolution imagery").`;
         });
         imageContent.push({
           type: 'image_url',
-          image_url: { url: ad.imageUrl, detail: 'high' }
+          image_url: { url: ad.imageUrl, detail: 'low' }
         });
       }
     }
@@ -1615,10 +1686,9 @@ Headline: "${group.headline}"
 
 **ADS PERFORMANCE (sorted by CVR):**
 ${(() => {
-    // Send top 25 + bottom 25 to keep prompt within timeout budget.
+    // Send top 15 + bottom 15 to keep prompt within Vercel 60s timeout budget.
     // Middle-tier ads add noise without adding analytical signal — aggregate stats suffice.
-    // Combined with 'high' reasoning effort, this gives deep analysis without timeout.
-    const MAX_ADS_PER_TAIL = 25;
+    const MAX_ADS_PER_TAIL = 15;
     if (sortedAds.length <= MAX_ADS_PER_TAIL * 2) {
       // Small enough to send everything
       return sortedAds.map(ad => formatAdLine(ad)).join('\n');
@@ -1630,13 +1700,13 @@ ${(() => {
     const middleTotalSpend = middleSlice.reduce((s, a) => s + a.spend, 0);
     const middleTotalConversions = middleSlice.reduce((s, a) => s + a.conversions, 0);
     return [
-      '--- TOP 25 ---',
+      '--- TOP 15 ---',
       ...topSlice.map(ad => formatAdLine(ad)),
       '',
       `--- MIDDLE TIER (${middleSlice.length} ads omitted for brevity) ---`,
       `Avg CVR: ${middleAvgCVR.toFixed(2)}% | Total Spend: $${middleTotalSpend.toFixed(2)} | Total Conversions: ${middleTotalConversions}`,
       '',
-      '--- BOTTOM 25 ---',
+      '--- BOTTOM 15 ---',
       ...bottomSlice.map(ad => formatAdLine(ad)),
     ].join('\n');
   })()}
