@@ -227,15 +227,18 @@ async function handleStatus(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  // Fetch active subscription from Stripe
+  // Fetch active subscriptions from Stripe (limit: 10 to account for add-ons)
   const subscriptions = await stripe.subscriptions.list({
     customer: customerId,
     status: 'active',
-    limit: 1,
+    limit: 10,
     expand: ['data.default_payment_method'],
   });
 
-  const subscription = subscriptions.data[0];
+  // Find the base plan subscription (not an account_block add-on)
+  const subscription = subscriptions.data.find(
+    sub => sub.metadata?.type !== 'account_block',
+  );
 
   // Also check for trialing subscriptions
   let trialingSub: Stripe.Subscription | undefined;
@@ -243,10 +246,12 @@ async function handleStatus(req: VercelRequest, res: VercelResponse) {
     const trialSubs = await stripe.subscriptions.list({
       customer: customerId,
       status: 'trialing',
-      limit: 1,
+      limit: 10,
       expand: ['data.default_payment_method'],
     });
-    trialingSub = trialSubs.data[0];
+    trialingSub = trialSubs.data.find(
+      sub => sub.metadata?.type !== 'account_block',
+    );
   }
 
   const activeSub = subscription || trialingSub;
@@ -473,72 +478,52 @@ async function handleReserveCredits(req: VercelRequest, res: VercelResponse) {
     ? new Date(org.current_period_end).toISOString().split('T')[0]
     : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-  // Upsert usage_tracking row and atomically increment credits_used
-  const { data: usage, error: upsertError } = await supabase
+  // Read current usage, then insert or increment
+  const { data: existingUsage } = await supabase
     .from('usage_tracking')
-    .upsert(
-      {
+    .select('credits_used')
+    .eq('organization_id', auth.organizationId)
+    .eq('period_start', periodStart)
+    .single();
+
+  const totalAvailable = creditsLimit + (org.bonus_credits || 0);
+
+  if (existingUsage) {
+    // Row exists — check budget and increment
+    const currentCreditsUsed = existingUsage.credits_used || 0;
+    const newCreditsUsed = currentCreditsUsed + creditsRequired;
+
+    if (newCreditsUsed > totalAvailable) {
+      return res.status(403).json({
+        error: 'Insufficient credits',
+        creditsRemaining: Math.max(0, totalAvailable - currentCreditsUsed),
+        creditsRequired,
+      });
+    }
+
+    await supabase
+      .from('usage_tracking')
+      .update({ credits_used: newCreditsUsed })
+      .eq('organization_id', auth.organizationId)
+      .eq('period_start', periodStart);
+  } else {
+    // No row yet — check budget and insert
+    if (creditsRequired > totalAvailable) {
+      return res.status(403).json({
+        error: 'Insufficient credits',
+        creditsRemaining: totalAvailable,
+        creditsRequired,
+      });
+    }
+
+    await supabase
+      .from('usage_tracking')
+      .insert({
         organization_id: auth.organizationId,
         period_start: periodStart,
         period_end: periodEnd,
         credits_used: creditsRequired,
-      },
-      { onConflict: 'organization_id,period_start' }
-    )
-    .select('credits_used')
-    .single();
-
-  // If row already existed, we need to increment instead
-  if (usage && upsertError === null) {
-    // Check if this was an insert or if we need to add to existing
-    const { data: currentUsage } = await supabase
-      .from('usage_tracking')
-      .select('credits_used')
-      .eq('organization_id', auth.organizationId)
-      .eq('period_start', periodStart)
-      .single();
-
-    const currentCreditsUsed = currentUsage?.credits_used || 0;
-
-    // If the current value equals exactly our creditsRequired, it was a fresh insert — good
-    // Otherwise, we need to do a proper increment via RPC or manual update
-    if (currentCreditsUsed !== creditsRequired) {
-      // Row existed — need to add to existing credits_used
-      const newCreditsUsed = currentCreditsUsed + creditsRequired;
-      const totalAvailable = creditsLimit + (org.bonus_credits || 0);
-
-      // Check if we can afford it before incrementing
-      if (newCreditsUsed > totalAvailable) {
-        return res.status(403).json({
-          error: 'Insufficient credits',
-          creditsRemaining: Math.max(0, totalAvailable - currentCreditsUsed),
-          creditsRequired,
-        });
-      }
-
-      await supabase
-        .from('usage_tracking')
-        .update({ credits_used: newCreditsUsed })
-        .eq('organization_id', auth.organizationId)
-        .eq('period_start', periodStart);
-    } else {
-      // Fresh insert — check if we can afford it
-      const totalAvailable = creditsLimit + (org.bonus_credits || 0);
-      if (creditsRequired > totalAvailable) {
-        // Undo the insert
-        await supabase
-          .from('usage_tracking')
-          .update({ credits_used: 0 })
-          .eq('organization_id', auth.organizationId)
-          .eq('period_start', periodStart);
-
-        return res.status(403).json({
-          error: 'Insufficient credits',
-          creditsRemaining: totalAvailable,
-          creditsRequired,
-        });
-      }
-    }
+      });
   }
 
   // Also increment the specific ad type counter
@@ -905,6 +890,13 @@ async function handleAccountBlockCheckout(req: VercelRequest, res: VercelRespons
       organizationId: auth.organizationId,
       blockSize,
       seats: block.seats.toString(),
+    },
+    subscription_data: {
+      metadata: {
+        type: 'account_block',
+        organizationId: auth.organizationId,
+        seats: block.seats.toString(),
+      },
     },
     ...(org?.stripe_customer_id ? { customer: org.stripe_customer_id } : {}),
   };
