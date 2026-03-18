@@ -9,33 +9,44 @@ import { getAuthToken } from '../lib/authToken';
 import { getBusinessTypeConfig, getCampaignIntentConfig } from '../lib/businessTypeConfig';
 import { META_AD_POLICY_PROMPT, IMAGE_SAFETY_DIRECTIVE, POLICY_SANITIZE_PATTERNS } from './adPolicyGuard';
 
-// Dev-mode fallback key (only used when no auth token is available)
-const OPENAI_API_KEY_FALLBACK = import.meta.env.VITE_OPENAI_API_KEY;
+// OpenAI API key — prefer direct browser-to-OpenAI calls (no 60s timeout).
+// Falls back to backend proxy when VITE key isn't set (degraded: 60s limit).
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_IMAGES_URL = 'https://api.openai.com/v1/images/generations';
 
-// ─── OpenAI Backend Proxy ───────────────────────────────────────────────────
-// Routes OpenAI calls through /api/ai/* so the API key stays server-side.
-// Falls back to direct calls with VITE_OPENAI_API_KEY for local dev without auth.
+// ─── OpenAI API Calls ───────────────────────────────────────────────────────
+// Primary: direct browser-to-OpenAI (VITE_OPENAI_API_KEY). No serverless
+// proxy, no timeout. GPT-5.4 reasoning + vision can take 60-120s.
+// Fallback: backend proxy (/api/ai/*) with 55s timeout — degraded but
+// functional when VITE_OPENAI_API_KEY isn't set.
 
 async function openaiProxy(
   endpoint: 'chat' | 'images',
   body: Record<string, unknown>
 ): Promise<Response> {
-  const token = await getAuthToken();
+  // Primary: direct call — no Vercel 60s limit
+  if (OPENAI_API_KEY) {
+    const url = endpoint === 'chat' ? OPENAI_API_URL : OPENAI_IMAGES_URL;
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify(body),
+    });
+  }
 
+  // Fallback: proxy through backend (key is server-side).
+  // Capped at ~55s due to Vercel Hobby 60s limit — analysis may timeout
+  // on large accounts. Set VITE_OPENAI_API_KEY to remove this constraint.
+  const token = await getAuthToken();
   if (token) {
-    // Production: proxy through backend
-    // 55s timeout — must finish before Vercel's 60s maxDuration kills the function.
-    // Without this, the browser waits its default ~5 min, making the UI feel frozen.
-    // NOTE: For streaming (SSE) responses, fetch() resolves on headers but the body
-    // is read incrementally. The AbortController stays active until stream collection
-    // completes, so aborting will cancel the reader.read() in collectStreamResponse.
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 55_000);
-    let res: Response;
     try {
-      res = await fetch(`/api/ai/${endpoint}`, {
+      const res = await fetch(`/api/ai/${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -44,174 +55,20 @@ async function openaiProxy(
         body: JSON.stringify(body),
         signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+      return res;
     } catch (err: unknown) {
       clearTimeout(timeoutId);
       if (err instanceof DOMException && err.name === 'AbortError') {
         return new Response(JSON.stringify({
-          error: { message: 'AI analysis timed out (55s). Try running the analysis with fewer ads or a lower ConversionIQ™ reasoning level.' },
+          error: { message: 'AI analysis timed out (55s). Set VITE_OPENAI_API_KEY to remove this limit, or try with fewer ads.' },
         }), { status: 504, headers: { 'Content-Type': 'application/json' } });
       }
       throw err;
     }
-
-    // Backend streams chat responses as SSE to avoid the 60s serverless
-    // timeout. Collect the stream and reconstruct a standard JSON response
-    // so callOpenAI/callOpenAIWithVision callers don't need to change.
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('text/event-stream') && res.body) {
-      try {
-        return await collectStreamResponse(res);
-      } catch (err: unknown) {
-        clearTimeout(timeoutId);
-        if (err instanceof DOMException && err.name === 'AbortError') {
-          return new Response(JSON.stringify({
-            error: { message: 'AI analysis timed out (55s). Try running the analysis with fewer ads or a lower ConversionIQ™ reasoning level.' },
-          }), { status: 504, headers: { 'Content-Type': 'application/json' } });
-        }
-        throw err;
-      } finally {
-        clearTimeout(timeoutId);
-      }
-    }
-
-    clearTimeout(timeoutId);
-    return res;
   }
 
-  // Dev fallback: direct call with VITE_ key
-  if (!OPENAI_API_KEY_FALLBACK) {
-    throw new Error('AI API not configured. Please contact support.');
-  }
-
-  const url = endpoint === 'chat' ? OPENAI_API_URL : OPENAI_IMAGES_URL;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENAI_API_KEY_FALLBACK}`,
-    },
-    body: JSON.stringify(body),
-  });
-  return res;
-}
-
-/**
- * Collect an SSE stream from the backend AI proxy and reconstruct a
- * standard OpenAI chat completion JSON response. This lets the serverless
- * proxy stream (avoiding timeout) while keeping existing callers unchanged.
- */
-async function collectStreamResponse(streamRes: Response): Promise<Response> {
-  const reader = streamRes.body!.getReader();
-  const decoder = new TextDecoder();
-
-  let content = '';
-  let finishReason = '';
-  let usage: Record<string, unknown> | null = null;
-  let model = '';
-  let id = '';
-  let buffer = '';
-  let receivedDone = false;
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-
-      // Process complete SSE lines
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith('data: ')) continue;
-        const data = trimmed.slice(6);
-        if (data === '[DONE]') {
-          receivedDone = true;
-          continue;
-        }
-
-        try {
-          const chunk = JSON.parse(data);
-          if (chunk.id) id = chunk.id;
-          if (chunk.model) model = chunk.model;
-
-          const delta = chunk.choices?.[0]?.delta;
-          if (delta?.content) content += delta.content;
-
-          const chunkFinish = chunk.choices?.[0]?.finish_reason;
-          if (chunkFinish) finishReason = chunkFinish;
-
-          // usage is sent in the final chunk (stream_options.include_usage)
-          if (chunk.usage) usage = chunk.usage;
-        } catch {
-          // Skip malformed chunks
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  // If the stream ended without [DONE], it was interrupted (network drop,
-  // serverless function killed, etc.). Return an error response so the
-  // caller's existing error handling kicks in instead of silently accepting
-  // partial/truncated content.
-  if (!receivedDone && !finishReason) {
-    // If we got partial content, the analysis exceeded Vercel's 60s function timeout.
-    // Return the partial content if we have enough for a usable response.
-    if (content.length > 500) {
-      // Try to salvage partial JSON by closing any open braces
-      let salvaged = content.trim();
-      // Count open vs close braces to close the JSON
-      const openBraces = (salvaged.match(/{/g) || []).length;
-      const closeBraces = (salvaged.match(/}/g) || []).length;
-      const openBrackets = (salvaged.match(/\[/g) || []).length;
-      const closeBrackets = (salvaged.match(/\]/g) || []).length;
-      // Close any open arrays then objects
-      for (let i = 0; i < openBrackets - closeBrackets; i++) salvaged += ']';
-      for (let i = 0; i < openBraces - closeBraces; i++) salvaged += '}';
-      try {
-        JSON.parse(salvaged);
-        // Valid JSON after repair — return it as a successful (partial) response.
-        // Use 'stop' (not 'length') so callers don't throw the truncation exception
-        // that fires for finish_reason=length + json_object response_format.
-        console.warn('⚠️ Stream interrupted but partial response was salvageable');
-        content = salvaged;
-        finishReason = 'stop';
-      } catch {
-        // Couldn't repair — fall through to error
-      }
-    }
-
-    if (!finishReason) {
-      return new Response(JSON.stringify({
-        error: { message: 'AI analysis timed out — the server function was terminated before the response completed. This usually happens with large ad accounts. Please try again.' },
-      }), {
-        status: 504,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-  }
-
-  // Reconstruct standard chat completion response format
-  const reconstructed = {
-    id,
-    object: 'chat.completion',
-    model,
-    choices: [{
-      index: 0,
-      message: { role: 'assistant', content },
-      finish_reason: finishReason || 'stop',
-    }],
-    usage,
-  };
-
-  return new Response(JSON.stringify(reconstructed), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  throw new Error('AI API not configured. Please contact support.');
 }
 
 // Google Gemini API Configuration
@@ -227,13 +84,11 @@ const DEFAULT_CHAT_MODEL = 'gpt-5.4'; // Latest GPT-5.4 with reasoning capabilit
 const DEFAULT_VISION_MODEL = 'gpt-5.4'; // GPT-5.4 has multimodal vision support
 
 // Reasoning configuration for GPT-5.4
-// 'medium' for analysis — balances depth with serverless timeout budget.
-// The AI proxy now streams responses to avoid the 60s hard limit, but
-// 'medium' reasoning keeps the total well within bounds on Hobby plan.
-// Prompt caps ads at top/bottom 25 to limit token count.
+// 'high' for analysis — direct browser-to-OpenAI calls have no timeout
+// constraint, so we can use full reasoning depth for maximum insight quality.
 type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
-const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'medium';
-const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'medium';
+const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'high';
+const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'high';
 
 // Image Generation - Gemini models with automatic fallback
 // Primary: gemini-3-pro-image-preview (highest quality)
@@ -547,15 +402,13 @@ if (import.meta.env.DEV) {
   console.log('🎨 Gemini API Key:', GEMINI_API_KEY ? 'configured' : 'NOT CONFIGURED');
 }
 
-// Check if OpenAI is configured (always true in production — key is server-side)
+// Check if OpenAI is configured (direct key OR backend proxy available)
 export function isOpenAIConfigured(): boolean {
-  // In production with auth, the key is on the server — always available
-  // In dev without auth, check for the VITE_ fallback key
-  return true;
+  return !!OPENAI_API_KEY || !!import.meta.env.VITE_SUPABASE_URL;
 }
 
 // Log configuration status
-console.log('🔑 OpenAI API: proxy mode (key server-side)', OPENAI_API_KEY_FALLBACK ? '+ dev fallback' : '');
+console.log('🔑 OpenAI API:', OPENAI_API_KEY ? 'direct mode (no timeout)' : 'proxy fallback (55s limit)');
 
 // Types for ad analysis
 export interface AdCreativeData {
@@ -1513,7 +1366,7 @@ export async function analyzeChannelPerformance(
   const topWithImages = top5.filter(filterAccessibleImages);
   const bottomWithImages = bottom5.filter(filterAccessibleImages);
   // Interleave: top1, bottom1, top2, bottom2, top3 — ensures both tiers represented
-  const MAX_ANALYSIS_IMAGES = 5;
+  const MAX_ANALYSIS_IMAGES = 10;
   const adsWithImages: AdCreativeData[] = [];
   const maxLen = Math.max(topWithImages.length, bottomWithImages.length);
   for (let i = 0; i < maxLen && adsWithImages.length < MAX_ANALYSIS_IMAGES; i++) {
@@ -1585,7 +1438,7 @@ likely show transformation/resolution imagery").`;
         });
         imageContent.push({
           type: 'image_url',
-          image_url: { url: ad.imageUrl, detail: 'low' }
+          image_url: { url: ad.imageUrl, detail: 'high' }
         });
       }
     }
@@ -1686,9 +1539,9 @@ Headline: "${group.headline}"
 
 **ADS PERFORMANCE (sorted by CVR):**
 ${(() => {
-    // Send top 15 + bottom 15 to keep prompt within Vercel 60s timeout budget.
-    // Middle-tier ads add noise without adding analytical signal — aggregate stats suffice.
-    const MAX_ADS_PER_TAIL = 15;
+    // Send top 25 + bottom 25 for deep analysis. Middle-tier ads add noise
+    // without analytical signal — aggregate stats suffice.
+    const MAX_ADS_PER_TAIL = 25;
     if (sortedAds.length <= MAX_ADS_PER_TAIL * 2) {
       // Small enough to send everything
       return sortedAds.map(ad => formatAdLine(ad)).join('\n');
@@ -1700,13 +1553,13 @@ ${(() => {
     const middleTotalSpend = middleSlice.reduce((s, a) => s + a.spend, 0);
     const middleTotalConversions = middleSlice.reduce((s, a) => s + a.conversions, 0);
     return [
-      '--- TOP 15 ---',
+      '--- TOP 25 ---',
       ...topSlice.map(ad => formatAdLine(ad)),
       '',
       `--- MIDDLE TIER (${middleSlice.length} ads omitted for brevity) ---`,
       `Avg CVR: ${middleAvgCVR.toFixed(2)}% | Total Spend: $${middleTotalSpend.toFixed(2)} | Total Conversions: ${middleTotalConversions}`,
       '',
-      '--- BOTTOM 15 ---',
+      '--- BOTTOM 25 ---',
       ...bottomSlice.map(ad => formatAdLine(ad)),
     ].join('\n');
   })()}
