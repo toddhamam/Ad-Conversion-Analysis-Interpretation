@@ -2666,6 +2666,7 @@ Description: ${p.description}
 ${p.landingPageUrl ? `Landing Page: ${p.landingPageUrl}` : ''}
 
 CRITICAL: All copy MUST be about "${p.name}" by ${p.author}. NEVER reference any other product, brand, or company name. The product name and author above are the ONLY correct references.
+VOICE: Write ad copy in the author's voice (first person). The author is speaking directly to the prospect, make the reader feel like the person who wrote the ad is talking only to them — never refer to the author in third person.
 `;
   }
 
@@ -2990,7 +2991,8 @@ ${bv.distinctiveTraits?.length ? `Traits: ${bv.distinctiveTraits.join('; ')}` : 
   if (config.productContext) {
     const p = config.productContext;
     productSection = `\nPRODUCT: "${p.name}" by ${p.author}. ${p.description}${p.landingPageUrl ? ` Landing page: ${p.landingPageUrl}` : ''}
-All copy MUST reference "${p.name}" by ${p.author} — no other product or brand names.\n`;
+All copy MUST reference "${p.name}" by ${p.author} — no other product or brand names.
+VOICE: Write ad copy in the author's voice (first person). The author is speaking directly to the prospect, make the reader feel like the person who wrote the ad is talking only to them — never refer to the author in third person.\n`;
   }
 
   // Build existing items list for dedup
@@ -4888,6 +4890,7 @@ Top performing patterns from this account inform the suggestions below.
 Name: ${config.productContext.name}
 ${config.productContext.author ? `By: ${config.productContext.author}` : ''}
 ${config.productContext.description || ''}
+VOICE: Write ad copy in the author's voice (first person). The author is speaking directly to the prospect, make the reader feel like the person who wrote the ad is talking only to them — never refer to the author in third person.
 `;
   }
 
