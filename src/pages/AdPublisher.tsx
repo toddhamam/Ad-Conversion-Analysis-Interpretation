@@ -469,7 +469,7 @@ const AdPublisher = () => {
     if (businessType !== btSyncedRef.current) {
       btSyncedRef.current = businessType;
 
-      if (businessType === 'hybrid' && campaignIntent) {
+      if (campaignIntent) {
         const intentCfg = getCampaignIntentConfig(campaignIntent);
         setCampaignObjective(intentCfg.defaultObjective as CampaignObjective);
         setConversionEvent(intentCfg.defaultConversionEvent as ConversionEvent);
@@ -526,13 +526,11 @@ const AdPublisher = () => {
       setCampaignIntent(intent);
       clearPublishIntent();
 
-      // Apply intent-specific defaults when businessType is hybrid
-      if (businessType === 'hybrid') {
-        const intentCfg = getCampaignIntentConfig(intent);
-        setCampaignObjective(intentCfg.defaultObjective as CampaignObjective);
-        setConversionEvent(intentCfg.defaultConversionEvent as ConversionEvent);
-        setCtaButtonType(intentCfg.defaultCTAType as CallToActionType);
-      }
+      // Apply intent-specific defaults
+      const intentCfg = getCampaignIntentConfig(intent);
+      setCampaignObjective(intentCfg.defaultObjective as CampaignObjective);
+      setConversionEvent(intentCfg.defaultConversionEvent as ConversionEvent);
+      setCtaButtonType(intentCfg.defaultCTAType as CallToActionType);
     }
 
     if (SKIP_LOCALSTORAGE) {
@@ -1008,13 +1006,13 @@ const AdPublisher = () => {
         </span>
       </div>
 
-      {/* Campaign Intent Badge (shown for hybrid accounts with an intent) */}
-      {businessType === 'hybrid' && campaignIntent && (
+      {/* Campaign Intent Badge (shown when a specific intent was set in AdGenerator) */}
+      {campaignIntent && (
         <div className="publisher-intent-badge-bar">
           <span
-            className={`publisher-intent-badge ${campaignIntent === 'purchase' ? 'intent-purchase' : 'intent-lead'}`}
+            className={`publisher-intent-badge ${campaignIntent === 'purchase' ? 'intent-purchase' : campaignIntent === 'quiz' ? 'intent-quiz' : 'intent-lead'}`}
           >
-            {campaignIntent === 'purchase' ? 'Purchase Campaign' : 'Lead Gen Campaign'}
+            {campaignIntent === 'purchase' ? 'Purchase Campaign' : campaignIntent === 'quiz' ? 'Quiz Funnel Campaign' : 'Lead Gen Campaign'}
           </span>
           <span className="intent-badge-hint">
             Defaults configured for {getCampaignIntentConfig(campaignIntent).description}

@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-03-19 — Add quiz/assessment funnel support to CreativeIQ
+
+### What
+Added "Quiz / Assessment" as a third campaign goal in CreativeIQ, alongside "Sell a Product" and "Generate Leads". This enables AI-generated ad creatives that are purpose-built for driving traffic to quiz funnels (e.g., personality assessments, self-discovery tools) where the ad sells the quiz experience rather than the product directly.
+
+### Why
+Quiz funnels have a fundamentally different ad strategy: Ad → Quiz → Personalized Result → Offer/Sale. The existing "purchase" and "lead" intents generated copy that pushed products or lead forms directly, which produces the wrong tone, hooks, and CTAs for a quiz funnel where curiosity and self-discovery are the primary levers.
+
+### Changed
+- **`src/types/organization.ts`** — Added `'quiz'` to the `CampaignIntent` union type
+- **`src/lib/businessTypeConfig.ts`** — Added `QUIZ_INTENT_CONFIG` with quiz-specific AI prompts (curiosity-driven copy, self-discovery psychology, identity-based retargeting), Meta defaults (`OUTCOME_LEADS`, `LEAD`, `LEARN_MORE`)
+- **`src/pages/AdGenerator.tsx`** — Campaign goal selector now visible for all business types (was hybrid-only). Added quiz option with brain icon. Added `useEffect` to sync default intent when `businessType` resolves asynchronously, preventing leadgen accounts from silently initializing with `purchase` intent
+- **`src/services/openaiApi.ts`** — All 8 intent-gated prompt injections (copy, image, video, text ad generation) now fire whenever a `campaignIntent` is set (removed hybrid-only gate). Added quiz-specific descriptions for copy focus and image visual direction
+- **`src/pages/AdPublisher.tsx`** — Intent badge and defaults application now work for all business types. Quiz shows as "Quiz Funnel Campaign" with distinct badge class
+
 ## 2026-03-18 — Fix ConversionIQ analysis timeout & show business type context in AdGenerator
 
 ### Problem 1: Channel analysis always fails with "AI analysis stream was interrupted"
