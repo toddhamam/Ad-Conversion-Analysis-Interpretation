@@ -118,6 +118,7 @@ export function AdAccountProvider({ children }: { children: React.ReactNode }) {
             account_status: null,
             currency: null,
             business_type: null,
+            products: null,
           };
           setCurrentAccount(defaultAccount);
           setMetaCurrentAccount(defaultAccount);
@@ -163,7 +164,7 @@ export function AdAccountProvider({ children }: { children: React.ReactNode }) {
         setSeatInfo({ seats: data.seats, seatsUsed: data.seatsUsed, maxAccounts: data.maxAccounts });
         // Build a fingerprint that captures both the account list and key config fields
         const fingerprint = (accts: AdAccountInfo[]) =>
-          accts.map(a => `${a.ad_account_id}:${a.page_id || ''}:${a.pixel_id || ''}:${a.business_type || ''}`).sort().join(',');
+          accts.map(a => `${a.ad_account_id}:${a.page_id || ''}:${a.pixel_id || ''}:${a.business_type || ''}:${JSON.stringify(a.products || [])}`).sort().join(',');
         if (fingerprint(freshAccounts) !== fingerprint(cachedAccounts)) {
           applyAccounts(freshAccounts);
         }

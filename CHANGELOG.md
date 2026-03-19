@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-03-19 — Move Product Configurator to Integrations (ad account level)
+
+### What
+Products/offers are now configured per ad account in the Integrations page, instead of being buried inside CreativeIQ. Product metadata is persisted to Supabase (`organization_ad_accounts.products` JSONB column), while product images remain in scoped localStorage. Both single-account and multi-account UI paths are supported.
+
+### Why
+Users had to navigate into CreativeIQ just to set up what they're advertising — this should be part of account setup. Moving products to Integrations makes them a first-class part of account configuration, permanently saved to Supabase, and easily selectable when generating ads.
+
+### Changed
+- **`supabase/migrations/014_ad_account_products.sql`** — NEW: Adds `products JSONB` column to `organization_ad_accounts`
+- **`src/components/ProductConfigurator.tsx`** — NEW: Reusable product CRUD component with explicit `adAccountId` scoping for localStorage reads/writes (prevents cross-account contamination when configuring a non-active account)
+- **`src/components/ProductConfigurator.css`** — NEW: Compact styles using design system CSS variables
+- **`api/meta.ts`** — Added `products` to status endpoint select, update-selection route, and configure action
+- **`src/services/metaApi.ts`** — Added `ProductMetadata` interface and `products` field to `AdAccountInfo`; extended `saveMetaSelection()` and `configureAdAccount()` to accept products
+- **`src/contexts/AdAccountContext.tsx`** — Added `products` to refresh fingerprint so product changes trigger context re-apply
+- **`src/pages/Integrations.tsx`** — Added ProductConfigurator to both single-account and multi-account configure paths; auto-saves product changes to Supabase using persisted (committed) page/pixel values to avoid side effects; migrates existing localStorage products on first configure
+- **`src/pages/AdGenerator.tsx`** — Changed "Add a product" link from `/products` to `/integrations`
+
+### Migration Required
+Run in Supabase SQL Editor:
+```sql
+ALTER TABLE organization_ad_accounts ADD COLUMN IF NOT EXISTS products JSONB DEFAULT '[]'::jsonb;
+NOTIFY pgrst, 'reload schema';
+```
+
 ## 2026-03-19 — Fix Ad Publisher "new ad set in existing campaign" mode
 
 ### Problem
