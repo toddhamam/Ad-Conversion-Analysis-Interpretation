@@ -1266,6 +1266,7 @@ export interface CampaignForPublish {
   name: string;
   status: string;
   objective: string;
+  budgetMode: BudgetMode;
 }
 
 export interface AdSetForPublish {
@@ -1587,13 +1588,19 @@ export async function fetchCampaignsForPublish(): Promise<CampaignForPublish[]> 
   if (!adAccountId) return [];
 
   const data = await metaFetch(`${adAccountId}/campaigns`, {
-    params: { fields: 'id,name,status,objective', limit: '100' },
+    params: { fields: 'id,name,status,objective,daily_budget,lifetime_budget', limit: '100' },
   });
 
   const ALLOWED_STATUSES = new Set(['ACTIVE', 'PAUSED']);
   return (data.data || [])
     .filter((c: any) => ALLOWED_STATUSES.has(c.status))
-    .map((c: any) => ({ id: c.id, name: c.name, status: c.status, objective: c.objective }));
+    .map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      status: c.status,
+      objective: c.objective,
+      budgetMode: (c.daily_budget || c.lifetime_budget) ? 'CBO' as BudgetMode : 'ABO' as BudgetMode,
+    }));
 }
 
 export async function fetchAdSetsForPublish(campaignId?: string): Promise<AdSetForPublish[]> {
