@@ -444,7 +444,7 @@ async function handleStatus(req: VercelRequest, res: VercelResponse) {
   // Load activated ad accounts from organization_ad_accounts table
   const { data: adAccounts, error: adAccountsError } = await supabase
     .from('organization_ad_accounts')
-    .select('id, ad_account_id, ad_account_name, page_id, pixel_id, is_active, account_status, currency, business_type')
+    .select('id, ad_account_id, ad_account_name, page_id, pixel_id, is_active, account_status, currency, business_type, products')
     .eq('organization_id', auth.organizationId)
     .eq('is_active', true)
     .order('ad_account_name', { ascending: true });
@@ -715,7 +715,7 @@ async function handleUpdateSelection(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { adAccountId, pageId, pixelId } = req.body || {};
+  const { adAccountId, pageId, pixelId, products } = req.body || {};
 
   if (!adAccountId) {
     return res.status(400).json({ error: 'adAccountId is required' });
@@ -774,6 +774,7 @@ async function handleUpdateSelection(req: VercelRequest, res: VercelResponse) {
         is_active: true,
         account_status: selectedAccount?.account_status || null,
         currency: selectedAccount?.currency || null,
+        ...(products !== undefined ? { products } : {}),
         updated_at: new Date().toISOString(),
       }, { onConflict: 'organization_id,ad_account_id' });
     await updateSeatCount(auth.organizationId);
@@ -1948,7 +1949,7 @@ async function handleAdAccountsWrite(
   res: VercelResponse,
   auth: AuthContext
 ) {
-  const { action, adAccountId, adAccountName, pageId, pixelId, currency, businessType } = req.body || {};
+  const { action, adAccountId, adAccountName, pageId, pixelId, currency, businessType, products } = req.body || {};
 
   if (!action || !adAccountId) {
     return res.status(400).json({ error: 'action and adAccountId are required' });
@@ -2056,6 +2057,7 @@ async function handleAdAccountsWrite(
         page_id: pageId !== undefined ? (pageId || null) : undefined,
         pixel_id: pixelId !== undefined ? (pixelId || null) : undefined,
         business_type: businessType !== undefined ? (businessType || null) : undefined,
+        products: products !== undefined ? products : undefined,
         updated_at: new Date().toISOString(),
       })
       .eq('organization_id', auth.organizationId)

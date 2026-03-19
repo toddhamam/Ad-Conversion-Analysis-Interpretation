@@ -42,6 +42,16 @@ interface AvailablePage {
   name: string;
 }
 
+/** Product metadata stored in Supabase (no images — those stay in localStorage) */
+export interface ProductMetadata {
+  id: string;
+  name: string;
+  author: string;
+  description: string;
+  landingPageUrl: string;
+  createdAt: string;
+}
+
 /** Info about an activated ad account (from organization_ad_accounts table) */
 export interface AdAccountInfo {
   id: string;              // UUID from organization_ad_accounts
@@ -53,6 +63,7 @@ export interface AdAccountInfo {
   account_status: number | null;
   currency: string | null;
   business_type: import('../types/organization').BusinessType | null;
+  products: ProductMetadata[] | null;
 }
 
 export interface OrgMetaIds {
@@ -220,6 +231,7 @@ export async function saveMetaSelection(selection: {
   adAccountId: string;
   pageId: string | null;
   pixelId: string | null;
+  products?: ProductMetadata[];
 }): Promise<{ success: boolean }> {
   const token = await getAuthToken();
   if (!token) throw new Error('Not authenticated');
@@ -2327,11 +2339,12 @@ export async function deactivateAdAccount(adAccountId: string): Promise<void> {
   }
 }
 
-/** Update configuration (page_id, pixel_id) for an activated ad account */
+/** Update configuration (page_id, pixel_id, products) for an activated ad account */
 export async function configureAdAccount(adAccountId: string, config: {
   pageId?: string | null;
   pixelId?: string | null;
   businessType?: import('../types/organization').BusinessType | null;
+  products?: ProductMetadata[];
 }): Promise<void> {
   const token = await getAuthToken();
   const res = await fetch('/api/meta/ad-accounts', {
@@ -2346,6 +2359,7 @@ export async function configureAdAccount(adAccountId: string, config: {
       pageId: config.pageId,
       pixelId: config.pixelId,
       businessType: config.businessType,
+      ...(config.products !== undefined ? { products: config.products } : {}),
     }),
   });
   if (!res.ok) {

@@ -1454,7 +1454,7 @@ const AdGenerator = () => {
             {products.length === 0 ? (
               <div className="product-selector-empty">
                 <span>No products defined yet.</span>
-                <Link to="/products" className="product-selector-link">Add a product →</Link>
+                <Link to="/integrations" className="product-selector-link">Add a product →</Link>
               </div>
             ) : (
               <div className="product-selector-options">
