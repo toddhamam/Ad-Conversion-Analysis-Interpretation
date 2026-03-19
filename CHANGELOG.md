@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-03-19 — Fix Ad Publisher "new ad set in existing campaign" mode
+
+### Problem
+Selecting "New Ad Set in Existing Campaign" in the Ad Publisher always failed with "Invalid parameter" from Meta's API. The other two modes (New Campaign, Existing Ad Set) worked fine.
+
+### Root Cause
+The `budgetMode` was hardcoded to `'ABO'` for the `new_adset` publish mode, which always sent a `daily_budget` on the ad set creation request. If the existing campaign uses CBO (Campaign Budget Optimization), Meta rejects `daily_budget` on the ad set because CBO campaigns manage budget at the campaign level — ad sets can't have their own budgets.
+
+### Fixed
+- **`src/services/metaApi.ts`** — `fetchCampaignsForPublish()` now fetches `daily_budget` and `lifetime_budget` fields from Meta to detect CBO vs ABO; added `budgetMode` to `CampaignForPublish` interface
+- **`src/pages/AdPublisher.tsx`** — Added `existingCampaignBudgetMode` memo that detects the selected campaign's actual budget mode
+- **`src/pages/AdPublisher.tsx`** — Publish config now uses the detected budget mode instead of hardcoded `'ABO'`, so CBO campaigns don't send ad set budgets
+- **`src/pages/AdPublisher.tsx`** — Budget input hidden for CBO campaigns with "Budget is managed at the campaign level (CBO)" message; review summary updated accordingly
+- **`src/pages/AdPublisher.tsx`** — Validation no longer requires `dailyBudget > 0` for CBO campaigns; added `existingCampaignBudgetMode` to `canProceedToReview` dependency array
+
 ## 2026-03-19 — Add quiz/assessment funnel support to CreativeIQ
 
 ### What

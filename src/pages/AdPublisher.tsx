@@ -495,6 +495,15 @@ const AdPublisher = () => {
     return campaignObjective;
   }, [publishMode, selectedCampaignId, campaigns, campaignObjective]);
 
+  // Detect the existing campaign's budget mode (CBO vs ABO) for new_adset mode
+  const existingCampaignBudgetMode = useMemo((): BudgetMode | undefined => {
+    if (publishMode === 'new_adset' && selectedCampaignId) {
+      const selectedCampaign = campaigns.find(c => c.id === selectedCampaignId);
+      return selectedCampaign?.budgetMode;
+    }
+    return undefined;
+  }, [publishMode, selectedCampaignId, campaigns]);
+
   // Collapsible sections
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(['campaign', 'conversion', 'targeting', 'ad-setup'])
@@ -881,13 +890,19 @@ const AdPublisher = () => {
     // For new_campaign: require campaignName, adsetName, and budget
     // For new_adset: only require adsetName and budget (campaign already exists)
     if (publishMode === 'new_campaign' && !campaignName) return false;
-    if (!adsetName || dailyBudget <= 0) return false;
+    if (!adsetName) return false;
+    // CBO campaigns manage budget at campaign level — no ad set budget needed
+    if (publishMode === 'new_adset' && existingCampaignBudgetMode === 'CBO') {
+      // No budget validation needed — campaign handles it
+    } else if (dailyBudget <= 0) {
+      return false;
+    }
     if (needsConversionTracking(effectiveCampaignObjective) && !pixelId) return false;
     if (targetCountries.length === 0) return false;
     if (!placementAutomatic && publisherPlatforms.length === 0) return false;
     return true;
   }, [landingPageUrl, publishMode, campaignName, adsetName, dailyBudget,
-      effectiveCampaignObjective, pixelId, targetCountries, placementAutomatic, publisherPlatforms]);
+      effectiveCampaignObjective, existingCampaignBudgetMode, pixelId, targetCountries, placementAutomatic, publisherPlatforms]);
 
   // Build targeting and placements for review/publish
   const buildTargeting = useCallback((): FullTargetingSpec => ({
@@ -933,7 +948,7 @@ const AdPublisher = () => {
         settings: {
           campaignName: publishMode === 'new_campaign' ? campaignName : undefined,
           campaignObjective: publishMode !== 'existing_adset' ? effectiveCampaignObjective : undefined,
-          budgetMode: publishMode === 'new_campaign' ? budgetMode : publishMode === 'new_adset' ? 'ABO' as BudgetMode : undefined,
+          budgetMode: publishMode === 'new_campaign' ? budgetMode : publishMode === 'new_adset' ? (existingCampaignBudgetMode || 'ABO') : undefined,
           adsetName: publishMode !== 'existing_adset' ? adsetName : undefined,
           dailyBudget: publishMode !== 'existing_adset' ? dailyBudget : undefined,
           landingPageUrl,
@@ -1819,16 +1834,22 @@ const AdPublisher = () => {
                           className="form-input"
                         />
                       </div>
-                      <div className="form-group">
-                        <label className="form-label">Daily Budget ($)</label>
-                        <input
-                          type="number"
-                          value={dailyBudget}
-                          onChange={e => setDailyBudget(Number(e.target.value))}
-                          className="form-input"
-                          min={1}
-                        />
-                      </div>
+                      {existingCampaignBudgetMode === 'CBO' ? (
+                        <div className="form-group">
+                          <span className="form-sublabel">Budget is managed at the campaign level (CBO)</span>
+                        </div>
+                      ) : (
+                        <div className="form-group">
+                          <label className="form-label">Daily Budget ($)</label>
+                          <input
+                            type="number"
+                            value={dailyBudget}
+                            onChange={e => setDailyBudget(Number(e.target.value))}
+                            className="form-input"
+                            min={1}
+                          />
+                        </div>
+                      )}
                     </>
                   )}
                   {publishMode === 'new_campaign' && (
@@ -1985,7 +2006,11 @@ const AdPublisher = () => {
                       </div>
                       <div className="summary-item">
                         <span className="summary-label">Budget</span>
-                        <span className="summary-value">${dailyBudget}/day ({publishMode === 'new_adset' ? 'Ad Set' : budgetMode})</span>
+                        <span className="summary-value">
+                          {publishMode === 'new_adset' && existingCampaignBudgetMode === 'CBO'
+                            ? 'Managed by campaign (CBO)'
+                            : `$${dailyBudget}/day (${publishMode === 'new_adset' ? 'Ad Set' : budgetMode})`}
+                        </span>
                       </div>
                       {needsConversionTracking(effectiveCampaignObjective) && (
                         <div className="summary-item">
