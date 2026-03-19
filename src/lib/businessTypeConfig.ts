@@ -176,9 +176,21 @@ const LEAD_INTENT_CONFIG: CampaignIntentConfig = {
   aiRetentionContext: LEADGEN_CONFIG.aiRetentionContext,
 };
 
+const QUIZ_INTENT_CONFIG: CampaignIntentConfig = {
+  label: 'Quiz / Assessment Funnel',
+  description: 'Quiz funnel campaign — drive quiz completions that lead to sales',
+  defaultObjective: 'OUTCOME_LEADS',
+  defaultConversionEvent: 'LEAD',
+  defaultCTAType: 'LEARN_MORE',
+  aiConversionLanguage: `When we say "conversion", we mean a QUIZ or ASSESSMENT completion. The ad drives traffic to an interactive quiz/assessment. The user answers questions and receives a personalized result, which then presents a relevant product or service offer. The funnel is: Ad → Quiz → Personalized Result → Offer/Sale. At the ad level, optimize for quiz starts and completions (tracked as leads). The ultimate business goal is sales, but the ad copy should sell the QUIZ EXPERIENCE, not the product directly.`,
+  aiPsychologyShifts: `fear_elimination should focus on quiz-specific fears: "will I learn something uncomfortable about myself", "is this just a gimmick to sell me something", "will this waste my time", "what if my results are bad". Counter these with: the quiz is free, takes 2 minutes, no email required (if applicable), and the results are genuinely valuable regardless of whether they buy anything. The PRIMARY psychological lever is CURIOSITY — the irresistible desire to discover something hidden about themselves.`,
+  aiRetentionContext: `This person has ALREADY TAKEN THE QUIZ. They have their personalized results and know their "type" or profile. They may or may not have purchased after seeing the offer. Your job is to re-engage based on their quiz results — reference the self-discovery they experienced, deepen the insight from their results, and position the product as the next step in their personal journey. Use identity-based language tied to their quiz outcome.`,
+};
+
 const INTENT_CONFIGS: Record<CampaignIntent, CampaignIntentConfig> = {
   purchase: PURCHASE_INTENT_CONFIG,
   lead: LEAD_INTENT_CONFIG,
+  quiz: QUIZ_INTENT_CONFIG,
 };
 
 export function getCampaignIntentConfig(intent: CampaignIntent): CampaignIntentConfig {

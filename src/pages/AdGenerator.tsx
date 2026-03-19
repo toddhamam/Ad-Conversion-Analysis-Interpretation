@@ -166,11 +166,26 @@ const AdGenerator = () => {
   const navigate = useNavigate();
   const { accountBusinessType: businessType } = useAdAccount();
 
-  // Campaign intent for hybrid accounts — controls AI prompts + publisher defaults
-  const [campaignIntent, setCampaignIntent] = useState<CampaignIntent>('purchase');
-  const effectiveIntent: CampaignIntent = businessType === 'hybrid'
-    ? campaignIntent
-    : (businessType === 'leadgen' ? 'lead' : 'purchase');
+  // Campaign intent — controls AI prompts + publisher defaults.
+  // Default based on business type; user can override (e.g. quiz funnel).
+  const [campaignIntent, setCampaignIntent] = useState<CampaignIntent>(
+    businessType === 'leadgen' ? 'lead' : 'purchase'
+  );
+  const userChangedIntentRef = useRef(false);
+  const effectiveIntent: CampaignIntent = campaignIntent;
+
+  // Sync default intent when businessType resolves asynchronously (e.g. leadgen
+  // loads after initial ecommerce fallback), but only if the user hasn't manually
+  // changed it yet.
+  const prevBusinessTypeRef = useRef(businessType);
+  useEffect(() => {
+    if (businessType !== prevBusinessTypeRef.current) {
+      prevBusinessTypeRef.current = businessType;
+      if (!userChangedIntentRef.current) {
+        setCampaignIntent(businessType === 'leadgen' ? 'lead' : 'purchase');
+      }
+    }
+  }, [businessType]);
 
   // Render tracking for debugging Chrome crashes
   const renderCountRef = useRef(0);
@@ -1380,59 +1395,28 @@ const AdGenerator = () => {
         <section className="config-panel">
           <h3 className="config-title">Step 1: {copySource === 'generate' ? 'Audience & Concept' : 'Audience & Copy'}</h3>
 
-          {/* Campaign Goal — interactive for hybrid, read-only indicator for ecom/leadgen */}
-          {businessType === 'hybrid' ? (
-            <div className="config-section">
-              <label className="config-label">Campaign Goal</label>
-              <p className="config-hint">What is this campaign optimizing for?</p>
-              <div className="campaign-intent-options" style={{ display: 'flex', gap: '12px' }}>
-                {([
-                  { id: 'purchase' as CampaignIntent, label: 'Sell a Product', desc: 'Optimize for purchases & ROAS', icon: '🛒' },
-                  { id: 'lead' as CampaignIntent, label: 'Generate Leads', desc: 'Optimize for leads, calls & opt-ins', icon: '📞' },
-                ] as const).map(option => (
-                  <button
-                    key={option.id}
-                    className={`copy-source-btn ${campaignIntent === option.id ? 'active' : ''}`}
-                    onClick={() => setCampaignIntent(option.id)}
-                    style={{ flex: 1 }}
-                  >
-                    <span className="copy-source-name">{option.icon} {option.label}</span>
-                    <span className="copy-source-desc">{option.desc}</span>
-                  </button>
-                ))}
-              </div>
+          {/* Campaign Goal — always interactive so any account can select quiz funnel */}
+          <div className="config-section">
+            <label className="config-label">Campaign Goal</label>
+            <p className="config-hint">What is this campaign optimizing for?</p>
+            <div className="campaign-intent-options" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              {([
+                { id: 'purchase' as CampaignIntent, label: 'Sell a Product', desc: 'Optimize for purchases & ROAS', icon: '🛒' },
+                { id: 'lead' as CampaignIntent, label: 'Generate Leads', desc: 'Optimize for leads, calls & opt-ins', icon: '📞' },
+                { id: 'quiz' as CampaignIntent, label: 'Quiz / Assessment', desc: 'Drive quiz completions that lead to sales', icon: '🧠' },
+              ] as const).map(option => (
+                <button
+                  key={option.id}
+                  className={`copy-source-btn ${campaignIntent === option.id ? 'active' : ''}`}
+                  onClick={() => { userChangedIntentRef.current = true; setCampaignIntent(option.id); }}
+                  style={{ flex: 1, minWidth: '140px' }}
+                >
+                  <span className="copy-source-name">{option.icon} {option.label}</span>
+                  <span className="copy-source-desc">{option.desc}</span>
+                </button>
+              ))}
             </div>
-          ) : (
-            <div className="config-section">
-              <label className="config-label">Campaign Context</label>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: '10px',
-                padding: '12px 16px',
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--border-primary)',
-                borderRadius: '10px',
-              }}>
-                <span style={{ fontSize: '20px' }}>{businessType === 'leadgen' ? '📞' : '🛒'}</span>
-                <div>
-                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '14px' }}>
-                    {businessType === 'leadgen' ? 'Lead Generation' : 'E-commerce'}
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    {businessType === 'leadgen'
-                      ? 'AI copy is optimized for lead submissions, calls & opt-ins'
-                      : 'AI copy is optimized for purchases & ROAS'}
-                  </div>
-                </div>
-                <span style={{
-                  marginLeft: 'auto', fontSize: '11px', color: 'var(--text-muted)',
-                  padding: '2px 8px', background: 'var(--bg-card)', borderRadius: '6px',
-                  border: '1px solid var(--border-primary)',
-                }}>
-                  Set in Integrations
-                </span>
-              </div>
-            </div>
-          )}
+          </div>
 
           {/* Copy Source Selection */}
           <div className="config-section">

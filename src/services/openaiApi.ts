@@ -2319,8 +2319,8 @@ export async function generateCopyOptions(config: {
   const copyVariation = config.copyVariationLevel ?? 30;
   const copyLengthConfig = COPY_LENGTH_OPTIONS.find(opt => opt.id === copyLength) ?? COPY_LENGTH_OPTIONS[0];
   const btConfig = getBusinessTypeConfig(config.businessType || 'ecommerce');
-  // For hybrid accounts, use intent-specific AI context
-  const intentConfig = (config.businessType === 'hybrid' && config.campaignIntent)
+  // Use intent-specific AI context when a campaign intent is set
+  const intentConfig = (config.campaignIntent)
     ? getCampaignIntentConfig(config.campaignIntent)
     : null;
   console.log(`📝 Generating copy options for ${config.audienceType} audience with ${config.conceptType} concept | IQ Level: ${reasoningEffort} | Copy Length: ${copyLength} | Copy Variation: ${copyVariation}%`);
@@ -2649,8 +2649,9 @@ NOTE: No analysis data is available. Run Channel Analysis first for data-driven 
   const effectivePsychologyShifts = intentConfig?.aiPsychologyShifts || btConfig.aiPsychologyShifts;
   const effectiveRetentionContext = intentConfig?.aiRetentionContext || btConfig.aiRetentionContext;
   systemPrompt += `\n\nBUSINESS CONTEXT:\n${effectiveConversionLanguage}`;
-  if (config.businessType === 'hybrid' && config.campaignIntent) {
-    systemPrompt += `\n\nCAMPAIGN INTENT: This creative is for a "${intentConfig?.label}" campaign. Focus copy on driving ${config.campaignIntent === 'purchase' ? 'purchases and sales' : 'lead submissions, call bookings, or opt-ins'}. Use the relevant patterns from the analysis for this intent type.`;
+  if (config.campaignIntent) {
+    const intentFocusDesc = config.campaignIntent === 'purchase' ? 'purchases and sales' : config.campaignIntent === 'quiz' ? 'quiz/assessment completions (the ad sells the quiz experience, not the product directly — curiosity and self-discovery are the primary hooks)' : 'lead submissions, call bookings, or opt-ins';
+    systemPrompt += `\n\nCAMPAIGN INTENT: This creative is for a "${intentConfig?.label}" campaign. Focus copy on driving ${intentFocusDesc}. Use the relevant patterns from the analysis for this intent type.`;
   }
 
   // Build product context section
@@ -2966,7 +2967,7 @@ ${bv.distinctiveTraits?.length ? `Traits: ${bv.distinctiveTraits.join('; ')}` : 
 4. ${META_AD_POLICY_PROMPT}`;
 
   // Inject business context (use intent-specific language for hybrid)
-  const regenIntentConfig = (config.businessType === 'hybrid' && config.campaignIntent)
+  const regenIntentConfig = (config.campaignIntent)
     ? getCampaignIntentConfig(config.campaignIntent)
     : null;
   const regenConversionLanguage = regenIntentConfig?.aiConversionLanguage || btConfig.aiConversionLanguage;
@@ -2979,8 +2980,9 @@ ${bv.distinctiveTraits?.length ? `Traits: ${bv.distinctiveTraits.join('; ')}` : 
       systemPrompt += `\n\nRETENTION CONTEXT: ${regenRetentionContext}`;
     }
   }
-  if (config.businessType === 'hybrid' && config.campaignIntent) {
-    systemPrompt += `\n\nCAMPAIGN INTENT: This creative is for a "${regenIntentConfig?.label}" campaign. Focus on driving ${config.campaignIntent === 'purchase' ? 'purchases and sales' : 'lead submissions, call bookings, or opt-ins'}.`;
+  if (config.campaignIntent) {
+    const regenIntentFocusDesc = config.campaignIntent === 'purchase' ? 'purchases and sales' : config.campaignIntent === 'quiz' ? 'quiz/assessment completions (sell the quiz experience, not the product directly)' : 'lead submissions, call bookings, or opt-ins';
+    systemPrompt += `\n\nCAMPAIGN INTENT: This creative is for a "${regenIntentConfig?.label}" campaign. Focus on driving ${regenIntentFocusDesc}.`;
   }
 
   // Build product context
@@ -3514,13 +3516,15 @@ Explore fresh visual directions while maintaining professional quality.`,
   );
 
   // Inject campaign intent visual direction for hybrid accounts
-  if (config.businessType === 'hybrid' && config.campaignIntent) {
+  if (config.campaignIntent) {
     const imgIntentConfig = getCampaignIntentConfig(config.campaignIntent);
     promptParts.push(
       `CAMPAIGN INTENT: ${imgIntentConfig.label}`,
       `- ${imgIntentConfig.description}`,
       `- ${config.campaignIntent === 'purchase'
         ? 'Visual should emphasize the product, its value, and the purchase outcome — show what the buyer gets'
+        : config.campaignIntent === 'quiz'
+        ? 'Visual should evoke curiosity and self-discovery — abstract imagery of hidden layers, identity, or inner exploration. Avoid showing the product. The visual should make the viewer wonder "what will I discover about myself?"'
         : 'Visual should emphasize the transformation, the result of taking action — consultation, freedom, next step'}`,
       ''
     );
@@ -4043,7 +4047,7 @@ export async function generateVideoStoryboard(config: {
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
 
   // Build intent-aware system prompt for hybrid accounts
-  const storyboardIntentConfig = (config.businessType === 'hybrid' && config.campaignIntent)
+  const storyboardIntentConfig = (config.campaignIntent)
     ? getCampaignIntentConfig(config.campaignIntent)
     : null;
   const storyboardIntentContext = storyboardIntentConfig
@@ -4230,7 +4234,7 @@ export async function generateAdVideoWithVeo(config: {
   );
 
   // Inject campaign intent for hybrid accounts
-  if (config.businessType === 'hybrid' && config.campaignIntent) {
+  if (config.campaignIntent) {
     const veoIntentConfig = getCampaignIntentConfig(config.campaignIntent);
     promptParts.push(
       `CAMPAIGN INTENT: ${veoIntentConfig.label}`,
@@ -4853,7 +4857,7 @@ export async function generateTextAdCopy(config: {
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
 
   // Intent-specific context for hybrid accounts
-  const textIntentConfig = (config.businessType === 'hybrid' && config.campaignIntent)
+  const textIntentConfig = (config.campaignIntent)
     ? getCampaignIntentConfig(config.campaignIntent)
     : null;
   const textConversionLanguage = textIntentConfig?.aiConversionLanguage || btConfig.aiConversionLanguage;
