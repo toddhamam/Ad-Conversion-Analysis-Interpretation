@@ -3671,7 +3671,7 @@ Explore fresh visual directions while maintaining professional quality.`,
     try {
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout per request
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout — reference images can be 25-50MB
         try {
           response = await fetch(apiUrl, {
             method: 'POST',
@@ -3770,7 +3770,7 @@ Explore fresh visual directions while maintaining professional quality.`,
       }
       // Convert AbortError (timeout) to a descriptive message
       if (err instanceof DOMException && err.name === 'AbortError') {
-        lastError = new Error(`Image generation timed out after 60s (${model})`);
+        lastError = new Error(`Image generation timed out after 120s (${model})`);
       } else {
         lastError = err instanceof Error ? err : new Error(String(err));
       }
@@ -4602,7 +4602,9 @@ export async function regenerateAllImages(config: {
     });
     const firstError = failedResults[0].reason;
     const errorMessage = firstError?.message || String(firstError);
-    if (errorMessage.includes('429') || errorMessage.includes('quota')) {
+    if (errorMessage.includes('timed out')) {
+      imageError = `${images.length} of ${config.variationCount} images generated before timeout. You can regenerate the failed slots individually, or try reducing the number of variations.`;
+    } else if (errorMessage.includes('429') || errorMessage.includes('quota')) {
       imageError = 'Image generation quota exceeded. Please wait a few minutes and try again, or check your billing settings.';
     } else if (errorMessage.includes('503') || errorMessage.includes('overloaded') || errorMessage.includes('500')) {
       imageError = 'Image generation service is temporarily overloaded. Both primary and fallback models were tried. Please try again in a few minutes.';
