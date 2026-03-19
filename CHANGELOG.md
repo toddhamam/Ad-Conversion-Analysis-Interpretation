@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-03-19 — First-person voice for product-linked ad copy
+
+### What
+Ad copy generation now defaults to first-person voice when a product context is set. The author speaks directly to the prospect instead of being referred to in third person ("Marcus Reid reveals..." → "I discovered...").
+
+### Changed
+- **`src/services/openaiApi.ts`** — Added `VOICE:` prompt instruction to all 3 copy generation paths: main copy generation, regeneration/more options, and text-only ad generation. Image and video prompts are unaffected (visual, not copy).
+
 ## 2026-03-19 — Move Product Configurator to Integrations (ad account level)
 
 ### What
