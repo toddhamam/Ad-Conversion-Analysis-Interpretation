@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-03-19 — Fix Gemini image generation timeout for 5+ variations
+
+### What
+Increased the Gemini image generation `AbortController` timeout from 60s to 120s per request. When generating 5 ad images with large reference image payloads (25-50MB of base64), the 60s limit was too tight — typically only 3 images would complete before the timeout killed remaining requests.
+
+### Changed
+- **`src/services/openaiApi.ts`** — Bumped `AbortController` timeout from 60s to 120s in `generateAdImageWithGemini`; updated timeout error message to reflect new limit; added timeout-specific user-friendly error in `regenerateAllImages` that reports how many images succeeded (e.g. "3 of 5 images generated before timeout")
+- **`CLAUDE.md`** — Updated documented timeout values from 60s to 120s in both "Things to Avoid" and "Timeouts & Retry Policy" sections
+
 ## 2026-03-19 — First-person voice for product-linked ad copy
 
 ### What
