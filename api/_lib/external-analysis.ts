@@ -313,7 +313,7 @@ export async function analyzeServerSide(
   datePreset: string,
   businessType?: string,
 ): Promise<ServerAnalysisResult> {
-  const openaiApiKey = process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+  const openaiApiKey = process.env.OPENAI_API_KEY;
   if (!openaiApiKey) {
     throw new Error('OpenAI API key not configured');
   }

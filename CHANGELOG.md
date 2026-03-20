@@ -25,6 +25,24 @@ Users were generating all content from scratch each time. Now they can save prov
   - **Step 2 (Copy Selection)**: "Add from Swipe Library" button appends saved items alongside AI-generated options
   - **Step 3 (Final Config)**: Library image picker with thumbnail preview; no-credit generation path that skips AI APIs and credit reservation entirely
 
+## 2026-03-20 — Fix OpenAI API key exposure — route all calls through backend proxy
+
+### What
+OpenAI detected our API key leaked in the client-side JavaScript bundle and disabled it. The root cause was `VITE_OPENAI_API_KEY` — Vite's `VITE_` prefix bundles env vars into the browser output, making the key visible to anyone inspecting the page source.
+
+### Fix
+Removed the direct browser-to-OpenAI path entirely. All OpenAI API calls now route exclusively through the existing backend proxy (`/api/ai/chat` and `/api/ai/images` in `api/meta.ts`), which uses `OPENAI_API_KEY` (no VITE_ prefix) — a server-side-only env var that never reaches the browser. The backend streams SSE responses to avoid Vercel's 60s function timeout; the frontend reassembles the stream into a standard JSON response so all existing callers continue working without changes.
+
+### Changed
+- **`src/services/openaiApi.ts`** — Rewrote `openaiProxy()` to always use the backend proxy with SSE stream reassembly; removed `VITE_OPENAI_API_KEY`, `OPENAI_API_URL`, and `OPENAI_IMAGES_URL` constants; updated `isOpenAIConfigured()` and logging
+- **`api/_lib/external-analysis.ts`** — Removed `VITE_OPENAI_API_KEY` fallback, now only reads `OPENAI_API_KEY`
+
+### Action Required
+1. Generate a new OpenAI API key (the old one was disabled by OpenAI)
+2. Set `OPENAI_API_KEY` (no VITE_ prefix) in Vercel environment variables
+3. Delete `VITE_OPENAI_API_KEY` from Vercel environment variables
+4. Redeploy
+
 ## 2026-03-19 — Fix Gemini image generation timeout for 5+ variations
 
 ### What
