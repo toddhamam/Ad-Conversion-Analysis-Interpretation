@@ -17,11 +17,16 @@ if (import.meta.env.DEV) {
 // Note: StrictMode temporarily disabled to debug rendering issues
 // StrictMode causes double-rendering in development which can cause issues
 // with async operations and localStorage parsing
-// React 19 error handlers forward errors to Sentry
+// React 19 error handlers forward errors to Sentry AND console
+const wrapErrorHandler = (handler: ReturnType<typeof Sentry.reactErrorHandler>) =>
+  (error: unknown, errorInfo: unknown) => {
+    console.error('[React Error]', error, errorInfo);
+    handler(error as Error, errorInfo as { componentStack?: string });
+  };
 createRoot(document.getElementById('root')!, {
-  onUncaughtError: Sentry.reactErrorHandler(),
-  onCaughtError: Sentry.reactErrorHandler(),
-  onRecoverableError: Sentry.reactErrorHandler(),
+  onUncaughtError: wrapErrorHandler(Sentry.reactErrorHandler()),
+  onCaughtError: wrapErrorHandler(Sentry.reactErrorHandler()),
+  onRecoverableError: wrapErrorHandler(Sentry.reactErrorHandler()),
 }).render(
   // <StrictMode>
     <HelmetProvider>

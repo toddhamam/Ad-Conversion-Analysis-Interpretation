@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-03-20 — Fix Insights blank page crash from missing analysis data
+
+### What
+The `/insights` page showed a completely blank white screen — no sidebar, no header, nothing — when cached channel analysis data was missing expected properties like `recommendations`, `performanceBreakdown`, or `audienceInsights`.
+
+### Why
+`ChannelInsightsPanel` accessed nested properties like `analysis.recommendations.immediate` without null-checking the parent object. When cached analysis data (from localStorage) had an older format that didn't include all expected sections, accessing `.immediate` on `undefined` threw a `TypeError` that tore down the entire React tree. The error was invisible in the browser console because `Sentry.reactErrorHandler()` in `main.tsx` silently captured errors without logging them.
+
+### Changed
+- **`src/components/ChannelInsightsPanel.tsx`** — Added null guards for all top-level analysis sub-objects (`performanceBreakdown`, `winningPatterns`, `losingPatterns`, `audienceInsights`, `recommendations`). Each section now conditionally renders only when its data exists, preventing crashes from incomplete or stale cached data.
+- **`src/main.tsx`** — Wrapped React 19 error handlers to also `console.error` the error alongside sending to Sentry, so future crashes are visible in the browser console instead of being silently swallowed.
+
 ## 2026-03-20 — Fix missing conversion ads — broaden Meta action type matching + add pagination
 
 ### What
