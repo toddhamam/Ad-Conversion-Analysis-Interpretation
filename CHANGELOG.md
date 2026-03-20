@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-03-20 — Fix OpenAI copy generation timeout after backend proxy migration
+
+### What
+Lowered default GPT-5.4 reasoning effort from `high` to `medium` to prevent `FUNCTION_INVOCATION_TIMEOUT` errors during CreativeIQ copy generation.
+
+### Why
+PR #351 moved all OpenAI calls from direct browser→OpenAI to a backend proxy (`api/meta.ts`) so the API key never reaches the browser. However, the proxy runs as a Vercel serverless function with a 60-second timeout (Hobby plan max). GPT-5.4 with `reasoning_effort: 'high'` on large CreativeIQ prompts (channel analysis + top ads + product context + ad library inspirations) routinely exceeded 60s during the reasoning phase, causing the function to be killed before any tokens could stream back.
+
+### Changed
+- `DEFAULT_REASONING_EFFORT`: `'high'` → `'medium'` — affects copy generation, storyboards, text ad copy
+- `ANALYSIS_REASONING_EFFORT`: `'high'` → `'medium'` — affects ad analysis and channel analysis
+- Updated code comment to document the 60s backend proxy constraint
+
 ## 2026-03-20 — Cache Meta Ads data to avoid re-syncing on every page visit
 
 ### What
