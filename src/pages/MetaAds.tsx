@@ -131,6 +131,24 @@ const MetaAds = () => {
   const [savingAdId, setSavingAdId] = useState<string | null>(null);
   const [savingAll, setSavingAll] = useState(false);
 
+  // Selective save modal
+  const [selectSaveCreative, setSelectSaveCreative] = useState<AdCreative | null>(null);
+  const [saveSelection, setSaveSelection] = useState({ headline: true, body: true, image: true });
+
+  // Save feedback toast
+  const [saveToast, setSaveToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const saveToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Track failed image loads for UI fallback
+  const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
+
+  // Show toast with auto-dismiss
+  const showToast = useCallback((type: 'success' | 'error', message: string) => {
+    if (saveToastTimer.current) clearTimeout(saveToastTimer.current);
+    setSaveToast({ type, message });
+    saveToastTimer.current = setTimeout(() => setSaveToast(null), 4000);
+  }, []);
+
   // Update cached image IDs when cache changes
   const refreshCachedIds = useCallback(() => {
     const stats = getCacheStats();
@@ -167,10 +185,28 @@ const MetaAds = () => {
     }
   };
 
-  // Save ad elements to Swipe Library
-  const handleSaveToLibrary = async (creative: AdCreative) => {
-    if (!currentAccount?.ad_account_id) return;
+  // Open selective save modal for an ad
+  const openSaveModal = (creative: AdCreative) => {
+    const hasImage = !!(creative.imageUrl && !failedImageIds.has(creative.id) && getCachedImage(creative.id));
+    setSaveSelection({
+      headline: !!creative.headline,
+      body: !!creative.bodySnippet,
+      image: hasImage,
+    });
+    setSelectSaveCreative(creative);
+  };
+
+  // Perform save with selected elements
+  const performSave = async (creative: AdCreative, selection?: { headline: boolean; body: boolean; image: boolean }) => {
+    if (!currentAccount?.ad_account_id) {
+      showToast('error', 'No ad account configured');
+      return;
+    }
+
+    const sel = selection || saveSelection;
     setSavingAdId(creative.id);
+    setSelectSaveCreative(null);
+
     try {
       const items: SwipeLibrarySavePayload[] = [];
       const perf = {
@@ -181,7 +217,8 @@ const MetaAds = () => {
         conversions: creative.conversions,
         spend: creative.spend,
       };
-      if (creative.headline) {
+
+      if (sel.headline && creative.headline) {
         items.push({
           element_type: 'headline',
           text_content: creative.headline,
@@ -192,7 +229,8 @@ const MetaAds = () => {
           performance_snapshot: perf,
         });
       }
-      if (creative.bodySnippet) {
+
+      if (sel.body && creative.bodySnippet) {
         items.push({
           element_type: 'body_copy',
           text_content: creative.bodySnippet,
@@ -203,10 +241,10 @@ const MetaAds = () => {
           performance_snapshot: perf,
         });
       }
-      if (creative.imageUrl) {
+
+      if (sel.image && creative.imageUrl) {
         const cached = getCachedImage(creative.id);
         if (cached) {
-          // Generate thumbnail: resize to 200px wide
           const img = new Image();
           img.src = `data:${cached.mimeType || 'image/jpeg'};base64,${cached.base64Data}`;
           await new Promise<void>((resolve) => { img.onload = () => resolve(); img.onerror = () => resolve(); });
@@ -232,28 +270,53 @@ const MetaAds = () => {
           });
         }
       }
-      if (items.length > 0) {
-        await saveToSwipeLibrary(currentAccount.ad_account_id, items);
+
+      if (items.length === 0) {
+        showToast('error', 'No elements selected to save');
+        return;
+      }
+
+      const result = await saveToSwipeLibrary(currentAccount.ad_account_id, items);
+      setSavedAdIds(prev => new Set(prev).add(creative.id));
+
+      const types = items.map(i => i.element_type === 'body_copy' ? 'body' : i.element_type).join(', ');
+      if (result.saved > 0) {
+        showToast('success', `Saved ${result.saved} element${result.saved > 1 ? 's' : ''} (${types})`);
+      } else if (result.duplicates > 0) {
+        showToast('success', 'Already in your library');
         setSavedAdIds(prev => new Set(prev).add(creative.id));
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to save to Swipe Library:', err);
+      const msg = err instanceof Error ? err.message : 'Save failed';
+      showToast('error', msg.includes('Unauthorized') ? 'Please sign in to save' : `Save failed: ${msg}`);
     } finally {
       setSavingAdId(null);
     }
   };
 
-  // Bulk save all winning ads to Swipe Library
+  // Bulk save all winning ads to Swipe Library (saves all elements)
   const handleSaveAllWinning = async () => {
-    const winning = creatives.filter(c => c.status === 'Winning');
+    const winning = creatives.filter(c => c.status === 'Winning' && c.conversions > 0);
     if (winning.length === 0) return;
     setSavingAll(true);
-    for (const creative of winning) {
-      if (!savedAdIds.has(creative.id)) {
-        await handleSaveToLibrary(creative);
+    try {
+      let savedCount = 0;
+      for (const creative of winning) {
+        if (!savedAdIds.has(creative.id)) {
+          await performSave(creative, { headline: true, body: true, image: true });
+          savedCount++;
+        }
       }
+      if (savedCount > 0) {
+        showToast('success', `Saved elements from ${savedCount} winning ad${savedCount > 1 ? 's' : ''}`);
+      }
+    } catch (err: unknown) {
+      console.error('Bulk save error:', err);
+      showToast('error', 'Some ads failed to save');
+    } finally {
+      setSavingAll(false);
     }
-    setSavingAll(false);
   };
 
   // Check which ads are already saved on load
@@ -393,8 +456,12 @@ const MetaAds = () => {
     endDate: defaultDates.endDate,
   });
 
-  // Sort creatives by conversion rate (best performers first)
-  const sortedCreatives = [...creatives].sort((a, b) => b.conversionRate - a.conversionRate);
+  // Filter out zero-conversion ads (not useful in the UI — zero-conv ads are
+  // still included in backend channel analysis for the full picture)
+  // Sort by conversion rate (best performers first)
+  const sortedCreatives = [...creatives]
+    .filter(c => c.conversions > 0)
+    .sort((a, b) => b.conversionRate - a.conversionRate);
 
   const loadMetaData = useCallback(async (dateOptions?: DateRangeOptions) => {
     console.log('🚀 Starting Meta data load...', dateOptions);
@@ -611,10 +678,10 @@ const MetaAds = () => {
             </div>
 
             {/* AD CREATIVE IMAGE/VIDEO - 1080x1080 format */}
-            {creative.imageUrl ? (
+            {creative.imageUrl && !failedImageIds.has(creative.id) ? (
               <div style={{
                 width: '100%',
-                aspectRatio: '1 / 1',  // Square format for 1080x1080 images
+                aspectRatio: '1 / 1',
                 overflow: 'hidden',
                 borderRadius: '8px',
                 marginBottom: '16px'
@@ -625,42 +692,15 @@ const MetaAds = () => {
                   style={{
                     width: '100%',
                     height: '100%',
-                    objectFit: 'cover',  // Crop to fit if needed
+                    objectFit: 'cover',
                     display: 'block'
                   }}
-                  onError={(e) => {
-                    console.error(`❌ Image failed to load for ad ${creative.id}:`, creative.imageUrl);
-                    // Show placeholder instead of hiding
-                    const parent = e.currentTarget.parentElement;
-                    if (parent) {
-                      parent.innerHTML = `
-                        <div style="
-                          width: 100%;
-                          height: 100%;
-                          display: flex;
-                          align-items: center;
-                          justify-content: center;
-                          background: var(--surface-secondary);
-                          border-radius: 8px;
-                        ">
-                          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                            <circle cx="8.5" cy="8.5" r="1.5"/>
-                            <polyline points="21 15 16 10 5 21"/>
-                          </svg>
-                        </div>
-                      `;
-                    }
+                  onError={() => {
+                    setFailedImageIds(prev => new Set(prev).add(creative.id));
                   }}
                   onLoad={(e) => {
-                    console.log(`✅ Image loaded successfully for ad ${creative.id}`);
-                    // Capture the image for use in ad generation
                     const imgElement = e.currentTarget as HTMLImageElement;
-                    const captured = captureImage(imgElement, creative.id, creative.conversionRate, creative.headline, creative.bodySnippet);
-                    if (captured) {
-                      const stats = getCacheStats();
-                      console.log(`📸 Image cache now has ${stats.count} images (top: ${stats.topConversionRate.toFixed(1)}% conv rate)`);
-                    }
+                    captureImage(imgElement, creative.id, creative.conversionRate, creative.headline, creative.bodySnippet);
                   }}
                 />
               </div>
@@ -670,15 +710,20 @@ const MetaAds = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'var(--surface-secondary)',
+                background: 'var(--bg-secondary)',
                 borderRadius: '8px',
-                marginBottom: '16px'
+                marginBottom: '16px',
+                color: 'var(--text-muted)',
+                fontSize: '12px',
+                flexDirection: 'column',
+                gap: '8px'
               }}>
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
                   <circle cx="8.5" cy="8.5" r="1.5"/>
                   <polyline points="21 15 16 10 5 21"/>
                 </svg>
+                {failedImageIds.has(creative.id) && <span>Image unavailable</span>}
               </div>
             )}
 
@@ -746,7 +791,7 @@ const MetaAds = () => {
               {/* Save to Swipe Library Button */}
               <button
                 className={`save-library-btn ${savedAdIds.has(creative.id) ? 'is-saved' : ''}`}
-                onClick={() => handleSaveToLibrary(creative)}
+                onClick={() => openSaveModal(creative)}
                 disabled={savingAdId === creative.id || savedAdIds.has(creative.id)}
               >
                 {savingAdId === creative.id ? (
@@ -777,6 +822,108 @@ const MetaAds = () => {
           ad={analyzingAd}
           onClose={() => setAnalyzingAd(null)}
         />
+      )}
+
+      {/* Save to Library Modal — selective element picker */}
+      {selectSaveCreative && (
+        <div className="save-modal-overlay" onClick={() => setSelectSaveCreative(null)}>
+          <div className="save-modal" onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>
+              Save to Swipe Library
+            </h3>
+            <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: 'var(--text-muted)' }}>
+              Choose which elements to save
+            </p>
+
+            <div className="save-modal-options">
+              {selectSaveCreative.headline && (
+                <label className="save-modal-option">
+                  <input
+                    type="checkbox"
+                    checked={saveSelection.headline}
+                    onChange={e => setSaveSelection(prev => ({ ...prev, headline: e.target.checked }))}
+                  />
+                  <div className="save-modal-option-content">
+                    <span className="save-modal-option-type">Headline</span>
+                    <span className="save-modal-option-preview">{selectSaveCreative.headline}</span>
+                  </div>
+                </label>
+              )}
+
+              {selectSaveCreative.bodySnippet && (
+                <label className="save-modal-option">
+                  <input
+                    type="checkbox"
+                    checked={saveSelection.body}
+                    onChange={e => setSaveSelection(prev => ({ ...prev, body: e.target.checked }))}
+                  />
+                  <div className="save-modal-option-content">
+                    <span className="save-modal-option-type">Body Copy</span>
+                    <span className="save-modal-option-preview">{selectSaveCreative.bodySnippet}</span>
+                  </div>
+                </label>
+              )}
+
+              {selectSaveCreative.imageUrl && !failedImageIds.has(selectSaveCreative.id) && (
+                <label className="save-modal-option">
+                  <input
+                    type="checkbox"
+                    checked={saveSelection.image}
+                    onChange={e => setSaveSelection(prev => ({ ...prev, image: e.target.checked }))}
+                  />
+                  <div className="save-modal-option-content">
+                    <span className="save-modal-option-type">Image</span>
+                    {getCachedImage(selectSaveCreative.id) ? (
+                      <img
+                        src={selectSaveCreative.imageUrl}
+                        alt=""
+                        style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '6px', marginTop: '6px' }}
+                      />
+                    ) : (
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                        Image visible but not cached — will be skipped
+                      </span>
+                    )}
+                  </div>
+                </label>
+              )}
+            </div>
+
+            <div style={{
+              padding: '10px 12px',
+              background: 'rgba(168, 85, 247, 0.06)',
+              borderRadius: '8px',
+              fontSize: '12px',
+              color: 'var(--text-secondary)',
+              margin: '16px 0'
+            }}>
+              CVR {selectSaveCreative.conversionRate}% · CPA ${(selectSaveCreative.costPerConversion || 0).toFixed(2)} · {selectSaveCreative.conversions} conversions
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                className="save-modal-cancel"
+                onClick={() => setSelectSaveCreative(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="save-modal-confirm"
+                disabled={!saveSelection.headline && !saveSelection.body && !saveSelection.image}
+                onClick={() => performSave(selectSaveCreative)}
+              >
+                Save Selected
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Save feedback toast */}
+      {saveToast && (
+        <div className={`save-toast save-toast-${saveToast.type}`}>
+          {saveToast.type === 'success' ? '✓' : '⚠'} {saveToast.message}
+        </div>
       )}
     </div>
   );
