@@ -9,66 +9,107 @@ import { getAuthToken } from '../lib/authToken';
 import { getBusinessTypeConfig, getCampaignIntentConfig } from '../lib/businessTypeConfig';
 import { META_AD_POLICY_PROMPT, IMAGE_SAFETY_DIRECTIVE, POLICY_SANITIZE_PATTERNS } from './adPolicyGuard';
 
-// OpenAI API key — prefer direct browser-to-OpenAI calls (no 60s timeout).
-// Falls back to backend proxy when VITE key isn't set (degraded: 60s limit).
-const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
-const OPENAI_IMAGES_URL = 'https://api.openai.com/v1/images/generations';
-
 // ─── OpenAI API Calls ───────────────────────────────────────────────────────
-// Primary: direct browser-to-OpenAI (VITE_OPENAI_API_KEY). No serverless
-// proxy, no timeout. GPT-5.4 reasoning + vision can take 60-120s.
-// Fallback: backend proxy (/api/ai/*) with 55s timeout — degraded but
-// functional when VITE_OPENAI_API_KEY isn't set.
+// All OpenAI calls route through the backend proxy (/api/ai/*) so the API key
+// never reaches the browser. The backend streams SSE to stay within Vercel's
+// function timeout; this proxy reassembles the stream into a JSON response so
+// callers can use `await res.json()` as before.
 
 async function openaiProxy(
   endpoint: 'chat' | 'images',
   body: Record<string, unknown>
 ): Promise<Response> {
-  // Primary: direct call — no Vercel 60s limit
-  if (OPENAI_API_KEY) {
-    const url = endpoint === 'chat' ? OPENAI_API_URL : OPENAI_IMAGES_URL;
-    return fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify(body),
-    });
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('AI API not configured. Please sign in and try again.');
   }
 
-  // Fallback: proxy through backend (key is server-side).
-  // Capped at ~55s due to Vercel Hobby 60s limit — analysis may timeout
-  // on large accounts. Set VITE_OPENAI_API_KEY to remove this constraint.
-  const token = await getAuthToken();
-  if (token) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55_000);
-    try {
-      const res = await fetch(`/api/ai/${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      return res;
-    } catch (err: unknown) {
-      clearTimeout(timeoutId);
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        return new Response(JSON.stringify({
-          error: { message: 'AI analysis timed out (55s). Set VITE_OPENAI_API_KEY to remove this limit, or try with fewer ads.' },
-        }), { status: 504, headers: { 'Content-Type': 'application/json' } });
+  const res = await fetch(`/api/ai/${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  // Images endpoint returns JSON directly — no reassembly needed
+  if (endpoint === 'images') return res;
+
+  // Error responses are JSON — pass through as-is
+  if (!res.ok) return res;
+
+  // Chat endpoint returns SSE stream — reassemble into a single JSON response
+  // so callers can do `await response.json()` and get the standard OpenAI shape:
+  // { choices: [{ message: { content }, finish_reason }], model, usage }
+  if (!res.body) {
+    return new Response(JSON.stringify({
+      error: { message: 'Failed to read AI response stream' },
+    }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let fullContent = '';
+  let model = '';
+  let finishReason = '';
+  let usage: Record<string, unknown> | null = null;
+
+  try {
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      // Keep the last (possibly incomplete) line in the buffer
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.choices?.[0]?.delta?.content) {
+            fullContent += parsed.choices[0].delta.content;
+          }
+          if (parsed.choices?.[0]?.finish_reason) {
+            finishReason = parsed.choices[0].finish_reason;
+          }
+          if (parsed.model) model = parsed.model;
+          if (parsed.usage) usage = parsed.usage;
+        } catch {
+          // Skip unparseable SSE lines
+        }
       }
-      throw err;
+    }
+  } catch (err: unknown) {
+    if (fullContent) {
+      // Partial content is still usable — return what we have
+      console.warn('⚠️ SSE stream interrupted, returning partial content');
+    } else {
+      return new Response(JSON.stringify({
+        error: { message: err instanceof Error ? err.message : 'AI stream failed' },
+      }), { status: 502, headers: { 'Content-Type': 'application/json' } });
     }
   }
 
-  throw new Error('AI API not configured. Please contact support.');
+  const reassembled = {
+    choices: [{
+      message: { role: 'assistant', content: fullContent },
+      finish_reason: finishReason || 'stop',
+    }],
+    model,
+    usage,
+  };
+
+  return new Response(JSON.stringify(reassembled), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 // Google Gemini API Configuration
@@ -402,13 +443,13 @@ if (import.meta.env.DEV) {
   console.log('🎨 Gemini API Key:', GEMINI_API_KEY ? 'configured' : 'NOT CONFIGURED');
 }
 
-// Check if OpenAI is configured (direct key OR backend proxy available)
+// Check if OpenAI is configured (backend proxy available when Supabase auth is configured)
 export function isOpenAIConfigured(): boolean {
-  return !!OPENAI_API_KEY || !!import.meta.env.VITE_SUPABASE_URL;
+  return !!import.meta.env.VITE_SUPABASE_URL;
 }
 
 // Log configuration status
-console.log('🔑 OpenAI API:', OPENAI_API_KEY ? 'direct mode (no timeout)' : 'proxy fallback (55s limit)');
+console.log('🔑 OpenAI API: backend proxy mode (key stays server-side)');
 
 // Types for ad analysis
 export interface AdCreativeData {
