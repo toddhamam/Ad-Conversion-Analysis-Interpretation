@@ -401,6 +401,70 @@
   cursor: not-allowed;
 }
 
+.save-modal-title {
+  margin: 0 0 4px 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.save-modal-subtitle {
+  margin: 0 0 20px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.save-modal-option.is-saved {
+  opacity: 0.5;
+}
+
+.save-modal-saved-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.1);
+  border-radius: 4px;
+}
+
+.save-modal-image-preview {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+  margin-top: 6px;
+}
+
+.save-modal-image-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.save-modal-metrics {
+  padding: 10px 12px;
+  background: rgba(168, 85, 247, 0.06);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 16px 0;
+}
+
+.save-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.save-library-btn.is-partial {
+  color: var(--accent-violet);
+  border-color: var(--accent-violet);
+}
+
 /* ==================== Save Feedback Toast ==================== */
 
 .save-toast {

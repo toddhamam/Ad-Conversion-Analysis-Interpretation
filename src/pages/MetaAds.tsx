@@ -126,8 +126,8 @@ const MetaAds = () => {
   const [fetchingImageId, setFetchingImageId] = useState<string | null>(null);
   const autoFetchingRefsRef = useRef(false);
 
-  // Swipe Library tracking
-  const [savedAdIds, setSavedAdIds] = useState<Set<string>>(new Set());
+  // Swipe Library tracking — tracks which element types are saved per ad
+  const [savedElements, setSavedElements] = useState<Map<string, Set<string>>>(new Map());
   const [savingAdId, setSavingAdId] = useState<string | null>(null);
   const [savingAll, setSavingAll] = useState(false);
 
@@ -185,22 +185,45 @@ const MetaAds = () => {
     }
   };
 
+  // Helper: check if all available elements of an ad are already saved
+  const isFullySaved = (creative: AdCreative): boolean => {
+    const saved = savedElements.get(creative.id);
+    if (!saved) return false;
+    if (creative.headline && !saved.has('headline')) return false;
+    if (creative.bodySnippet && !saved.has('body_copy')) return false;
+    if (creative.imageUrl && !failedImageIds.has(creative.id) && getCachedImage(creative.id) && !saved.has('image')) return false;
+    return true;
+  };
+
+  // Helper: mark specific element types as saved for an ad
+  const markElementsSaved = (adId: string, types: string[]) => {
+    setSavedElements(prev => {
+      const next = new Map(prev);
+      const existing = next.get(adId) || new Set<string>();
+      const updated = new Set(existing);
+      for (const t of types) updated.add(t);
+      next.set(adId, updated);
+      return next;
+    });
+  };
+
   // Open selective save modal for an ad
   const openSaveModal = (creative: AdCreative) => {
+    const saved = savedElements.get(creative.id) || new Set<string>();
     const hasImage = !!(creative.imageUrl && !failedImageIds.has(creative.id) && getCachedImage(creative.id));
     setSaveSelection({
-      headline: !!creative.headline,
-      body: !!creative.bodySnippet,
-      image: hasImage,
+      headline: !!creative.headline && !saved.has('headline'),
+      body: !!creative.bodySnippet && !saved.has('body_copy'),
+      image: hasImage && !saved.has('image'),
     });
     setSelectSaveCreative(creative);
   };
 
-  // Perform save with selected elements
-  const performSave = async (creative: AdCreative, selection?: { headline: boolean; body: boolean; image: boolean }) => {
+  // Perform save with selected elements. Returns true on success.
+  const performSave = async (creative: AdCreative, selection?: { headline: boolean; body: boolean; image: boolean }): Promise<boolean> => {
     if (!currentAccount?.ad_account_id) {
       showToast('error', 'No ad account configured');
-      return;
+      return false;
     }
 
     const sel = selection || saveSelection;
@@ -273,23 +296,26 @@ const MetaAds = () => {
 
       if (items.length === 0) {
         showToast('error', 'No elements selected to save');
-        return;
+        return false;
       }
 
       const result = await saveToSwipeLibrary(currentAccount.ad_account_id, items);
-      setSavedAdIds(prev => new Set(prev).add(creative.id));
+      const savedTypes = items.map(i => i.element_type);
+      markElementsSaved(creative.id, savedTypes);
 
       const types = items.map(i => i.element_type === 'body_copy' ? 'body' : i.element_type).join(', ');
       if (result.saved > 0) {
         showToast('success', `Saved ${result.saved} element${result.saved > 1 ? 's' : ''} (${types})`);
       } else if (result.duplicates > 0) {
         showToast('success', 'Already in your library');
-        setSavedAdIds(prev => new Set(prev).add(creative.id));
+        markElementsSaved(creative.id, savedTypes);
       }
+      return true;
     } catch (err: unknown) {
       console.error('Failed to save to Swipe Library:', err);
       const msg = err instanceof Error ? err.message : 'Save failed';
       showToast('error', msg.includes('Unauthorized') ? 'Please sign in to save' : `Save failed: ${msg}`);
+      return false;
     } finally {
       setSavingAdId(null);
     }
@@ -303,13 +329,15 @@ const MetaAds = () => {
     try {
       let savedCount = 0;
       for (const creative of winning) {
-        if (!savedAdIds.has(creative.id)) {
-          await performSave(creative, { headline: true, body: true, image: true });
-          savedCount++;
+        if (!isFullySaved(creative)) {
+          const ok = await performSave(creative, { headline: true, body: true, image: true });
+          if (ok) savedCount++;
         }
       }
       if (savedCount > 0) {
         showToast('success', `Saved elements from ${savedCount} winning ad${savedCount > 1 ? 's' : ''}`);
+      } else {
+        showToast('error', 'No ads were saved — check your connection');
       }
     } catch (err: unknown) {
       console.error('Bulk save error:', err);
@@ -319,32 +347,36 @@ const MetaAds = () => {
     }
   };
 
-  // Check which ads are already saved on load
+  // Check which ad elements are already saved on load
   const checkSavedAds = useCallback(async (creativesData: AdCreative[]) => {
     if (!currentAccount?.ad_account_id) return;
     try {
       const allHashes: string[] = [];
-      const hashToAdId = new Map<string, string>();
+      const hashToAdInfo = new Map<string, { adId: string; elementType: string }>();
       for (const c of creativesData) {
         if (c.headline) {
           const h = await computeContentHash(c.headline);
           allHashes.push(h);
-          hashToAdId.set(h, c.id);
+          hashToAdInfo.set(h, { adId: c.id, elementType: 'headline' });
         }
         if (c.bodySnippet) {
           const h = await computeContentHash(c.bodySnippet);
           allHashes.push(h);
-          hashToAdId.set(h, c.id);
+          hashToAdInfo.set(h, { adId: c.id, elementType: 'body_copy' });
         }
       }
       if (allHashes.length === 0) return;
       const existing = await checkSavedHashes(currentAccount.ad_account_id, allHashes);
-      const ids = new Set<string>();
+      const elemMap = new Map<string, Set<string>>();
       for (const hash of existing) {
-        const adId = hashToAdId.get(hash);
-        if (adId) ids.add(adId);
+        const info = hashToAdInfo.get(hash);
+        if (info) {
+          const set = elemMap.get(info.adId) || new Set<string>();
+          set.add(info.elementType);
+          elemMap.set(info.adId, set);
+        }
       }
-      setSavedAdIds(ids);
+      setSavedElements(elemMap);
     } catch (err) {
       console.error('Failed to check saved hashes:', err);
     }
@@ -790,19 +822,24 @@ const MetaAds = () => {
 
               {/* Save to Swipe Library Button */}
               <button
-                className={`save-library-btn ${savedAdIds.has(creative.id) ? 'is-saved' : ''}`}
+                className={`save-library-btn ${isFullySaved(creative) ? 'is-saved' : savedElements.has(creative.id) ? 'is-partial' : ''}`}
                 onClick={() => openSaveModal(creative)}
-                disabled={savingAdId === creative.id || savedAdIds.has(creative.id)}
+                disabled={savingAdId === creative.id || isFullySaved(creative)}
               >
                 {savingAdId === creative.id ? (
                   <>
                     <span className="save-library-icon">⏳</span>
                     Saving...
                   </>
-                ) : savedAdIds.has(creative.id) ? (
+                ) : isFullySaved(creative) ? (
                   <>
                     <span className="save-library-icon">✓</span>
                     Saved
+                  </>
+                ) : savedElements.has(creative.id) ? (
+                  <>
+                    <span className="save-library-icon">🔖</span>
+                    Save More
                   </>
                 ) : (
                   <>
@@ -825,99 +862,100 @@ const MetaAds = () => {
       )}
 
       {/* Save to Library Modal — selective element picker */}
-      {selectSaveCreative && (
-        <div className="save-modal-overlay" onClick={() => setSelectSaveCreative(null)}>
-          <div className="save-modal" onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>
-              Save to Swipe Library
-            </h3>
-            <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: 'var(--text-muted)' }}>
-              Choose which elements to save
-            </p>
+      {selectSaveCreative && (() => {
+        const alreadySaved = savedElements.get(selectSaveCreative.id) || new Set<string>();
+        return (
+          <div className="save-modal-overlay" onClick={() => setSelectSaveCreative(null)}>
+            <div className="save-modal" onClick={e => e.stopPropagation()}>
+              <h3 className="save-modal-title">Save to Swipe Library</h3>
+              <p className="save-modal-subtitle">Choose which elements to save</p>
 
-            <div className="save-modal-options">
-              {selectSaveCreative.headline && (
-                <label className="save-modal-option">
-                  <input
-                    type="checkbox"
-                    checked={saveSelection.headline}
-                    onChange={e => setSaveSelection(prev => ({ ...prev, headline: e.target.checked }))}
-                  />
-                  <div className="save-modal-option-content">
-                    <span className="save-modal-option-type">Headline</span>
-                    <span className="save-modal-option-preview">{selectSaveCreative.headline}</span>
-                  </div>
-                </label>
-              )}
-
-              {selectSaveCreative.bodySnippet && (
-                <label className="save-modal-option">
-                  <input
-                    type="checkbox"
-                    checked={saveSelection.body}
-                    onChange={e => setSaveSelection(prev => ({ ...prev, body: e.target.checked }))}
-                  />
-                  <div className="save-modal-option-content">
-                    <span className="save-modal-option-type">Body Copy</span>
-                    <span className="save-modal-option-preview">{selectSaveCreative.bodySnippet}</span>
-                  </div>
-                </label>
-              )}
-
-              {selectSaveCreative.imageUrl && !failedImageIds.has(selectSaveCreative.id) && (
-                <label className="save-modal-option">
-                  <input
-                    type="checkbox"
-                    checked={saveSelection.image}
-                    onChange={e => setSaveSelection(prev => ({ ...prev, image: e.target.checked }))}
-                  />
-                  <div className="save-modal-option-content">
-                    <span className="save-modal-option-type">Image</span>
-                    {getCachedImage(selectSaveCreative.id) ? (
-                      <img
-                        src={selectSaveCreative.imageUrl}
-                        alt=""
-                        style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '6px', marginTop: '6px' }}
-                      />
-                    ) : (
-                      <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                        Image visible but not cached — will be skipped
+              <div className="save-modal-options">
+                {selectSaveCreative.headline && (
+                  <label className={`save-modal-option ${alreadySaved.has('headline') ? 'is-saved' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={saveSelection.headline}
+                      disabled={alreadySaved.has('headline')}
+                      onChange={e => setSaveSelection(prev => ({ ...prev, headline: e.target.checked }))}
+                    />
+                    <div className="save-modal-option-content">
+                      <span className="save-modal-option-type">
+                        Headline {alreadySaved.has('headline') && <span className="save-modal-saved-badge">Saved</span>}
                       </span>
-                    )}
-                  </div>
-                </label>
-              )}
-            </div>
+                      <span className="save-modal-option-preview">{selectSaveCreative.headline}</span>
+                    </div>
+                  </label>
+                )}
 
-            <div style={{
-              padding: '10px 12px',
-              background: 'rgba(168, 85, 247, 0.06)',
-              borderRadius: '8px',
-              fontSize: '12px',
-              color: 'var(--text-secondary)',
-              margin: '16px 0'
-            }}>
-              CVR {selectSaveCreative.conversionRate}% · CPA ${(selectSaveCreative.costPerConversion || 0).toFixed(2)} · {selectSaveCreative.conversions} conversions
-            </div>
+                {selectSaveCreative.bodySnippet && (
+                  <label className={`save-modal-option ${alreadySaved.has('body_copy') ? 'is-saved' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={saveSelection.body}
+                      disabled={alreadySaved.has('body_copy')}
+                      onChange={e => setSaveSelection(prev => ({ ...prev, body: e.target.checked }))}
+                    />
+                    <div className="save-modal-option-content">
+                      <span className="save-modal-option-type">
+                        Body Copy {alreadySaved.has('body_copy') && <span className="save-modal-saved-badge">Saved</span>}
+                      </span>
+                      <span className="save-modal-option-preview">{selectSaveCreative.bodySnippet}</span>
+                    </div>
+                  </label>
+                )}
 
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button
-                className="save-modal-cancel"
-                onClick={() => setSelectSaveCreative(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="save-modal-confirm"
-                disabled={!saveSelection.headline && !saveSelection.body && !saveSelection.image}
-                onClick={() => performSave(selectSaveCreative)}
-              >
-                Save Selected
-              </button>
+                {selectSaveCreative.imageUrl && !failedImageIds.has(selectSaveCreative.id) && (
+                  <label className={`save-modal-option ${alreadySaved.has('image') ? 'is-saved' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={saveSelection.image}
+                      disabled={alreadySaved.has('image')}
+                      onChange={e => setSaveSelection(prev => ({ ...prev, image: e.target.checked }))}
+                    />
+                    <div className="save-modal-option-content">
+                      <span className="save-modal-option-type">
+                        Image {alreadySaved.has('image') && <span className="save-modal-saved-badge">Saved</span>}
+                      </span>
+                      {getCachedImage(selectSaveCreative.id) ? (
+                        <img
+                          src={selectSaveCreative.imageUrl}
+                          alt=""
+                          className="save-modal-image-preview"
+                        />
+                      ) : (
+                        <span className="save-modal-image-note">
+                          Image visible but not cached — will be skipped
+                        </span>
+                      )}
+                    </div>
+                  </label>
+                )}
+              </div>
+
+              <div className="save-modal-metrics">
+                CVR {selectSaveCreative.conversionRate}% · CPA ${(selectSaveCreative.costPerConversion || 0).toFixed(2)} · {selectSaveCreative.conversions} conversions
+              </div>
+
+              <div className="save-modal-actions">
+                <button
+                  className="save-modal-cancel"
+                  onClick={() => setSelectSaveCreative(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="save-modal-confirm"
+                  disabled={!saveSelection.headline && !saveSelection.body && !saveSelection.image}
+                  onClick={() => performSave(selectSaveCreative)}
+                >
+                  Save Selected
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Save feedback toast */}
       {saveToast && (
