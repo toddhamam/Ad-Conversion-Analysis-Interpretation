@@ -20,6 +20,36 @@ The code was only matching one label per category. Ads tracked via CAPI or insta
   - `fetchAccountLevelInsights()` — account-level deduplicated purchases and leads
 - **`src/services/metaApi.ts`** — Added pagination to `fetchAdInsights()` — follows `paging.cursors.after` to fetch all ads (capped at 1000), instead of stopping at the first 100
 
+## 2026-03-20 — Fix OpenAI copy generation timeout after backend proxy migration
+
+### What
+Lowered default GPT-5.4 reasoning effort from `high` to `medium` to prevent `FUNCTION_INVOCATION_TIMEOUT` errors during CreativeIQ copy generation.
+
+### Why
+PR #351 moved all OpenAI calls from direct browser→OpenAI to a backend proxy (`api/meta.ts`) so the API key never reaches the browser. However, the proxy runs as a Vercel serverless function with a 60-second timeout (Hobby plan max). GPT-5.4 with `reasoning_effort: 'high'` on large CreativeIQ prompts (channel analysis + top ads + product context + ad library inspirations) routinely exceeded 60s during the reasoning phase, causing the function to be killed before any tokens could stream back.
+
+### Changed
+- `DEFAULT_REASONING_EFFORT`: `'high'` → `'medium'` — affects copy generation, storyboards, text ad copy
+- `ANALYSIS_REASONING_EFFORT`: `'high'` → `'medium'` — affects ad analysis and channel analysis
+- Updated code comment to document the 60s backend proxy constraint
+
+## 2026-03-20 — Cache Meta Ads data to avoid re-syncing on every page visit
+
+### What
+Meta Ads page now caches fetched creatives and campaign metrics in localStorage with a 7-day TTL. Navigating away and back loads instantly from cache instead of re-syncing from the Meta API every time.
+
+### Why
+Every navigation to Meta Ads triggered a full re-sync — slow, unnecessary, and burned through Meta API rate limits. Users typically only need fresh data once per week.
+
+### Added
+- **localStorage cache layer** — keyed by ad account ID, business type, and date range; 7-day TTL with automatic expiry
+- **"Re-sync" button** in the page header — forces a fresh fetch from Meta, bypassing the cache
+- **"Synced X ago" indicator** — shows when data was last fetched (e.g., "Synced 3h ago", "Synced 2d ago")
+
+### Fixed
+- `catch (err: any)` → `catch (err: unknown)` per project conventions
+- Cache-hit path now clears any previous error state to prevent stale error banners
+
 ## 2026-03-20 — Swipe Library — save and reuse winning ad elements
 
 ### What
