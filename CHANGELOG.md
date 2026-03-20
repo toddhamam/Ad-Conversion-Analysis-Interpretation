@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-03-20 — Fix missing conversion ads — broaden Meta action type matching + add pagination
+
+### What
+Only 4 out of ~20 ads with conversions were showing in the Meta Ads dashboard. The rest were invisible because the conversion matching was too narrow — it only checked one specific Meta action type per conversion category, missing conversions tracked via Conversions API (CAPI), omnipanel, or on-Facebook instant forms.
+
+### Why
+Meta reports the same conversion under different `action_type` labels depending on the tracking method:
+- **Purchases**: `offsite_conversion.fb_pixel_purchase` (pixel), `purchase` (pixel + CAPI aggregated), `omni_purchase` (omnipanel)
+- **Leads**: `lead` (aggregated), `offsite_conversion.fb_pixel_lead` (pixel), `onsite_conversion.lead_grouped` (on-Facebook forms)
+
+The code was only matching one label per category. Ads tracked via CAPI or instant forms showed 0 conversions and were filtered out of the UI.
+
+### Changed
+- **`src/services/metaApi.ts`** — Added `PURCHASE_ACTION_TYPES` and `LEAD_ACTION_TYPES` arrays with `getConversionCount()` helper that checks all related action types and returns the max value. Updated all 6 conversion-counting paths:
+  - `fetchAdCreatives()` — ad-level conversion count (ecommerce, leadgen, hybrid)
+  - `fetchTrafficTypes()` — campaign-level traffic conversions
+  - `fetchCampaignSummaries()` — purchases, purchase values, leads, and `resolveResults()` helper
+  - `fetchAccountLevelInsights()` — account-level deduplicated purchases and leads
+- **`src/services/metaApi.ts`** — Added pagination to `fetchAdInsights()` — follows `paging.cursors.after` to fetch all ads (capped at 1000), instead of stopping at the first 100
+
 ## 2026-03-20 — Swipe Library — save and reuse winning ad elements
 
 ### What
