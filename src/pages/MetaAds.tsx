@@ -28,6 +28,12 @@ import {
 import Loading from '../components/Loading';
 import { AlertTriangle, Check } from 'lucide-react';
 import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
+import {
+  saveToSwipeLibrary,
+  checkSavedHashes,
+  computeContentHash,
+  type SwipeLibrarySavePayload,
+} from '../services/swipeLibraryApi';
 import './MetaAds.css';
 
 // Helper to calculate dates from preset
@@ -120,6 +126,11 @@ const MetaAds = () => {
   const [fetchingImageId, setFetchingImageId] = useState<string | null>(null);
   const autoFetchingRefsRef = useRef(false);
 
+  // Swipe Library tracking
+  const [savedAdIds, setSavedAdIds] = useState<Set<string>>(new Set());
+  const [savingAdId, setSavingAdId] = useState<string | null>(null);
+  const [savingAll, setSavingAll] = useState(false);
+
   // Update cached image IDs when cache changes
   const refreshCachedIds = useCallback(() => {
     const stats = getCacheStats();
@@ -155,6 +166,126 @@ const MetaAds = () => {
       setFetchingImageId(null);
     }
   };
+
+  // Save ad elements to Swipe Library
+  const handleSaveToLibrary = async (creative: AdCreative) => {
+    if (!currentAccount?.ad_account_id) return;
+    setSavingAdId(creative.id);
+    try {
+      const items: SwipeLibrarySavePayload[] = [];
+      const perf = {
+        cvr: creative.conversionRate,
+        cpa: creative.costPerConversion,
+        ctr: creative.clickThroughRate,
+        roas: creative.roas,
+        conversions: creative.conversions,
+        spend: creative.spend,
+      };
+      if (creative.headline) {
+        items.push({
+          element_type: 'headline',
+          text_content: creative.headline,
+          content_hash: await computeContentHash(creative.headline),
+          meta_ad_id: creative.id,
+          meta_campaign_name: creative.campaignName,
+          meta_adset_name: creative.adsetName,
+          performance_snapshot: perf,
+        });
+      }
+      if (creative.bodySnippet) {
+        items.push({
+          element_type: 'body_copy',
+          text_content: creative.bodySnippet,
+          content_hash: await computeContentHash(creative.bodySnippet),
+          meta_ad_id: creative.id,
+          meta_campaign_name: creative.campaignName,
+          meta_adset_name: creative.adsetName,
+          performance_snapshot: perf,
+        });
+      }
+      if (creative.imageUrl) {
+        const cached = getCachedImage(creative.id);
+        if (cached) {
+          // Generate thumbnail: resize to 200px wide
+          const img = new Image();
+          img.src = `data:${cached.mimeType || 'image/jpeg'};base64,${cached.base64Data}`;
+          await new Promise<void>((resolve) => { img.onload = () => resolve(); img.onerror = () => resolve(); });
+          const canvas = document.createElement('canvas');
+          const scale = 200 / (img.naturalWidth || 200);
+          canvas.width = 200;
+          canvas.height = Math.round((img.naturalHeight || 200) * scale);
+          const ctx = canvas.getContext('2d');
+          if (ctx) ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const thumbnailDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+          const thumbnail = thumbnailDataUrl.split(',')[1];
+
+          items.push({
+            element_type: 'image',
+            image_data: cached.base64Data,
+            image_thumbnail: thumbnail,
+            image_mime_type: cached.mimeType || 'image/jpeg',
+            content_hash: await computeContentHash(cached.base64Data.slice(0, 1000)),
+            meta_ad_id: creative.id,
+            meta_campaign_name: creative.campaignName,
+            meta_adset_name: creative.adsetName,
+            performance_snapshot: perf,
+          });
+        }
+      }
+      if (items.length > 0) {
+        await saveToSwipeLibrary(currentAccount.ad_account_id, items);
+        setSavedAdIds(prev => new Set(prev).add(creative.id));
+      }
+    } catch (err) {
+      console.error('Failed to save to Swipe Library:', err);
+    } finally {
+      setSavingAdId(null);
+    }
+  };
+
+  // Bulk save all winning ads to Swipe Library
+  const handleSaveAllWinning = async () => {
+    const winning = creatives.filter(c => c.status === 'Winning');
+    if (winning.length === 0) return;
+    setSavingAll(true);
+    for (const creative of winning) {
+      if (!savedAdIds.has(creative.id)) {
+        await handleSaveToLibrary(creative);
+      }
+    }
+    setSavingAll(false);
+  };
+
+  // Check which ads are already saved on load
+  const checkSavedAds = useCallback(async (creativesData: AdCreative[]) => {
+    if (!currentAccount?.ad_account_id) return;
+    try {
+      const allHashes: string[] = [];
+      const hashToAdId = new Map<string, string>();
+      for (const c of creativesData) {
+        if (c.headline) {
+          const h = await computeContentHash(c.headline);
+          allHashes.push(h);
+          hashToAdId.set(h, c.id);
+        }
+        if (c.bodySnippet) {
+          const h = await computeContentHash(c.bodySnippet);
+          allHashes.push(h);
+          hashToAdId.set(h, c.id);
+        }
+      }
+      if (allHashes.length === 0) return;
+      const existing = await checkSavedHashes(currentAccount.ad_account_id, allHashes);
+      const ids = new Set<string>();
+      for (const hash of existing) {
+        const adId = hashToAdId.get(hash);
+        if (adId) ids.add(adId);
+      }
+      setSavedAdIds(ids);
+    } catch (err) {
+      console.error('Failed to check saved hashes:', err);
+    }
+  }, [currentAccount?.ad_account_id]);
 
   // Auto-fetch top performing ad images until we have 3 HIGH-QUALITY references
   // This ensures we always have enough quality references for ad generation
@@ -305,6 +436,9 @@ const MetaAds = () => {
 
       // Auto-fetch top performing images as references
       autoFetchTopImages(creativesData);
+
+      // Check which ads are already saved to Swipe Library
+      checkSavedAds(creativesData);
     } catch (err: any) {
       console.error('❌ Failed to load Meta data:', err);
       console.error('❌ Full error object:', err);
@@ -396,6 +530,32 @@ const MetaAds = () => {
       {/* Campaign Type Dashboard */}
       {!usingMockData && campaignMetrics.length > 0 && (
         <CampaignTypeDashboard metrics={campaignMetrics} loading={loading} businessType={businessType} />
+      )}
+
+      {creatives.some(c => c.status === 'Winning') && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+          <button
+            className="save-library-btn"
+            onClick={handleSaveAllWinning}
+            disabled={savingAll}
+            style={{
+              padding: '10px 20px',
+              background: 'rgba(212, 225, 87, 0.1)',
+              border: '1px solid rgba(212, 225, 87, 0.3)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--text-primary)',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: savingAll ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              opacity: savingAll ? 0.7 : 1,
+            }}
+          >
+            {savingAll ? '⏳ Saving...' : '🔖 Save All Winning Ads'}
+          </button>
+        </div>
       )}
 
       <div className="creative-grid">
@@ -582,6 +742,30 @@ const MetaAds = () => {
                   )}
                 </button>
               )}
+
+              {/* Save to Swipe Library Button */}
+              <button
+                className={`save-library-btn ${savedAdIds.has(creative.id) ? 'is-saved' : ''}`}
+                onClick={() => handleSaveToLibrary(creative)}
+                disabled={savingAdId === creative.id || savedAdIds.has(creative.id)}
+              >
+                {savingAdId === creative.id ? (
+                  <>
+                    <span className="save-library-icon">⏳</span>
+                    Saving...
+                  </>
+                ) : savedAdIds.has(creative.id) ? (
+                  <>
+                    <span className="save-library-icon">✓</span>
+                    Saved
+                  </>
+                ) : (
+                  <>
+                    <span className="save-library-icon">🔖</span>
+                    Save to Library
+                  </>
+                )}
+              </button>
             </div>
           </div>
         ))}

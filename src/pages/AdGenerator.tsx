@@ -46,6 +46,8 @@ import { setPublishData } from '../services/publishStore';
 import type { AdLibraryInspiration } from '../types';
 import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
 import { useAdAccount } from '../contexts/AdAccountContext';
+import SwipeLibraryPicker from '../components/SwipeLibraryPicker';
+import { fetchSwipeImage, type SwipeLibraryItem, type SwipeElementType } from '../services/swipeLibraryApi';
 import { reserveCredits, confirmCredits, refundCredits, InsufficientCreditsError, checkCredits } from '../services/stripeApi';
 import type { CreditActionType, CampaignIntent } from '../types/organization';
 import CreditExhaustionModal from '../components/CreditExhaustionModal';
@@ -164,7 +166,7 @@ const IMPORT_DATE_OPTIONS: { id: DatePreset; label: string }[] = [
 
 const AdGenerator = () => {
   const navigate = useNavigate();
-  const { accountBusinessType: businessType } = useAdAccount();
+  const { currentAccount, accountBusinessType: businessType } = useAdAccount();
 
   // Campaign intent — controls AI prompts + publisher defaults.
   // Default based on business type; user can override (e.g. quiz funnel).
@@ -305,6 +307,12 @@ const AdGenerator = () => {
 
   // Pagination state
   const [visibleAdsCount, setVisibleAdsCount] = useState(ADS_PER_PAGE);
+
+  // Swipe Library picker state
+  const [showSwipePicker, setShowSwipePicker] = useState(false);
+  const [swipePickerTypes, setSwipePickerTypes] = useState<SwipeElementType[]>(['headline', 'body_copy']);
+  const [swipePickerContext, setSwipePickerContext] = useState<'step1' | 'step2' | 'step3'>('step1');
+  const [libraryImages, setLibraryImages] = useState<SwipeLibraryItem[]>([]);
 
   // Image cache status for brand-informed generation
   const [imageCacheCount, setImageCacheCount] = useState(0);
@@ -792,6 +800,72 @@ const AdGenerator = () => {
 
   // Generate final creatives
   const handleGenerateCreatives = async () => {
+    // --- Library images path: skip AI generation & credits entirely ---
+    if (libraryImages.length > 0 && adType === 'image') {
+      setIsGeneratingCreatives(true);
+      setError(null);
+      setGenerationProgress('Loading library images...');
+
+      try {
+        // Get selected copy
+        const selectedHeadlineTexts = copyOptions?.headlines
+          .filter(h => selectedHeadlines.includes(h.id))
+          .map(h => h.text) || [];
+        const selectedBodyTextTexts = copyOptions?.bodyTexts
+          .filter(b => selectedBodyTexts.includes(b.id))
+          .map(b => b.text) || [];
+        const selectedCTATexts = copyOptions?.callToActions
+          .filter(c => selectedCTAs.includes(c.id))
+          .map(c => c.text) || [];
+
+        // Fetch full-res images for each library item
+        const images: { imageUrl: string; revisedPrompt: string }[] = [];
+        for (const img of libraryImages) {
+          const fullImg = (img as SwipeLibraryItem & { _fullImageData?: string; _fullImageMime?: string });
+          if (fullImg._fullImageData && fullImg._fullImageMime) {
+            images.push({
+              imageUrl: `data:${fullImg._fullImageMime};base64,${fullImg._fullImageData}`,
+              revisedPrompt: 'From Swipe Library',
+            });
+          } else {
+            // Fetch on demand if not already loaded
+            const data = await fetchSwipeImage(img.id);
+            images.push({
+              imageUrl: `data:${data.image_mime_type};base64,${data.image_data}`,
+              revisedPrompt: 'From Swipe Library',
+            });
+          }
+        }
+
+        const result: GeneratedAdPackage = {
+          id: `lib_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          generatedAt: new Date().toISOString(),
+          adType: 'image',
+          audienceType,
+          conceptType,
+          images,
+          copy: {
+            headlines: selectedHeadlineTexts,
+            bodyTexts: selectedBodyTextTexts,
+            callToActions: selectedCTATexts,
+            rationale: 'Using saved winning creatives from Swipe Library',
+          },
+          whyItWorks: 'Using saved winning creatives from Swipe Library',
+          campaignIntent: effectiveIntent,
+        };
+
+        setGeneratedAds(prev => [result, ...prev]);
+        setLibraryImages([]); // Clear after use
+      } catch (err: unknown) {
+        console.error('Library image generation failed:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load library images.');
+      } finally {
+        setIsGeneratingCreatives(false);
+        setGenerationProgress('');
+      }
+      return;
+    }
+
     // Text ads use Canvas rendering — no API keys needed for image generation
     if (adType !== 'text') {
       const hasImageApi = isGeminiConfigured() || isOpenAIConfigured();
@@ -1035,6 +1109,60 @@ const AdGenerator = () => {
     setSelectedCTAs(callToActions.map(c => c.id));
     // Skip Step 2 — go directly to final-config
     setCurrentStep('final-config');
+  };
+
+  // Handle Swipe Library picker selection
+  const handleSwipeLibrarySelect = (items: SwipeLibraryItem[]) => {
+    setShowSwipePicker(false);
+
+    if (swipePickerContext === 'step1' && copySource === 'manual') {
+      // In manual mode, populate the manual entry fields
+      const headlines = items.filter(i => i.element_type === 'headline').map(i => i.text_content || '');
+      const bodies = items.filter(i => i.element_type === 'body_copy').map(i => i.text_content || '');
+      if (headlines.length > 0) setManualHeadlines(headlines);
+      if (bodies.length > 0) setManualBodyTexts(bodies);
+    } else if (swipePickerContext === 'step1' || swipePickerContext === 'step2') {
+      // Append to existing copyOptions
+      const newHeadlines: CopyOption[] = items
+        .filter(i => i.element_type === 'headline')
+        .map(i => ({
+          id: `swipe_h_${i.id}`,
+          text: i.text_content || '',
+          rationale: `Saved${i.performance_snapshot.cvr ? ` • ${i.performance_snapshot.cvr.toFixed(1)}% CVR` : ''}${i.performance_snapshot.cpa ? ` • $${i.performance_snapshot.cpa.toFixed(2)} CPA` : ''}`,
+        }));
+      const newBodyTexts: CopyOption[] = items
+        .filter(i => i.element_type === 'body_copy')
+        .map(i => ({
+          id: `swipe_b_${i.id}`,
+          text: i.text_content || '',
+          rationale: `Saved${i.performance_snapshot.cvr ? ` • ${i.performance_snapshot.cvr.toFixed(1)}% CVR` : ''}${i.performance_snapshot.cpa ? ` • $${i.performance_snapshot.cpa.toFixed(2)} CPA` : ''}`,
+        }));
+
+      if (copyOptions) {
+        // Step 2: append to existing options
+        setCopyOptions({
+          ...copyOptions,
+          headlines: [...copyOptions.headlines, ...newHeadlines],
+          bodyTexts: [...copyOptions.bodyTexts, ...newBodyTexts],
+        });
+      } else {
+        // Step 1 (generate/import mode): pre-populate so they show in Step 2
+        setCopyOptions({
+          headlines: newHeadlines,
+          bodyTexts: newBodyTexts,
+          callToActions: [],
+        });
+      }
+    } else if (swipePickerContext === 'step3') {
+      // Image selection for Step 3
+      setLibraryImages(items.filter(i => i.element_type === 'image'));
+    }
+  };
+
+  const openSwipePicker = (context: 'step1' | 'step2' | 'step3', types: SwipeElementType[]) => {
+    setSwipePickerContext(context);
+    setSwipePickerTypes(types);
+    setShowSwipePicker(true);
   };
 
   // Regenerate a single image within an ad package
@@ -1445,6 +1573,33 @@ const AdGenerator = () => {
                 <span className="copy-source-desc">Paste your own copy</span>
               </button>
             </div>
+
+            {/* Swipe Library Button — available for all copy source modes */}
+            {currentAccount?.ad_account_id && (
+              <button
+                type="button"
+                className="swipe-library-inline-btn"
+                onClick={() => openSwipePicker('step1', ['headline', 'body_copy'])}
+                style={{
+                  marginTop: '12px',
+                  padding: '10px 16px',
+                  background: 'rgba(212, 225, 87, 0.08)',
+                  border: '1px solid rgba(212, 225, 87, 0.2)',
+                  borderRadius: 'var(--radius-md, 8px)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  width: '100%',
+                  justifyContent: 'center',
+                }}
+              >
+                🔖 Browse Swipe Library
+              </button>
+            )}
           </div>
 
           {/* Product Selection */}
@@ -1846,6 +2001,33 @@ const AdGenerator = () => {
             )}
           </div>
 
+          {/* Add from Swipe Library — Step 2 */}
+          {currentAccount?.ad_account_id && (
+            <button
+              type="button"
+              className="swipe-library-inline-btn"
+              onClick={() => openSwipePicker('step2', ['headline', 'body_copy'])}
+              style={{
+                marginBottom: '16px',
+                padding: '10px 16px',
+                background: 'rgba(212, 225, 87, 0.08)',
+                border: '1px solid rgba(212, 225, 87, 0.2)',
+                borderRadius: 'var(--radius-md, 8px)',
+                color: 'var(--text-primary)',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                width: '100%',
+                justifyContent: 'center',
+              }}
+            >
+              🔖 Add from Swipe Library
+            </button>
+          )}
+
           <CopySelectionPanel
             headlines={copyOptions.headlines}
             bodyTexts={copyOptions.bodyTexts}
@@ -1983,6 +2165,71 @@ const AdGenerator = () => {
               </button>
             </div>
           </div>
+
+          {/* Library Images — use saved images instead of AI generation */}
+          {adType === 'image' && currentAccount?.ad_account_id && (
+            <div className="config-section">
+              <label className="config-label">
+                Use Saved Images <span className="manual-entry-optional">(optional)</span>
+              </label>
+              <p className="config-hint">Select images from your Swipe Library instead of generating with AI. No credits will be used.</p>
+              <button
+                type="button"
+                className="swipe-library-inline-btn"
+                onClick={() => openSwipePicker('step3', ['image'])}
+                style={{
+                  padding: '10px 16px',
+                  background: 'rgba(212, 225, 87, 0.08)',
+                  border: '1px solid rgba(212, 225, 87, 0.2)',
+                  borderRadius: 'var(--radius-md, 8px)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  width: '100%',
+                  justifyContent: 'center',
+                }}
+              >
+                🖼️ Browse Library Images
+              </button>
+              {libraryImages.length > 0 && (
+                <div style={{ marginTop: '12px' }}>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    {libraryImages.map(img => (
+                      <div key={img.id} style={{
+                        width: '64px', height: '64px', borderRadius: '8px', overflow: 'hidden',
+                        border: '2px solid var(--accent-primary)',
+                      }}>
+                        {img.image_thumbnail && (
+                          <img
+                            src={`data:${img.image_mime_type || 'image/jpeg'};base64,${img.image_thumbnail}`}
+                            alt="Library"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => setLibraryImages([])}
+                      style={{
+                        padding: '4px 10px', fontSize: '12px', background: 'transparent',
+                        border: '1px solid var(--border-primary)', borderRadius: '6px',
+                        color: 'var(--text-muted)', cursor: 'pointer',
+                      }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#10b981', marginTop: '8px', fontWeight: 500 }}>
+                    {libraryImages.length} image{libraryImages.length !== 1 ? 's' : ''} selected — no credits will be used
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Text Ad Configuration */}
           {adType === 'text' && (
@@ -2518,6 +2765,15 @@ const AdGenerator = () => {
           <h3>No Creatives Yet</h3>
           <p>Select your audience and concept above, then generate copy options to get started.</p>
         </div>
+      )}
+      {/* Swipe Library Picker Modal */}
+      {showSwipePicker && currentAccount?.ad_account_id && (
+        <SwipeLibraryPicker
+          adAccountId={currentAccount.ad_account_id}
+          elementTypes={swipePickerTypes}
+          onSelect={handleSwipeLibrarySelect}
+          onClose={() => setShowSwipePicker(false)}
+        />
       )}
       {/* Credit Exhaustion Modal */}
       {showCreditModal && (
