@@ -125,11 +125,12 @@ const DEFAULT_CHAT_MODEL = 'gpt-5.4'; // Latest GPT-5.4 with reasoning capabilit
 const DEFAULT_VISION_MODEL = 'gpt-5.4'; // GPT-5.4 has multimodal vision support
 
 // Reasoning configuration for GPT-5.4
-// 'high' for analysis — direct browser-to-OpenAI calls have no timeout
-// constraint, so we can use full reasoning depth for maximum insight quality.
+// All OpenAI calls now route through the backend proxy (api/meta.ts) which has
+// a 60-second Vercel function timeout (Hobby plan max). 'medium' keeps most
+// calls within that window; 'high'/'xhigh' risk FUNCTION_INVOCATION_TIMEOUT.
 type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
-const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'high';
-const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'high';
+const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'medium';
+const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'medium';
 
 // Image Generation - Gemini models with automatic fallback
 // Primary: gemini-3-pro-image-preview (highest quality)
