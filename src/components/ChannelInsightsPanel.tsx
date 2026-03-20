@@ -42,7 +42,11 @@ function formatDate(isoString: string): string {
 }
 
 export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelProps) {
-  const { performanceBreakdown } = analysis;
+  const performanceBreakdown = analysis.performanceBreakdown;
+  const winningPatterns = analysis.winningPatterns;
+  const losingPatterns = analysis.losingPatterns;
+  const audienceInsights = analysis.audienceInsights;
+  const recommendations = analysis.recommendations;
 
   return (
     <div className="channel-insights-panel">
@@ -170,6 +174,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
       )}
 
       {/* Performance Metrics */}
+      {performanceBreakdown && (
       <section className="insights-section metrics-overview">
         <h3>Performance Overview</h3>
         <div className="metrics-grid">
@@ -209,6 +214,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
           </div>
         </div>
       </section>
+      )}
 
       {/* NEW: Visual/Creative Analysis Section */}
       {analysis.visualAnalysis && (
@@ -292,15 +298,17 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
       )}
 
       {/* Patterns Analysis (Enhanced with Visual Elements) */}
+      {(winningPatterns || losingPatterns) && (
       <section className="insights-section patterns-section">
         <h3>Pattern Analysis</h3>
         <div className="patterns-grid">
+          {winningPatterns && (
           <div className="pattern-card winning">
             <h4>What's Working</h4>
             <div className="pattern-group">
               <span className="pattern-label">Winning Headlines</span>
               <ul>
-                {analysis.winningPatterns.headlines?.map((item, i) => (
+                {winningPatterns.headlines?.map((item, i) => (
                   <li key={i}>{item}</li>
                 ))}
               </ul>
@@ -308,17 +316,16 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
             <div className="pattern-group">
               <span className="pattern-label">Effective Copy Elements</span>
               <ul>
-                {analysis.winningPatterns.copyElements?.map((item, i) => (
+                {winningPatterns.copyElements?.map((item, i) => (
                   <li key={i}>{item}</li>
                 ))}
               </ul>
             </div>
-            {/* NEW: Visual Elements */}
-            {analysis.winningPatterns.visualElements && analysis.winningPatterns.visualElements.length > 0 && (
+            {winningPatterns.visualElements && winningPatterns.visualElements.length > 0 && (
               <div className="pattern-group">
                 <span className="pattern-label">Winning Visual Elements</span>
                 <ul>
-                  {analysis.winningPatterns.visualElements.map((item, i) => (
+                  {winningPatterns.visualElements.map((item, i) => (
                     <li key={i}>{item}</li>
                   ))}
                 </ul>
@@ -327,7 +334,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
             <div className="pattern-group">
               <span className="pattern-label">Emotional Triggers</span>
               <div className="tags">
-                {analysis.winningPatterns.emotionalTriggers?.map((item, i) => (
+                {winningPatterns.emotionalTriggers?.map((item, i) => (
                   <span key={i} className="tag success">{item}</span>
                 ))}
               </div>
@@ -335,19 +342,21 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
             <div className="pattern-group">
               <span className="pattern-label">Effective CTAs</span>
               <div className="tags">
-                {analysis.winningPatterns.callToActions?.map((item, i) => (
+                {winningPatterns.callToActions?.map((item, i) => (
                   <span key={i} className="tag cta">{item}</span>
                 ))}
               </div>
             </div>
           </div>
+          )}
 
+          {losingPatterns && (
           <div className="pattern-card losing">
             <h4>What's Not Working</h4>
             <div className="pattern-group">
               <span className="pattern-label">Problematic Headlines</span>
               <ul>
-                {analysis.losingPatterns.headlines?.map((item, i) => (
+                {losingPatterns.headlines?.map((item, i) => (
                   <li key={i}>{item}</li>
                 ))}
               </ul>
@@ -355,17 +364,16 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
             <div className="pattern-group">
               <span className="pattern-label">Ineffective Copy</span>
               <ul>
-                {analysis.losingPatterns.copyElements?.map((item, i) => (
+                {losingPatterns.copyElements?.map((item, i) => (
                   <li key={i}>{item}</li>
                 ))}
               </ul>
             </div>
-            {/* NEW: Visual Issues */}
-            {analysis.losingPatterns.visualIssues && analysis.losingPatterns.visualIssues.length > 0 && (
+            {losingPatterns.visualIssues && losingPatterns.visualIssues.length > 0 && (
               <div className="pattern-group">
                 <span className="pattern-label">Visual Issues</span>
                 <ul>
-                  {analysis.losingPatterns.visualIssues.map((item, i) => (
+                  {losingPatterns.visualIssues.map((item, i) => (
                     <li key={i}>{item}</li>
                   ))}
                 </ul>
@@ -374,23 +382,26 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
             <div className="pattern-group">
               <span className="pattern-label">Common Issues</span>
               <ul>
-                {analysis.losingPatterns.issues?.map((item, i) => (
+                {losingPatterns.issues?.map((item, i) => (
                   <li key={i}>{item}</li>
                 ))}
               </ul>
             </div>
           </div>
+          )}
         </div>
       </section>
+      )}
 
       {/* Audience Insights (Enhanced with Visual Preferences) */}
+      {audienceInsights && (
       <section className="insights-section audience-section">
         <h3>Audience Insights</h3>
         <div className="audience-grid">
           <div className="audience-card resonates">
             <h4>What Resonates</h4>
             <ul>
-              {analysis.audienceInsights.whatResonates?.map((item, i) => (
+              {audienceInsights.whatResonates?.map((item, i) => (
                 <li key={i}>{item}</li>
               ))}
             </ul>
@@ -398,7 +409,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
           <div className="audience-card doesnt-work">
             <h4>What Doesn't Work</h4>
             <ul>
-              {analysis.audienceInsights.whatDoesntWork?.map((item, i) => (
+              {audienceInsights.whatDoesntWork?.map((item, i) => (
                 <li key={i}>{item}</li>
               ))}
             </ul>
@@ -406,17 +417,16 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
           <div className="audience-card targeting">
             <h4>Targeting Recommendations</h4>
             <ul>
-              {analysis.audienceInsights.targetingRecommendations?.map((item, i) => (
+              {audienceInsights.targetingRecommendations?.map((item, i) => (
                 <li key={i}>{item}</li>
               ))}
             </ul>
           </div>
-          {/* NEW: Visual Preferences */}
-          {analysis.audienceInsights.visualPreferences && analysis.audienceInsights.visualPreferences.length > 0 && (
+          {audienceInsights.visualPreferences && audienceInsights.visualPreferences.length > 0 && (
             <div className="audience-card visual-prefs">
               <h4>Visual Preferences</h4>
               <ul>
-                {analysis.audienceInsights.visualPreferences.map((item, i) => (
+                {audienceInsights.visualPreferences.map((item, i) => (
                   <li key={i}>{item}</li>
                 ))}
               </ul>
@@ -424,6 +434,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
           )}
         </div>
       </section>
+      )}
 
       {/* Top & Bottom Performers (Enhanced with Image Analysis) */}
       <section className="insights-section performers-section">
@@ -491,6 +502,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
       </section>
 
       {/* Strategic Recommendations (Enhanced with Creative Direction) */}
+      {recommendations && (
       <section className="insights-section recommendations-section">
         <h3>Strategic Recommendations</h3>
         <div className="recommendations-grid">
@@ -500,7 +512,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
               <h4>Immediate Actions</h4>
             </div>
             <ul>
-              {analysis.recommendations.immediate?.map((item, i) => (
+              {recommendations.immediate?.map((item, i) => (
                 <li key={i}>{item}</li>
               ))}
             </ul>
@@ -511,7 +523,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
               <h4>Short-Term (2 weeks)</h4>
             </div>
             <ul>
-              {analysis.recommendations.shortTerm?.map((item, i) => (
+              {recommendations.shortTerm?.map((item, i) => (
                 <li key={i}>{item}</li>
               ))}
             </ul>
@@ -522,20 +534,19 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
               <h4>Strategic (Long-term)</h4>
             </div>
             <ul>
-              {analysis.recommendations.strategic?.map((item, i) => (
+              {recommendations.strategic?.map((item, i) => (
                 <li key={i}>{item}</li>
               ))}
             </ul>
           </div>
-          {/* Creative Direction */}
-          {analysis.recommendations.creativeDirection && analysis.recommendations.creativeDirection.length > 0 && (
+          {recommendations.creativeDirection && recommendations.creativeDirection.length > 0 && (
             <div className="recommendation-card creative-direction">
               <div className="recommendation-header">
                 <span className="recommendation-icon"><Palette size={18} strokeWidth={1.5} /></span>
                 <h4>Creative Direction</h4>
               </div>
               <ul>
-                {analysis.recommendations.creativeDirection.map((item, i) => (
+                {recommendations.creativeDirection.map((item, i) => (
                   <li key={i}>{item}</li>
                 ))}
               </ul>
@@ -543,6 +554,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
           )}
         </div>
       </section>
+      )}
     </div>
   );
 }
