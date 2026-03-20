@@ -788,7 +788,7 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
       body = creative?.body || spec?.link_data?.message || spec?.link_data?.description || spec?.video_data?.message;
     }
 
-    imageUrl = creative?.image_url || spec?.link_data?.picture || spec?.video_data?.picture;
+    imageUrl = creative?.image_url || creative?.thumbnail_url || spec?.link_data?.picture || spec?.video_data?.picture;
 
     if (logThis) {
       console.log(`Extracted creative for ${adId}:`, { headline, hasBody: !!body, hasImage: !!imageUrl });
