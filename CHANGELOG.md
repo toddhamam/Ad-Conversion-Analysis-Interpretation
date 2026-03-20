@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-03-20 — Swipe Library — save and reuse winning ad elements
+
+### What
+New persistent library for saving best-performing ad elements (headlines, body copy, images) from Meta Ads and reusing them in CreativeIQ ad generation. Enables mix-and-match workflows: e.g., a "home run headline" combined with fresh AI-generated images, or saved winning images used without consuming credits.
+
+### Why
+Users were generating all content from scratch each time. Now they can save proven winners and inject them alongside AI-generated content, reducing creative fatigue and preserving what works.
+
+### Added
+- **`supabase/migrations/015_swipe_library.sql`** — Database table with RLS policies, SHA-256 content dedup, tenant isolation
+- **`src/services/swipeLibraryApi.ts`** — Frontend service layer with typed API functions (save, list, update, delete, image fetch, hash check)
+- **`src/pages/SwipeLibrary.tsx`** + **`SwipeLibrary.css`** — Browse/manage page with filter tabs, search, sort (newest/oldest/CVR/CPA), bulk delete, edit tags/notes, pin items, image viewer
+- **`src/components/SwipeLibraryPicker.tsx`** — Reusable modal picker for selecting library items (used in CreativeIQ Steps 1, 2, and 3)
+- **`src/components/Sidebar.tsx`** — Nav link for Swipe Library between Integrations and Reports
+- **`src/App.tsx`** — Route `/swipe-library`
+
+### Changed
+- **`api/meta.ts`** — 6 new route handlers: `swipe-list`, `swipe-save`, `swipe-update`, `swipe-delete`, `swipe-image`, `swipe-check` (added to existing catch-all, no new serverless functions)
+- **`src/pages/MetaAds.tsx`** — "Save to Library" button per ad card + "Save All Winning Ads" bulk toolbar button. Tracks saved state via content hash check on page load
+- **`src/pages/MetaAds.css`** — `.save-library-btn` styles (lime accent, matching existing button patterns)
+- **`src/pages/AdGenerator.tsx`** — Three Swipe Library integration points:
+  - **Step 1 (Config)**: "Browse Swipe Library" button for all copy source modes (manual mode populates entry fields, generate/import mode pre-populates copy options)
+  - **Step 2 (Copy Selection)**: "Add from Swipe Library" button appends saved items alongside AI-generated options
+  - **Step 3 (Final Config)**: Library image picker with thumbnail preview; no-credit generation path that skips AI APIs and credit reservation entirely
+
 ## 2026-03-20 — Fix OpenAI API key exposure — route all calls through backend proxy
 
 ### What

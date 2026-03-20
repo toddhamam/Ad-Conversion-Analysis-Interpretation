@@ -249,6 +249,44 @@
   font-size: 14px;
 }
 
+/* Save to Library Button */
+.save-library-btn {
+  flex: 1;
+  padding: 14px 16px;
+  background: rgba(212, 225, 87, 0.08);
+  border: 1px solid rgba(212, 225, 87, 0.2);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.save-library-btn:hover:not(:disabled) {
+  background: rgba(212, 225, 87, 0.15);
+  border-color: rgba(212, 225, 87, 0.4);
+}
+
+.save-library-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.save-library-btn.is-saved {
+  background: rgba(212, 225, 87, 0.2);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.save-library-icon {
+  font-size: 14px;
+}
+
 /* ==================== Responsive Styles ==================== */
 
 /* Tablet breakpoint - 768px */
@@ -303,7 +341,8 @@
   }
 
   .analyze-btn,
-  .reference-btn {
+  .reference-btn,
+  .save-library-btn {
     min-height: 44px;
   }
 }
