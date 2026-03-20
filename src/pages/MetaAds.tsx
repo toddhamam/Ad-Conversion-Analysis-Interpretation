@@ -26,7 +26,7 @@ import {
   clearLegacyCache
 } from '../services/imageCache';
 import Loading from '../components/Loading';
-import { AlertTriangle, Check } from 'lucide-react';
+import { AlertTriangle, Check, RefreshCw } from 'lucide-react';
 import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
 import {
   saveToSwipeLibrary,
@@ -35,6 +35,62 @@ import {
   type SwipeLibrarySavePayload,
 } from '../services/swipeLibraryApi';
 import './MetaAds.css';
+
+// --- Meta Ads data cache (localStorage) ---
+// Prevents re-syncing from Meta API on every page navigation.
+// Data is cached per account + date range and reused for 7 days.
+const META_ADS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+interface MetaAdsCacheEntry {
+  creatives: AdCreative[];
+  campaignMetrics: CampaignTypeMetrics[];
+  timestamp: number;
+}
+
+function getMetaAdsCacheKey(accountId: string | undefined, businessType: string, dateOptions?: DateRangeOptions): string {
+  const acct = accountId || 'default';
+  const dateKey = dateOptions
+    ? JSON.stringify(dateOptions)
+    : 'default';
+  return `ci_meta_ads_cache_${acct}_${businessType}_${dateKey}`;
+}
+
+function readMetaAdsCache(accountId: string | undefined, businessType: string, dateOptions?: DateRangeOptions): MetaAdsCacheEntry | null {
+  try {
+    const key = getMetaAdsCacheKey(accountId, businessType, dateOptions);
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const entry: MetaAdsCacheEntry = JSON.parse(raw);
+    if (Date.now() - entry.timestamp > META_ADS_CACHE_TTL_MS) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return entry;
+  } catch {
+    return null;
+  }
+}
+
+function writeMetaAdsCache(accountId: string | undefined, businessType: string, dateOptions: DateRangeOptions | undefined, data: MetaAdsCacheEntry): void {
+  try {
+    const key = getMetaAdsCacheKey(accountId, businessType, dateOptions);
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch {
+    // QuotaExceeded — non-critical, just skip caching
+  }
+}
+
+// Format how long ago data was synced
+function formatSyncAge(timestamp: number): string {
+  const diffMs = Date.now() - timestamp;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHrs = Math.floor(diffMin / 60);
+  if (diffHrs < 24) return `${diffHrs}h ago`;
+  const diffDays = Math.floor(diffHrs / 24);
+  return `${diffDays}d ago`;
+}
 
 // Helper to calculate dates from preset
 function getPresetDates(preset: DatePreset): { startDate: Date; endDate: Date } {
@@ -495,8 +551,30 @@ const MetaAds = () => {
     .filter(c => c.conversions > 0)
     .sort((a, b) => b.conversionRate - a.conversionRate);
 
-  const loadMetaData = useCallback(async (dateOptions?: DateRangeOptions) => {
-    console.log('🚀 Starting Meta data load...', dateOptions);
+  // Track when data was last synced for UI display
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+
+  const loadMetaData = useCallback(async (dateOptions?: DateRangeOptions, forceRefresh = false) => {
+    console.log('🚀 Starting Meta data load...', dateOptions, forceRefresh ? '(forced)' : '');
+
+    // Check cache first (unless force refresh)
+    if (!forceRefresh) {
+      const cached = readMetaAdsCache(currentAccount?.ad_account_id, businessType, dateOptions);
+      if (cached) {
+        console.log('✅ Using cached Meta data from', new Date(cached.timestamp).toLocaleString());
+        setCreatives(cached.creatives);
+        setCampaignMetrics(cached.campaignMetrics);
+        setUsingMockData(false);
+        setError(null);
+        setLoading(false);
+        setLastSyncedAt(cached.timestamp);
+
+        // Still run background tasks on cached data
+        autoFetchTopImages(cached.creatives);
+        checkSavedAds(cached.creatives);
+        return;
+      }
+    }
 
     try {
       setLoading(true);
@@ -533,15 +611,24 @@ const MetaAds = () => {
       setCampaignMetrics(aggregatedMetrics);
       setUsingMockData(false);
 
+      // Cache the fetched data
+      const now = Date.now();
+      writeMetaAdsCache(currentAccount?.ad_account_id, businessType, dateOptions, {
+        creatives: creativesData,
+        campaignMetrics: aggregatedMetrics,
+        timestamp: now,
+      });
+      setLastSyncedAt(now);
+
       // Auto-fetch top performing images as references
       autoFetchTopImages(creativesData);
 
       // Check which ads are already saved to Swipe Library
       checkSavedAds(creativesData);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('❌ Failed to load Meta data:', err);
-      console.error('❌ Full error object:', err);
-      setError(`Could not load Meta data: ${err.message}. Displaying sample data.`);
+      const message = err instanceof Error ? err.message : String(err);
+      setError(`Could not load Meta data: ${message}. Displaying sample data.`);
 
       // Fallback to mock data
       setCreatives(mockCreatives as any);
@@ -550,7 +637,7 @@ const MetaAds = () => {
     } finally {
       setLoading(false);
     }
-  }, [autoFetchTopImages, businessType]);
+  }, [autoFetchTopImages, businessType, currentAccount?.ad_account_id]);
 
   // Initialize cache IDs on mount
   useEffect(() => {
@@ -570,8 +657,23 @@ const MetaAds = () => {
     loadMetaData(dateOptions);
   }, [dateRange, loadMetaData, currentAccount?.ad_account_id]);
 
+  const buildDateOptions = (): DateRangeOptions => {
+    return dateRange.preset
+      ? { datePreset: dateRange.preset }
+      : {
+          timeRange: {
+            since: formatDateForApi(dateRange.startDate),
+            until: formatDateForApi(dateRange.endDate),
+          },
+        };
+  };
+
   const handleDateRangeChange = (newDateRange: { preset?: DatePreset; startDate: Date; endDate: Date }) => {
     setDateRange(newDateRange);
+  };
+
+  const handleResync = () => {
+    loadMetaData(buildDateOptions(), true);
   };
 
   if (loading) {
@@ -605,7 +707,34 @@ const MetaAds = () => {
             )}
           </p>
         </div>
-        <div className="page-header-right">
+        <div className="page-header-right" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {lastSyncedAt && !usingMockData && (
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+              Synced {formatSyncAge(lastSyncedAt)}
+            </span>
+          )}
+          <button
+            onClick={handleResync}
+            disabled={loading}
+            title="Re-sync data from Meta"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 14px',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-primary)',
+              borderRadius: '8px',
+              color: 'var(--text-secondary)',
+              fontSize: '13px',
+              fontWeight: 500,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.6 : 1,
+            }}
+          >
+            <RefreshCw size={14} strokeWidth={1.5} style={loading ? { animation: 'spin 1s linear infinite' } : undefined} />
+            Re-sync
+          </button>
           <DateRangePicker
             value={dateRange}
             onChange={handleDateRangeChange}

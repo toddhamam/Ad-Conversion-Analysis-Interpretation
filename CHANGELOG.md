@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-03-20 — Cache Meta Ads data to avoid re-syncing on every page visit
+
+### What
+Meta Ads page now caches fetched creatives and campaign metrics in localStorage with a 7-day TTL. Navigating away and back loads instantly from cache instead of re-syncing from the Meta API every time.
+
+### Why
+Every navigation to Meta Ads triggered a full re-sync — slow, unnecessary, and burned through Meta API rate limits. Users typically only need fresh data once per week.
+
+### Added
+- **localStorage cache layer** — keyed by ad account ID, business type, and date range; 7-day TTL with automatic expiry
+- **"Re-sync" button** in the page header — forces a fresh fetch from Meta, bypassing the cache
+- **"Synced X ago" indicator** — shows when data was last fetched (e.g., "Synced 3h ago", "Synced 2d ago")
+
+### Fixed
+- `catch (err: any)` → `catch (err: unknown)` per project conventions
+- Cache-hit path now clears any previous error state to prevent stale error banners
+
 ## 2026-03-20 — Swipe Library — save and reuse winning ad elements
 
 ### What
