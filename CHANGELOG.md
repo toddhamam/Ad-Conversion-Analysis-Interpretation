@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-03-22 — Replace Meta Ads auto-sync with manual sync + billing fixes
+
+### What
+The Meta Ads page (`/channels/meta-ads`) was auto-syncing on every page visit with a hardcoded `last_30d` date range, which meant only 4 of ~20 converting ads appeared — the rest fell outside the 30-day window. Replaced this with a manual sync model where users choose their date range and explicitly trigger sync, with data persisting indefinitely until re-synced.
+
+Also fixed three billing bugs found during Codex review: customers scheduled for cancellation were locked out immediately, credit reservations accepted negative quantities, and the `canceling` subscription status wasn't in the TypeScript type.
+
+### Changed
+- **`src/pages/MetaAds.tsx`** — Replaced auto-fetch-on-mount with manual sync model:
+  - New persistent cache (`ci_meta_ads_sync_{accountId}`) — single entry per account, no TTL, no date-range keys
+  - Default date range changed from `last_30d` to `maximum` (2 years)
+  - `loading` starts `false` — empty state shows immediately instead of spinner
+  - Empty state UI with DateRangePicker + "Sync Ad Data" button when no cached data
+  - Split loading: full-page spinner only for first sync; inline indicator for re-sync with data visible
+  - Sync status label: "Synced 2h ago · Maximum (2yr)" with amber color when >7 days stale
+  - Business type mismatch banner when config changed since last sync
+  - Removed mock data fallback — errors preserve cached data, show error banner
+  - Account switch resets state before loading new account's cache
+  - Old `ci_meta_ads_cache_*` entries cleaned up on mount (migration)
+- **`src/pages/MetaAds.css`** — Added empty state styles (`.meta-ads-empty`, `.meta-ads-sync-btn`) with responsive breakpoints
+- **`src/contexts/OrganizationContext.tsx`** — Added `'canceling'` to `isSubscriptionValid` check so customers who schedule cancellation keep access through their paid period
+- **`src/types/organization.ts`** — Added `'canceling'` to `SubscriptionStatus` type
+- **`api/billing/subscription.ts`** — Added positive integer validation for `quantity` in both credit reservation handlers; documented known race condition in read-check-write sequence
+
 ## 2026-03-20 — Fix Insights blank page crash from missing analysis data
 
 ### What

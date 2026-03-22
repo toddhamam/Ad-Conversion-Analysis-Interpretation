@@ -2,7 +2,7 @@
 
 export type PlanTier = 'free' | 'starter' | 'pro' | 'agency' | 'agency_pro' | 'enterprise' | 'velocity_partner';
 export type BillingInterval = 'monthly' | 'yearly';
-export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'trialing' | 'incomplete';
+export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'canceling' | 'trialing' | 'incomplete';
 export type UserRole = 'owner' | 'admin' | 'member' | 'viewer';
 export type UserStatus = 'active' | 'invited' | 'suspended';
 export type BusinessType = 'ecommerce' | 'leadgen' | 'hybrid';

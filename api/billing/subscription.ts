@@ -361,6 +361,9 @@ async function handleCheckCredits(req: VercelRequest, res: VercelResponse) {
   if (!actionType || !CREDIT_COSTS[actionType as CreditActionType]) {
     return res.status(400).json({ error: 'Invalid actionType' });
   }
+  if (typeof quantity !== 'number' || quantity < 1 || !Number.isInteger(quantity)) {
+    return res.status(400).json({ error: 'quantity must be a positive integer' });
+  }
 
   const creditsRequired = CREDIT_COSTS[actionType as CreditActionType] * quantity;
 
@@ -430,6 +433,9 @@ async function handleReserveCredits(req: VercelRequest, res: VercelResponse) {
   if (!actionType || !CREDIT_COSTS[actionType as CreditActionType]) {
     return res.status(400).json({ error: 'Invalid actionType' });
   }
+  if (typeof quantity !== 'number' || quantity < 1 || !Number.isInteger(quantity)) {
+    return res.status(400).json({ error: 'quantity must be a positive integer' });
+  }
 
   const creditsRequired = CREDIT_COSTS[actionType as CreditActionType] * quantity;
 
@@ -479,6 +485,10 @@ async function handleReserveCredits(req: VercelRequest, res: VercelResponse) {
     : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   // Read current usage, then insert or increment
+  // NOTE: This is not atomic — concurrent requests can race past the budget check.
+  // Acceptable for soft metering (single-user concurrency). For strict enforcement,
+  // migrate to a Postgres RPC: UPDATE ... SET credits_used = credits_used + $1
+  // WHERE credits_used + $1 <= $2 RETURNING credits_used.
   const { data: existingUsage } = await supabase
     .from('usage_tracking')
     .select('credits_used')
