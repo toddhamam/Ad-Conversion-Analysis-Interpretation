@@ -645,6 +645,8 @@ export interface AdCreative {
   adsetName: string;
   roas?: number;
   detectedConversionType?: DetectedConversionType;
+  purchaseConversions: number;
+  leadConversions: number;
 }
 
 export interface TrafficType {
@@ -895,27 +897,24 @@ export async function fetchAdCreatives(dateOptions?: DateRangeOptions, options?:
       const creative = creativeDetails[index] || {};
       const actionType = options?.primaryActionType || 'offsite_conversion.fb_pixel_purchase';
 
+      // Always detect both purchase and lead conversion counts for filtering
+      const purchases = getConversionCount(ad.actions, 'offsite_conversion.fb_pixel_purchase');
+      const leads = getConversionCount(ad.actions, 'lead');
+
+      let detectedConversionType: DetectedConversionType;
+      if (purchases > 0 && leads > 0) {
+        detectedConversionType = 'both';
+      } else if (purchases > 0) {
+        detectedConversionType = 'purchase';
+      } else if (leads > 0) {
+        detectedConversionType = 'lead';
+      } else {
+        detectedConversionType = 'none';
+      }
+
       let conversionCount: number;
-      let detectedConversionType: DetectedConversionType | undefined;
-
       if (actionType === 'hybrid') {
-        // Hybrid: look for both purchase and lead conversions across all related action types
-        const purchases = getConversionCount(ad.actions, 'offsite_conversion.fb_pixel_purchase');
-        const leads = getConversionCount(ad.actions, 'lead');
-
-        if (purchases > 0 && leads > 0) {
-          detectedConversionType = 'both';
-          conversionCount = Math.max(purchases, leads); // Use the primary conversion type
-        } else if (purchases > 0) {
-          detectedConversionType = 'purchase';
-          conversionCount = purchases;
-        } else if (leads > 0) {
-          detectedConversionType = 'lead';
-          conversionCount = leads;
-        } else {
-          detectedConversionType = 'none';
-          conversionCount = 0;
-        }
+        conversionCount = Math.max(purchases, leads);
       } else {
         conversionCount = getConversionCount(ad.actions, actionType);
       }
@@ -964,7 +963,9 @@ export async function fetchAdCreatives(dateOptions?: DateRangeOptions, options?:
         clicks,
         campaignName: ad.campaign_name,
         adsetName: ad.adset_name,
-        ...(detectedConversionType !== undefined && { detectedConversionType }),
+        detectedConversionType,
+        purchaseConversions: purchases,
+        leadConversions: leads,
       };
     });
   } catch (error) {

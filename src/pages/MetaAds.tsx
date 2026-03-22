@@ -25,7 +25,7 @@ import {
   clearLegacyCache
 } from '../services/imageCache';
 import Loading from '../components/Loading';
-import { ArrowDownWideNarrow, Check, Database, Info, RefreshCw } from 'lucide-react';
+import { ArrowDownWideNarrow, Check, Database, Filter, Info, RefreshCw } from 'lucide-react';
 import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
 import {
   saveToSwipeLibrary,
@@ -320,6 +320,9 @@ const MetaAds = () => {
         roas: creative.roas,
         conversions: creative.conversions,
         spend: creative.spend,
+        conversion_type: creative.detectedConversionType || 'none' as const,
+        purchase_conversions: creative.purchaseConversions,
+        lead_conversions: creative.leadConversions,
       };
 
       if (sel.headline && creative.headline) {
@@ -599,9 +602,32 @@ const MetaAds = () => {
   type SortField = 'conversions' | 'conversionRate' | 'costPerConversion';
   const [sortField, setSortField] = useState<SortField>('conversionRate');
 
-  // Filter out zero-conversion ads, then sort by selected field
+  // Conversion type filter
+  type ConversionFilter = 'all' | 'purchase' | 'lead';
+  const [conversionFilter, setConversionFilter] = useState<ConversionFilter>('all');
+
+  // Count ads by conversion type for filter chip badges
+  const conversionTypeCounts = (() => {
+    const withConversions = creatives.filter(c => c.conversions > 0);
+    return {
+      all: withConversions.length,
+      purchase: withConversions.filter(c => c.detectedConversionType === 'purchase' || c.detectedConversionType === 'both').length,
+      lead: withConversions.filter(c => c.detectedConversionType === 'lead' || c.detectedConversionType === 'both').length,
+    };
+  })();
+
+  // Determine if we have a mix of conversion types (show filter only when useful)
+  const hasMultipleConversionTypes = conversionTypeCounts.purchase > 0 && conversionTypeCounts.lead > 0;
+
+  // Filter out zero-conversion ads, apply conversion type filter, then sort
   const sortedCreatives = [...creatives]
     .filter(c => c.conversions > 0)
+    .filter(c => {
+      if (conversionFilter === 'all') return true;
+      if (conversionFilter === 'purchase') return c.detectedConversionType === 'purchase' || c.detectedConversionType === 'both';
+      if (conversionFilter === 'lead') return c.detectedConversionType === 'lead' || c.detectedConversionType === 'both';
+      return true;
+    })
     .sort((a, b) => {
       if (sortField === 'costPerConversion') {
         // CPA: lower is better, so ascending
@@ -699,6 +725,7 @@ const MetaAds = () => {
     setSyncedDateRange(null);
     setBusinessTypeMismatch(false);
     setError(null);
+    setConversionFilter('all');
 
     // Read persisted sync data for this account
     const cached = readMetaAdsSync(currentAccount?.ad_account_id);
@@ -948,29 +975,54 @@ const MetaAds = () => {
         </div>
       )}
 
-      {/* Sort controls */}
+      {/* Conversion type filter + Sort controls */}
       {sortedCreatives.length > 0 && (
-        <div className="meta-ads-sort-bar">
-          <ArrowDownWideNarrow size={14} strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
-          <span className="meta-ads-sort-label">Sort by</span>
-          {([
-            { field: 'conversions' as SortField, label: 'Conversions' },
-            { field: 'conversionRate' as SortField, label: 'CVR%' },
-            { field: 'costPerConversion' as SortField, label: 'CPA' },
-          ]).map(opt => (
-            <button
-              key={opt.field}
-              className={`meta-ads-sort-chip${sortField === opt.field ? ' active' : ''}`}
-              onClick={() => setSortField(opt.field)}
-            >
-              {opt.label}
-              {sortField === opt.field && (
-                <span className="meta-ads-sort-arrow">
-                  {opt.field === 'costPerConversion' ? '↑' : '↓'}
-                </span>
-              )}
-            </button>
-          ))}
+        <div className="meta-ads-controls-bar">
+          {/* Conversion type filter — only show when account has both types */}
+          {hasMultipleConversionTypes && (
+            <div className="meta-ads-sort-bar">
+              <Filter size={14} strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
+              <span className="meta-ads-sort-label">Type</span>
+              {([
+                { value: 'all' as ConversionFilter, label: 'All', count: conversionTypeCounts.all },
+                { value: 'purchase' as ConversionFilter, label: 'Purchases', count: conversionTypeCounts.purchase },
+                { value: 'lead' as ConversionFilter, label: 'Leads', count: conversionTypeCounts.lead },
+              ]).map(opt => (
+                <button
+                  key={opt.value}
+                  className={`meta-ads-sort-chip${conversionFilter === opt.value ? ' active' : ''}`}
+                  onClick={() => setConversionFilter(opt.value)}
+                >
+                  {opt.label}
+                  <span className="meta-ads-filter-count">{opt.count}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Sort controls */}
+          <div className="meta-ads-sort-bar">
+            <ArrowDownWideNarrow size={14} strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
+            <span className="meta-ads-sort-label">Sort by</span>
+            {([
+              { field: 'conversions' as SortField, label: 'Conversions' },
+              { field: 'conversionRate' as SortField, label: 'CVR%' },
+              { field: 'costPerConversion' as SortField, label: 'CPA' },
+            ]).map(opt => (
+              <button
+                key={opt.field}
+                className={`meta-ads-sort-chip${sortField === opt.field ? ' active' : ''}`}
+                onClick={() => setSortField(opt.field)}
+              >
+                {opt.label}
+                {sortField === opt.field && (
+                  <span className="meta-ads-sort-arrow">
+                    {opt.field === 'costPerConversion' ? '↑' : '↓'}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -984,6 +1036,11 @@ const MetaAds = () => {
               <Badge variant={creative.confidence.toLowerCase() as 'high' | 'medium' | 'low'}>
                 {creative.confidence}
               </Badge>
+              {creative.detectedConversionType && creative.detectedConversionType !== 'none' && (
+                <span className={`conversion-type-badge conversion-type-${creative.detectedConversionType}`}>
+                  {creative.detectedConversionType === 'purchase' ? 'Purchase' : creative.detectedConversionType === 'lead' ? 'Lead' : 'Purchase + Lead'}
+                </span>
+              )}
             </div>
 
             {/* CONVERSION INTELLIGENCE METRICS */}
@@ -1022,6 +1079,11 @@ const MetaAds = () => {
                 <div>
                   <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>Conversions</div>
                   <div style={{ fontSize: '16px', fontWeight: '600' }}>{creative.conversions}</div>
+                  {creative.detectedConversionType === 'both' && (
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      {creative.purchaseConversions} purch · {creative.leadConversions} leads
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

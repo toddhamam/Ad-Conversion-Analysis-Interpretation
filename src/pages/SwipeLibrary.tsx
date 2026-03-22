@@ -8,6 +8,7 @@ import {
   type SwipeLibraryItem,
   type SwipeElementType,
   type SwipeListFilters,
+  type SwipeConversionType,
 } from '../services/swipeLibraryApi';
 import SEO from '../components/SEO';
 import Loading from '../components/Loading';
@@ -24,6 +25,7 @@ const SwipeLibrary = () => {
 
   // Filters
   const [activeType, setActiveType] = useState<SwipeElementType | 'all'>('all');
+  const [activeConversionType, setActiveConversionType] = useState<SwipeConversionType | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
 
@@ -48,6 +50,7 @@ const SwipeLibrary = () => {
     try {
       const filters: SwipeListFilters = { sort: sortBy };
       if (activeType !== 'all') filters.element_type = activeType;
+      if (activeConversionType !== 'all') filters.conversion_type = activeConversionType;
       if (searchQuery.trim()) filters.search = searchQuery.trim();
       const result = await fetchSwipeLibrary(adAccountId, filters);
       setItems(result.items);
@@ -58,7 +61,7 @@ const SwipeLibrary = () => {
     } finally {
       setLoading(false);
     }
-  }, [adAccountId, activeType, searchQuery, sortBy]);
+  }, [adAccountId, activeType, activeConversionType, searchQuery, sortBy]);
 
   useEffect(() => {
     loadItems();
@@ -179,6 +182,25 @@ const SwipeLibrary = () => {
           ))}
         </div>
 
+        {/* Conversion type filter */}
+        <div className="swipe-type-tabs swipe-conversion-tabs">
+          {([
+            { label: 'All Types', value: 'all' as const },
+            { label: 'Purchases', value: 'purchase' as SwipeConversionType },
+            { label: 'Leads', value: 'lead' as SwipeConversionType },
+          ]).map(tab => (
+            <button
+              key={tab.value}
+              className={`swipe-type-tab swipe-conv-tab ${activeConversionType === tab.value ? 'active' : ''}`}
+              onClick={() => setActiveConversionType(tab.value)}
+            >
+              {tab.value === 'purchase' && <span className="swipe-conv-dot swipe-conv-dot-purchase" />}
+              {tab.value === 'lead' && <span className="swipe-conv-dot swipe-conv-dot-lead" />}
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         <div className="swipe-filter-controls">
           <input
             type="text"
@@ -249,6 +271,11 @@ const SwipeLibrary = () => {
                     className="swipe-card-check"
                   />
                   <span className="swipe-type-badge">{item.element_type === 'body_copy' ? 'Body' : item.element_type === 'headline' ? 'Headline' : 'Image'}</span>
+                  {item.performance_snapshot.conversion_type && item.performance_snapshot.conversion_type !== 'none' && (
+                    <span className={`swipe-conv-badge swipe-conv-badge-${item.performance_snapshot.conversion_type}`}>
+                      {item.performance_snapshot.conversion_type === 'purchase' ? 'Purchase' : item.performance_snapshot.conversion_type === 'lead' ? 'Lead' : 'Purch + Lead'}
+                    </span>
+                  )}
                   {item.is_pinned && <span className="swipe-pin-indicator" title="Pinned">📌</span>}
                   <div className="swipe-card-actions">
                     <button onClick={() => handleTogglePin(item)} title={item.is_pinned ? 'Unpin' : 'Pin'}>

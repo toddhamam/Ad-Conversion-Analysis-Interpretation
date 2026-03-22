@@ -2102,6 +2102,7 @@ async function handleSwipeList(req: VercelRequest, res: VercelResponse) {
   if (!adAccountId) return res.status(400).json({ error: 'ad_account_id required' });
 
   const elementType = req.query.element_type as string | undefined;
+  const conversionType = req.query.conversion_type as string | undefined;
   const search = req.query.search as string | undefined;
   const sort = (req.query.sort as string) || 'newest';
   const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
@@ -2120,6 +2121,14 @@ async function handleSwipeList(req: VercelRequest, res: VercelResponse) {
 
     if (elementType) {
       query = query.eq('element_type', elementType);
+    }
+
+    // Filter by conversion type stored in the performance_snapshot JSONB.
+    // Include items without conversion_type (saved before this feature) so they aren't hidden.
+    if (conversionType === 'purchase') {
+      query = query.or('performance_snapshot->>conversion_type.eq.purchase,performance_snapshot->>conversion_type.eq.both,performance_snapshot->>conversion_type.is.null');
+    } else if (conversionType === 'lead') {
+      query = query.or('performance_snapshot->>conversion_type.eq.lead,performance_snapshot->>conversion_type.eq.both,performance_snapshot->>conversion_type.is.null');
     }
 
     if (search) {
