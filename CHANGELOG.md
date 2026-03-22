@@ -16,6 +16,7 @@ Fixed three issues: (1) Most ad images couldn't be saved to the Swipe Library be
 - **`supabase/migrations/001_multi_tenant_schema.sql`** — Updated CHECK constraints for clean installs: added `'starter'`, `'velocity_partner'` to `plan_tier`; added `'canceling'` to `subscription_status`
 - **`supabase/migrations/016_fix_billing_constraints.sql`** — New migration to ALTER existing deployed DBs: drops old CHECK constraints and re-adds corrected ones
 
+
 ## 2026-03-22 — Replace Meta Ads auto-sync with manual sync + billing fixes
 
 ### What
