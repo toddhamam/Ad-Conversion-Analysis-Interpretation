@@ -25,7 +25,7 @@ import {
   clearLegacyCache
 } from '../services/imageCache';
 import Loading from '../components/Loading';
-import { Check, Database, Info, RefreshCw } from 'lucide-react';
+import { ArrowDownWideNarrow, Check, Database, Info, RefreshCw } from 'lucide-react';
 import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
 import {
   saveToSwipeLibrary,
@@ -272,7 +272,7 @@ const MetaAds = () => {
     if (!saved) return false;
     if (creative.headline && !saved.has('headline')) return false;
     if (creative.bodySnippet && !saved.has('body_copy')) return false;
-    if (creative.imageUrl && !failedImageIds.has(creative.id) && getCachedImage(creative.id) && !saved.has('image')) return false;
+    if (creative.imageUrl && !failedImageIds.has(creative.id) && !saved.has('image')) return false;
     return true;
   };
 
@@ -291,7 +291,7 @@ const MetaAds = () => {
   // Open selective save modal for an ad
   const openSaveModal = (creative: AdCreative) => {
     const saved = savedElements.get(creative.id) || new Set<string>();
-    const hasImage = !!(creative.imageUrl && !failedImageIds.has(creative.id) && getCachedImage(creative.id));
+    const hasImage = !!(creative.imageUrl && !failedImageIds.has(creative.id));
     setSaveSelection({
       headline: !!creative.headline && !saved.has('headline'),
       body: !!creative.bodySnippet && !saved.has('body_copy'),
@@ -347,7 +347,20 @@ const MetaAds = () => {
       }
 
       if (sel.image && creative.imageUrl) {
-        const cached = getCachedImage(creative.id);
+        // Try cache first; if not cached, fetch on-demand via CORS proxy
+        let cached = getCachedImage(creative.id);
+        if (!cached) {
+          cached = await storeImageFromUrl(
+            creative.imageUrl,
+            creative.id,
+            creative.conversionRate,
+            0, // No quality filter — user explicitly wants this image
+            creative.headline,
+            creative.bodySnippet
+          );
+          if (cached) refreshCachedIds();
+        }
+
         if (cached) {
           const img = new Image();
           img.src = `data:${cached.mimeType || 'image/jpeg'};base64,${cached.base64Data}`;
@@ -444,6 +457,15 @@ const MetaAds = () => {
           const h = await computeContentHash(c.bodySnippet);
           allHashes.push(h);
           hashToAdInfo.set(h, { adId: c.id, elementType: 'body_copy' });
+        }
+        // Check image hashes for cached images (matches performSave hash logic)
+        if (c.imageUrl) {
+          const cached = getCachedImage(c.id);
+          if (cached?.base64Data) {
+            const h = await computeContentHash(cached.base64Data.slice(0, 1000));
+            allHashes.push(h);
+            hashToAdInfo.set(h, { adId: c.id, elementType: 'image' });
+          }
         }
       }
       if (allHashes.length === 0) return;
@@ -573,12 +595,21 @@ const MetaAds = () => {
   const [syncedDateRange, setSyncedDateRange] = useState<{ preset?: DatePreset; startDate: string; endDate: string } | null>(null);
   const [businessTypeMismatch, setBusinessTypeMismatch] = useState(false);
 
-  // Filter out zero-conversion ads (not useful in the UI — zero-conv ads are
-  // still included in backend channel analysis for the full picture)
-  // Sort by conversion rate (best performers first)
+  // Sort control for the creative grid
+  type SortField = 'conversions' | 'conversionRate' | 'costPerConversion';
+  const [sortField, setSortField] = useState<SortField>('conversionRate');
+
+  // Filter out zero-conversion ads, then sort by selected field
   const sortedCreatives = [...creatives]
     .filter(c => c.conversions > 0)
-    .sort((a, b) => b.conversionRate - a.conversionRate);
+    .sort((a, b) => {
+      if (sortField === 'costPerConversion') {
+        // CPA: lower is better, so ascending
+        return (a.costPerConversion || Infinity) - (b.costPerConversion || Infinity);
+      }
+      // Conversions & CVR: higher is better, so descending
+      return (b[sortField] || 0) - (a[sortField] || 0);
+    });
 
   // Track when data was last synced for UI display
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
@@ -917,6 +948,32 @@ const MetaAds = () => {
         </div>
       )}
 
+      {/* Sort controls */}
+      {sortedCreatives.length > 0 && (
+        <div className="meta-ads-sort-bar">
+          <ArrowDownWideNarrow size={14} strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
+          <span className="meta-ads-sort-label">Sort by</span>
+          {([
+            { field: 'conversions' as SortField, label: 'Conversions' },
+            { field: 'conversionRate' as SortField, label: 'CVR%' },
+            { field: 'costPerConversion' as SortField, label: 'CPA' },
+          ]).map(opt => (
+            <button
+              key={opt.field}
+              className={`meta-ads-sort-chip${sortField === opt.field ? ' active' : ''}`}
+              onClick={() => setSortField(opt.field)}
+            >
+              {opt.label}
+              {sortField === opt.field && (
+                <span className="meta-ads-sort-arrow">
+                  {opt.field === 'costPerConversion' ? '↑' : '↓'}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="creative-grid">
         {sortedCreatives.map((creative) => (
           <div key={creative.id} className="creative-card">
@@ -1177,15 +1234,14 @@ const MetaAds = () => {
                       <span className="save-modal-option-type">
                         Image {alreadySaved.has('image') && <span className="save-modal-saved-badge">Saved</span>}
                       </span>
-                      {getCachedImage(selectSaveCreative.id) ? (
-                        <img
-                          src={selectSaveCreative.imageUrl}
-                          alt=""
-                          className="save-modal-image-preview"
-                        />
-                      ) : (
+                      <img
+                        src={selectSaveCreative.imageUrl}
+                        alt=""
+                        className="save-modal-image-preview"
+                      />
+                      {!getCachedImage(selectSaveCreative.id) && (
                         <span className="save-modal-image-note">
-                          Image visible but not cached — will be skipped
+                          Will be fetched when saving
                         </span>
                       )}
                     </div>

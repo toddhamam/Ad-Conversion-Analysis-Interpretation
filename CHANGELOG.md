@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-03-22 — Fix Swipe Library image saving + add sort controls + fix billing schema
+
+### What
+Fixed three issues: (1) Most ad images couldn't be saved to the Swipe Library because they weren't pre-cached — now images are fetched on-demand via CORS proxy when saving. (2) Added sort controls to Meta Ads page for sorting by Conversions, CVR%, and CPA. (3) Fixed Supabase CHECK constraints that silently rejected the `'canceling'` subscription status and newer plan tiers.
+
+### Changed
+- **`src/pages/MetaAds.tsx`** — Swipe Library image saving + sort controls:
+  - Images are now fetched on-demand via CORS proxy when saving (no longer gated on pre-cached images)
+  - Save modal shows image preview with "Will be fetched when saving" note instead of "will be skipped"
+  - `isFullySaved` and `openSaveModal` no longer require `getCachedImage()` — any visible image is saveable
+  - `checkSavedAds` now includes image content hashes for cached images on reload (prevents false "unsaved" state)
+  - Added sort bar with pill chips: Conversions (desc), CVR% (desc, default), CPA (asc — lower is better)
+- **`src/pages/MetaAds.css`** — Added sort bar styles (`.meta-ads-sort-bar`, `.meta-ads-sort-chip`, active state)
+- **`supabase/migrations/001_multi_tenant_schema.sql`** — Updated CHECK constraints for clean installs: added `'starter'`, `'velocity_partner'` to `plan_tier`; added `'canceling'` to `subscription_status`
+- **`supabase/migrations/016_fix_billing_constraints.sql`** — New migration to ALTER existing deployed DBs: drops old CHECK constraints and re-adds corrected ones
+
+
 ## 2026-03-22 — Replace Meta Ads auto-sync with manual sync + billing fixes
 
 ### What

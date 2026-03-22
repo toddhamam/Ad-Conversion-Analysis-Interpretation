@@ -665,6 +665,54 @@
   font-style: italic;
 }
 
+/* ==================== Sort Bar ==================== */
+
+.meta-ads-sort-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.meta-ads-sort-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+
+.meta-ads-sort-chip {
+  padding: 5px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.meta-ads-sort-chip:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-primary);
+}
+
+.meta-ads-sort-chip.active {
+  background: rgba(168, 85, 247, 0.1);
+  border-color: rgba(168, 85, 247, 0.3);
+  color: var(--accent-violet);
+  font-weight: 600;
+}
+
+.meta-ads-sort-arrow {
+  font-size: 11px;
+  line-height: 1;
+}
+
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
