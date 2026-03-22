@@ -21,9 +21,9 @@ CREATE TABLE IF NOT EXISTS organizations (
 
   -- Billing (linked to Stripe)
   stripe_customer_id TEXT UNIQUE,
-  plan_tier TEXT NOT NULL DEFAULT 'free' CHECK (plan_tier IN ('free', 'pro', 'enterprise')),
+  plan_tier TEXT NOT NULL DEFAULT 'free' CHECK (plan_tier IN ('free', 'starter', 'pro', 'enterprise', 'velocity_partner')),
   billing_interval TEXT DEFAULT 'monthly' CHECK (billing_interval IN ('monthly', 'yearly')),
-  subscription_status TEXT DEFAULT 'active' CHECK (subscription_status IN ('active', 'past_due', 'canceled', 'trialing', 'incomplete')),
+  subscription_status TEXT DEFAULT 'active' CHECK (subscription_status IN ('active', 'past_due', 'canceled', 'canceling', 'trialing', 'incomplete')),
   subscription_id TEXT,
   current_period_start TIMESTAMPTZ,
   current_period_end TIMESTAMPTZ,
