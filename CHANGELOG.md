@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-03-22 — Optimize cold outreach system with course-informed improvements
+
+### What
+Applied learnings from a 4.5-hour cold email masterclass to optimize the Convertra cold outreach system across four files: email templates, AI drafter prompt, optimizer engine, and knowledge base.
+
+### Why
+Deep analysis comparing the course framework against the current system identified several high-impact gaps: subject lines that revealed sales intent, zero social proof in emails, feature-heavy follow-ups that re-pitched instead of bumping, a testing engine that was too conservative in early rounds, and no seeded knowledge base for the optimizer.
+
+### Changed
+
+**`ops/convertra-leads/data/templates.json`** — Subject lines + follow-up
+- Activated Tier 5 (plausible deniability) subject lines alongside Tier 1 for natural A/B testing
+- Added 4 new casual subject line variants: "thought of you", "{first_name}", "hey", "{company}"
+- Rewrote follow-up from 50-word feature re-pitch to 15-word short bump
+
+**`ops/convertra-leads/modules/drafter.py`** — Email structure improvements
+- Added social proof step (PROOF) to email structure, making it 5-part instead of 4-part (PWOC framework)
+- Added company name casualization rule (strip Inc/LLC/Ltd/Corp/Pty Ltd/Group/Holdings suffixes)
+- Added ad count offer specificity — AI references prospect's active ad count when meaningful (20+)
+
+**`ops/convertra-leads/modules/optimizer.py`** — Scaled divergence strategy
+- `_generate_challenger()` now scales experiment boldness by round number (big changes early, small changes late)
+- Rounds 1-3: fundamentally different emails. Rounds 4-6: change 2-3 elements. Rounds 7+: isolate single variables
+- System prompt converted to f-string with dynamic `{change_rule}` injection and proper `{{` escaping
+- Follow-up instruction changed to "short bump (under 20 words), not a re-pitch"
+- Both callers (`start_first_experiment`, `deploy_new_round`) now pass explicit `round_number`
+
+**`ops/convertra-leads/data/resources.md`** — Seeded optimizer knowledge base
+- Added "Proven Principles" section covering subject lines, PWOC framework, follow-ups, copy rules, iteration strategy
+- Added "Hypotheses Worth Testing" for optimizer to explore organically (deliberate typo, scarcity, shared identity, give-first, ad count specificity)
+- Updated "What Works" with mixed subject line pool insight
+
 ## 2026-03-20 — Fix Insights blank page crash from missing analysis data
 
 ### What

@@ -197,13 +197,19 @@ def _build_prompt(prospect):
     # Pick a subject line from the active pool
     subject_line = _pick_subject_line(prospect)
 
+    # Get ad count for offer specificity (only if meaningful)
+    ad_count = prospect.get("company_intel", {}).get("active_ad_count", 0)
+    ad_count_context = ""
+    if ad_count and int(ad_count) > 0:
+        ad_count_context = f" The prospect is running {ad_count} ads right now. If this number is significant (20+), reference it to make the offer specific, e.g., 'You're running {ad_count} ads right now, what if you could test 5x that without adding headcount?'"
+
     if is_agency:
         cta_instruction = f"""4. CTA (exact format): "Convertra can help you pump out fresh winning creatives to test for your clients in less than 3 minutes. I shot a video to show you how. Want me to send it over?"
    Note: For agencies, Convertra is named because they are evaluating tooling for their workflow."""
         bridge_suffix = " for each client"
     else:
         cta_instruction = f"""4. CTA (exact format): "I recorded a quick video for you showing how we're helping businesses just like {company_name} transform their full Meta ad creative generation and testing process from days into just minutes, (literally, under 3 minutes)... No designers. No briefs. No agencies. No waiting...\n\nWant me to send it over?"
-   Note: For SaaS/DTC founders, do NOT mention Convertra by name. The product is introduced on the reply, not the cold open."""
+   Note: For SaaS/DTC founders, do NOT mention Convertra by name. The product is introduced on the reply, not the cold open.{ad_count_context}"""
         bridge_suffix = ""
 
     system_message = f"""You are an expert cold email copywriter for Convertra, an AI-powered ad creative platform.
@@ -213,11 +219,18 @@ Convertra automates ad creative generation. It maps the patterns already driving
 
 FOCUS: Meta/Facebook ads ONLY. Never mention Google Ads, multi-channel, or other platforms.
 
-STRUCTURE: every email must follow this exact 4-part structure:
+STRUCTURE: every email must follow this exact 5-part structure:
 
 1. GREETING: "Hi {{first_name}}," on its own line. Never use an em dash after the name.
 
 2. OPENING + BRIDGE (2 sentences max): Start with "Just" followed by a specific observation about their business — their Meta ads activity, growth signals (hiring, scaling, ecommerce growth), or what they're building. Use whatever personalization hook is strongest from the data provided. Never reference blogs, newsletters, content marketing, or general website activity. Then connect it to the universal challenge: "At that volume, the biggest challenge is usually keeping enough fresh ad creatives flowing into Meta testing{bridge_suffix}." Do NOT frame this as criticism of their team. Frame it as a natural challenge that comes with scale. Do NOT mention tech stack names (Shopify, Klaviyo, HubSpot, etc.) or "Meta Pixel". Do NOT say "I looked you up on LinkedIn."
+
+3. PROOF (1 sentence max): Include a brief, specific result that builds trust. Vary the phrasing each time, choosing from angles like:
+   - A user/brand in a similar space achieving a specific outcome (e.g., "went from X creatives/month to Y")
+   - A time savings result (e.g., "cut creative production from days to minutes")
+   - A testing velocity result (e.g., "now testing 40+ variations a month, zero designers")
+   - A competitive advantage framing (e.g., "brands using this are outpacing their competitors on creative volume")
+   Do NOT make up specific company names. Keep it vague enough to be true but specific enough to be credible. Do NOT use the same proof framing more than once if you can help it.
 
 {cta_instruction}
 
@@ -227,6 +240,7 @@ SUBJECT LINE: Use this exact subject line: "{subject_line}"
 
 Rules, follow these exactly:
 - NEVER use em dashes anywhere in the email. Em dashes are a dead giveaway of AI-written copy. Use periods, commas, or ellipsis (...) instead.
+- Casualize the company name: strip suffixes like Inc, LLC, Ltd, Corp, Pty Ltd, Group, Holdings. Use the short form people would actually say aloud. E.g., "Leftclick Incorporated" becomes "Leftclick", "Pacific Creative Group LLC" becomes "Pacific Creative" or "PCG".
 - Plain text only, no HTML, no markdown, no images, no bold, no formatting
 - No links in the email (zero URLs)
 - Body must be under 80 words (shorter is better)
