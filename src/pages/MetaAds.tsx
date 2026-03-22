@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { creatives as mockCreatives } from '../data/mockData';
 import {
   fetchAdCreatives,
   fetchCampaignSummaries,
@@ -26,7 +25,7 @@ import {
   clearLegacyCache
 } from '../services/imageCache';
 import Loading from '../components/Loading';
-import { AlertTriangle, Check, RefreshCw } from 'lucide-react';
+import { Check, Database, Info, RefreshCw } from 'lucide-react';
 import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
 import {
   saveToSwipeLibrary,
@@ -36,47 +35,55 @@ import {
 } from '../services/swipeLibraryApi';
 import './MetaAds.css';
 
-// --- Meta Ads data cache (localStorage) ---
-// Prevents re-syncing from Meta API on every page navigation.
-// Data is cached per account + date range and reused for 7 days.
-const META_ADS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+// --- Meta Ads persistent sync cache (localStorage) ---
+// Manual sync model: data persists indefinitely until user explicitly re-syncs.
+// One entry per account (no date range in key, no TTL).
 
-interface MetaAdsCacheEntry {
+interface MetaAdsSyncData {
   creatives: AdCreative[];
   campaignMetrics: CampaignTypeMetrics[];
-  timestamp: number;
+  syncedAt: number;
+  dateRange: {
+    preset?: DatePreset;
+    startDate: string; // ISO string for localStorage
+    endDate: string;
+  };
+  businessType: string;
 }
 
-function getMetaAdsCacheKey(accountId: string | undefined, businessType: string, dateOptions?: DateRangeOptions): string {
-  const acct = accountId || 'default';
-  const dateKey = dateOptions
-    ? JSON.stringify(dateOptions)
-    : 'default';
-  return `ci_meta_ads_cache_${acct}_${businessType}_${dateKey}`;
+function getMetaAdsSyncKey(accountId: string | undefined): string {
+  return `ci_meta_ads_sync_${accountId || 'default'}`;
 }
 
-function readMetaAdsCache(accountId: string | undefined, businessType: string, dateOptions?: DateRangeOptions): MetaAdsCacheEntry | null {
+function readMetaAdsSync(accountId: string | undefined): MetaAdsSyncData | null {
   try {
-    const key = getMetaAdsCacheKey(accountId, businessType, dateOptions);
-    const raw = localStorage.getItem(key);
+    const raw = localStorage.getItem(getMetaAdsSyncKey(accountId));
     if (!raw) return null;
-    const entry: MetaAdsCacheEntry = JSON.parse(raw);
-    if (Date.now() - entry.timestamp > META_ADS_CACHE_TTL_MS) {
-      localStorage.removeItem(key);
-      return null;
-    }
-    return entry;
+    return JSON.parse(raw);
   } catch {
     return null;
   }
 }
 
-function writeMetaAdsCache(accountId: string | undefined, businessType: string, dateOptions: DateRangeOptions | undefined, data: MetaAdsCacheEntry): void {
+function writeMetaAdsSync(accountId: string | undefined, data: MetaAdsSyncData): void {
   try {
-    const key = getMetaAdsCacheKey(accountId, businessType, dateOptions);
-    localStorage.setItem(key, JSON.stringify(data));
+    localStorage.setItem(getMetaAdsSyncKey(accountId), JSON.stringify(data));
   } catch {
     // QuotaExceeded — non-critical, just skip caching
+  }
+}
+
+// One-time cleanup of old date-range-keyed cache entries (migration)
+function cleanupOldCache(): void {
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('ci_meta_ads_cache_')) keysToRemove.push(key);
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+  } catch {
+    // Non-critical
   }
 }
 
@@ -90,6 +97,25 @@ function formatSyncAge(timestamp: number): string {
   if (diffHrs < 24) return `${diffHrs}h ago`;
   const diffDays = Math.floor(diffHrs / 24);
   return `${diffDays}d ago`;
+}
+
+// Human-readable label for date presets
+const PRESET_LABELS: Record<DatePreset, string> = {
+  today: 'Today',
+  yesterday: 'Yesterday',
+  last_7d: 'Last 7 days',
+  last_14d: 'Last 14 days',
+  last_28d: 'Last 28 days',
+  last_30d: 'Last 30 days',
+  this_week: 'This week',
+  last_week: 'Last week',
+  this_month: 'This month',
+  last_month: 'Last month',
+  maximum: 'Maximum (2yr)',
+};
+
+function getPresetLabel(preset?: DatePreset): string {
+  return preset ? PRESET_LABELS[preset] || preset : 'Custom range';
 }
 
 // Helper to calculate dates from preset
@@ -172,9 +198,8 @@ const MetaAds = () => {
   const btConfig = getBusinessTypeConfig(businessType);
   const [creatives, setCreatives] = useState<AdCreative[]>([]);
   const [campaignMetrics, setCampaignMetrics] = useState<CampaignTypeMetrics[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [usingMockData, setUsingMockData] = useState(false);
   const [analyzingAd, setAnalyzingAd] = useState<AdCreativeData | null>(null);
 
   // Reference image tracking
@@ -531,8 +556,8 @@ const MetaAds = () => {
     autoFetchingRefsRef.current = false;
   }, [refreshCachedIds]);
 
-  // Date range state - default to last 30 days
-  const defaultPreset: DatePreset = 'last_30d';
+  // Date range state - default to maximum for first-time users (overridden from cache on mount)
+  const defaultPreset: DatePreset = 'maximum';
   const defaultDates = getPresetDates(defaultPreset);
   const [dateRange, setDateRange] = useState<{
     preset?: DatePreset;
@@ -544,6 +569,10 @@ const MetaAds = () => {
     endDate: defaultDates.endDate,
   });
 
+  // Sync metadata — what date range was used for last sync, business type mismatch
+  const [syncedDateRange, setSyncedDateRange] = useState<{ preset?: DatePreset; startDate: string; endDate: string } | null>(null);
+  const [businessTypeMismatch, setBusinessTypeMismatch] = useState(false);
+
   // Filter out zero-conversion ads (not useful in the UI — zero-conv ads are
   // still included in backend channel analysis for the full picture)
   // Sort by conversion rate (best performers first)
@@ -554,33 +583,14 @@ const MetaAds = () => {
   // Track when data was last synced for UI display
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
 
-  const loadMetaData = useCallback(async (dateOptions?: DateRangeOptions, forceRefresh = false) => {
-    console.log('🚀 Starting Meta data load...', dateOptions, forceRefresh ? '(forced)' : '');
-
-    // Check cache first (unless force refresh)
-    if (!forceRefresh) {
-      const cached = readMetaAdsCache(currentAccount?.ad_account_id, businessType, dateOptions);
-      if (cached) {
-        console.log('✅ Using cached Meta data from', new Date(cached.timestamp).toLocaleString());
-        setCreatives(cached.creatives);
-        setCampaignMetrics(cached.campaignMetrics);
-        setUsingMockData(false);
-        setError(null);
-        setLoading(false);
-        setLastSyncedAt(cached.timestamp);
-
-        // Still run background tasks on cached data
-        autoFetchTopImages(cached.creatives);
-        checkSavedAds(cached.creatives);
-        return;
-      }
-    }
+  // Manual sync: always fetches fresh from Meta API (only called on explicit user action)
+  const syncMetaData = useCallback(async (dateOptions: DateRangeOptions, selectedRange: { preset?: DatePreset; startDate: Date; endDate: Date }) => {
+    console.log('🚀 Starting Meta data sync...', dateOptions);
 
     try {
       setLoading(true);
       setError(null);
 
-      // Fetch real data from Meta API directly (no connection test - let it fail gracefully)
       console.log('Fetching creatives and campaign summary data from Meta API...');
       const [creativesData, campaignSummaries] = await Promise.all([
         fetchAdCreatives(dateOptions, {
@@ -600,25 +610,31 @@ const MetaAds = () => {
       console.log('✅ Creatives loaded:', creativesData.length);
       console.log('✅ Campaign summaries loaded:', campaignSummaries.length);
 
-      // Aggregate campaign data by type
       const aggregatedMetrics = aggregateByType(campaignSummaries, {
         primaryConversionField: businessType === 'leadgen' ? 'leads' : 'purchases',
         includeLeadsInTotal: businessType === 'hybrid',
       });
-      console.log('✅ Aggregated metrics by type:', aggregatedMetrics);
 
       setCreatives(creativesData);
       setCampaignMetrics(aggregatedMetrics);
-      setUsingMockData(false);
 
-      // Cache the fetched data
+      // Persist sync data (no TTL — persists until next manual sync)
       const now = Date.now();
-      writeMetaAdsCache(currentAccount?.ad_account_id, businessType, dateOptions, {
+      const syncDateRange = {
+        preset: selectedRange.preset,
+        startDate: selectedRange.startDate.toISOString(),
+        endDate: selectedRange.endDate.toISOString(),
+      };
+      writeMetaAdsSync(currentAccount?.ad_account_id, {
         creatives: creativesData,
         campaignMetrics: aggregatedMetrics,
-        timestamp: now,
+        syncedAt: now,
+        dateRange: syncDateRange,
+        businessType,
       });
       setLastSyncedAt(now);
+      setSyncedDateRange(syncDateRange);
+      setBusinessTypeMismatch(false);
 
       // Auto-fetch top performing images as references
       autoFetchTopImages(creativesData);
@@ -626,36 +642,63 @@ const MetaAds = () => {
       // Check which ads are already saved to Swipe Library
       checkSavedAds(creativesData);
     } catch (err: unknown) {
-      console.error('❌ Failed to load Meta data:', err);
+      console.error('❌ Failed to sync Meta data:', err);
       const message = err instanceof Error ? err.message : String(err);
-      setError(`Could not load Meta data: ${message}. Displaying sample data.`);
-
-      // Fallback to mock data
-      setCreatives(mockCreatives as any);
-      setCampaignMetrics([]);
-      setUsingMockData(true);
+      setError(`Could not sync Meta data: ${message}`);
+      // On error, preserve any previously cached data (don't overwrite)
     } finally {
       setLoading(false);
     }
-  }, [autoFetchTopImages, businessType, currentAccount?.ad_account_id]);
+  }, [autoFetchTopImages, btConfig, businessType, checkSavedAds, currentAccount?.ad_account_id]);
 
   // Initialize cache IDs on mount
   useEffect(() => {
     refreshCachedIds();
   }, [refreshCachedIds]);
 
-  // Load data on mount and when date range changes
+  // Load persisted sync data on mount / account switch (NO auto-fetch)
   useEffect(() => {
-    const dateOptions: DateRangeOptions = dateRange.preset
-      ? { datePreset: dateRange.preset }
-      : {
-          timeRange: {
-            since: formatDateForApi(dateRange.startDate),
-            until: formatDateForApi(dateRange.endDate),
-          },
-        };
-    loadMetaData(dateOptions);
-  }, [dateRange, loadMetaData, currentAccount?.ad_account_id]);
+    // One-time migration: clean up old date-range-keyed cache entries
+    cleanupOldCache();
+
+    // Reset state before loading new account's cache (prevents flash of previous account data)
+    setCreatives([]);
+    setCampaignMetrics([]);
+    setLastSyncedAt(null);
+    setSyncedDateRange(null);
+    setBusinessTypeMismatch(false);
+    setError(null);
+
+    // Read persisted sync data for this account
+    const cached = readMetaAdsSync(currentAccount?.ad_account_id);
+    if (cached) {
+      setCreatives(cached.creatives);
+      setCampaignMetrics(cached.campaignMetrics);
+      setLastSyncedAt(cached.syncedAt);
+      setSyncedDateRange(cached.dateRange);
+
+      // Restore date range picker to what was last synced (Date objects from ISO strings)
+      setDateRange({
+        preset: cached.dateRange.preset,
+        startDate: new Date(cached.dateRange.startDate),
+        endDate: new Date(cached.dateRange.endDate),
+      });
+
+      // Detect business type mismatch
+      if (cached.businessType !== businessType) {
+        setBusinessTypeMismatch(true);
+      }
+
+      // Background tasks on cached data
+      autoFetchTopImages(cached.creatives);
+      checkSavedAds(cached.creatives);
+    } else {
+      // First visit — default to 'maximum' for the best coverage
+      const maxDates = getPresetDates('maximum');
+      setDateRange({ preset: 'maximum', startDate: maxDates.startDate, endDate: maxDates.endDate });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentAccount?.ad_account_id]);
 
   const buildDateOptions = (): DateRangeOptions => {
     return dateRange.preset
@@ -668,15 +711,21 @@ const MetaAds = () => {
         };
   };
 
+  // DateRangePicker onChange — only updates selected range, does NOT trigger a fetch
   const handleDateRangeChange = (newDateRange: { preset?: DatePreset; startDate: Date; endDate: Date }) => {
     setDateRange(newDateRange);
   };
 
-  const handleResync = () => {
-    loadMetaData(buildDateOptions(), true);
+  // Explicit sync: user clicks Sync / Re-sync button
+  const handleSync = () => {
+    syncMetaData(buildDateOptions(), dateRange);
   };
 
-  if (loading) {
+  // Determine if this is a first sync (no data yet) for loading UX
+  const hasData = creatives.length > 0 || lastSyncedAt !== null;
+
+  // Full-page loading spinner ONLY for first sync (no cached data visible)
+  if (loading && !hasData) {
     return (
       <div className="page">
         <div className="page-header">
@@ -687,6 +736,69 @@ const MetaAds = () => {
       </div>
     );
   }
+
+  // Empty state — no synced data yet, prompt user to sync
+  if (!hasData && !loading) {
+    return (
+      <div className="page">
+        <SEO
+          title="Meta Ads"
+          description="Analyze Meta (Facebook & Instagram) ad performance with ConversionIQ™ conversion intelligence."
+          canonical="/channels/meta-ads"
+          noindex={true}
+        />
+        <div className="page-header">
+          <div className="page-header-left">
+            <h1 className="page-title">Meta Ads</h1>
+            <p className="page-subtitle">Sync your ad data to get started</p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="error-banner" style={{
+            padding: '12px 20px',
+            marginBottom: '24px',
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: '8px',
+            color: '#ef4444'
+          }}>
+            {error}
+          </div>
+        )}
+
+        <div className="meta-ads-empty">
+          <Database size={48} strokeWidth={1} style={{ color: 'var(--accent-violet)', marginBottom: '16px' }} />
+          <h2 className="meta-ads-empty-title">No Ad Data Synced</h2>
+          <p className="meta-ads-empty-desc">
+            Select a date range and sync to load your Meta ad performance data.
+          </p>
+          <div className="meta-ads-empty-controls">
+            <DateRangePicker
+              value={dateRange}
+              onChange={handleDateRangeChange}
+            />
+            <button
+              className="meta-ads-sync-btn"
+              onClick={handleSync}
+              disabled={loading}
+            >
+              <RefreshCw size={16} strokeWidth={1.5} />
+              Sync Ad Data
+            </button>
+          </div>
+          <p className="meta-ads-empty-tip">
+            Tip: Use "Maximum" to pull up to 2 years of ad data for the fullest picture.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Sync status label — shows when and what range
+  const syncAgeText = lastSyncedAt ? formatSyncAge(lastSyncedAt) : null;
+  const syncRangeText = syncedDateRange ? getPresetLabel(syncedDateRange.preset) : null;
+  const isStaleData = lastSyncedAt ? (Date.now() - lastSyncedAt > 7 * 24 * 60 * 60 * 1000) : false;
 
   return (
     <div className="page">
@@ -700,21 +812,21 @@ const MetaAds = () => {
         <div className="page-header-left">
           <h1 className="page-title">Meta Ads</h1>
           <p className="page-subtitle">
-            {usingMockData ? (
-              <><AlertTriangle size={14} strokeWidth={1.5} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Sample data (Meta API unavailable)</>
-            ) : (
-              <><Check size={14} strokeWidth={1.5} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Live data{currentAccount?.ad_account_name ? ` · ${currentAccount.ad_account_name}` : ''}</>
-            )}
+            <Check size={14} strokeWidth={1.5} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Live data{currentAccount?.ad_account_name ? ` · ${currentAccount.ad_account_name}` : ''}
           </p>
         </div>
         <div className="page-header-right" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {lastSyncedAt && !usingMockData && (
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-              Synced {formatSyncAge(lastSyncedAt)}
+          {syncAgeText && (
+            <span style={{
+              fontSize: '12px',
+              color: isStaleData ? '#f59e0b' : 'var(--text-muted)',
+              whiteSpace: 'nowrap',
+            }}>
+              Synced {syncAgeText}{syncRangeText ? ` · ${syncRangeText}` : ''}
             </span>
           )}
           <button
-            onClick={handleResync}
+            onClick={handleSync}
             disabled={loading}
             title="Re-sync data from Meta"
             style={{
@@ -733,7 +845,7 @@ const MetaAds = () => {
             }}
           >
             <RefreshCw size={14} strokeWidth={1.5} style={loading ? { animation: 'spin 1s linear infinite' } : undefined} />
-            Re-sync
+            {loading ? 'Syncing...' : 'Re-sync'}
           </button>
           <DateRangePicker
             value={dateRange}
@@ -741,6 +853,25 @@ const MetaAds = () => {
           />
         </div>
       </div>
+
+      {/* Business type mismatch info banner */}
+      {businessTypeMismatch && (
+        <div style={{
+          padding: '12px 20px',
+          marginBottom: '16px',
+          background: 'rgba(99, 102, 241, 0.08)',
+          border: '1px solid rgba(99, 102, 241, 0.2)',
+          borderRadius: '8px',
+          color: 'var(--text-secondary)',
+          fontSize: '13px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}>
+          <Info size={16} strokeWidth={1.5} style={{ color: 'var(--accent-violet)', flexShrink: 0 }} />
+          Business type has changed since last sync. Re-sync to update ad classifications.
+        </div>
+      )}
 
       {error && (
         <div className="error-banner" style={{
@@ -756,7 +887,7 @@ const MetaAds = () => {
       )}
 
       {/* Campaign Type Dashboard */}
-      {!usingMockData && campaignMetrics.length > 0 && (
+      {campaignMetrics.length > 0 && (
         <CampaignTypeDashboard metrics={campaignMetrics} loading={loading} businessType={businessType} />
       )}
 

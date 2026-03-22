@@ -225,6 +225,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
   const isSubscriptionValid =
     (organization?.subscription_status === 'active' && (organization?.plan_tier !== 'free' || isFreePlanAdmin)) ||
     organization?.subscription_status === 'past_due' ||
+    organization?.subscription_status === 'canceling' ||
     (isTrialing && trialDaysRemaining > 0) ||
     trialingGracePeriod;
 
