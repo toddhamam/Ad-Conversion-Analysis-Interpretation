@@ -16,9 +16,12 @@ import {
   type OrgMetaIds,
   type AdAccountInfo,
   type AdAccountListResponse,
+  type ProductMetadata,
 } from '../services/metaApi';
 import { PLAN_LIMITS, type BusinessType } from '../types/organization';
 import { purchaseAccountBlock } from '../services/stripeApi';
+import { getScopedItem } from '../lib/scopedStorage';
+import ProductConfigurator from '../components/ProductConfigurator';
 import SEO from '../components/SEO';
 import Loading from '../components/Loading';
 import './Integrations.css';
@@ -49,6 +52,8 @@ function Integrations() {
   const [configPixels, setConfigPixels] = useState<Array<{ id: string; name: string }>>([]);
   const [configPixelsLoading, setConfigPixelsLoading] = useState(false);
   const [refreshingAvailable, setRefreshingAvailable] = useState(false);
+  const [configProducts, setConfigProducts] = useState<ProductMetadata[]>([]);
+  const [singleAccountProducts, setSingleAccountProducts] = useState<ProductMetadata[]>([]);
 
   // Determine if org supports multi-account
   const planTier = organization?.plan_tier || 'free';
@@ -66,6 +71,17 @@ function Integrations() {
     }
     return status;
   }, []);
+
+  // Load single-account products from localStorage (metadata only) when connected
+  useEffect(() => {
+    if (!metaStatus?.connected || supportsMultiAccount) return;
+    try {
+      const stored = getScopedItem('convertra_products');
+      if (!stored) return;
+      const full: Array<{ id: string; name: string; author: string; description: string; landingPageUrl: string; createdAt: string }> = JSON.parse(stored);
+      setSingleAccountProducts(full.map(p => ({ id: p.id, name: p.name, author: p.author, description: p.description, landingPageUrl: p.landingPageUrl, createdAt: p.createdAt })));
+    } catch { /* ignore parse errors */ }
+  }, [metaStatus?.connected, supportsMultiAccount]);
 
   const loadAdAccounts = useCallback(async () => {
     if (!supportsMultiAccount) return;
@@ -184,6 +200,7 @@ function Integrations() {
         adAccountId: selectedAccountId,
         pageId: selectedPageId || null,
         pixelId: selectedPixelId || null,
+        products: singleAccountProducts,
       });
       await refreshStatus();
       setMessage({ type: 'success', text: 'Configuration saved.' });
@@ -228,6 +245,21 @@ function Integrations() {
     setConfigPixelId(account.pixel_id || '');
     setConfigBusinessType(account.business_type || '');
 
+    // Load products from Supabase; migrate from account's localStorage if Supabase is empty
+    let products = account.products || [];
+    if (products.length === 0) {
+      try {
+        // Read from this specific account's scoped key (not the globally active account)
+        const accountKey = `convertra_products_${account.ad_account_id}`;
+        const stored = localStorage.getItem(accountKey) || localStorage.getItem('convertra_products');
+        if (stored) {
+          const full: Array<{ id: string; name: string; author: string; description: string; landingPageUrl: string; createdAt: string }> = JSON.parse(stored);
+          products = full.map(p => ({ id: p.id, name: p.name, author: p.author, description: p.description, landingPageUrl: p.landingPageUrl, createdAt: p.createdAt }));
+        }
+      } catch { /* ignore */ }
+    }
+    setConfigProducts(products);
+
     // Load available pixels for this ad account
     setConfigPixels([]);
     setConfigPixelsLoading(true);
@@ -249,6 +281,7 @@ function Integrations() {
         pageId: configPageId || null,
         pixelId: configPixelId || null,
         businessType: configBusinessType || null,
+        products: configProducts,
       });
       setConfiguringAccount(null);
       await loadAdAccounts();
@@ -256,6 +289,40 @@ function Integrations() {
       setMessage({ type: 'success', text: 'Account configuration saved.' });
     } catch (error: unknown) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to save configuration.' });
+    }
+  };
+
+  /** Auto-save products to Supabase when they change (single-account path).
+   *  Uses the *persisted* page/pixel values from metaStatus (not the uncommitted
+   *  dropdown selections) to avoid accidentally saving unsaved config changes. */
+  const handleSingleAccountProductsChange = async (newProducts: ProductMetadata[]) => {
+    setSingleAccountProducts(newProducts);
+    const accountId = metaStatus?.adAccountId;
+    if (accountId) {
+      try {
+        await saveMetaSelection({
+          adAccountId: accountId,
+          pageId: metaStatus?.pageId || null,
+          pixelId: metaStatus?.pixelId || null,
+          products: newProducts,
+        });
+      } catch {
+        // Products are already saved in localStorage by ProductConfigurator;
+        // Supabase save failed silently — will succeed on next full save
+      }
+    }
+  };
+
+  /** Auto-save products to Supabase when they change (multi-account configure panel) */
+  const handleConfigProductsChange = async (newProducts: ProductMetadata[]) => {
+    setConfigProducts(newProducts);
+    if (configuringAccount) {
+      try {
+        await configureAdAccount(configuringAccount, { products: newProducts });
+      } catch {
+        // Products are already saved in localStorage by ProductConfigurator;
+        // Supabase save failed silently — will succeed on next panel save
+      }
     }
   };
 
@@ -399,6 +466,18 @@ function Integrations() {
                       </button>
                     </div>
                   )}
+
+                  <div className="config-group">
+                    <label>Products / Offers</label>
+                    <p className="config-hint" style={{ marginBottom: 8 }}>
+                      Configure your products so CreativeIQ knows what you're advertising
+                    </p>
+                    <ProductConfigurator
+                      products={singleAccountProducts}
+                      onProductsChange={handleSingleAccountProductsChange}
+                      adAccountId={selectedAccountId || undefined}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -501,6 +580,7 @@ function Integrations() {
                               {account.ad_account_id}
                               {account.currency ? ` · ${account.currency}` : ''}
                               {account.business_type ? ` · ${account.business_type === 'leadgen' ? 'Lead Gen' : account.business_type === 'hybrid' ? 'Hybrid' : 'E-Commerce'}` : ''}
+                              {account.products && account.products.length > 0 ? ` · ${account.products.length} product${account.products.length > 1 ? 's' : ''}` : ''}
                               {account.page_id ? '' : ' · Needs page setup'}
                               {account.pixel_id ? '' : ' · Needs pixel setup'}
                             </span>
@@ -601,6 +681,17 @@ function Integrations() {
                               <p className="config-hint">
                                 Controls ConversionIQ™ metrics, labels, and AI analysis for this account
                               </p>
+                            </div>
+                            <div className="config-group">
+                              <label>Products / Offers</label>
+                              <p className="config-hint" style={{ marginBottom: 8 }}>
+                                Configure your products so CreativeIQ knows what you're advertising
+                              </p>
+                              <ProductConfigurator
+                                products={configProducts}
+                                onProductsChange={handleConfigProductsChange}
+                                adAccountId={configuringAccount || undefined}
+                              />
                             </div>
                             <div className="ad-account-configure-actions">
                               <button

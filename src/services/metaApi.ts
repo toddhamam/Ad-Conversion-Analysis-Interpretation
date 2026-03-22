@@ -42,6 +42,16 @@ interface AvailablePage {
   name: string;
 }
 
+/** Product metadata stored in Supabase (no images — those stay in localStorage) */
+export interface ProductMetadata {
+  id: string;
+  name: string;
+  author: string;
+  description: string;
+  landingPageUrl: string;
+  createdAt: string;
+}
+
 /** Info about an activated ad account (from organization_ad_accounts table) */
 export interface AdAccountInfo {
   id: string;              // UUID from organization_ad_accounts
@@ -53,6 +63,7 @@ export interface AdAccountInfo {
   account_status: number | null;
   currency: string | null;
   business_type: import('../types/organization').BusinessType | null;
+  products: ProductMetadata[] | null;
 }
 
 export interface OrgMetaIds {
@@ -220,6 +231,7 @@ export async function saveMetaSelection(selection: {
   adAccountId: string;
   pageId: string | null;
   pixelId: string | null;
+  products?: ProductMetadata[];
 }): Promise<{ success: boolean }> {
   const token = await getAuthToken();
   if (!token) throw new Error('Not authenticated');
@@ -573,6 +585,47 @@ interface MetaAdInsight {
 
 export type DetectedConversionType = 'purchase' | 'lead' | 'both' | 'none';
 
+// Meta reports conversions under multiple action types depending on tracking setup
+// (pixel-only, Conversions API/CAPI, or both). Match all related types and take the max.
+const PURCHASE_ACTION_TYPES = [
+  'offsite_conversion.fb_pixel_purchase', // Pixel-only tracking
+  'purchase',                              // Aggregated (pixel + CAPI)
+  'omni_purchase',                         // Omnipanel (includes in-store + online)
+];
+
+const LEAD_ACTION_TYPES = [
+  'lead',                                  // Aggregated lead events
+  'offsite_conversion.fb_pixel_lead',      // Pixel-only lead tracking
+  'onsite_conversion.lead_grouped',        // On-Facebook instant form leads
+];
+
+/**
+ * Get conversion count by checking all related action types for a conversion category.
+ * Returns the max value found across related types (they overlap as Meta aggregates differently).
+ */
+function getConversionCount(
+  actions: Array<{ action_type: string; value: string }> | undefined,
+  actionType: string
+): number {
+  if (!actions) return 0;
+
+  let typesToCheck: string[];
+
+  if (actionType === 'offsite_conversion.fb_pixel_purchase') {
+    typesToCheck = PURCHASE_ACTION_TYPES;
+  } else if (actionType === 'lead') {
+    typesToCheck = LEAD_ACTION_TYPES;
+  } else {
+    // Exact match for unknown action types
+    return parseInt(actions.find(a => a.action_type === actionType)?.value || '0', 10);
+  }
+
+  const values = typesToCheck.map(type =>
+    parseInt(actions.find(a => a.action_type === type)?.value || '0', 10)
+  );
+  return Math.max(...values, 0);
+}
+
 export interface AdCreative {
   id: string;
   headline: string;
@@ -692,12 +745,19 @@ function resolveResults(
 ): number {
   const resultActionType = getResultActionType(objective);
   if (resultActionType) {
+    // For purchase/lead result types, check all related action types
+    if (resultActionType === 'offsite_conversion.fb_pixel_purchase') {
+      return Math.max(...PURCHASE_ACTION_TYPES.map(t => getAction(t)), 0);
+    }
+    if (resultActionType === 'lead') {
+      return Math.max(...LEAD_ACTION_TYPES.map(t => getAction(t)), 0);
+    }
     return getAction(resultActionType);
   }
-  // Fallback: pick the first non-zero conversion in priority order
-  const purchases = getAction('offsite_conversion.fb_pixel_purchase');
+  // Fallback: pick the first non-zero conversion in priority order (check all related types)
+  const purchases = Math.max(...PURCHASE_ACTION_TYPES.map(t => getAction(t)), 0);
   if (purchases > 0) return purchases;
-  const leads = getAction('lead');
+  const leads = Math.max(...LEAD_ACTION_TYPES.map(t => getAction(t)), 0);
   if (leads > 0) return leads;
   const lpv = getAction('landing_page_view');
   if (lpv > 0) return lpv;
@@ -718,16 +778,30 @@ export async function fetchAdInsights(dateOptions?: DateRangeOptions): Promise<M
   }
 
   try {
-    const data = await metaFetch(`${adAccountId}/insights`, {
-      params: {
+    const allInsights: MetaAdInsight[] = [];
+    let after: string | undefined;
+
+    // Paginate through all ad insights (Meta returns max 100 per page)
+    do {
+      const params: Record<string, string> = {
         fields: 'ad_id,ad_name,campaign_id,campaign_name,adset_id,adset_name,impressions,clicks,spend,actions,ctr,cpc,cpp,frequency',
         level: 'ad',
         limit: '100',
         filtering: JSON.stringify([{ field: 'impressions', operator: 'GREATER_THAN', value: 0 }]),
         ...buildDateParams(dateOptions),
-      },
-    });
-    return data.data || [];
+      };
+      if (after) params.after = after;
+
+      const data = await metaFetch(`${adAccountId}/insights`, { params });
+      allInsights.push(...(data.data || []));
+
+      after = data.paging?.cursors?.after;
+      // Safety cap — 1000 ads covers the vast majority of SMB accounts.
+      // Each page is a separate proxied+rate-guarded API call, so unlimited
+      // pagination risks rate limit violations on very large accounts.
+    } while (after && allInsights.length < 1000);
+
+    return allInsights;
   } catch (error) {
     console.error('Error fetching ad insights:', error);
     throw error;
@@ -776,7 +850,7 @@ async function fetchAdCreativeDetails(adId: string): Promise<{
       body = creative?.body || spec?.link_data?.message || spec?.link_data?.description || spec?.video_data?.message;
     }
 
-    imageUrl = creative?.image_url || spec?.link_data?.picture || spec?.video_data?.picture;
+    imageUrl = creative?.image_url || creative?.thumbnail_url || spec?.link_data?.picture || spec?.video_data?.picture;
 
     if (logThis) {
       console.log(`Extracted creative for ${adId}:`, { headline, hasBody: !!body, hasImage: !!imageUrl });
@@ -825,13 +899,9 @@ export async function fetchAdCreatives(dateOptions?: DateRangeOptions, options?:
       let detectedConversionType: DetectedConversionType | undefined;
 
       if (actionType === 'hybrid') {
-        // Hybrid: look for both purchase and lead conversions
-        const purchases = parseInt(
-          ad.actions?.find((a: any) => a.action_type === 'offsite_conversion.fb_pixel_purchase')?.value || '0', 10
-        );
-        const leads = parseInt(
-          ad.actions?.find((a: any) => a.action_type === 'lead')?.value || '0', 10
-        );
+        // Hybrid: look for both purchase and lead conversions across all related action types
+        const purchases = getConversionCount(ad.actions, 'offsite_conversion.fb_pixel_purchase');
+        const leads = getConversionCount(ad.actions, 'lead');
 
         if (purchases > 0 && leads > 0) {
           detectedConversionType = 'both';
@@ -847,9 +917,7 @@ export async function fetchAdCreatives(dateOptions?: DateRangeOptions, options?:
           conversionCount = 0;
         }
       } else {
-        conversionCount = parseInt(
-          ad.actions?.find((action: any) => action.action_type === actionType)?.value || '0', 10
-        );
+        conversionCount = getConversionCount(ad.actions, actionType);
       }
 
       const spend = parseFloat(ad.spend || '0');
@@ -926,17 +994,11 @@ export async function fetchTrafficTypes(dateOptions?: DateRangeOptions, options?
     return (data.data || []).map((campaign: any, index: number) => {
       let conversions: number;
       if (trafficActionType === 'hybrid') {
-        const purchases = parseInt(
-          campaign.actions?.find((a: any) => a.action_type === 'offsite_conversion.fb_pixel_purchase')?.value || '0', 10
-        );
-        const leads = parseInt(
-          campaign.actions?.find((a: any) => a.action_type === 'lead')?.value || '0', 10
-        );
+        const purchases = getConversionCount(campaign.actions, 'offsite_conversion.fb_pixel_purchase');
+        const leads = getConversionCount(campaign.actions, 'lead');
         conversions = purchases + leads;
       } else {
-        conversions = parseInt(
-          campaign.actions?.find((a: any) => a.action_type === trafficActionType)?.value || '0', 10
-        );
+        conversions = getConversionCount(campaign.actions, trafficActionType);
       }
       return {
         id: campaign.campaign_id || `traffic-${index}`,
@@ -1006,8 +1068,13 @@ export async function fetchCampaignSummaries(dateOptions?: DateRangeOptions): Pr
       const getUniqueAction = (actionType: string): number =>
         parseInt(campaign.unique_actions?.find((a: any) => a.action_type === actionType)?.value || '0', 10);
 
-      const purchases = getAction('offsite_conversion.fb_pixel_purchase');
-      const purchaseValue = getActionValue('offsite_conversion.fb_pixel_purchase');
+      // Check all purchase-related action types (pixel, CAPI, omnipanel)
+      const purchases = Math.max(
+        ...PURCHASE_ACTION_TYPES.map(t => getAction(t)), 0
+      );
+      const purchaseValue = Math.max(
+        ...PURCHASE_ACTION_TYPES.map(t => getActionValue(t)), 0
+      );
       const roas = spend > 0 ? purchaseValue / spend : 0;
       const campaignName = campaign.campaign_name || 'Unknown';
       const campaignId = campaign.campaign_id || `campaign-${index}`;
@@ -1024,7 +1091,7 @@ export async function fetchCampaignSummaries(dateOptions?: DateRangeOptions): Pr
         impressions,
         clicks,
         ctr,
-        leads: getAction('lead'),
+        leads: Math.max(...LEAD_ACTION_TYPES.map(t => getAction(t)), 0),
         linkClicks: getAction('link_click'),
         uniqueLinkClicks: getUniqueAction('link_click'),
         postEngagements: getAction('post_engagement'),
@@ -1093,15 +1160,11 @@ export async function fetchAccountLevelInsights(dateOptions?: DateRangeOptions):
 
     // Use account-level `actions` for purchases — deduplicates across campaigns
     // (Meta's unique_actions doesn't support offsite_conversion action types)
-    const uniquePurchases = parseInt(
-      row.actions?.find((a: any) => a.action_type === 'offsite_conversion.fb_pixel_purchase')?.value || '0',
-      10
-    );
+    // Check all purchase-related action types (pixel, CAPI, omnipanel)
+    const uniquePurchases = getConversionCount(row.actions, 'offsite_conversion.fb_pixel_purchase');
 
-    const uniqueLeads = parseInt(
-      row.actions?.find((a: any) => a.action_type === 'lead')?.value || '0',
-      10
-    );
+    // Check all lead-related action types
+    const uniqueLeads = getConversionCount(row.actions, 'lead');
 
     return { reach, uniqueLinkClicks, uniquePurchases, uniqueLeads };
   } catch (error: unknown) {
@@ -2327,11 +2390,12 @@ export async function deactivateAdAccount(adAccountId: string): Promise<void> {
   }
 }
 
-/** Update configuration (page_id, pixel_id) for an activated ad account */
+/** Update configuration (page_id, pixel_id, products) for an activated ad account */
 export async function configureAdAccount(adAccountId: string, config: {
   pageId?: string | null;
   pixelId?: string | null;
   businessType?: import('../types/organization').BusinessType | null;
+  products?: ProductMetadata[];
 }): Promise<void> {
   const token = await getAuthToken();
   const res = await fetch('/api/meta/ad-accounts', {
@@ -2346,6 +2410,7 @@ export async function configureAdAccount(adAccountId: string, config: {
       pageId: config.pageId,
       pixelId: config.pixelId,
       businessType: config.businessType,
+      ...(config.products !== undefined ? { products: config.products } : {}),
     }),
   });
   if (!res.ok) {

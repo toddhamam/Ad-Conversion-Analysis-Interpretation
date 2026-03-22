@@ -26,9 +26,71 @@ import {
   clearLegacyCache
 } from '../services/imageCache';
 import Loading from '../components/Loading';
-import { AlertTriangle, Check } from 'lucide-react';
+import { AlertTriangle, Check, RefreshCw } from 'lucide-react';
 import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
+import {
+  saveToSwipeLibrary,
+  checkSavedHashes,
+  computeContentHash,
+  type SwipeLibrarySavePayload,
+} from '../services/swipeLibraryApi';
 import './MetaAds.css';
+
+// --- Meta Ads data cache (localStorage) ---
+// Prevents re-syncing from Meta API on every page navigation.
+// Data is cached per account + date range and reused for 7 days.
+const META_ADS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+interface MetaAdsCacheEntry {
+  creatives: AdCreative[];
+  campaignMetrics: CampaignTypeMetrics[];
+  timestamp: number;
+}
+
+function getMetaAdsCacheKey(accountId: string | undefined, businessType: string, dateOptions?: DateRangeOptions): string {
+  const acct = accountId || 'default';
+  const dateKey = dateOptions
+    ? JSON.stringify(dateOptions)
+    : 'default';
+  return `ci_meta_ads_cache_${acct}_${businessType}_${dateKey}`;
+}
+
+function readMetaAdsCache(accountId: string | undefined, businessType: string, dateOptions?: DateRangeOptions): MetaAdsCacheEntry | null {
+  try {
+    const key = getMetaAdsCacheKey(accountId, businessType, dateOptions);
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const entry: MetaAdsCacheEntry = JSON.parse(raw);
+    if (Date.now() - entry.timestamp > META_ADS_CACHE_TTL_MS) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return entry;
+  } catch {
+    return null;
+  }
+}
+
+function writeMetaAdsCache(accountId: string | undefined, businessType: string, dateOptions: DateRangeOptions | undefined, data: MetaAdsCacheEntry): void {
+  try {
+    const key = getMetaAdsCacheKey(accountId, businessType, dateOptions);
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch {
+    // QuotaExceeded — non-critical, just skip caching
+  }
+}
+
+// Format how long ago data was synced
+function formatSyncAge(timestamp: number): string {
+  const diffMs = Date.now() - timestamp;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHrs = Math.floor(diffMin / 60);
+  if (diffHrs < 24) return `${diffHrs}h ago`;
+  const diffDays = Math.floor(diffHrs / 24);
+  return `${diffDays}d ago`;
+}
 
 // Helper to calculate dates from preset
 function getPresetDates(preset: DatePreset): { startDate: Date; endDate: Date } {
@@ -120,6 +182,29 @@ const MetaAds = () => {
   const [fetchingImageId, setFetchingImageId] = useState<string | null>(null);
   const autoFetchingRefsRef = useRef(false);
 
+  // Swipe Library tracking — tracks which element types are saved per ad
+  const [savedElements, setSavedElements] = useState<Map<string, Set<string>>>(new Map());
+  const [savingAdId, setSavingAdId] = useState<string | null>(null);
+  const [savingAll, setSavingAll] = useState(false);
+
+  // Selective save modal
+  const [selectSaveCreative, setSelectSaveCreative] = useState<AdCreative | null>(null);
+  const [saveSelection, setSaveSelection] = useState({ headline: true, body: true, image: true });
+
+  // Save feedback toast
+  const [saveToast, setSaveToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const saveToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Track failed image loads for UI fallback
+  const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
+
+  // Show toast with auto-dismiss
+  const showToast = useCallback((type: 'success' | 'error', message: string) => {
+    if (saveToastTimer.current) clearTimeout(saveToastTimer.current);
+    setSaveToast({ type, message });
+    saveToastTimer.current = setTimeout(() => setSaveToast(null), 4000);
+  }, []);
+
   // Update cached image IDs when cache changes
   const refreshCachedIds = useCallback(() => {
     const stats = getCacheStats();
@@ -155,6 +240,203 @@ const MetaAds = () => {
       setFetchingImageId(null);
     }
   };
+
+  // Helper: check if all available elements of an ad are already saved
+  const isFullySaved = (creative: AdCreative): boolean => {
+    const saved = savedElements.get(creative.id);
+    if (!saved) return false;
+    if (creative.headline && !saved.has('headline')) return false;
+    if (creative.bodySnippet && !saved.has('body_copy')) return false;
+    if (creative.imageUrl && !failedImageIds.has(creative.id) && getCachedImage(creative.id) && !saved.has('image')) return false;
+    return true;
+  };
+
+  // Helper: mark specific element types as saved for an ad
+  const markElementsSaved = (adId: string, types: string[]) => {
+    setSavedElements(prev => {
+      const next = new Map(prev);
+      const existing = next.get(adId) || new Set<string>();
+      const updated = new Set(existing);
+      for (const t of types) updated.add(t);
+      next.set(adId, updated);
+      return next;
+    });
+  };
+
+  // Open selective save modal for an ad
+  const openSaveModal = (creative: AdCreative) => {
+    const saved = savedElements.get(creative.id) || new Set<string>();
+    const hasImage = !!(creative.imageUrl && !failedImageIds.has(creative.id) && getCachedImage(creative.id));
+    setSaveSelection({
+      headline: !!creative.headline && !saved.has('headline'),
+      body: !!creative.bodySnippet && !saved.has('body_copy'),
+      image: hasImage && !saved.has('image'),
+    });
+    setSelectSaveCreative(creative);
+  };
+
+  // Perform save with selected elements. Returns true on success.
+  const performSave = async (creative: AdCreative, selection?: { headline: boolean; body: boolean; image: boolean }): Promise<boolean> => {
+    if (!currentAccount?.ad_account_id) {
+      showToast('error', 'No ad account configured');
+      return false;
+    }
+
+    const sel = selection || saveSelection;
+    setSavingAdId(creative.id);
+    setSelectSaveCreative(null);
+
+    try {
+      const items: SwipeLibrarySavePayload[] = [];
+      const perf = {
+        cvr: creative.conversionRate,
+        cpa: creative.costPerConversion,
+        ctr: creative.clickThroughRate,
+        roas: creative.roas,
+        conversions: creative.conversions,
+        spend: creative.spend,
+      };
+
+      if (sel.headline && creative.headline) {
+        items.push({
+          element_type: 'headline',
+          text_content: creative.headline,
+          content_hash: await computeContentHash(creative.headline),
+          meta_ad_id: creative.id,
+          meta_campaign_name: creative.campaignName,
+          meta_adset_name: creative.adsetName,
+          performance_snapshot: perf,
+        });
+      }
+
+      if (sel.body && creative.bodySnippet) {
+        items.push({
+          element_type: 'body_copy',
+          text_content: creative.bodySnippet,
+          content_hash: await computeContentHash(creative.bodySnippet),
+          meta_ad_id: creative.id,
+          meta_campaign_name: creative.campaignName,
+          meta_adset_name: creative.adsetName,
+          performance_snapshot: perf,
+        });
+      }
+
+      if (sel.image && creative.imageUrl) {
+        const cached = getCachedImage(creative.id);
+        if (cached) {
+          const img = new Image();
+          img.src = `data:${cached.mimeType || 'image/jpeg'};base64,${cached.base64Data}`;
+          await new Promise<void>((resolve) => { img.onload = () => resolve(); img.onerror = () => resolve(); });
+          const canvas = document.createElement('canvas');
+          const scale = 200 / (img.naturalWidth || 200);
+          canvas.width = 200;
+          canvas.height = Math.round((img.naturalHeight || 200) * scale);
+          const ctx = canvas.getContext('2d');
+          if (ctx) ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const thumbnailDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+          const thumbnail = thumbnailDataUrl.split(',')[1];
+
+          items.push({
+            element_type: 'image',
+            image_data: cached.base64Data,
+            image_thumbnail: thumbnail,
+            image_mime_type: cached.mimeType || 'image/jpeg',
+            content_hash: await computeContentHash(cached.base64Data.slice(0, 1000)),
+            meta_ad_id: creative.id,
+            meta_campaign_name: creative.campaignName,
+            meta_adset_name: creative.adsetName,
+            performance_snapshot: perf,
+          });
+        }
+      }
+
+      if (items.length === 0) {
+        showToast('error', 'No elements selected to save');
+        return false;
+      }
+
+      const result = await saveToSwipeLibrary(currentAccount.ad_account_id, items);
+      const savedTypes = items.map(i => i.element_type);
+      markElementsSaved(creative.id, savedTypes);
+
+      const types = items.map(i => i.element_type === 'body_copy' ? 'body' : i.element_type).join(', ');
+      if (result.saved > 0) {
+        showToast('success', `Saved ${result.saved} element${result.saved > 1 ? 's' : ''} (${types})`);
+      } else if (result.duplicates > 0) {
+        showToast('success', 'Already in your library');
+        markElementsSaved(creative.id, savedTypes);
+      }
+      return true;
+    } catch (err: unknown) {
+      console.error('Failed to save to Swipe Library:', err);
+      const msg = err instanceof Error ? err.message : 'Save failed';
+      showToast('error', msg.includes('Unauthorized') ? 'Please sign in to save' : `Save failed: ${msg}`);
+      return false;
+    } finally {
+      setSavingAdId(null);
+    }
+  };
+
+  // Bulk save all winning ads to Swipe Library (saves all elements)
+  const handleSaveAllWinning = async () => {
+    const winning = creatives.filter(c => c.status === 'Winning' && c.conversions > 0);
+    if (winning.length === 0) return;
+    setSavingAll(true);
+    try {
+      let savedCount = 0;
+      for (const creative of winning) {
+        if (!isFullySaved(creative)) {
+          const ok = await performSave(creative, { headline: true, body: true, image: true });
+          if (ok) savedCount++;
+        }
+      }
+      if (savedCount > 0) {
+        showToast('success', `Saved elements from ${savedCount} winning ad${savedCount > 1 ? 's' : ''}`);
+      } else {
+        showToast('error', 'No ads were saved — check your connection');
+      }
+    } catch (err: unknown) {
+      console.error('Bulk save error:', err);
+      showToast('error', 'Some ads failed to save');
+    } finally {
+      setSavingAll(false);
+    }
+  };
+
+  // Check which ad elements are already saved on load
+  const checkSavedAds = useCallback(async (creativesData: AdCreative[]) => {
+    if (!currentAccount?.ad_account_id) return;
+    try {
+      const allHashes: string[] = [];
+      const hashToAdInfo = new Map<string, { adId: string; elementType: string }>();
+      for (const c of creativesData) {
+        if (c.headline) {
+          const h = await computeContentHash(c.headline);
+          allHashes.push(h);
+          hashToAdInfo.set(h, { adId: c.id, elementType: 'headline' });
+        }
+        if (c.bodySnippet) {
+          const h = await computeContentHash(c.bodySnippet);
+          allHashes.push(h);
+          hashToAdInfo.set(h, { adId: c.id, elementType: 'body_copy' });
+        }
+      }
+      if (allHashes.length === 0) return;
+      const existing = await checkSavedHashes(currentAccount.ad_account_id, allHashes);
+      const elemMap = new Map<string, Set<string>>();
+      for (const hash of existing) {
+        const info = hashToAdInfo.get(hash);
+        if (info) {
+          const set = elemMap.get(info.adId) || new Set<string>();
+          set.add(info.elementType);
+          elemMap.set(info.adId, set);
+        }
+      }
+      setSavedElements(elemMap);
+    } catch (err) {
+      console.error('Failed to check saved hashes:', err);
+    }
+  }, [currentAccount?.ad_account_id]);
 
   // Auto-fetch top performing ad images until we have 3 HIGH-QUALITY references
   // This ensures we always have enough quality references for ad generation
@@ -262,11 +544,37 @@ const MetaAds = () => {
     endDate: defaultDates.endDate,
   });
 
-  // Sort creatives by conversion rate (best performers first)
-  const sortedCreatives = [...creatives].sort((a, b) => b.conversionRate - a.conversionRate);
+  // Filter out zero-conversion ads (not useful in the UI — zero-conv ads are
+  // still included in backend channel analysis for the full picture)
+  // Sort by conversion rate (best performers first)
+  const sortedCreatives = [...creatives]
+    .filter(c => c.conversions > 0)
+    .sort((a, b) => b.conversionRate - a.conversionRate);
 
-  const loadMetaData = useCallback(async (dateOptions?: DateRangeOptions) => {
-    console.log('🚀 Starting Meta data load...', dateOptions);
+  // Track when data was last synced for UI display
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+
+  const loadMetaData = useCallback(async (dateOptions?: DateRangeOptions, forceRefresh = false) => {
+    console.log('🚀 Starting Meta data load...', dateOptions, forceRefresh ? '(forced)' : '');
+
+    // Check cache first (unless force refresh)
+    if (!forceRefresh) {
+      const cached = readMetaAdsCache(currentAccount?.ad_account_id, businessType, dateOptions);
+      if (cached) {
+        console.log('✅ Using cached Meta data from', new Date(cached.timestamp).toLocaleString());
+        setCreatives(cached.creatives);
+        setCampaignMetrics(cached.campaignMetrics);
+        setUsingMockData(false);
+        setError(null);
+        setLoading(false);
+        setLastSyncedAt(cached.timestamp);
+
+        // Still run background tasks on cached data
+        autoFetchTopImages(cached.creatives);
+        checkSavedAds(cached.creatives);
+        return;
+      }
+    }
 
     try {
       setLoading(true);
@@ -303,12 +611,24 @@ const MetaAds = () => {
       setCampaignMetrics(aggregatedMetrics);
       setUsingMockData(false);
 
+      // Cache the fetched data
+      const now = Date.now();
+      writeMetaAdsCache(currentAccount?.ad_account_id, businessType, dateOptions, {
+        creatives: creativesData,
+        campaignMetrics: aggregatedMetrics,
+        timestamp: now,
+      });
+      setLastSyncedAt(now);
+
       // Auto-fetch top performing images as references
       autoFetchTopImages(creativesData);
-    } catch (err: any) {
+
+      // Check which ads are already saved to Swipe Library
+      checkSavedAds(creativesData);
+    } catch (err: unknown) {
       console.error('❌ Failed to load Meta data:', err);
-      console.error('❌ Full error object:', err);
-      setError(`Could not load Meta data: ${err.message}. Displaying sample data.`);
+      const message = err instanceof Error ? err.message : String(err);
+      setError(`Could not load Meta data: ${message}. Displaying sample data.`);
 
       // Fallback to mock data
       setCreatives(mockCreatives as any);
@@ -317,7 +637,7 @@ const MetaAds = () => {
     } finally {
       setLoading(false);
     }
-  }, [autoFetchTopImages, businessType]);
+  }, [autoFetchTopImages, businessType, currentAccount?.ad_account_id]);
 
   // Initialize cache IDs on mount
   useEffect(() => {
@@ -337,8 +657,23 @@ const MetaAds = () => {
     loadMetaData(dateOptions);
   }, [dateRange, loadMetaData, currentAccount?.ad_account_id]);
 
+  const buildDateOptions = (): DateRangeOptions => {
+    return dateRange.preset
+      ? { datePreset: dateRange.preset }
+      : {
+          timeRange: {
+            since: formatDateForApi(dateRange.startDate),
+            until: formatDateForApi(dateRange.endDate),
+          },
+        };
+  };
+
   const handleDateRangeChange = (newDateRange: { preset?: DatePreset; startDate: Date; endDate: Date }) => {
     setDateRange(newDateRange);
+  };
+
+  const handleResync = () => {
+    loadMetaData(buildDateOptions(), true);
   };
 
   if (loading) {
@@ -372,7 +707,34 @@ const MetaAds = () => {
             )}
           </p>
         </div>
-        <div className="page-header-right">
+        <div className="page-header-right" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {lastSyncedAt && !usingMockData && (
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+              Synced {formatSyncAge(lastSyncedAt)}
+            </span>
+          )}
+          <button
+            onClick={handleResync}
+            disabled={loading}
+            title="Re-sync data from Meta"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 14px',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-primary)',
+              borderRadius: '8px',
+              color: 'var(--text-secondary)',
+              fontSize: '13px',
+              fontWeight: 500,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.6 : 1,
+            }}
+          >
+            <RefreshCw size={14} strokeWidth={1.5} style={loading ? { animation: 'spin 1s linear infinite' } : undefined} />
+            Re-sync
+          </button>
           <DateRangePicker
             value={dateRange}
             onChange={handleDateRangeChange}
@@ -396,6 +758,32 @@ const MetaAds = () => {
       {/* Campaign Type Dashboard */}
       {!usingMockData && campaignMetrics.length > 0 && (
         <CampaignTypeDashboard metrics={campaignMetrics} loading={loading} businessType={businessType} />
+      )}
+
+      {creatives.some(c => c.status === 'Winning') && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+          <button
+            className="save-library-btn"
+            onClick={handleSaveAllWinning}
+            disabled={savingAll}
+            style={{
+              padding: '10px 20px',
+              background: 'rgba(212, 225, 87, 0.1)',
+              border: '1px solid rgba(212, 225, 87, 0.3)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--text-primary)',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: savingAll ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              opacity: savingAll ? 0.7 : 1,
+            }}
+          >
+            {savingAll ? '⏳ Saving...' : '🔖 Save All Winning Ads'}
+          </button>
+        </div>
       )}
 
       <div className="creative-grid">
@@ -451,10 +839,10 @@ const MetaAds = () => {
             </div>
 
             {/* AD CREATIVE IMAGE/VIDEO - 1080x1080 format */}
-            {creative.imageUrl ? (
+            {creative.imageUrl && !failedImageIds.has(creative.id) ? (
               <div style={{
                 width: '100%',
-                aspectRatio: '1 / 1',  // Square format for 1080x1080 images
+                aspectRatio: '1 / 1',
                 overflow: 'hidden',
                 borderRadius: '8px',
                 marginBottom: '16px'
@@ -465,42 +853,15 @@ const MetaAds = () => {
                   style={{
                     width: '100%',
                     height: '100%',
-                    objectFit: 'cover',  // Crop to fit if needed
+                    objectFit: 'cover',
                     display: 'block'
                   }}
-                  onError={(e) => {
-                    console.error(`❌ Image failed to load for ad ${creative.id}:`, creative.imageUrl);
-                    // Show placeholder instead of hiding
-                    const parent = e.currentTarget.parentElement;
-                    if (parent) {
-                      parent.innerHTML = `
-                        <div style="
-                          width: 100%;
-                          height: 100%;
-                          display: flex;
-                          align-items: center;
-                          justify-content: center;
-                          background: var(--surface-secondary);
-                          border-radius: 8px;
-                        ">
-                          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                            <circle cx="8.5" cy="8.5" r="1.5"/>
-                            <polyline points="21 15 16 10 5 21"/>
-                          </svg>
-                        </div>
-                      `;
-                    }
+                  onError={() => {
+                    setFailedImageIds(prev => new Set(prev).add(creative.id));
                   }}
                   onLoad={(e) => {
-                    console.log(`✅ Image loaded successfully for ad ${creative.id}`);
-                    // Capture the image for use in ad generation
                     const imgElement = e.currentTarget as HTMLImageElement;
-                    const captured = captureImage(imgElement, creative.id, creative.conversionRate, creative.headline, creative.bodySnippet);
-                    if (captured) {
-                      const stats = getCacheStats();
-                      console.log(`📸 Image cache now has ${stats.count} images (top: ${stats.topConversionRate.toFixed(1)}% conv rate)`);
-                    }
+                    captureImage(imgElement, creative.id, creative.conversionRate, creative.headline, creative.bodySnippet);
                   }}
                 />
               </div>
@@ -510,15 +871,20 @@ const MetaAds = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'var(--surface-secondary)',
+                background: 'var(--bg-secondary)',
                 borderRadius: '8px',
-                marginBottom: '16px'
+                marginBottom: '16px',
+                color: 'var(--text-muted)',
+                fontSize: '12px',
+                flexDirection: 'column',
+                gap: '8px'
               }}>
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
                   <circle cx="8.5" cy="8.5" r="1.5"/>
                   <polyline points="21 15 16 10 5 21"/>
                 </svg>
+                {failedImageIds.has(creative.id) && <span>Image unavailable</span>}
               </div>
             )}
 
@@ -582,6 +948,35 @@ const MetaAds = () => {
                   )}
                 </button>
               )}
+
+              {/* Save to Swipe Library Button */}
+              <button
+                className={`save-library-btn ${isFullySaved(creative) ? 'is-saved' : savedElements.has(creative.id) ? 'is-partial' : ''}`}
+                onClick={() => openSaveModal(creative)}
+                disabled={savingAdId === creative.id || isFullySaved(creative)}
+              >
+                {savingAdId === creative.id ? (
+                  <>
+                    <span className="save-library-icon">⏳</span>
+                    Saving...
+                  </>
+                ) : isFullySaved(creative) ? (
+                  <>
+                    <span className="save-library-icon">✓</span>
+                    Saved
+                  </>
+                ) : savedElements.has(creative.id) ? (
+                  <>
+                    <span className="save-library-icon">🔖</span>
+                    Save More
+                  </>
+                ) : (
+                  <>
+                    <span className="save-library-icon">🔖</span>
+                    Save to Library
+                  </>
+                )}
+              </button>
             </div>
           </div>
         ))}
@@ -593,6 +988,109 @@ const MetaAds = () => {
           ad={analyzingAd}
           onClose={() => setAnalyzingAd(null)}
         />
+      )}
+
+      {/* Save to Library Modal — selective element picker */}
+      {selectSaveCreative && (() => {
+        const alreadySaved = savedElements.get(selectSaveCreative.id) || new Set<string>();
+        return (
+          <div className="save-modal-overlay" onClick={() => setSelectSaveCreative(null)}>
+            <div className="save-modal" onClick={e => e.stopPropagation()}>
+              <h3 className="save-modal-title">Save to Swipe Library</h3>
+              <p className="save-modal-subtitle">Choose which elements to save</p>
+
+              <div className="save-modal-options">
+                {selectSaveCreative.headline && (
+                  <label className={`save-modal-option ${alreadySaved.has('headline') ? 'is-saved' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={saveSelection.headline}
+                      disabled={alreadySaved.has('headline')}
+                      onChange={e => setSaveSelection(prev => ({ ...prev, headline: e.target.checked }))}
+                    />
+                    <div className="save-modal-option-content">
+                      <span className="save-modal-option-type">
+                        Headline {alreadySaved.has('headline') && <span className="save-modal-saved-badge">Saved</span>}
+                      </span>
+                      <span className="save-modal-option-preview">{selectSaveCreative.headline}</span>
+                    </div>
+                  </label>
+                )}
+
+                {selectSaveCreative.bodySnippet && (
+                  <label className={`save-modal-option ${alreadySaved.has('body_copy') ? 'is-saved' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={saveSelection.body}
+                      disabled={alreadySaved.has('body_copy')}
+                      onChange={e => setSaveSelection(prev => ({ ...prev, body: e.target.checked }))}
+                    />
+                    <div className="save-modal-option-content">
+                      <span className="save-modal-option-type">
+                        Body Copy {alreadySaved.has('body_copy') && <span className="save-modal-saved-badge">Saved</span>}
+                      </span>
+                      <span className="save-modal-option-preview">{selectSaveCreative.bodySnippet}</span>
+                    </div>
+                  </label>
+                )}
+
+                {selectSaveCreative.imageUrl && !failedImageIds.has(selectSaveCreative.id) && (
+                  <label className={`save-modal-option ${alreadySaved.has('image') ? 'is-saved' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={saveSelection.image}
+                      disabled={alreadySaved.has('image')}
+                      onChange={e => setSaveSelection(prev => ({ ...prev, image: e.target.checked }))}
+                    />
+                    <div className="save-modal-option-content">
+                      <span className="save-modal-option-type">
+                        Image {alreadySaved.has('image') && <span className="save-modal-saved-badge">Saved</span>}
+                      </span>
+                      {getCachedImage(selectSaveCreative.id) ? (
+                        <img
+                          src={selectSaveCreative.imageUrl}
+                          alt=""
+                          className="save-modal-image-preview"
+                        />
+                      ) : (
+                        <span className="save-modal-image-note">
+                          Image visible but not cached — will be skipped
+                        </span>
+                      )}
+                    </div>
+                  </label>
+                )}
+              </div>
+
+              <div className="save-modal-metrics">
+                CVR {selectSaveCreative.conversionRate}% · CPA ${(selectSaveCreative.costPerConversion || 0).toFixed(2)} · {selectSaveCreative.conversions} conversions
+              </div>
+
+              <div className="save-modal-actions">
+                <button
+                  className="save-modal-cancel"
+                  onClick={() => setSelectSaveCreative(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="save-modal-confirm"
+                  disabled={!saveSelection.headline && !saveSelection.body && !saveSelection.image}
+                  onClick={() => performSave(selectSaveCreative)}
+                >
+                  Save Selected
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Save feedback toast */}
+      {saveToast && (
+        <div className={`save-toast save-toast-${saveToast.type}`}>
+          {saveToast.type === 'success' ? '✓' : '⚠'} {saveToast.message}
+        </div>
       )}
     </div>
   );

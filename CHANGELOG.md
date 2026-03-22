@@ -32,6 +32,153 @@ Deep analysis comparing the course framework against the current system identifi
 - Added "Hypotheses Worth Testing" for optimizer to explore organically (deliberate typo, scarcity, shared identity, give-first, ad count specificity)
 - Updated "What Works" with mixed subject line pool insight
 
+## 2026-03-20 — Fix Insights blank page crash from missing analysis data
+
+### What
+The `/insights` page showed a completely blank white screen — no sidebar, no header, nothing — when cached channel analysis data was missing expected properties like `recommendations`, `performanceBreakdown`, or `audienceInsights`.
+
+### Why
+`ChannelInsightsPanel` accessed nested properties like `analysis.recommendations.immediate` without null-checking the parent object. When cached analysis data (from localStorage) had an older format that didn't include all expected sections, accessing `.immediate` on `undefined` threw a `TypeError` that tore down the entire React tree. The error was invisible in the browser console because `Sentry.reactErrorHandler()` in `main.tsx` silently captured errors without logging them.
+
+### Changed
+- **`src/components/ChannelInsightsPanel.tsx`** — Added null guards for all top-level analysis sub-objects (`performanceBreakdown`, `winningPatterns`, `losingPatterns`, `audienceInsights`, `recommendations`). Each section now conditionally renders only when its data exists, preventing crashes from incomplete or stale cached data.
+- **`src/main.tsx`** — Wrapped React 19 error handlers to also `console.error` the error alongside sending to Sentry, so future crashes are visible in the browser console instead of being silently swallowed.
+
+## 2026-03-20 — Fix missing conversion ads — broaden Meta action type matching + add pagination
+
+### What
+Only 4 out of ~20 ads with conversions were showing in the Meta Ads dashboard. The rest were invisible because the conversion matching was too narrow — it only checked one specific Meta action type per conversion category, missing conversions tracked via Conversions API (CAPI), omnipanel, or on-Facebook instant forms.
+
+### Why
+Meta reports the same conversion under different `action_type` labels depending on the tracking method:
+- **Purchases**: `offsite_conversion.fb_pixel_purchase` (pixel), `purchase` (pixel + CAPI aggregated), `omni_purchase` (omnipanel)
+- **Leads**: `lead` (aggregated), `offsite_conversion.fb_pixel_lead` (pixel), `onsite_conversion.lead_grouped` (on-Facebook forms)
+
+The code was only matching one label per category. Ads tracked via CAPI or instant forms showed 0 conversions and were filtered out of the UI.
+
+### Changed
+- **`src/services/metaApi.ts`** — Added `PURCHASE_ACTION_TYPES` and `LEAD_ACTION_TYPES` arrays with `getConversionCount()` helper that checks all related action types and returns the max value. Updated all 6 conversion-counting paths:
+  - `fetchAdCreatives()` — ad-level conversion count (ecommerce, leadgen, hybrid)
+  - `fetchTrafficTypes()` — campaign-level traffic conversions
+  - `fetchCampaignSummaries()` — purchases, purchase values, leads, and `resolveResults()` helper
+  - `fetchAccountLevelInsights()` — account-level deduplicated purchases and leads
+- **`src/services/metaApi.ts`** — Added pagination to `fetchAdInsights()` — follows `paging.cursors.after` to fetch all ads (capped at 1000), instead of stopping at the first 100
+
+## 2026-03-20 — Fix OpenAI copy generation timeout after backend proxy migration
+
+### What
+Lowered default GPT-5.4 reasoning effort from `high` to `medium` to prevent `FUNCTION_INVOCATION_TIMEOUT` errors during CreativeIQ copy generation.
+
+### Why
+PR #351 moved all OpenAI calls from direct browser→OpenAI to a backend proxy (`api/meta.ts`) so the API key never reaches the browser. However, the proxy runs as a Vercel serverless function with a 60-second timeout (Hobby plan max). GPT-5.4 with `reasoning_effort: 'high'` on large CreativeIQ prompts (channel analysis + top ads + product context + ad library inspirations) routinely exceeded 60s during the reasoning phase, causing the function to be killed before any tokens could stream back.
+
+### Changed
+- `DEFAULT_REASONING_EFFORT`: `'high'` → `'medium'` — affects copy generation, storyboards, text ad copy
+- `ANALYSIS_REASONING_EFFORT`: `'high'` → `'medium'` — affects ad analysis and channel analysis
+- Updated code comment to document the 60s backend proxy constraint
+
+## 2026-03-20 — Cache Meta Ads data to avoid re-syncing on every page visit
+
+### What
+Meta Ads page now caches fetched creatives and campaign metrics in localStorage with a 7-day TTL. Navigating away and back loads instantly from cache instead of re-syncing from the Meta API every time.
+
+### Why
+Every navigation to Meta Ads triggered a full re-sync — slow, unnecessary, and burned through Meta API rate limits. Users typically only need fresh data once per week.
+
+### Added
+- **localStorage cache layer** — keyed by ad account ID, business type, and date range; 7-day TTL with automatic expiry
+- **"Re-sync" button** in the page header — forces a fresh fetch from Meta, bypassing the cache
+- **"Synced X ago" indicator** — shows when data was last fetched (e.g., "Synced 3h ago", "Synced 2d ago")
+
+### Fixed
+- `catch (err: any)` → `catch (err: unknown)` per project conventions
+- Cache-hit path now clears any previous error state to prevent stale error banners
+
+## 2026-03-20 — Swipe Library — save and reuse winning ad elements
+
+### What
+New persistent library for saving best-performing ad elements (headlines, body copy, images) from Meta Ads and reusing them in CreativeIQ ad generation. Enables mix-and-match workflows: e.g., a "home run headline" combined with fresh AI-generated images, or saved winning images used without consuming credits.
+
+### Why
+Users were generating all content from scratch each time. Now they can save proven winners and inject them alongside AI-generated content, reducing creative fatigue and preserving what works.
+
+### Added
+- **`supabase/migrations/015_swipe_library.sql`** — Database table with RLS policies, SHA-256 content dedup, tenant isolation
+- **`src/services/swipeLibraryApi.ts`** — Frontend service layer with typed API functions (save, list, update, delete, image fetch, hash check)
+- **`src/pages/SwipeLibrary.tsx`** + **`SwipeLibrary.css`** — Browse/manage page with filter tabs, search, sort (newest/oldest/CVR/CPA), bulk delete, edit tags/notes, pin items, image viewer
+- **`src/components/SwipeLibraryPicker.tsx`** — Reusable modal picker for selecting library items (used in CreativeIQ Steps 1, 2, and 3)
+- **`src/components/Sidebar.tsx`** — Nav link for Swipe Library between Integrations and Reports
+- **`src/App.tsx`** — Route `/swipe-library`
+
+### Changed
+- **`api/meta.ts`** — 6 new route handlers: `swipe-list`, `swipe-save`, `swipe-update`, `swipe-delete`, `swipe-image`, `swipe-check` (added to existing catch-all, no new serverless functions)
+- **`src/pages/MetaAds.tsx`** — "Save to Library" button per ad card + "Save All Winning Ads" bulk toolbar button. Tracks saved state via content hash check on page load
+- **`src/pages/MetaAds.css`** — `.save-library-btn` styles (lime accent, matching existing button patterns)
+- **`src/pages/AdGenerator.tsx`** — Three Swipe Library integration points:
+  - **Step 1 (Config)**: "Browse Swipe Library" button for all copy source modes (manual mode populates entry fields, generate/import mode pre-populates copy options)
+  - **Step 2 (Copy Selection)**: "Add from Swipe Library" button appends saved items alongside AI-generated options
+  - **Step 3 (Final Config)**: Library image picker with thumbnail preview; no-credit generation path that skips AI APIs and credit reservation entirely
+
+## 2026-03-20 — Fix OpenAI API key exposure — route all calls through backend proxy
+
+### What
+OpenAI detected our API key leaked in the client-side JavaScript bundle and disabled it. The root cause was `VITE_OPENAI_API_KEY` — Vite's `VITE_` prefix bundles env vars into the browser output, making the key visible to anyone inspecting the page source.
+
+### Fix
+Removed the direct browser-to-OpenAI path entirely. All OpenAI API calls now route exclusively through the existing backend proxy (`/api/ai/chat` and `/api/ai/images` in `api/meta.ts`), which uses `OPENAI_API_KEY` (no VITE_ prefix) — a server-side-only env var that never reaches the browser. The backend streams SSE responses to avoid Vercel's 60s function timeout; the frontend reassembles the stream into a standard JSON response so all existing callers continue working without changes.
+
+### Changed
+- **`src/services/openaiApi.ts`** — Rewrote `openaiProxy()` to always use the backend proxy with SSE stream reassembly; removed `VITE_OPENAI_API_KEY`, `OPENAI_API_URL`, and `OPENAI_IMAGES_URL` constants; updated `isOpenAIConfigured()` and logging
+- **`api/_lib/external-analysis.ts`** — Removed `VITE_OPENAI_API_KEY` fallback, now only reads `OPENAI_API_KEY`
+
+### Action Required
+1. Generate a new OpenAI API key (the old one was disabled by OpenAI)
+2. Set `OPENAI_API_KEY` (no VITE_ prefix) in Vercel environment variables
+3. Delete `VITE_OPENAI_API_KEY` from Vercel environment variables
+4. Redeploy
+
+## 2026-03-19 — Fix Gemini image generation timeout for 5+ variations
+
+### What
+Increased the Gemini image generation `AbortController` timeout from 60s to 120s per request. When generating 5 ad images with large reference image payloads (25-50MB of base64), the 60s limit was too tight — typically only 3 images would complete before the timeout killed remaining requests.
+
+### Changed
+- **`src/services/openaiApi.ts`** — Bumped `AbortController` timeout from 60s to 120s in `generateAdImageWithGemini`; updated timeout error message to reflect new limit; added timeout-specific user-friendly error in `regenerateAllImages` that reports how many images succeeded (e.g. "3 of 5 images generated before timeout")
+- **`CLAUDE.md`** — Updated documented timeout values from 60s to 120s in both "Things to Avoid" and "Timeouts & Retry Policy" sections
+
+## 2026-03-19 — First-person voice for product-linked ad copy
+
+### What
+Ad copy generation now defaults to first-person voice when a product context is set. The author speaks directly to the prospect instead of being referred to in third person ("Marcus Reid reveals..." → "I discovered...").
+
+### Changed
+- **`src/services/openaiApi.ts`** — Added `VOICE:` prompt instruction to all 3 copy generation paths: main copy generation, regeneration/more options, and text-only ad generation. Image and video prompts are unaffected (visual, not copy).
+
+## 2026-03-19 — Move Product Configurator to Integrations (ad account level)
+
+### What
+Products/offers are now configured per ad account in the Integrations page, instead of being buried inside CreativeIQ. Product metadata is persisted to Supabase (`organization_ad_accounts.products` JSONB column), while product images remain in scoped localStorage. Both single-account and multi-account UI paths are supported.
+
+### Why
+Users had to navigate into CreativeIQ just to set up what they're advertising — this should be part of account setup. Moving products to Integrations makes them a first-class part of account configuration, permanently saved to Supabase, and easily selectable when generating ads.
+
+### Changed
+- **`supabase/migrations/014_ad_account_products.sql`** — NEW: Adds `products JSONB` column to `organization_ad_accounts`
+- **`src/components/ProductConfigurator.tsx`** — NEW: Reusable product CRUD component with explicit `adAccountId` scoping for localStorage reads/writes (prevents cross-account contamination when configuring a non-active account)
+- **`src/components/ProductConfigurator.css`** — NEW: Compact styles using design system CSS variables
+- **`api/meta.ts`** — Added `products` to status endpoint select, update-selection route, and configure action
+- **`src/services/metaApi.ts`** — Added `ProductMetadata` interface and `products` field to `AdAccountInfo`; extended `saveMetaSelection()` and `configureAdAccount()` to accept products
+- **`src/contexts/AdAccountContext.tsx`** — Added `products` to refresh fingerprint so product changes trigger context re-apply
+- **`src/pages/Integrations.tsx`** — Added ProductConfigurator to both single-account and multi-account configure paths; auto-saves product changes to Supabase using persisted (committed) page/pixel values to avoid side effects; migrates existing localStorage products on first configure
+- **`src/pages/AdGenerator.tsx`** — Changed "Add a product" link from `/products` to `/integrations`
+
+### Migration Required
+Run in Supabase SQL Editor:
+```sql
+ALTER TABLE organization_ad_accounts ADD COLUMN IF NOT EXISTS products JSONB DEFAULT '[]'::jsonb;
+NOTIFY pgrst, 'reload schema';
+```
+
 ## 2026-03-19 — Fix Ad Publisher "new ad set in existing campaign" mode
 
 ### Problem

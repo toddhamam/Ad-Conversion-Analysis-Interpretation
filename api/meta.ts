@@ -242,6 +242,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleReportCron(req, res);
       case 'report-history':
         return handleReportHistory(req, res);
+      case 'swipe-list':
+        return handleSwipeList(req, res);
+      case 'swipe-save':
+        return handleSwipeSave(req, res);
+      case 'swipe-update':
+        return handleSwipeUpdate(req, res);
+      case 'swipe-delete':
+        return handleSwipeDelete(req, res);
+      case 'swipe-image':
+        return handleSwipeImage(req, res);
+      case 'swipe-check':
+        return handleSwipeCheck(req, res);
       case 'external-summary':
       case 'reports-external-summary':
         // DISABLED: External API access to Meta Platform Data is not covered by
@@ -444,7 +456,7 @@ async function handleStatus(req: VercelRequest, res: VercelResponse) {
   // Load activated ad accounts from organization_ad_accounts table
   const { data: adAccounts, error: adAccountsError } = await supabase
     .from('organization_ad_accounts')
-    .select('id, ad_account_id, ad_account_name, page_id, pixel_id, is_active, account_status, currency, business_type')
+    .select('id, ad_account_id, ad_account_name, page_id, pixel_id, is_active, account_status, currency, business_type, products')
     .eq('organization_id', auth.organizationId)
     .eq('is_active', true)
     .order('ad_account_name', { ascending: true });
@@ -715,7 +727,7 @@ async function handleUpdateSelection(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { adAccountId, pageId, pixelId } = req.body || {};
+  const { adAccountId, pageId, pixelId, products } = req.body || {};
 
   if (!adAccountId) {
     return res.status(400).json({ error: 'adAccountId is required' });
@@ -774,6 +786,7 @@ async function handleUpdateSelection(req: VercelRequest, res: VercelResponse) {
         is_active: true,
         account_status: selectedAccount?.account_status || null,
         currency: selectedAccount?.currency || null,
+        ...(products !== undefined ? { products } : {}),
         updated_at: new Date().toISOString(),
       }, { onConflict: 'organization_id,ad_account_id' });
     await updateSeatCount(auth.organizationId);
@@ -1948,7 +1961,7 @@ async function handleAdAccountsWrite(
   res: VercelResponse,
   auth: AuthContext
 ) {
-  const { action, adAccountId, adAccountName, pageId, pixelId, currency, businessType } = req.body || {};
+  const { action, adAccountId, adAccountName, pageId, pixelId, currency, businessType, products } = req.body || {};
 
   if (!action || !adAccountId) {
     return res.status(400).json({ error: 'action and adAccountId are required' });
@@ -2056,6 +2069,7 @@ async function handleAdAccountsWrite(
         page_id: pageId !== undefined ? (pageId || null) : undefined,
         pixel_id: pixelId !== undefined ? (pixelId || null) : undefined,
         business_type: businessType !== undefined ? (businessType || null) : undefined,
+        products: products !== undefined ? products : undefined,
         updated_at: new Date().toISOString(),
       })
       .eq('organization_id', auth.organizationId)
@@ -2071,6 +2085,282 @@ async function handleAdAccountsWrite(
   }
 
   return res.status(400).json({ error: `Unknown action: ${action}` });
+}
+
+// ─── Swipe Library Handlers ─────────────────────────────────────────────────
+
+// List swipe library items (excludes image_data for performance)
+async function handleSwipeList(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+
+  const adAccountId = req.query.ad_account_id as string;
+  if (!adAccountId) return res.status(400).json({ error: 'ad_account_id required' });
+
+  const elementType = req.query.element_type as string | undefined;
+  const search = req.query.search as string | undefined;
+  const sort = (req.query.sort as string) || 'newest';
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+  const offset = parseInt(req.query.offset as string) || 0;
+
+  try {
+    // Select all columns except image_data (loaded on demand via swipe-image)
+    let query = supabase
+      .from('swipe_library_items')
+      .select(
+        'id, organization_id, ad_account_id, element_type, text_content, image_thumbnail, image_mime_type, meta_ad_id, meta_campaign_name, meta_adset_name, performance_snapshot, content_hash, tags, notes, is_pinned, saved_by, created_at, updated_at',
+        { count: 'exact' }
+      )
+      .eq('organization_id', auth.organizationId)
+      .eq('ad_account_id', adAccountId);
+
+    if (elementType) {
+      query = query.eq('element_type', elementType);
+    }
+
+    if (search) {
+      query = query.ilike('text_content', `%${search}%`);
+    }
+
+    // Sort: pinned items first, then by user-selected sort
+    switch (sort) {
+      case 'oldest':
+        query = query.order('is_pinned', { ascending: false })
+          .order('created_at', { ascending: true });
+        break;
+      case 'cvr':
+        query = query.order('is_pinned', { ascending: false })
+          .order('performance_snapshot->cvr', { ascending: false, nullsFirst: false });
+        break;
+      case 'cpa':
+        query = query.order('is_pinned', { ascending: false })
+          .order('performance_snapshot->cpa', { ascending: true, nullsFirst: false });
+        break;
+      case 'newest':
+      default:
+        query = query.order('is_pinned', { ascending: false })
+          .order('created_at', { ascending: false });
+        break;
+    }
+
+    query = query.range(offset, offset + limit - 1);
+
+    const { data, error, count } = await query;
+    if (error) throw error;
+
+    return res.status(200).json({ items: data || [], total: count || 0 });
+  } catch (err: unknown) {
+    captureError(err, { route: 'meta/swipe-list', organizationId: auth.organizationId });
+    await flushSentry();
+    return res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to fetch swipe library' });
+  }
+}
+
+// Save items to swipe library (with ignoreDuplicates to protect user curation)
+async function handleSwipeSave(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { ad_account_id, items } = req.body;
+  if (!ad_account_id || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'ad_account_id and items[] required' });
+  }
+
+  if (items.length > 20) {
+    return res.status(400).json({ error: 'Maximum 20 items per save request' });
+  }
+
+  try {
+    const rows = items.map((item: {
+      element_type: string;
+      text_content?: string;
+      image_data?: string;
+      image_thumbnail?: string;
+      image_mime_type?: string;
+      meta_ad_id?: string;
+      meta_campaign_name?: string;
+      meta_adset_name?: string;
+      performance_snapshot?: Record<string, unknown>;
+      content_hash: string;
+      tags?: string[];
+    }) => ({
+      organization_id: auth.organizationId,
+      ad_account_id,
+      element_type: item.element_type,
+      text_content: item.text_content || null,
+      image_data: item.image_data || null,
+      image_thumbnail: item.image_thumbnail || null,
+      image_mime_type: item.image_mime_type || null,
+      meta_ad_id: item.meta_ad_id || null,
+      meta_campaign_name: item.meta_campaign_name || null,
+      meta_adset_name: item.meta_adset_name || null,
+      performance_snapshot: item.performance_snapshot || {},
+      content_hash: item.content_hash,
+      tags: item.tags || [],
+      saved_by: auth.userId,
+    }));
+
+    // ignoreDuplicates: true — silently skips rows that match the unique constraint
+    // without overwriting user-curated fields (tags, notes, is_pinned)
+    const { data, error } = await supabase
+      .from('swipe_library_items')
+      .upsert(rows, {
+        onConflict: 'organization_id,ad_account_id,element_type,content_hash',
+        ignoreDuplicates: true,
+      })
+      .select('id, element_type, content_hash');
+
+    if (error) throw error;
+
+    const savedCount = data?.length || 0;
+    const duplicateCount = items.length - savedCount;
+
+    return res.status(200).json({ saved: savedCount, duplicates: duplicateCount, items: data || [] });
+  } catch (err: unknown) {
+    captureError(err, { route: 'meta/swipe-save', organizationId: auth.organizationId });
+    await flushSentry();
+    return res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to save to swipe library' });
+  }
+}
+
+// Update tags, notes, or pinned status
+async function handleSwipeUpdate(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'PUT') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { id, tags, notes, is_pinned } = req.body;
+  if (!id) return res.status(400).json({ error: 'id required' });
+
+  try {
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (tags !== undefined) updates.tags = tags;
+    if (notes !== undefined) updates.notes = notes;
+    if (is_pinned !== undefined) updates.is_pinned = is_pinned;
+
+    const { data, error } = await supabase
+      .from('swipe_library_items')
+      .update(updates)
+      .eq('id', id)
+      .eq('organization_id', auth.organizationId)
+      .select('id, tags, notes, is_pinned, updated_at')
+      .single();
+
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Item not found' });
+
+    return res.status(200).json(data);
+  } catch (err: unknown) {
+    captureError(err, { route: 'meta/swipe-update', organizationId: auth.organizationId });
+    await flushSentry();
+    return res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to update swipe item' });
+  }
+}
+
+// Bulk delete items
+async function handleSwipeDelete(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'DELETE') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'ids[] required' });
+  }
+
+  try {
+    const { error } = await supabase
+      .from('swipe_library_items')
+      .delete()
+      .in('id', ids)
+      .eq('organization_id', auth.organizationId);
+
+    if (error) throw error;
+
+    return res.status(200).json({ deleted: ids.length });
+  } catch (err: unknown) {
+    captureError(err, { route: 'meta/swipe-delete', organizationId: auth.organizationId });
+    await flushSentry();
+    return res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to delete swipe items' });
+  }
+}
+
+// On-demand full image fetch (excludes image_data from list queries for performance)
+async function handleSwipeImage(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+
+  const id = req.query.id as string;
+  if (!id) return res.status(400).json({ error: 'id required' });
+
+  try {
+    const { data, error } = await supabase
+      .from('swipe_library_items')
+      .select('id, image_data, image_mime_type')
+      .eq('id', id)
+      .eq('organization_id', auth.organizationId)
+      .single();
+
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Image not found' });
+
+    return res.status(200).json(data);
+  } catch (err: unknown) {
+    captureError(err, { route: 'meta/swipe-image', organizationId: auth.organizationId });
+    await flushSentry();
+    return res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to fetch swipe image' });
+  }
+}
+
+// Batch dedup check — returns which content hashes already exist
+async function handleSwipeCheck(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { ad_account_id, content_hashes } = req.body;
+  if (!ad_account_id || !Array.isArray(content_hashes) || content_hashes.length === 0) {
+    return res.status(400).json({ error: 'ad_account_id and content_hashes[] required' });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('swipe_library_items')
+      .select('content_hash')
+      .eq('organization_id', auth.organizationId)
+      .eq('ad_account_id', ad_account_id)
+      .in('content_hash', content_hashes);
+
+    if (error) throw error;
+
+    const saved = (data || []).map(row => row.content_hash);
+    return res.status(200).json({ saved });
+  } catch (err: unknown) {
+    captureError(err, { route: 'meta/swipe-check', organizationId: auth.organizationId });
+    await flushSentry();
+    return res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to check swipe library' });
+  }
 }
 
 // ── Helper: Update denormalized seat count ──

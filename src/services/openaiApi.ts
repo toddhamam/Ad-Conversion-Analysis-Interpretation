@@ -9,66 +9,107 @@ import { getAuthToken } from '../lib/authToken';
 import { getBusinessTypeConfig, getCampaignIntentConfig } from '../lib/businessTypeConfig';
 import { META_AD_POLICY_PROMPT, IMAGE_SAFETY_DIRECTIVE, POLICY_SANITIZE_PATTERNS } from './adPolicyGuard';
 
-// OpenAI API key — prefer direct browser-to-OpenAI calls (no 60s timeout).
-// Falls back to backend proxy when VITE key isn't set (degraded: 60s limit).
-const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
-const OPENAI_IMAGES_URL = 'https://api.openai.com/v1/images/generations';
-
 // ─── OpenAI API Calls ───────────────────────────────────────────────────────
-// Primary: direct browser-to-OpenAI (VITE_OPENAI_API_KEY). No serverless
-// proxy, no timeout. GPT-5.4 reasoning + vision can take 60-120s.
-// Fallback: backend proxy (/api/ai/*) with 55s timeout — degraded but
-// functional when VITE_OPENAI_API_KEY isn't set.
+// All OpenAI calls route through the backend proxy (/api/ai/*) so the API key
+// never reaches the browser. The backend streams SSE to stay within Vercel's
+// function timeout; this proxy reassembles the stream into a JSON response so
+// callers can use `await res.json()` as before.
 
 async function openaiProxy(
   endpoint: 'chat' | 'images',
   body: Record<string, unknown>
 ): Promise<Response> {
-  // Primary: direct call — no Vercel 60s limit
-  if (OPENAI_API_KEY) {
-    const url = endpoint === 'chat' ? OPENAI_API_URL : OPENAI_IMAGES_URL;
-    return fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify(body),
-    });
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('AI API not configured. Please sign in and try again.');
   }
 
-  // Fallback: proxy through backend (key is server-side).
-  // Capped at ~55s due to Vercel Hobby 60s limit — analysis may timeout
-  // on large accounts. Set VITE_OPENAI_API_KEY to remove this constraint.
-  const token = await getAuthToken();
-  if (token) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55_000);
-    try {
-      const res = await fetch(`/api/ai/${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      return res;
-    } catch (err: unknown) {
-      clearTimeout(timeoutId);
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        return new Response(JSON.stringify({
-          error: { message: 'AI analysis timed out (55s). Set VITE_OPENAI_API_KEY to remove this limit, or try with fewer ads.' },
-        }), { status: 504, headers: { 'Content-Type': 'application/json' } });
+  const res = await fetch(`/api/ai/${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  // Images endpoint returns JSON directly — no reassembly needed
+  if (endpoint === 'images') return res;
+
+  // Error responses are JSON — pass through as-is
+  if (!res.ok) return res;
+
+  // Chat endpoint returns SSE stream — reassemble into a single JSON response
+  // so callers can do `await response.json()` and get the standard OpenAI shape:
+  // { choices: [{ message: { content }, finish_reason }], model, usage }
+  if (!res.body) {
+    return new Response(JSON.stringify({
+      error: { message: 'Failed to read AI response stream' },
+    }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let fullContent = '';
+  let model = '';
+  let finishReason = '';
+  let usage: Record<string, unknown> | null = null;
+
+  try {
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      // Keep the last (possibly incomplete) line in the buffer
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.choices?.[0]?.delta?.content) {
+            fullContent += parsed.choices[0].delta.content;
+          }
+          if (parsed.choices?.[0]?.finish_reason) {
+            finishReason = parsed.choices[0].finish_reason;
+          }
+          if (parsed.model) model = parsed.model;
+          if (parsed.usage) usage = parsed.usage;
+        } catch {
+          // Skip unparseable SSE lines
+        }
       }
-      throw err;
+    }
+  } catch (err: unknown) {
+    if (fullContent) {
+      // Partial content is still usable — return what we have
+      console.warn('⚠️ SSE stream interrupted, returning partial content');
+    } else {
+      return new Response(JSON.stringify({
+        error: { message: err instanceof Error ? err.message : 'AI stream failed' },
+      }), { status: 502, headers: { 'Content-Type': 'application/json' } });
     }
   }
 
-  throw new Error('AI API not configured. Please contact support.');
+  const reassembled = {
+    choices: [{
+      message: { role: 'assistant', content: fullContent },
+      finish_reason: finishReason || 'stop',
+    }],
+    model,
+    usage,
+  };
+
+  return new Response(JSON.stringify(reassembled), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 // Google Gemini API Configuration
@@ -84,11 +125,12 @@ const DEFAULT_CHAT_MODEL = 'gpt-5.4'; // Latest GPT-5.4 with reasoning capabilit
 const DEFAULT_VISION_MODEL = 'gpt-5.4'; // GPT-5.4 has multimodal vision support
 
 // Reasoning configuration for GPT-5.4
-// 'high' for analysis — direct browser-to-OpenAI calls have no timeout
-// constraint, so we can use full reasoning depth for maximum insight quality.
+// All OpenAI calls now route through the backend proxy (api/meta.ts) which has
+// a 60-second Vercel function timeout (Hobby plan max). 'medium' keeps most
+// calls within that window; 'high'/'xhigh' risk FUNCTION_INVOCATION_TIMEOUT.
 type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
-const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'high';
-const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'high';
+const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'medium';
+const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'medium';
 
 // Image Generation - Gemini models with automatic fallback
 // Primary: gemini-3-pro-image-preview (highest quality)
@@ -402,13 +444,13 @@ if (import.meta.env.DEV) {
   console.log('🎨 Gemini API Key:', GEMINI_API_KEY ? 'configured' : 'NOT CONFIGURED');
 }
 
-// Check if OpenAI is configured (direct key OR backend proxy available)
+// Check if OpenAI is configured (backend proxy available when Supabase auth is configured)
 export function isOpenAIConfigured(): boolean {
-  return !!OPENAI_API_KEY || !!import.meta.env.VITE_SUPABASE_URL;
+  return !!import.meta.env.VITE_SUPABASE_URL;
 }
 
 // Log configuration status
-console.log('🔑 OpenAI API:', OPENAI_API_KEY ? 'direct mode (no timeout)' : 'proxy fallback (55s limit)');
+console.log('🔑 OpenAI API: backend proxy mode (key stays server-side)');
 
 // Types for ad analysis
 export interface AdCreativeData {
@@ -2666,6 +2708,7 @@ Description: ${p.description}
 ${p.landingPageUrl ? `Landing Page: ${p.landingPageUrl}` : ''}
 
 CRITICAL: All copy MUST be about "${p.name}" by ${p.author}. NEVER reference any other product, brand, or company name. The product name and author above are the ONLY correct references.
+VOICE: Write ad copy in the author's voice (first person). The author is speaking directly to the prospect, make the reader feel like the person who wrote the ad is talking only to them — never refer to the author in third person.
 `;
   }
 
@@ -2990,7 +3033,8 @@ ${bv.distinctiveTraits?.length ? `Traits: ${bv.distinctiveTraits.join('; ')}` : 
   if (config.productContext) {
     const p = config.productContext;
     productSection = `\nPRODUCT: "${p.name}" by ${p.author}. ${p.description}${p.landingPageUrl ? ` Landing page: ${p.landingPageUrl}` : ''}
-All copy MUST reference "${p.name}" by ${p.author} — no other product or brand names.\n`;
+All copy MUST reference "${p.name}" by ${p.author} — no other product or brand names.
+VOICE: Write ad copy in the author's voice (first person). The author is speaking directly to the prospect, make the reader feel like the person who wrote the ad is talking only to them — never refer to the author in third person.\n`;
   }
 
   // Build existing items list for dedup
@@ -3669,7 +3713,7 @@ Explore fresh visual directions while maintaining professional quality.`,
     try {
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout per request
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout — reference images can be 25-50MB
         try {
           response = await fetch(apiUrl, {
             method: 'POST',
@@ -3768,7 +3812,7 @@ Explore fresh visual directions while maintaining professional quality.`,
       }
       // Convert AbortError (timeout) to a descriptive message
       if (err instanceof DOMException && err.name === 'AbortError') {
-        lastError = new Error(`Image generation timed out after 60s (${model})`);
+        lastError = new Error(`Image generation timed out after 120s (${model})`);
       } else {
         lastError = err instanceof Error ? err : new Error(String(err));
       }
@@ -4600,7 +4644,9 @@ export async function regenerateAllImages(config: {
     });
     const firstError = failedResults[0].reason;
     const errorMessage = firstError?.message || String(firstError);
-    if (errorMessage.includes('429') || errorMessage.includes('quota')) {
+    if (errorMessage.includes('timed out')) {
+      imageError = `${images.length} of ${config.variationCount} images generated before timeout. You can regenerate the failed slots individually, or try reducing the number of variations.`;
+    } else if (errorMessage.includes('429') || errorMessage.includes('quota')) {
       imageError = 'Image generation quota exceeded. Please wait a few minutes and try again, or check your billing settings.';
     } else if (errorMessage.includes('503') || errorMessage.includes('overloaded') || errorMessage.includes('500')) {
       imageError = 'Image generation service is temporarily overloaded. Both primary and fallback models were tried. Please try again in a few minutes.';
@@ -4888,6 +4934,7 @@ Top performing patterns from this account inform the suggestions below.
 Name: ${config.productContext.name}
 ${config.productContext.author ? `By: ${config.productContext.author}` : ''}
 ${config.productContext.description || ''}
+VOICE: Write ad copy in the author's voice (first person). The author is speaking directly to the prospect, make the reader feel like the person who wrote the ad is talking only to them — never refer to the author in third person.
 `;
   }
 
