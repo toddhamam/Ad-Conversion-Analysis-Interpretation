@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-03-22 — Separate Lead vs Purchase conversions in Meta Ads + Swipe Library
+
+### What
+The Meta Ads page combined purchase and lead conversions into a single "Conversions" number, making it impossible to tell which ads drove sales vs lead form fills. Now every ad is classified by conversion type, both the Meta Ads dashboard and Swipe Library have filter controls, and saved elements carry their conversion type for future reference.
+
+### Changed
+- **`src/services/metaApi.ts`** — Always detect conversion type on every ad (not just hybrid mode):
+  - Added `purchaseConversions` and `leadConversions` fields to `AdCreative` interface
+  - Moved purchase/lead detection out of hybrid-only branch — all ads now get `detectedConversionType` set
+- **`src/pages/MetaAds.tsx`** — Conversion type filter + badges:
+  - Added conversion type filter chips (All / Purchases / Leads) — auto-hides when only one type present
+  - Added colored conversion type badge on each ad card (green Purchase, indigo Lead, violet Both)
+  - Purchase/lead breakdown shown under Conversions metric for dual-type ads
+  - Performance snapshot includes `conversion_type`, `purchase_conversions`, `lead_conversions` when saving to Swipe Library
+  - Conversion filter resets to "All" on account switch (prevents dead-end empty state)
+- **`src/pages/MetaAds.css`** — Styles for controls bar, filter count badges, and conversion type badges
+- **`src/services/swipeLibraryApi.ts`** — Extended types for conversion tracking:
+  - Added `SwipeConversionType`, `conversion_type`, `purchase_conversions`, `lead_conversions` to `PerformanceSnapshot`
+  - Added `conversion_type` to `SwipeListFilters` and wired into API call
+- **`src/pages/SwipeLibrary.tsx`** — Conversion type filter + badges:
+  - Added conversion type filter tabs (All Types / Purchases / Leads) with colored dot indicators
+  - Added conversion type badge on each card header
+  - Filter triggers server-side re-fetch
+- **`src/pages/SwipeLibrary.css`** — Styles for conversion tabs, dots, card badges, mobile responsive
+- **`api/meta.ts`** — Backend conversion type filtering:
+  - `handleSwipeList` accepts `conversion_type` query param
+  - Filters on `performance_snapshot->>conversion_type` via PostgREST JSONB operators
+  - Includes items without `conversion_type` (pre-existing) so they aren't hidden by the new filter
+
 ## 2026-03-22 — Fix Swipe Library image saving + add sort controls + fix billing schema
 
 ### What

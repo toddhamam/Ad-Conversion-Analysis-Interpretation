@@ -9,6 +9,8 @@ const API_BASE = '/api/meta';
 
 export type SwipeElementType = 'headline' | 'body_copy' | 'image';
 
+export type SwipeConversionType = 'purchase' | 'lead' | 'both' | 'none';
+
 export interface PerformanceSnapshot {
   cvr?: number;
   cpa?: number;
@@ -16,6 +18,9 @@ export interface PerformanceSnapshot {
   roas?: number;
   conversions?: number;
   spend?: number;
+  conversion_type?: SwipeConversionType;
+  purchase_conversions?: number;
+  lead_conversions?: number;
 }
 
 export interface SwipeLibraryItem {
@@ -56,6 +61,7 @@ export interface SwipeLibrarySavePayload {
 
 export interface SwipeListFilters {
   element_type?: SwipeElementType;
+  conversion_type?: SwipeConversionType;
   search?: string;
   sort?: 'newest' | 'oldest' | 'cvr' | 'cpa';
   limit?: number;
@@ -95,6 +101,7 @@ export async function fetchSwipeLibrary(
 ): Promise<{ items: SwipeLibraryItem[]; total: number }> {
   const params = new URLSearchParams({ ad_account_id: adAccountId });
   if (filters?.element_type) params.set('element_type', filters.element_type);
+  if (filters?.conversion_type) params.set('conversion_type', filters.conversion_type);
   if (filters?.search) params.set('search', filters.search);
   if (filters?.sort) params.set('sort', filters.sort);
   if (filters?.limit) params.set('limit', String(filters.limit));
