@@ -164,7 +164,10 @@ def start_first_experiment(from_best: bool = False, dry_run: bool = False) -> di
 
     # Generate challenger via GPT
     resources_md = _load_resources()
-    challenger = _generate_challenger(baseline_copy, resources_md, data.get("history", []))
+    challenger = _generate_challenger(
+        baseline_copy, resources_md, data.get("history", []),
+        round_number=round_num,
+    )
 
     # Create two Instantly campaigns
     from modules.instantly import create_campaign, activate_campaign
@@ -588,7 +591,10 @@ def deploy_new_round(data: dict) -> dict:
 
     round_num = data.get("round_number", 0) + 1
     resources_md = _load_resources()
-    challenger = _generate_challenger(baseline_copy, resources_md, data.get("history", []))
+    challenger = _generate_challenger(
+        baseline_copy, resources_md, data.get("history", []),
+        round_number=round_num,
+    )
 
     from modules.instantly import create_campaign, activate_campaign
 
@@ -755,14 +761,40 @@ def append_learnings(experiment: dict, winner: str) -> None:
 # ──────────────────────────────────────────────────────────────────────
 
 
-def _generate_challenger(baseline_copy: dict, resources_md: str, history: list) -> dict:
+def _generate_challenger(baseline_copy: dict, resources_md: str, history: list,
+                         round_number: int = 0) -> dict:
     """Use GPT to generate a challenger copy variant.
+
+    Scales divergence by round number (course principle: big changes early,
+    small changes late):
+    - Rounds 1-3: fundamentally different email
+    - Rounds 4-6: change 2-3 elements
+    - Rounds 7+: change exactly one variable
 
     Returns: {"copy": {subject, body, followup_1_body}, "hypothesis": str}
     """
     api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY not set — cannot generate challenger")
+
+    # Scale divergence by round number
+    effective_round = round_number if round_number > 0 else len(history) + 1
+    if effective_round <= 3:
+        change_rule = (
+            "Create a FUNDAMENTALLY different email. Change the structure, length, "
+            "tone, and approach entirely. Test a completely different strategy. "
+            "The goal is to eliminate entire categories of bad approaches early."
+        )
+    elif effective_round <= 6:
+        change_rule = (
+            "Change 2-3 elements from the baseline (e.g., tone + CTA + offer framing). "
+            "Keep what's proven but test meaningful combinations."
+        )
+    else:
+        change_rule = (
+            "Change exactly ONE variable from the baseline to isolate what works. "
+            "Fine-tune the winning formula."
+        )
 
     # Build history summary (last 5)
     history_summary = ""
@@ -776,7 +808,7 @@ def _generate_challenger(baseline_copy: dict, resources_md: str, history: list) 
     if not history_summary:
         history_summary = "(No previous experiments — this is the first round)"
 
-    system_prompt = """You are an expert cold email copywriter optimizing for positive reply rate.
+    system_prompt = f"""You are an expert cold email copywriter optimizing for positive reply rate.
 
 Your task is to generate a challenger email variant that tests a specific hypothesis against the current baseline.
 
@@ -785,18 +817,18 @@ RULES:
 - Plain text only, no HTML or markdown formatting
 - Under 80 words for body copy
 - Casual, conversational tone
-- Must include {first_name}, {company}, {personalization_hook} placeholders
-- End with {sender_first_name}
-- Follow-up must be different from the initial email (not a copy)
-- Change exactly ONE variable from the baseline
+- Must include {{first_name}}, {{company}}, {{personalization_hook}} placeholders
+- End with {{sender_first_name}}
+- Follow-up must be a short bump (under 20 words), not a re-pitch
+- {change_rule}
 
 Respond ONLY with valid JSON in this exact format:
-{
+{{
   "hypothesis": "Changing X to Y because Z",
   "subject": "...",
   "body": "...",
   "followup_1_body": "..."
-}"""
+}}"""
 
     user_prompt = f"""CURRENT BASELINE (the copy to beat):
 Subject: {baseline_copy.get('subject', '')}
@@ -809,7 +841,7 @@ COMPOUNDING LEARNINGS (from all past experiments):
 RECENT EXPERIMENT HISTORY:
 {history_summary}
 
-Generate a challenger that tests ONE specific hypothesis to beat this baseline."""
+This is round {effective_round}. Generate a challenger accordingly."""
 
     headers = {
         "Authorization": f"Bearer {api_key}",

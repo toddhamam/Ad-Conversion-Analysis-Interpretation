@@ -50,13 +50,17 @@
       ]
     },
     "tier_5_neutral_ambiguous": {
-      "description": "Proven at scale. Prospect is 97% sure it's cold email but opens just in case. Hard to beat as baseline. Reserved for future testing.",
-      "active": false,
+      "description": "Plausible deniability — looks like it could be from someone they know. Now active alongside Tier 1 for natural A/B testing via optimizer.",
+      "active": true,
       "variants": [
         "question {first_name}",
         "{first_name} thoughts",
         "hi {first_name}",
-        "quick question"
+        "quick question",
+        "thought of you",
+        "{first_name}",
+        "hey",
+        "{company}"
       ]
     },
     "tier_6_angle_based": {
@@ -80,6 +84,6 @@
     "body": "Hi {first_name},\n\n{mutual_connection} and I were chatting about {topic} and your name came up, specifically around {relevant_context}.\n\nI work on {brief_description} and thought there might be some overlap worth exploring.\n\nWould you be open to a quick chat this week? No pressure either way.\n\n{sender_first_name}"
   },
   "followup_1": {
-    "body": "Hi {first_name},\n\nOur users are launching high-converting Meta ad creatives ready to test in under 3 minutes. No designers. No briefs. No agencies. No waiting.\n\nI've still got that video ready for you if you want to see how it would work for {company}? Just reply here and I'll fire it over.\n\n{sender_first_name}"
+    "body": "Hi {first_name},\n\nJust floating this back up. Still happy to send that video over for {company} if you're curious.\n\n{sender_first_name}"
   }
 }
