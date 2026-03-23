@@ -704,7 +704,7 @@ export interface CampaignTypeMetrics {
 
 // ─── Campaign type detection ─────────────────────────────────────────────────
 
-function detectCampaignType(campaignName: string): CampaignType {
+export function detectCampaignType(campaignName: string): CampaignType {
   const name = campaignName.toLowerCase();
   if (name.includes('prospecting') || name.includes('prospect') || name.includes('cold') || name.includes('acquisition')) return 'Prospecting';
   if (name.includes('retargeting') || name.includes('retarget') || name.includes('remarketing') || name.includes('warm')) return 'Retargeting';

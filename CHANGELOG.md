@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-03-23 — Remove Meta Ads analytics + add campaign type filters to Meta Ads & Dashboard
+
+### What
+The `CampaignTypeDashboard` analytics section at the top of Meta Ads showed zeros for most metrics and wasn't useful. Removed it and repurposed campaign type detection (Prospecting/Retargeting/Retention) as filter controls on both the Meta Ads creative grid and the main Dashboard stat cards.
+
+### Changed
+- **`src/services/metaApi.ts`** — Exported `detectCampaignType` (was private) so MetaAds can classify ads client-side
+- **`src/pages/MetaAds.tsx`** — Restructured page:
+  - Removed `CampaignTypeDashboard` render, `campaignMetrics` state, `fetchCampaignSummaries` call, and related imports
+  - Added campaign type filter chips (All Types / Prospecting / Retargeting / Retention) with count badges
+  - Filter inserted into `sortedCreatives` chain between zero-conversion and conversion type filters
+  - "Save All Winning Ads" now operates on filtered `sortedCreatives`, not raw `creatives`
+  - Controls bar renders based on pre-filter creatives to prevent blank-state trap
+  - Campaign type filter resets on account switch
+- **`src/pages/Dashboard.tsx`** — Added campaign type filtering:
+  - Stored raw `CampaignSummary[]` in `campaigns` state for reactive filtering
+  - `filteredMetaData` via `useMemo` re-aggregates when filter changes (no re-fetch)
+  - `effectiveAccountInsights` derived layer — `null` when filtering (immutable, never mutates fetched state)
+  - Account-level metrics (uniqueCustomers, AOV, CAC, conversionRate, reach, uniqueLinkClicks, costPerUniqueLinkClick, uniqueLinkCtr, frequency, sessions) show "—" when filtering by campaign type
+  - `DashboardStats` interface updated to allow `number | null` for account-level fields
+  - Auto-resets filter to "All Types" when selected type has zero campaigns (prevents stuck state after date change)
+  - CSV export maps `null` values to "—" instead of misleading zeros
+  - Campaign type filter chip row between warning banners and stats grid
+- **`src/pages/Dashboard.css`** — New `.dashboard-campaign-filter` / `.dashboard-filter-chip` styles
+
 ## 2026-03-22 — Separate Lead vs Purchase conversions in Meta Ads + Swipe Library
 
 ### What
