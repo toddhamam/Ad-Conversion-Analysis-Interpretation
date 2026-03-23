@@ -6,7 +6,6 @@
 import { getAuthToken } from '../lib/authToken';
 import {
   guardedFetch,
-  batchProcess,
   updateRateLimitState,
   classifyMetaError,
   invalidateCache,
@@ -795,7 +794,12 @@ export async function fetchAdInsights(dateOptions?: DateRangeOptions): Promise<M
       if (after) params.after = after;
 
       const data = await metaFetch(`${adAccountId}/insights`, { params });
-      allInsights.push(...(data.data || []));
+      const pageResults = data.data || [];
+      allInsights.push(...pageResults);
+
+      // Guard: stop if Meta returns an empty page (avoids infinite loop
+      // when cursors are present but no data is returned)
+      if (pageResults.length === 0) break;
 
       after = data.paging?.cursors?.after;
       // Safety cap — 1000 ads covers the vast majority of SMB accounts.
@@ -810,59 +814,105 @@ export async function fetchAdInsights(dateOptions?: DateRangeOptions): Promise<M
   }
 }
 
-let adCounter = 0;
+/** Max IDs per batch request to Meta's ?ids= endpoint */
+const CREATIVE_BATCH_SIZE = 50;
 
-/**
- * Fetch actual ad creative content
- */
-async function fetchAdCreativeDetails(adId: string): Promise<{
+const CREATIVE_FIELDS = 'name,creative{name,title,body,image_url,thumbnail_url,object_story_spec,effective_object_story_id}';
+
+interface CreativeDetail {
   headline?: string;
   body?: string;
   imageUrl?: string;
-  videoUrl?: string;
-  callToAction?: string;
-}> {
-  adCounter++;
-  const logThis = adCounter <= 3;
+}
+
+/** Extract creative details from a single ad's API response object */
+function parseCreativeFromResponse(adData: Record<string, unknown>): CreativeDetail {
+  const creative = adData.creative as Record<string, unknown> | undefined;
+  const spec = (creative?.object_story_spec as Record<string, unknown>) || undefined;
+  const linkData = (spec?.link_data as Record<string, unknown>) || undefined;
+  const videoData = (spec?.video_data as Record<string, unknown>) || undefined;
+  const isCatalogAd = typeof creative?.name === 'string' && creative.name.includes('{{');
+
+  const headline = isCatalogAd
+    ? (adData.name as string | undefined)
+    : (creative?.title || creative?.name || linkData?.name || videoData?.title || adData.name) as string | undefined;
+
+  const body = isCatalogAd
+    ? 'Dynamic catalog ad - content varies by product shown to each user'
+    : (creative?.body || linkData?.message || linkData?.description || videoData?.message) as string | undefined;
+
+  const imageUrl = (creative?.image_url || creative?.thumbnail_url || linkData?.picture || videoData?.picture) as string | undefined;
+
+  return { headline, body, imageUrl };
+}
+
+/**
+ * Fetch creative details for multiple ads in a single API call using Meta's ?ids= parameter.
+ * Returns a Map of adId → creative details. Missing/failed IDs are silently skipped.
+ */
+async function fetchAdCreativeDetailsBatch(adIds: string[]): Promise<Map<string, CreativeDetail>> {
+  const result = new Map<string, CreativeDetail>();
+  if (adIds.length === 0) return result;
 
   try {
-    const data = await metaFetch(adId, {
+    // Meta's ?ids= endpoint returns an object keyed by ID, not a data array
+    const data = await metaFetch('', {
       params: {
-        fields: 'name,creative{name,title,body,image_url,thumbnail_url,object_story_spec,effective_object_story_id}',
+        ids: adIds.join(','),
+        fields: CREATIVE_FIELDS,
       },
     });
 
-    let headline: string | undefined;
-    let body: string | undefined;
-    let imageUrl: string | undefined;
-
-    const creative = data.creative;
-    const spec = creative?.object_story_spec;
-    const isCatalogAd = creative?.name?.includes('{{') || false;
-
-    if (isCatalogAd) {
-      headline = data.name;
-    } else {
-      headline = creative?.title || creative?.name || spec?.link_data?.name || spec?.video_data?.title || data.name;
+    for (const [adId, adData] of Object.entries(data)) {
+      if (adData && typeof adData === 'object') {
+        result.set(adId, parseCreativeFromResponse(adData as Record<string, unknown>));
+      }
     }
-
-    if (isCatalogAd) {
-      body = 'Dynamic catalog ad - content varies by product shown to each user';
-    } else {
-      body = creative?.body || spec?.link_data?.message || spec?.link_data?.description || spec?.video_data?.message;
-    }
-
-    imageUrl = creative?.image_url || creative?.thumbnail_url || spec?.link_data?.picture || spec?.video_data?.picture;
-
-    if (logThis) {
-      console.log(`Extracted creative for ${adId}:`, { headline, hasBody: !!body, hasImage: !!imageUrl });
-    }
-
-    return { headline, body, imageUrl, videoUrl: undefined, callToAction: undefined };
-  } catch (error) {
-    if (logThis) console.error(`Error fetching creative for ad ${adId}:`, error);
-    return {};
+  } catch (error: unknown) {
+    console.error('Batch creative fetch failed:', error instanceof Error ? error.message : error);
   }
+
+  return result;
+}
+
+/**
+ * Fetch creative details for all ads, using batched ?ids= requests.
+ * Falls back to individual fetches for any IDs that fail in batch mode.
+ */
+async function fetchAllCreativeDetails(adIds: string[]): Promise<Map<string, CreativeDetail>> {
+  const allDetails = new Map<string, CreativeDetail>();
+  if (adIds.length === 0) return allDetails;
+
+  // Split IDs into chunks for batch requests
+  const chunks: string[][] = [];
+  for (let i = 0; i < adIds.length; i += CREATIVE_BATCH_SIZE) {
+    chunks.push(adIds.slice(i, i + CREATIVE_BATCH_SIZE));
+  }
+
+  if (import.meta.env.DEV) {
+    console.log(`Fetching creative details: ${adIds.length} ads in ${chunks.length} batch request(s)`);
+  }
+
+  // Process chunks sequentially to respect the guard's rate limiting and usage tracking.
+  // Each batch goes through guardedFetch which handles concurrency and inter-request delays.
+  for (const chunk of chunks) {
+    const batchMap = await fetchAdCreativeDetailsBatch(chunk);
+    for (const [id, detail] of batchMap) {
+      allDetails.set(id, detail);
+    }
+  }
+
+  if (import.meta.env.DEV) {
+    let logged = 0;
+    for (const [adId, detail] of allDetails) {
+      if (logged >= 3) break;
+      console.log(`Extracted creative for ${adId}:`, { headline: detail.headline, hasBody: !!detail.body, hasImage: !!detail.imageUrl });
+      logged++;
+    }
+    console.log(`Creative details loaded: ${allDetails.size}/${adIds.length}`);
+  }
+
+  return allDetails;
 }
 
 export interface FetchCreativeOptions {
@@ -879,22 +929,17 @@ export interface FetchCreativeOptions {
  * Fetch ad creatives with performance data
  */
 export async function fetchAdCreatives(dateOptions?: DateRangeOptions, options?: FetchCreativeOptions): Promise<AdCreative[]> {
-  adCounter = 0;
-
   try {
     const insights = await fetchAdInsights(dateOptions);
 
-    // Use guarded batch processing instead of unbounded Promise.all()
-    // to prevent rate limit violations from parallel API calls.
-    // Max 3 concurrent requests with 200ms inter-request delay.
-    const creativeDetails = await batchProcess(
-      insights,
-      (ad) => fetchAdCreativeDetails(ad.ad_id),
-      { concurrency: 3, delayMs: 200 }
-    );
+    // Batch-fetch creative details using Meta's ?ids= endpoint.
+    // 50 IDs per request dramatically reduces API calls (e.g., 500 ads = 10 calls, not 500).
+    // Each batch call goes through guardedFetch which handles rate limiting.
+    const adIds = insights.map(ad => ad.ad_id).filter(Boolean);
+    const creativeMap = await fetchAllCreativeDetails(adIds);
 
     return insights.map((ad, index) => {
-      const creative = creativeDetails[index] || {};
+      const creative = creativeMap.get(ad.ad_id) || {};
       const actionType = options?.primaryActionType || 'offsite_conversion.fb_pixel_purchase';
 
       // Always detect both purchase and lead conversion counts for filtering

@@ -104,6 +104,19 @@ export default function DateRangePicker({ value, onChange }: DateRangePickerProp
   });
   const [rightMonth, setRightMonth] = useState(() => new Date(value.startDate));
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+
+  // Calculate fixed position when opening
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setDropdownStyle({
+        top: rect.bottom + 8,
+        right: Math.max(8, window.innerWidth - rect.right),
+      });
+    }
+  }, [isOpen]);
 
   // Reset temp values when opening
   useEffect(() => {
@@ -117,7 +130,10 @@ export default function DateRangePicker({ value, onChange }: DateRangePickerProp
   // Close on click outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
+        triggerRef.current && !triggerRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     }
@@ -183,8 +199,9 @@ export default function DateRangePicker({ value, onChange }: DateRangePickerProp
   };
 
   return (
-    <div className="date-range-picker" ref={dropdownRef}>
+    <div className="date-range-picker">
       <button
+        ref={triggerRef}
         className="date-range-trigger"
         onClick={() => setIsOpen(!isOpen)}
       >
@@ -203,7 +220,7 @@ export default function DateRangePicker({ value, onChange }: DateRangePickerProp
       </button>
 
       {isOpen && (
-        <div className="date-range-dropdown">
+        <div className="date-range-dropdown" ref={dropdownRef} style={dropdownStyle}>
           <div className="date-range-content">
             <div className="presets-sidebar">
               <div className="presets-label">Date range</div>

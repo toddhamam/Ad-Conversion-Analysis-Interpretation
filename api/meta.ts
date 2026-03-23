@@ -323,11 +323,12 @@ async function handleProxy(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  if (!endpoint || typeof endpoint !== 'string') {
+  // Allow empty endpoint for batch lookups via ?ids= (Meta's root-level Graph API)
+  if (endpoint !== '' && (!endpoint || typeof endpoint !== 'string')) {
     return res.status(400).json({ error: 'endpoint is required' });
   }
 
-  const apiUrl = new URL(`${GRAPH_API_BASE}/${endpoint}`);
+  const apiUrl = new URL(endpoint ? `${GRAPH_API_BASE}/${endpoint}` : `${GRAPH_API_BASE}/`);
   apiUrl.searchParams.set('access_token', creds.accessToken);
 
   if (params && typeof params === 'object') {
