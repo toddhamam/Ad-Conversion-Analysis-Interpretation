@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useCredits } from '../hooks/useCredits';
@@ -54,6 +54,7 @@ import {
   Repeat,
   Heart,
   ExternalLink,
+  Layers,
   Play,
   UserCheck,
   Package,
@@ -119,13 +120,13 @@ function saveCogsConfig(config: CogsConfig) {
 interface DashboardStats {
   totalRevenue: number;
   totalPurchases: number;
-  conversionRate: number;
-  aov: number;
-  uniqueCustomers: number;
-  sessions: number;
+  conversionRate: number | null;
+  aov: number | null;
+  uniqueCustomers: number | null;
+  sessions: number | null;
   adSpend: number;
   roas: number;
-  cac: number;
+  cac: number | null;
   transactionFees: number;
   cogs: number;
   grossProfit: number;
@@ -138,15 +139,15 @@ interface DashboardStats {
   linkClicks: number;
   cpc: number;
   costPerLinkClick: number;
-  uniqueLinkClicks: number;
-  costPerUniqueLinkClick: number;
+  uniqueLinkClicks: number | null;
+  costPerUniqueLinkClick: number | null;
   linkCtr: number;
-  uniqueLinkCtr: number;
+  uniqueLinkCtr: number | null;
   // Awareness metrics
   impressions: number;
-  reach: number;
+  reach: number | null;
   cpm: number;
-  frequency: number;
+  frequency: number | null;
   // Engagement metrics
   postEngagements: number;
   cpe: number;
@@ -470,26 +471,28 @@ function SortableStatCard({
 
   // Format value based on metric type
   const formatValue = () => {
-    const val = stats[id as keyof DashboardStats] as number;
+    const val = stats[id as keyof DashboardStats];
+    // Account-level metrics show "—" when filtered by campaign type (can't be split)
+    if (val === null) return '—';
     switch (id) {
       case 'totalRevenue':
         return formatCurrency(stats.totalRevenue);
       case 'totalPurchases':
         return formatNumber(stats.totalPurchases);
       case 'conversionRate':
-        return `${stats.conversionRate.toFixed(2)}%`;
+        return stats.conversionRate !== null ? `${stats.conversionRate.toFixed(2)}%` : '—';
       case 'aov':
-        return formatCurrency(stats.aov);
+        return stats.aov !== null ? formatCurrency(stats.aov) : '—';
       case 'uniqueCustomers':
-        return formatNumber(stats.uniqueCustomers);
+        return stats.uniqueCustomers !== null ? formatNumber(stats.uniqueCustomers) : '—';
       case 'sessions':
-        return formatNumber(stats.sessions);
+        return stats.sessions !== null ? formatNumber(stats.sessions) : '—';
       case 'adSpend':
         return stats.adSpend > 0 ? formatCurrency(stats.adSpend) : '—';
       case 'roas':
         return stats.roas > 0 ? `${stats.roas.toFixed(2)}x` : '—';
       case 'cac':
-        return stats.cac > 0 ? formatCurrency(stats.cac) : '—';
+        return stats.cac !== null && stats.cac > 0 ? formatCurrency(stats.cac) : '—';
       case 'transactionFees':
         return stats.transactionFees > 0 ? formatCurrency(stats.transactionFees) : '—';
       case 'cogs':
@@ -692,8 +695,13 @@ const Dashboard = () => {
     totalVideoViews: number;
     totalResults: number;
   } | null>(null);
+  const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
   const [accountInsights, setAccountInsights] = useState<AccountLevelInsights | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Campaign type filter
+  type CampaignTypeFilter = 'all' | 'Prospecting' | 'Retargeting' | 'Retention';
+  const [campaignTypeFilter, setCampaignTypeFilter] = useState<CampaignTypeFilter>('all');
   const [error, setError] = useState<string | null>(null);
   const [funnelWarning, setFunnelWarning] = useState<string | null>(null);
   const [metaWarning, setMetaWarning] = useState<string | null>(null);
@@ -812,7 +820,7 @@ const Dashboard = () => {
             return { reach: 0, uniqueLinkClicks: 0, uniquePurchases: 0 } as AccountLevelInsights;
           });
 
-        const [funnelResponse, campaigns, acctInsights] = await Promise.all([funnelPromise, metaPromise, accountPromise]);
+        const [funnelResponse, campaignsList, acctInsights] = await Promise.all([funnelPromise, metaPromise, accountPromise]);
 
         // Process funnel data (super admin only)
         if (funnelResponse && funnelResponse.ok) {
@@ -829,22 +837,25 @@ const Dashboard = () => {
           setMetrics(null);
         }
 
-        // Aggregate Meta campaign data
-        if (campaigns.length > 0) {
-          const totalSpend = campaigns.reduce((sum, c) => sum + c.spend, 0);
-          const totalPurchases = campaigns.reduce((sum, c) => sum + c.purchases, 0);
-          const totalPurchaseValue = campaigns.reduce((sum, c) => sum + c.purchaseValue, 0);
-          const totalClicks = campaigns.reduce((sum, c) => sum + c.clicks, 0);
+        // Store raw campaigns for campaign type filtering
+        setCampaigns(campaignsList);
+
+        // Aggregate Meta campaign data (all types — used as loading indicator)
+        if (campaignsList.length > 0) {
+          const totalSpend = campaignsList.reduce((sum, c) => sum + c.spend, 0);
+          const totalPurchases = campaignsList.reduce((sum, c) => sum + c.purchases, 0);
+          const totalPurchaseValue = campaignsList.reduce((sum, c) => sum + c.purchaseValue, 0);
+          const totalClicks = campaignsList.reduce((sum, c) => sum + c.clicks, 0);
           const roas = totalSpend > 0 ? totalPurchaseValue / totalSpend : 0;
-          const totalImpressions = campaigns.reduce((sum, c) => sum + c.impressions, 0);
-          const totalLeads = campaigns.reduce((sum, c) => sum + c.leads, 0);
-          const totalLinkClicks = campaigns.reduce((sum, c) => sum + c.linkClicks, 0);
-          const totalPostEngagements = campaigns.reduce((sum, c) => sum + c.postEngagements, 0);
-          const totalLandingPageViews = campaigns.reduce((sum, c) => sum + c.landingPageViews, 0);
-          const totalAddToCart = campaigns.reduce((sum, c) => sum + c.addToCart, 0);
-          const totalInitiateCheckout = campaigns.reduce((sum, c) => sum + c.initiateCheckout, 0);
-          const totalVideoViews = campaigns.reduce((sum, c) => sum + c.videoViews, 0);
-          const totalResults = campaigns.reduce((sum, c) => sum + c.results, 0);
+          const totalImpressions = campaignsList.reduce((sum, c) => sum + c.impressions, 0);
+          const totalLeads = campaignsList.reduce((sum, c) => sum + c.leads, 0);
+          const totalLinkClicks = campaignsList.reduce((sum, c) => sum + c.linkClicks, 0);
+          const totalPostEngagements = campaignsList.reduce((sum, c) => sum + c.postEngagements, 0);
+          const totalLandingPageViews = campaignsList.reduce((sum, c) => sum + c.landingPageViews, 0);
+          const totalAddToCart = campaignsList.reduce((sum, c) => sum + c.addToCart, 0);
+          const totalInitiateCheckout = campaignsList.reduce((sum, c) => sum + c.initiateCheckout, 0);
+          const totalVideoViews = campaignsList.reduce((sum, c) => sum + c.videoViews, 0);
+          const totalResults = campaignsList.reduce((sum, c) => sum + c.results, 0);
 
           setMetaData({
             totalSpend,
@@ -912,6 +923,64 @@ const Dashboard = () => {
     }
   };
 
+  // Campaign type filter: aggregate filtered campaigns reactively
+  const filteredMetaData = useMemo(() => {
+    const filtered = campaignTypeFilter === 'all'
+      ? campaigns
+      : campaigns.filter(c => c.campaignType === campaignTypeFilter);
+
+    if (filtered.length === 0) return null;
+
+    const totalSpend = filtered.reduce((sum, c) => sum + c.spend, 0);
+    const totalPurchases = filtered.reduce((sum, c) => sum + c.purchases, 0);
+    const totalPurchaseValue = filtered.reduce((sum, c) => sum + c.purchaseValue, 0);
+    const totalClicks = filtered.reduce((sum, c) => sum + c.clicks, 0);
+    const roas = totalSpend > 0 ? totalPurchaseValue / totalSpend : 0;
+    const totalImpressions = filtered.reduce((sum, c) => sum + c.impressions, 0);
+    const totalLeads = filtered.reduce((sum, c) => sum + c.leads, 0);
+    const totalLinkClicks = filtered.reduce((sum, c) => sum + c.linkClicks, 0);
+    const totalPostEngagements = filtered.reduce((sum, c) => sum + c.postEngagements, 0);
+    const totalLandingPageViews = filtered.reduce((sum, c) => sum + c.landingPageViews, 0);
+    const totalAddToCart = filtered.reduce((sum, c) => sum + c.addToCart, 0);
+    const totalInitiateCheckout = filtered.reduce((sum, c) => sum + c.initiateCheckout, 0);
+    const totalVideoViews = filtered.reduce((sum, c) => sum + c.videoViews, 0);
+    const totalResults = filtered.reduce((sum, c) => sum + c.results, 0);
+
+    return {
+      totalSpend, totalPurchases, totalPurchaseValue, totalClicks, roas,
+      totalImpressions, totalLeads, totalLinkClicks, totalPostEngagements,
+      totalLandingPageViews, totalAddToCart, totalInitiateCheckout,
+      totalVideoViews, totalResults,
+    };
+  }, [campaigns, campaignTypeFilter]);
+
+  // Account-level insights can't be split by campaign type — null out when filtering
+  const effectiveAccountInsights = useMemo(
+    () => campaignTypeFilter === 'all' ? accountInsights : null,
+    [campaignTypeFilter, accountInsights]
+  );
+
+  // Campaign type counts for filter chips
+  const campaignTypeCounts = useMemo(() => ({
+    all: campaigns.length,
+    Prospecting: campaigns.filter(c => c.campaignType === 'Prospecting').length,
+    Retargeting: campaigns.filter(c => c.campaignType === 'Retargeting').length,
+    Retention: campaigns.filter(c => c.campaignType === 'Retention').length,
+  }), [campaigns]);
+
+  const hasMultipleCampaignTypes = [
+    campaignTypeCounts.Prospecting,
+    campaignTypeCounts.Retargeting,
+    campaignTypeCounts.Retention,
+  ].filter(count => count > 0).length > 1;
+
+  // Auto-reset filter if selected type no longer exists in the data (e.g. after date range change)
+  useEffect(() => {
+    if (campaignTypeFilter !== 'all' && campaignTypeCounts[campaignTypeFilter] === 0) {
+      setCampaignTypeFilter('all');
+    }
+  }, [campaignTypeCounts, campaignTypeFilter]);
+
   // Calculate stats from Meta API data (primary source for all users)
   //
   // Data source strategy:
@@ -919,37 +988,40 @@ const Dashboard = () => {
   // - Ad Spend, ROAS, Revenue, Conversions, AOV, CPA, Conversion Rate
   // Funnel-only metrics (Unique Customers, Sessions) require Supabase funnel
   // tracking and are only shown to super admins who have that data configured.
+  //
+  // When filtered by campaign type, filteredMetaData replaces metaData.
+  // Account-level metrics (reach, unique clicks, unique purchases) show "—"
+  // because they can't be split by campaign type.
 
-  const adSpend = metaData?.totalSpend || 0;
+  const activeMetaData = campaigns.length > 0 ? filteredMetaData : metaData;
+
+  const adSpend = activeMetaData?.totalSpend || 0;
 
   // Core ad attribution metrics — all from Meta API
-  const totalPurchases = metaData?.totalPurchases || 0;
-  const totalRevenue = metaData?.totalPurchaseValue || 0;
-  const totalClicks = metaData?.totalClicks || 0;
+  const totalPurchases = activeMetaData?.totalPurchases || 0;
+  const totalRevenue = activeMetaData?.totalPurchaseValue || 0;
+  const totalClicks = activeMetaData?.totalClicks || 0;
+
+  // Account-level metrics — null when filtering by campaign type
+  const isFiltered = campaignTypeFilter !== 'all';
 
   // Purchasers from account-level actions (deduplicated across campaigns).
-  // Fetched at account level rather than summed per-campaign to avoid inflating
-  // counts when the same purchase is attributed to multiple campaigns.
-  // Note: this is total purchases, not unique people — Meta doesn't support
-  // unique_actions for conversion types. Multiple purchases by one person count separately.
-  const uniquePurchases = accountInsights?.uniquePurchases || 0;
+  const uniquePurchases = effectiveAccountInsights?.uniquePurchases || 0;
 
-  // AOV: Revenue per unique customer (total revenue includes upsells)
-  const aov = uniquePurchases > 0 ? totalRevenue / uniquePurchases : 0;
+  // AOV: Revenue per unique customer
+  const aov = isFiltered ? null : (uniquePurchases > 0 ? totalRevenue / uniquePurchases : 0);
 
   // CPA: Cost per unique customer acquired
-  const cac = uniquePurchases > 0 && adSpend > 0 ? adSpend / uniquePurchases : 0;
+  const cac = isFiltered ? null : (uniquePurchases > 0 && adSpend > 0 ? adSpend / uniquePurchases : 0);
 
   // Conversion Rate: % of landing page viewers who became unique customers.
-  // Uses Landing Page Views (not link clicks) — LPV only fires after the page
-  // actually loads and the Meta pixel initializes, filtering out accidental taps and bot clicks.
-  const totalLPV = metaData?.totalLandingPageViews || 0;
-  const conversionRate = totalLPV > 0 && uniquePurchases > 0
+  const totalLPV = activeMetaData?.totalLandingPageViews || 0;
+  const conversionRate = isFiltered ? null : (totalLPV > 0 && uniquePurchases > 0
     ? (uniquePurchases / totalLPV) * 100
-    : 0;
+    : 0);
 
-  // Unique Customers: from Meta unique_actions (works for all users, not just funnel-tracked)
-  const uniqueCustomers = uniquePurchases;
+  // Unique Customers: from Meta unique_actions
+  const uniqueCustomers = isFiltered ? null : uniquePurchases;
 
   // Transaction fees: configurable rate (default 2.9%)
   const transactionFees = totalRevenue * transactionFeeRate;
@@ -966,31 +1038,28 @@ const Dashboard = () => {
   const netProfit = totalRevenue - cogs - adSpend - transactionFees;
 
   // Extended Facebook Ads metrics — raw counts from Meta API
-  const totalImpressions = metaData?.totalImpressions || 0;
-  const totalLeads = metaData?.totalLeads || 0;
-  const totalLinkClicks = metaData?.totalLinkClicks || 0;
-  // Reach and unique link clicks use account-level data (not campaign sums)
-  // to avoid double-counting users who appear in multiple campaigns
-  const totalReach = accountInsights?.reach || 0;
-  const totalUniqueLinkClicks = accountInsights?.uniqueLinkClicks || 0;
-  const totalPostEngagements = metaData?.totalPostEngagements || 0;
-  const totalLandingPageViews = metaData?.totalLandingPageViews || 0;
-  const totalAddToCart = metaData?.totalAddToCart || 0;
-  const totalInitiateCheckout = metaData?.totalInitiateCheckout || 0;
-  const totalVideoViews = metaData?.totalVideoViews || 0;
+  const totalImpressions = activeMetaData?.totalImpressions || 0;
+  const totalLeads = activeMetaData?.totalLeads || 0;
+  const totalLinkClicks = activeMetaData?.totalLinkClicks || 0;
+  // Reach and unique link clicks: account-level (null when filtering)
+  const totalReach = isFiltered ? null : (effectiveAccountInsights?.reach || 0);
+  const totalUniqueLinkClicks = isFiltered ? null : (effectiveAccountInsights?.uniqueLinkClicks || 0);
+  const totalPostEngagements = activeMetaData?.totalPostEngagements || 0;
+  const totalLandingPageViews = activeMetaData?.totalLandingPageViews || 0;
+  const totalAddToCart = activeMetaData?.totalAddToCart || 0;
+  const totalInitiateCheckout = activeMetaData?.totalInitiateCheckout || 0;
+  const totalVideoViews = activeMetaData?.totalVideoViews || 0;
 
   // Derived Facebook Ads metrics
   const costPerLead = totalLeads > 0 && adSpend > 0 ? adSpend / totalLeads : 0;
   const leadRate = totalLinkClicks > 0 && totalLeads > 0 ? (totalLeads / totalLinkClicks) * 100 : 0;
   const cpcAll = totalClicks > 0 && adSpend > 0 ? adSpend / totalClicks : 0;
   const costPerLinkClick = totalLinkClicks > 0 && adSpend > 0 ? adSpend / totalLinkClicks : 0;
-  const costPerUniqueLinkClick = totalUniqueLinkClicks > 0 && adSpend > 0 ? adSpend / totalUniqueLinkClicks : 0;
+  const costPerUniqueLinkClick = isFiltered ? null : (totalUniqueLinkClicks && totalUniqueLinkClicks > 0 && adSpend > 0 ? adSpend / totalUniqueLinkClicks : 0);
   const linkCtr = totalImpressions > 0 && totalLinkClicks > 0 ? (totalLinkClicks / totalImpressions) * 100 : 0;
-  // Unique Link CTR: unique link clicks / reach (not impressions)
-  // Meta defines this as unique clickers / unique people reached
-  const uniqueLinkCtr = totalReach > 0 && totalUniqueLinkClicks > 0 ? (totalUniqueLinkClicks / totalReach) * 100 : 0;
+  const uniqueLinkCtr = isFiltered ? null : (totalReach && totalReach > 0 && totalUniqueLinkClicks && totalUniqueLinkClicks > 0 ? (totalUniqueLinkClicks / totalReach) * 100 : 0);
   const cpmVal = totalImpressions > 0 && adSpend > 0 ? (adSpend / totalImpressions) * 1000 : 0;
-  const frequencyVal = totalReach > 0 && totalImpressions > 0 ? totalImpressions / totalReach : 0;
+  const frequencyVal = isFiltered ? null : (totalReach && totalReach > 0 && totalImpressions > 0 ? totalImpressions / totalReach : 0);
   const cpeVal = totalPostEngagements > 0 && adSpend > 0 ? adSpend / totalPostEngagements : 0;
   const costPerLandingPageView = totalLandingPageViews > 0 && adSpend > 0 ? adSpend / totalLandingPageViews : 0;
   const costPerAddToCartVal = totalAddToCart > 0 && adSpend > 0 ? adSpend / totalAddToCart : 0;
@@ -998,7 +1067,7 @@ const Dashboard = () => {
   const costPerVideoViewVal = totalVideoViews > 0 && adSpend > 0 ? adSpend / totalVideoViews : 0;
 
   // Result metrics (objective-based — matches Meta Ads Manager "Results" column)
-  const totalResults = metaData?.totalResults || 0;
+  const totalResults = activeMetaData?.totalResults || 0;
   const costPerResult = totalResults > 0 && adSpend > 0 ? adSpend / totalResults : 0;
   const resultRate = totalLinkClicks > 0 && totalResults > 0 ? (totalResults / totalLinkClicks) * 100 : 0;
   const leadToResultRate = totalLeads > 0 && totalResults > 0 ? (totalResults / totalLeads) * 100 : 0;
@@ -1009,9 +1078,9 @@ const Dashboard = () => {
     conversionRate,
     aov,
     uniqueCustomers,
-    sessions: metrics?.summary.sessions || 0,
+    sessions: isFiltered ? null : (metrics?.summary.sessions || 0),
     adSpend,
-    roas: metaData?.roas || 0,
+    roas: activeMetaData?.roas || 0,
     cac,
     transactionFees,
     cogs,
@@ -1143,7 +1212,9 @@ const Dashboard = () => {
             onChange={handleDateRangeChange}
           />
           <ExportMenu
-            stats={stats as unknown as Record<string, number>}
+            stats={Object.fromEntries(
+              Object.entries(stats).map(([k, v]) => [k, v === null ? '—' : v])
+            ) as unknown as Record<string, number>}
             visibleMetrics={visibleMetrics.map((m) => ({ id: m.id, label: getMetricLabel(m.id, businessType) }))}
             dateRangeLabel={dateRangeLabel}
             accountName={currentAccount?.ad_account_name || undefined}
@@ -1173,6 +1244,29 @@ const Dashboard = () => {
         <div className="dashboard-error" style={{ background: 'rgba(245, 158, 11, 0.08)', borderColor: 'rgba(245, 158, 11, 0.3)', color: '#d97706' }}>
           <span className="error-icon">⚠</span>
           {metaWarning}
+        </div>
+      )}
+
+      {/* Campaign type filter — only show when multiple types exist */}
+      {!loading && hasMultipleCampaignTypes && (
+        <div className="dashboard-campaign-filter">
+          <Layers size={14} strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
+          <span className="dashboard-filter-label">Campaign</span>
+          {([
+            { value: 'all' as CampaignTypeFilter, label: 'All Types', count: campaignTypeCounts.all },
+            { value: 'Prospecting' as CampaignTypeFilter, label: 'Prospecting', count: campaignTypeCounts.Prospecting },
+            { value: 'Retargeting' as CampaignTypeFilter, label: 'Retargeting', count: campaignTypeCounts.Retargeting },
+            { value: 'Retention' as CampaignTypeFilter, label: 'Retention', count: campaignTypeCounts.Retention },
+          ]).filter(opt => opt.value === 'all' || opt.count > 0).map(opt => (
+            <button
+              key={opt.value}
+              className={`dashboard-filter-chip${campaignTypeFilter === opt.value ? ' active' : ''}`}
+              onClick={() => setCampaignTypeFilter(opt.value)}
+            >
+              {opt.label}
+              <span className="dashboard-filter-count">{opt.count}</span>
+            </button>
+          ))}
         </div>
       )}
 

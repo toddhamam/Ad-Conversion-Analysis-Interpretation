@@ -1,18 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   fetchAdCreatives,
-  fetchCampaignSummaries,
-  aggregateByType,
+  detectCampaignType,
   type AdCreative,
   type DatePreset,
   type DateRangeOptions,
-  type CampaignTypeMetrics
 } from '../services/metaApi';
 import { useAdAccount } from '../contexts/AdAccountContext';
 import { type AdCreativeData } from '../services/openaiApi';
 import Badge from '../components/Badge';
 import DateRangePicker from '../components/DateRangePicker';
-import CampaignTypeDashboard from '../components/CampaignTypeDashboard';
+
 import AdAnalysisPanel from '../components/AdAnalysisPanel';
 import SEO from '../components/SEO';
 import {
@@ -25,7 +23,7 @@ import {
   clearLegacyCache
 } from '../services/imageCache';
 import Loading from '../components/Loading';
-import { ArrowDownWideNarrow, Check, Database, Filter, Info, RefreshCw } from 'lucide-react';
+import { ArrowDownWideNarrow, Check, Database, Filter, Info, Layers, RefreshCw } from 'lucide-react';
 import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
 import {
   saveToSwipeLibrary,
@@ -41,7 +39,6 @@ import './MetaAds.css';
 
 interface MetaAdsSyncData {
   creatives: AdCreative[];
-  campaignMetrics: CampaignTypeMetrics[];
   syncedAt: number;
   dateRange: {
     preset?: DatePreset;
@@ -197,7 +194,6 @@ const MetaAds = () => {
   const { currentAccount, accountBusinessType: businessType } = useAdAccount();
   const btConfig = getBusinessTypeConfig(businessType);
   const [creatives, setCreatives] = useState<AdCreative[]>([]);
-  const [campaignMetrics, setCampaignMetrics] = useState<CampaignTypeMetrics[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analyzingAd, setAnalyzingAd] = useState<AdCreativeData | null>(null);
@@ -420,7 +416,7 @@ const MetaAds = () => {
 
   // Bulk save all winning ads to Swipe Library (saves all elements)
   const handleSaveAllWinning = async () => {
-    const winning = creatives.filter(c => c.status === 'Winning' && c.conversions > 0);
+    const winning = sortedCreatives.filter(c => c.status === 'Winning');
     if (winning.length === 0) return;
     setSavingAll(true);
     try {
@@ -606,6 +602,10 @@ const MetaAds = () => {
   type ConversionFilter = 'all' | 'purchase' | 'lead';
   const [conversionFilter, setConversionFilter] = useState<ConversionFilter>('all');
 
+  // Campaign type filter
+  type CampaignTypeFilter = 'all' | 'Prospecting' | 'Retargeting' | 'Retention';
+  const [campaignTypeFilter, setCampaignTypeFilter] = useState<CampaignTypeFilter>('all');
+
   // Count ads by conversion type for filter chip badges
   const conversionTypeCounts = (() => {
     const withConversions = creatives.filter(c => c.conversions > 0);
@@ -616,12 +616,31 @@ const MetaAds = () => {
     };
   })();
 
+  // Count ads by campaign type for filter chip badges
+  const campaignTypeCounts = (() => {
+    const withConversions = creatives.filter(c => c.conversions > 0);
+    return {
+      all: withConversions.length,
+      Prospecting: withConversions.filter(c => detectCampaignType(c.campaignName) === 'Prospecting').length,
+      Retargeting: withConversions.filter(c => detectCampaignType(c.campaignName) === 'Retargeting').length,
+      Retention: withConversions.filter(c => detectCampaignType(c.campaignName) === 'Retention').length,
+    };
+  })();
+
   // Determine if we have a mix of conversion types (show filter only when useful)
   const hasMultipleConversionTypes = conversionTypeCounts.purchase > 0 && conversionTypeCounts.lead > 0;
 
-  // Filter out zero-conversion ads, apply conversion type filter, then sort
+  // Determine if we have multiple campaign types (show filter only when useful)
+  const hasMultipleCampaignTypes = [campaignTypeCounts.Prospecting, campaignTypeCounts.Retargeting, campaignTypeCounts.Retention]
+    .filter(count => count > 0).length > 1;
+
+  // Filter out zero-conversion ads, apply campaign type + conversion type filters, then sort
   const sortedCreatives = [...creatives]
     .filter(c => c.conversions > 0)
+    .filter(c => {
+      if (campaignTypeFilter === 'all') return true;
+      return detectCampaignType(c.campaignName) === campaignTypeFilter;
+    })
     .filter(c => {
       if (conversionFilter === 'all') return true;
       if (conversionFilter === 'purchase') return c.detectedConversionType === 'purchase' || c.detectedConversionType === 'both';
@@ -648,32 +667,22 @@ const MetaAds = () => {
       setLoading(true);
       setError(null);
 
-      console.log('Fetching creatives and campaign summary data from Meta API...');
-      const [creativesData, campaignSummaries] = await Promise.all([
-        fetchAdCreatives(dateOptions, {
-          primaryActionType: btConfig.primaryActionType,
-          winningCVRThreshold: btConfig.winningCVRThreshold,
-          fatiguedCVRThreshold: btConfig.fatiguedCVRThreshold,
-          winningConversionMin: btConfig.winningConversionMin,
-          fatiguedSpendMin: btConfig.fatiguedSpendMin,
-          ...(businessType === 'hybrid' ? {
-            leadWinningCVRThreshold: 15,
-            leadFatiguedCVRThreshold: 3,
-          } : {}),
-        }),
-        fetchCampaignSummaries(dateOptions)
-      ]);
-
-      console.log('✅ Creatives loaded:', creativesData.length);
-      console.log('✅ Campaign summaries loaded:', campaignSummaries.length);
-
-      const aggregatedMetrics = aggregateByType(campaignSummaries, {
-        primaryConversionField: businessType === 'leadgen' ? 'leads' : 'purchases',
-        includeLeadsInTotal: businessType === 'hybrid',
+      console.log('Fetching creatives from Meta API...');
+      const creativesData = await fetchAdCreatives(dateOptions, {
+        primaryActionType: btConfig.primaryActionType,
+        winningCVRThreshold: btConfig.winningCVRThreshold,
+        fatiguedCVRThreshold: btConfig.fatiguedCVRThreshold,
+        winningConversionMin: btConfig.winningConversionMin,
+        fatiguedSpendMin: btConfig.fatiguedSpendMin,
+        ...(businessType === 'hybrid' ? {
+          leadWinningCVRThreshold: 15,
+          leadFatiguedCVRThreshold: 3,
+        } : {}),
       });
 
+      console.log('✅ Creatives loaded:', creativesData.length);
+
       setCreatives(creativesData);
-      setCampaignMetrics(aggregatedMetrics);
 
       // Persist sync data (no TTL — persists until next manual sync)
       const now = Date.now();
@@ -684,7 +693,6 @@ const MetaAds = () => {
       };
       writeMetaAdsSync(currentAccount?.ad_account_id, {
         creatives: creativesData,
-        campaignMetrics: aggregatedMetrics,
         syncedAt: now,
         dateRange: syncDateRange,
         businessType,
@@ -720,18 +728,17 @@ const MetaAds = () => {
 
     // Reset state before loading new account's cache (prevents flash of previous account data)
     setCreatives([]);
-    setCampaignMetrics([]);
     setLastSyncedAt(null);
     setSyncedDateRange(null);
     setBusinessTypeMismatch(false);
     setError(null);
     setConversionFilter('all');
+    setCampaignTypeFilter('all');
 
     // Read persisted sync data for this account
     const cached = readMetaAdsSync(currentAccount?.ad_account_id);
     if (cached) {
       setCreatives(cached.creatives);
-      setCampaignMetrics(cached.campaignMetrics);
       setLastSyncedAt(cached.syncedAt);
       setSyncedDateRange(cached.dateRange);
 
@@ -944,12 +951,7 @@ const MetaAds = () => {
         </div>
       )}
 
-      {/* Campaign Type Dashboard */}
-      {campaignMetrics.length > 0 && (
-        <CampaignTypeDashboard metrics={campaignMetrics} loading={loading} businessType={businessType} />
-      )}
-
-      {creatives.some(c => c.status === 'Winning') && (
+      {sortedCreatives.some(c => c.status === 'Winning') && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
           <button
             className="save-library-btn"
@@ -975,9 +977,32 @@ const MetaAds = () => {
         </div>
       )}
 
-      {/* Conversion type filter + Sort controls */}
-      {sortedCreatives.length > 0 && (
+      {/* Campaign type filter + Conversion type filter + Sort controls */}
+      {creatives.some(c => c.conversions > 0) && (
         <div className="meta-ads-controls-bar">
+          {/* Campaign type filter — only show when multiple types exist */}
+          {hasMultipleCampaignTypes && (
+            <div className="meta-ads-sort-bar">
+              <Layers size={14} strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
+              <span className="meta-ads-sort-label">Campaign</span>
+              {([
+                { value: 'all' as CampaignTypeFilter, label: 'All Types', count: campaignTypeCounts.all },
+                { value: 'Prospecting' as CampaignTypeFilter, label: 'Prospecting', count: campaignTypeCounts.Prospecting },
+                { value: 'Retargeting' as CampaignTypeFilter, label: 'Retargeting', count: campaignTypeCounts.Retargeting },
+                { value: 'Retention' as CampaignTypeFilter, label: 'Retention', count: campaignTypeCounts.Retention },
+              ]).filter(opt => opt.value === 'all' || opt.count > 0).map(opt => (
+                <button
+                  key={opt.value}
+                  className={`meta-ads-sort-chip${campaignTypeFilter === opt.value ? ' active' : ''}`}
+                  onClick={() => setCampaignTypeFilter(opt.value)}
+                >
+                  {opt.label}
+                  <span className="meta-ads-filter-count">{opt.count}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Conversion type filter — only show when account has both types */}
           {hasMultipleConversionTypes && (
             <div className="meta-ads-sort-bar">
