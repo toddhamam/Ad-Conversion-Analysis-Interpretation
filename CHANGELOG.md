@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-03-23 — Fix Swipe Library saves failing with 500 due to stale DB constraint
+
+### What
+Fixed a critical bug where **all** Swipe Library save attempts returned HTTP 500 ("Failed to save to swipe library"). The root cause was a stale 4-column unique constraint on `swipe_library_items` that migration 017 failed to drop because the auto-generated PostgreSQL constraint name didn't match the hardcoded name in the `DROP CONSTRAINT IF EXISTS` statement.
+
+### Root Cause
+1. Migration 015 created: `UNIQUE (organization_id, ad_account_id, element_type, content_hash)` (4 columns)
+2. Migration 017 tried to drop it and replace with: `UNIQUE (..., group_id)` (5 columns)
+3. The `DROP CONSTRAINT IF EXISTS` used a guessed constraint name that didn't match PostgreSQL's auto-truncated name — the old constraint was never dropped
+4. Both constraints existed simultaneously. Any save with an existing `content_hash` violated the old 4-column constraint, but the backend's `onConflict` targeted the 5-column constraint — PostgreSQL couldn't resolve the mismatch and threw an error
+5. The error was a PostgrestError (not `instanceof Error`), so the catch block returned a generic message instead of the real error
+
+### Fixed
+- **Backend upsert fallback** (`api/meta.ts`) — `handleSwipeSave` now tries the 5-column `onConflict` first (correct after migration 018), then falls back to the 4-column `onConflict` matching the stale constraint. If both fail, returns 500 with the actual Supabase error message instead of a generic fallback.
+- **PostgrestError message extraction** — The catch block now extracts `.message` from PostgrestError objects (which aren't `instanceof Error`) so real database errors are surfaced to the client.
+- **Migration 018** — Dynamically discovers and drops all stale unique constraints on `swipe_library_items`, keeping only the correct 5-column constraint. **Must be run manually in Supabase SQL Editor.**
+
+### Changed
+- **`api/meta.ts`** — `handleSwipeSave`: Added 4-column `onConflict` fallback upsert; improved error message extraction for PostgrestError
+- **`supabase/migrations/018_fix_swipe_library_constraint.sql`** — New migration to properly remove the stale constraint
+
+### Action Required
+Run `supabase/migrations/018_fix_swipe_library_constraint.sql` in the Supabase SQL Editor to permanently fix the constraint. The backend fallback handles it gracefully in the meantime.
+
+---
+
 ## 2026-03-23 — Fix Swipe Library save failures caused by oversized image payloads
 
 ### What

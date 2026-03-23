@@ -2232,8 +2232,14 @@ async function handleSwipeSave(req: VercelRequest, res: VercelResponse) {
     }));
 
     // ignoreDuplicates: true — silently skips rows that match the unique constraint
-    // without overwriting user-curated fields (tags, notes, is_pinned)
-    const { data, error } = await supabase
+    // without overwriting user-curated fields (tags, notes, is_pinned).
+    // Try the 5-column constraint first (correct after migration 018). If that fails
+    // (stale 4-column constraint still present), retry with the 4-column onConflict
+    // so duplicates are resolved against the constraint that actually exists.
+    let data: { id: string; element_type: string; content_hash: string }[] | null = null;
+    let error: { message?: string; code?: string; details?: string } | null = null;
+
+    const result = await supabase
       .from('swipe_library_items')
       .upsert(rows, {
         onConflict: 'organization_id,ad_account_id,element_type,content_hash,group_id',
@@ -2241,7 +2247,34 @@ async function handleSwipeSave(req: VercelRequest, res: VercelResponse) {
       })
       .select('id, element_type, content_hash');
 
-    if (error) throw error;
+    data = result.data;
+    error = result.error;
+
+    // Fallback: if the 5-column upsert failed (stale 4-column unique constraint from
+    // before migration 018), retry with the 4-column onConflict that matches the
+    // constraint actually present in the database. This correctly deduplicates
+    // against the active constraint instead of plain insert() which would count
+    // valid cross-group saves as duplicates.
+    if (error) {
+      const fallback = await supabase
+        .from('swipe_library_items')
+        .upsert(rows, {
+          onConflict: 'organization_id,ad_account_id,element_type,content_hash',
+          ignoreDuplicates: true,
+        })
+        .select('id, element_type, content_hash');
+
+      if (fallback.error) {
+        // Both upsert strategies failed — this is a real error (RLS, schema, etc.)
+        captureError(fallback.error, { route: 'meta/swipe-save-fallback', organizationId: auth.organizationId });
+        await flushSentry();
+        const msg = fallback.error.message || 'Failed to save to swipe library';
+        return res.status(500).json({ error: msg });
+      }
+
+      data = fallback.data;
+      error = null;
+    }
 
     const savedCount = data?.length || 0;
     const duplicateCount = items.length - savedCount;
@@ -2250,7 +2283,8 @@ async function handleSwipeSave(req: VercelRequest, res: VercelResponse) {
   } catch (err: unknown) {
     captureError(err, { route: 'meta/swipe-save', organizationId: auth.organizationId });
     await flushSentry();
-    return res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to save to swipe library' });
+    const msg = err instanceof Error ? err.message : (err as { message?: string })?.message || 'Failed to save to swipe library';
+    return res.status(500).json({ error: msg });
   }
 }
 
