@@ -240,6 +240,25 @@ export async function fetchSwipeImage(id: string): Promise<{ image_data: string;
   );
 }
 
+export async function fetchImageViaBackend(
+  imageUrl: string
+): Promise<{ base64Data: string; mimeType: string } | null> {
+  try {
+    const result = await fetchJson<{ base64Data: string; mimeType: string }>(
+      `${API_BASE}/image-fetch`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: imageUrl }),
+      }
+    );
+    return result;
+  } catch (err: unknown) {
+    console.error('Backend image fetch failed:', err);
+    return null;
+  }
+}
+
 export async function checkSavedHashes(
   adAccountId: string,
   hashes: string[],
