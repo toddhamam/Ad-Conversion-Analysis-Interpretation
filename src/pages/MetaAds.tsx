@@ -296,6 +296,9 @@ const MetaAds = () => {
     setSelectSaveCreative(creative);
   };
 
+  // Save modal loading state
+  const [savingFromModal, setSavingFromModal] = useState(false);
+
   // Perform save with selected elements. Returns true on success.
   const performSave = async (creative: AdCreative, selection?: { headline: boolean; body: boolean; image: boolean }): Promise<boolean> => {
     if (!currentAccount?.ad_account_id) {
@@ -305,7 +308,7 @@ const MetaAds = () => {
 
     const sel = selection || saveSelection;
     setSavingAdId(creative.id);
-    setSelectSaveCreative(null);
+    setSavingFromModal(true);
 
     try {
       const items: SwipeLibrarySavePayload[] = [];
@@ -321,6 +324,9 @@ const MetaAds = () => {
         lead_conversions: creative.leadConversions,
       };
 
+      const groupId = creative.id;
+      const campaignType = creative.campaignName ? detectCampaignType(creative.campaignName) : undefined;
+
       if (sel.headline && creative.headline) {
         items.push({
           element_type: 'headline',
@@ -330,6 +336,8 @@ const MetaAds = () => {
           meta_campaign_name: creative.campaignName,
           meta_adset_name: creative.adsetName,
           performance_snapshot: perf,
+          group_id: groupId,
+          campaign_type: campaignType,
         });
       }
 
@@ -342,6 +350,8 @@ const MetaAds = () => {
           meta_campaign_name: creative.campaignName,
           meta_adset_name: creative.adsetName,
           performance_snapshot: perf,
+          group_id: groupId,
+          campaign_type: campaignType,
         });
       }
 
@@ -383,6 +393,8 @@ const MetaAds = () => {
             meta_campaign_name: creative.campaignName,
             meta_adset_name: creative.adsetName,
             performance_snapshot: perf,
+            group_id: groupId,
+            campaign_type: campaignType,
           });
         }
       }
@@ -411,6 +423,8 @@ const MetaAds = () => {
       return false;
     } finally {
       setSavingAdId(null);
+      setSavingFromModal(false);
+      setSelectSaveCreative(null);
     }
   };
 
@@ -445,8 +459,10 @@ const MetaAds = () => {
     if (!currentAccount?.ad_account_id) return;
     try {
       const allHashes: string[] = [];
+      const allGroupIds: string[] = [];
       const hashToAdInfo = new Map<string, { adId: string; elementType: string }>();
       for (const c of creativesData) {
+        allGroupIds.push(c.id); // group_id = creative.id (meta_ad_id)
         if (c.headline) {
           const h = await computeContentHash(c.headline);
           allHashes.push(h);
@@ -468,7 +484,7 @@ const MetaAds = () => {
         }
       }
       if (allHashes.length === 0) return;
-      const existing = await checkSavedHashes(currentAccount.ad_account_id, allHashes);
+      const existing = await checkSavedHashes(currentAccount.ad_account_id, allHashes, allGroupIds);
       const elemMap = new Map<string, Set<string>>();
       for (const hash of existing) {
         const info = hashToAdInfo.get(hash);
@@ -1269,7 +1285,7 @@ const MetaAds = () => {
       {selectSaveCreative && (() => {
         const alreadySaved = savedElements.get(selectSaveCreative.id) || new Set<string>();
         return (
-          <div className="save-modal-overlay" onClick={() => setSelectSaveCreative(null)}>
+          <div className="save-modal-overlay" onClick={() => { if (!savingFromModal) setSelectSaveCreative(null); }}>
             <div className="save-modal" onClick={e => e.stopPropagation()}>
               <h3 className="save-modal-title">Save to Swipe Library</h3>
               <p className="save-modal-subtitle">Choose which elements to save</p>
@@ -1344,15 +1360,16 @@ const MetaAds = () => {
                 <button
                   className="save-modal-cancel"
                   onClick={() => setSelectSaveCreative(null)}
+                  disabled={savingFromModal}
                 >
                   Cancel
                 </button>
                 <button
                   className="save-modal-confirm"
-                  disabled={!saveSelection.headline && !saveSelection.body && !saveSelection.image}
+                  disabled={savingFromModal || (!saveSelection.headline && !saveSelection.body && !saveSelection.image)}
                   onClick={() => performSave(selectSaveCreative)}
                 >
-                  Save Selected
+                  {savingFromModal ? 'Saving...' : 'Save Selected'}
                 </button>
               </div>
             </div>

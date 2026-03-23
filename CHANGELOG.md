@@ -1,5 +1,44 @@
 # Changelog
 
+## 2026-03-23 — Swipe Library redesign: grouped ads, campaign type filters, save feedback
+
+### What
+Redesigned the Swipe Library to display saved ads as grouped cards (image + headline + body together) instead of separate element cards. Added campaign type filtering, fixed save feedback in Meta Ads modal, and addressed three Codex review findings (false saved-state dedup, PostgREST search injection, CSV export NaN).
+
+### Changed
+- **`supabase/migrations/017_swipe_library_groups.sql`** — New migration:
+  - Adds `group_id` and `campaign_type` columns with indexes
+  - Backfills `group_id` from `meta_ad_id`, generates UUIDs for orphans
+  - Updates unique constraint to `(org, account, element_type, content_hash, group_id)`
+  - Backfills `campaign_type` via keyword matching on campaign names
+- **`api/meta.ts`** — Backend updates:
+  - `handleSwipeSave`: accepts `group_id` and `campaign_type`, updated `onConflict` for new constraint
+  - `handleSwipeList`: adds `campaign_type` server-side filter, removes `element_type` filter (now client-side), increases limit to 500, adds `meta_campaign_name` to search, orders by `group_id`
+  - `handleSwipeCheck`: accepts optional `group_ids` array to prevent false "Saved" states for ads sharing content
+  - Search filter: wraps ilike values in double quotes to prevent PostgREST injection from commas/parentheses in user input
+- **`src/services/swipeLibraryApi.ts`** — Service layer:
+  - Added `SwipeAdGroup` interface and `groupSwipeItems()` grouping utility
+  - Added `CampaignTypeFilter` type
+  - Updated `checkSavedHashes` to accept optional `groupIds` parameter
+  - Updated types: `group_id`, `campaign_type` on `SwipeLibraryItem` and `SwipeLibrarySavePayload`
+- **`src/pages/SwipeLibrary.tsx`** — Complete page redesign:
+  - Grouped ad cards: image left, headline + body right, performance metrics footer
+  - Campaign type filter chips (All Types / Prospecting / Retargeting / Retention)
+  - Element type filter now client-side (preserves full ad context in each card)
+  - Group-level pin/edit/delete via `Promise.all` across all items
+  - Selection model: checkbox selects entire group
+- **`src/pages/SwipeLibrary.css`** — New grouped card styles, campaign badges, picker styles, responsive layout
+- **`src/components/SwipeLibraryPicker.tsx`** — Redesigned for grouped display:
+  - Expand/collapse per group with per-element checkboxes
+  - Selection tracked via `Map<string, Set<SwipeElementType>>`
+  - Non-selectable element types grayed out; returns `SwipeLibraryItem[]` (unchanged interface)
+- **`src/pages/MetaAds.tsx`** — Save flow fixes:
+  - Added `group_id` and `campaign_type` to all save payloads
+  - Modal stays open during save with "Saving..." state and disabled interactions
+  - `checkSavedAds` passes group IDs for accurate dedup
+- **`src/components/ExportMenu.tsx`** — Fixed CSV export NaN for null metrics:
+  - Added early guard for null, undefined, non-number, and NaN values → returns "—"
+
 ## 2026-03-23 — Remove Meta Ads analytics + add campaign type filters to Meta Ads & Dashboard
 
 ### What
