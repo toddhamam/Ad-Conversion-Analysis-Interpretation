@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-03-23 — Fix Swipe Library image saving + add save progress feedback
+
+### What
+Fixed a critical bug where images were not saving to the Swipe Library (only headline and body copy saved). Added a backend image proxy to reliably fetch Meta CDN images server-side when browser CORS proxies fail. Added a saving progress hint so users know the save is working and they can close the modal.
+
+### Fixed
+- **Image not saving to Swipe Library** — Root cause: the browser-side CORS proxies (`corsproxy.io`, `allorigins.win`) frequently fail to fetch Meta CDN images, causing images to be silently skipped during save. Added a server-side image fetch endpoint (`/api/meta/image-fetch`) as a reliable fallback. Flow is now: local cache → CORS proxies → backend proxy (always works).
+- **Save modal race condition** (Codex finding) — Removed shared `savingFromModal` boolean. Now uses `savingAdId` scoped per-creative via `isSavingThis = savingAdId === selectSaveCreative.id`. The `finally` block uses functional state updates to only clear state for the ad that finished saving, preventing interference when users close modal A and open modal B before A completes.
+- **SSRF domain validation** (Codex finding) — Changed hostname check from `endsWith('fbcdn.net')` (matches `evilfbcdn.net`) to dot-prefixed check: `hostname === d || hostname.endsWith('.${d}')`. Added HTTPS-only protocol check.
+
+### Added
+- **`api/meta.ts`** — `handleImageFetch` route: fetches Meta CDN images server-side, returns base64. SSRF-safe (allowlisted Meta domains only, HTTPS-only, 30s timeout, content-type validation).
+- **`src/services/swipeLibraryApi.ts`** — `fetchImageViaBackend()` helper function for the backend image proxy.
+- **`src/pages/MetaAds.css`** — `.save-modal-saving-hint` style for the saving progress message.
+
+### Changed
+- **`src/pages/MetaAds.tsx`** — Save modal:
+  - Shows "This may take a few seconds. You can close this window — the save will continue in the background." hint while saving
+  - Cancel button changes to "Close" during save, modal is always dismissible
+  - Image save uses backend proxy fallback when CORS proxies fail
+  - `finally` block scoped to specific creative ID to prevent race conditions
+
+---
+
 ## 2026-03-23 — Swipe Library redesign: grouped ads, campaign type filters, save feedback
 
 ### What

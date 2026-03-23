@@ -29,6 +29,7 @@ import {
   saveToSwipeLibrary,
   checkSavedHashes,
   computeContentHash,
+  fetchImageViaBackend,
   type SwipeLibrarySavePayload,
 } from '../services/swipeLibraryApi';
 import './MetaAds.css';
@@ -296,9 +297,6 @@ const MetaAds = () => {
     setSelectSaveCreative(creative);
   };
 
-  // Save modal loading state
-  const [savingFromModal, setSavingFromModal] = useState(false);
-
   // Perform save with selected elements. Returns true on success.
   const performSave = async (creative: AdCreative, selection?: { headline: boolean; body: boolean; image: boolean }): Promise<boolean> => {
     if (!currentAccount?.ad_account_id) {
@@ -307,8 +305,8 @@ const MetaAds = () => {
     }
 
     const sel = selection || saveSelection;
-    setSavingAdId(creative.id);
-    setSavingFromModal(true);
+    const savingId = creative.id;
+    setSavingAdId(savingId);
 
     try {
       const items: SwipeLibrarySavePayload[] = [];
@@ -370,9 +368,22 @@ const MetaAds = () => {
           if (cached) refreshCachedIds();
         }
 
-        if (cached) {
+        // Resolve image base64 — from cache or backend proxy fallback
+        let imageBase64: string | null = cached?.base64Data || null;
+        let imageMimeType: string = cached?.mimeType || 'image/jpeg';
+
+        if (!imageBase64) {
+          // CORS proxies failed — fetch via backend (no CORS restrictions server-side)
+          const backendResult = await fetchImageViaBackend(creative.imageUrl);
+          if (backendResult) {
+            imageBase64 = backendResult.base64Data;
+            imageMimeType = backendResult.mimeType;
+          }
+        }
+
+        if (imageBase64) {
           const img = new Image();
-          img.src = `data:${cached.mimeType || 'image/jpeg'};base64,${cached.base64Data}`;
+          img.src = `data:${imageMimeType};base64,${imageBase64}`;
           await new Promise<void>((resolve) => { img.onload = () => resolve(); img.onerror = () => resolve(); });
           const canvas = document.createElement('canvas');
           const scale = 200 / (img.naturalWidth || 200);
@@ -385,10 +396,10 @@ const MetaAds = () => {
 
           items.push({
             element_type: 'image',
-            image_data: cached.base64Data,
+            image_data: imageBase64,
             image_thumbnail: thumbnail,
-            image_mime_type: cached.mimeType || 'image/jpeg',
-            content_hash: await computeContentHash(cached.base64Data.slice(0, 1000)),
+            image_mime_type: imageMimeType,
+            content_hash: await computeContentHash(imageBase64.slice(0, 1000)),
             meta_ad_id: creative.id,
             meta_campaign_name: creative.campaignName,
             meta_adset_name: creative.adsetName,
@@ -422,9 +433,9 @@ const MetaAds = () => {
       showToast('error', msg.includes('Unauthorized') ? 'Please sign in to save' : `Save failed: ${msg}`);
       return false;
     } finally {
-      setSavingAdId(null);
-      setSavingFromModal(false);
-      setSelectSaveCreative(null);
+      setSavingAdId(prev => prev === savingId ? null : prev);
+      // Only auto-close the modal if it's still showing the ad we just saved
+      setSelectSaveCreative(prev => prev?.id === savingId ? null : prev);
     }
   };
 
@@ -1284,8 +1295,9 @@ const MetaAds = () => {
       {/* Save to Library Modal — selective element picker */}
       {selectSaveCreative && (() => {
         const alreadySaved = savedElements.get(selectSaveCreative.id) || new Set<string>();
+        const isSavingThis = savingAdId === selectSaveCreative.id;
         return (
-          <div className="save-modal-overlay" onClick={() => { if (!savingFromModal) setSelectSaveCreative(null); }}>
+          <div className="save-modal-overlay" onClick={() => setSelectSaveCreative(null)}>
             <div className="save-modal" onClick={e => e.stopPropagation()}>
               <h3 className="save-modal-title">Save to Swipe Library</h3>
               <p className="save-modal-subtitle">Choose which elements to save</p>
@@ -1356,20 +1368,25 @@ const MetaAds = () => {
                 CVR {selectSaveCreative.conversionRate}% · CPA ${(selectSaveCreative.costPerConversion || 0).toFixed(2)} · {selectSaveCreative.conversions} conversions
               </div>
 
+              {isSavingThis && (
+                <p className="save-modal-saving-hint">
+                  This may take a few seconds. You can close this window — the save will continue in the background. Check your Swipe Library shortly.
+                </p>
+              )}
+
               <div className="save-modal-actions">
                 <button
                   className="save-modal-cancel"
                   onClick={() => setSelectSaveCreative(null)}
-                  disabled={savingFromModal}
                 >
-                  Cancel
+                  {isSavingThis ? 'Close' : 'Cancel'}
                 </button>
                 <button
                   className="save-modal-confirm"
-                  disabled={savingFromModal || (!saveSelection.headline && !saveSelection.body && !saveSelection.image)}
+                  disabled={isSavingThis || (!saveSelection.headline && !saveSelection.body && !saveSelection.image)}
                   onClick={() => performSave(selectSaveCreative)}
                 >
-                  {savingFromModal ? 'Saving...' : 'Save Selected'}
+                  {isSavingThis ? 'Saving...' : 'Save Selected'}
                 </button>
               </div>
             </div>

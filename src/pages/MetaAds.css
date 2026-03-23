@@ -454,6 +454,17 @@
   margin: 16px 0;
 }
 
+.save-modal-saving-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0 0 12px 0;
+  line-height: 1.5;
+}
+
 .save-modal-actions {
   display: flex;
   gap: 10px;

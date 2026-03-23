@@ -254,6 +254,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleSwipeImage(req, res);
       case 'swipe-check':
         return handleSwipeCheck(req, res);
+      case 'image-fetch':
+        return handleImageFetch(req, res);
       case 'external-summary':
       case 'reports-external-summary':
         // DISABLED: External API access to Meta Platform Data is not covered by
@@ -2347,6 +2349,69 @@ async function handleSwipeImage(req: VercelRequest, res: VercelResponse) {
     captureError(err, { route: 'meta/swipe-image', organizationId: auth.organizationId });
     await flushSentry();
     return res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to fetch swipe image' });
+  }
+}
+
+// Fetch an image URL server-side (bypasses CORS restrictions on Meta CDN)
+async function handleImageFetch(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const auth = await authenticateRequest(req);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { url } = req.body;
+  if (!url || typeof url !== 'string') {
+    return res.status(400).json({ error: 'url required' });
+  }
+
+  // Only allow Facebook/Meta CDN domains to prevent SSRF
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return res.status(400).json({ error: 'Invalid URL' });
+  }
+
+  if (parsedUrl.protocol !== 'https:') {
+    return res.status(400).json({ error: 'Only HTTPS URLs are allowed' });
+  }
+
+  // Dot-prefixed domain check: "scontent.fbcdn.net" matches ".fbcdn.net",
+  // but "evilfbcdn.net" does not. Also allow exact domain matches.
+  const allowedDomains = ['fbcdn.net', 'facebook.com', 'fbsbx.com', 'fb.com'];
+  const hostname = parsedUrl.hostname;
+  const isAllowed = allowedDomains.some(d => hostname === d || hostname.endsWith(`.${d}`));
+  if (!isAllowed) {
+    return res.status(400).json({ error: 'Only Facebook/Meta image URLs are allowed' });
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      return res.status(502).json({ error: `Image fetch failed: ${response.status}` });
+    }
+
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    if (!contentType.startsWith('image/')) {
+      return res.status(400).json({ error: 'URL did not return an image' });
+    }
+
+    const buffer = await response.arrayBuffer();
+    const base64Data = Buffer.from(buffer).toString('base64');
+    const mimeType = contentType.split(';')[0].trim();
+
+    return res.status(200).json({ base64Data, mimeType });
+  } catch (err: unknown) {
+    captureError(err, { route: 'meta/image-fetch', organizationId: auth.organizationId });
+    await flushSentry();
+    return res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to fetch image' });
   }
 }
 
