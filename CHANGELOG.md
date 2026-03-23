@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-03-23 — Fix Swipe Library save failures caused by oversized image payloads
+
+### What
+Fixed a bug where ~2/3 of Swipe Library save attempts failed with "Failed to save to library". The root cause was full-resolution ad images (1080p+) being sent as base64 in the JSON request body, routinely exceeding Vercel's 4.5MB serverless function body limit.
+
+### Fixed
+- **Swipe Library save failures** — Images are now resized client-side to max 800px (longest side) and compressed to JPEG 0.82 quality before embedding in the save payload. This reduces typical image payloads from 2-6MB to ~100-300KB, well within Vercel's limit. 800px is more than sufficient for the library's reference/inspiration use case.
+- **Silent image decode failures** — Added explicit image load tracking (`imgLoaded` flag) so broken/corrupt images are gracefully skipped instead of producing empty black placeholder images from failed canvas operations.
+
+### Changed
+- **`src/pages/MetaAds.tsx`** — `performSave` function:
+  - Resizes full image to max 800px via canvas before saving (was sending original resolution)
+  - Creates thumbnail (200px) from original dimensions for accurate aspect ratio
+  - Sets `image_mime_type` to `'image/jpeg'` since canvas always outputs JPEG
+  - Only processes image when decode succeeds (`imgLoaded && img.naturalWidth > 0`)
+- **`src/services/swipeLibraryApi.ts`** — `saveToSwipeLibrary`:
+  - Added single retry with 1s delay for transient network/server failures
+
+---
+
 ## 2026-03-23 — Fix Swipe Library image saving + add save progress feedback
 
 ### What

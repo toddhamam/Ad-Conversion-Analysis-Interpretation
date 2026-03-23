@@ -383,30 +383,59 @@ const MetaAds = () => {
 
         if (imageBase64) {
           const img = new Image();
+          let imgLoaded = false;
           img.src = `data:${imageMimeType};base64,${imageBase64}`;
-          await new Promise<void>((resolve) => { img.onload = () => resolve(); img.onerror = () => resolve(); });
-          const canvas = document.createElement('canvas');
-          const scale = 200 / (img.naturalWidth || 200);
-          canvas.width = 200;
-          canvas.height = Math.round((img.naturalHeight || 200) * scale);
-          const ctx = canvas.getContext('2d');
-          if (ctx) ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          const thumbnailDataUrl = canvas.toDataURL('image/jpeg', 0.6);
-          const thumbnail = thumbnailDataUrl.split(',')[1];
-
-          items.push({
-            element_type: 'image',
-            image_data: imageBase64,
-            image_thumbnail: thumbnail,
-            image_mime_type: imageMimeType,
-            content_hash: await computeContentHash(imageBase64.slice(0, 1000)),
-            meta_ad_id: creative.id,
-            meta_campaign_name: creative.campaignName,
-            meta_adset_name: creative.adsetName,
-            performance_snapshot: perf,
-            group_id: groupId,
-            campaign_type: campaignType,
+          await new Promise<void>((resolve) => {
+            img.onload = () => { imgLoaded = true; resolve(); };
+            img.onerror = () => resolve();
           });
+
+          if (imgLoaded && img.naturalWidth > 0) {
+            const naturalW = img.naturalWidth;
+            const naturalH = img.naturalHeight;
+
+            // Resize to max 800px to keep payload under Vercel's 4.5MB body limit.
+            // Full-res ad images (1080p+) as base64 routinely exceed 4.5MB and fail.
+            const MAX_IMG_DIM = 800;
+            let imgW = naturalW;
+            let imgH = naturalH;
+            if (imgW > MAX_IMG_DIM || imgH > MAX_IMG_DIM) {
+              const ratio = Math.min(MAX_IMG_DIM / imgW, MAX_IMG_DIM / imgH);
+              imgW = Math.round(imgW * ratio);
+              imgH = Math.round(imgH * ratio);
+            }
+            const imgCanvas = document.createElement('canvas');
+            imgCanvas.width = imgW;
+            imgCanvas.height = imgH;
+            const imgCtx = imgCanvas.getContext('2d');
+            if (imgCtx) imgCtx.drawImage(img, 0, 0, imgW, imgH);
+            const resizedDataUrl = imgCanvas.toDataURL('image/jpeg', 0.82);
+            const resizedBase64 = resizedDataUrl.split(',')[1];
+
+            // Thumbnail at 200px for list view
+            const thumbScale = 200 / naturalW;
+            const thumbCanvas = document.createElement('canvas');
+            thumbCanvas.width = 200;
+            thumbCanvas.height = Math.round(naturalH * thumbScale);
+            const thumbCtx = thumbCanvas.getContext('2d');
+            if (thumbCtx) thumbCtx.drawImage(img, 0, 0, thumbCanvas.width, thumbCanvas.height);
+            const thumbnailDataUrl = thumbCanvas.toDataURL('image/jpeg', 0.6);
+            const thumbnail = thumbnailDataUrl.split(',')[1];
+
+            items.push({
+              element_type: 'image',
+              image_data: resizedBase64,
+              image_thumbnail: thumbnail,
+              image_mime_type: 'image/jpeg',
+              content_hash: await computeContentHash(imageBase64.slice(0, 1000)),
+              meta_ad_id: creative.id,
+              meta_campaign_name: creative.campaignName,
+              meta_adset_name: creative.adsetName,
+              performance_snapshot: perf,
+              group_id: groupId,
+              campaign_type: campaignType,
+            });
+          }
         }
       }
 
