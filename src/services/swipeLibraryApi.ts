@@ -199,14 +199,19 @@ export async function saveToSwipeLibrary(
   adAccountId: string,
   items: SwipeLibrarySavePayload[]
 ): Promise<{ saved: number; duplicates: number }> {
-  return fetchJson<{ saved: number; duplicates: number }>(
-    `${API_BASE}/swipe-save`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ad_account_id: adAccountId, items }),
-    }
-  );
+  const options = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ad_account_id: adAccountId, items }),
+  };
+
+  try {
+    return await fetchJson<{ saved: number; duplicates: number }>(`${API_BASE}/swipe-save`, options);
+  } catch (err) {
+    // Single retry after 1s for transient network/server failures
+    await new Promise(r => setTimeout(r, 1000));
+    return fetchJson<{ saved: number; duplicates: number }>(`${API_BASE}/swipe-save`, options);
+  }
 }
 
 export async function updateSwipeItem(
