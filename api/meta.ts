@@ -2101,27 +2101,24 @@ async function handleSwipeList(req: VercelRequest, res: VercelResponse) {
   const adAccountId = req.query.ad_account_id as string;
   if (!adAccountId) return res.status(400).json({ error: 'ad_account_id required' });
 
-  const elementType = req.query.element_type as string | undefined;
   const conversionType = req.query.conversion_type as string | undefined;
+  const campaignType = req.query.campaign_type as string | undefined;
   const search = req.query.search as string | undefined;
   const sort = (req.query.sort as string) || 'newest';
-  const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+  const limit = Math.min(parseInt(req.query.limit as string) || 500, 500);
   const offset = parseInt(req.query.offset as string) || 0;
 
   try {
     // Select all columns except image_data (loaded on demand via swipe-image)
+    // element_type filtering is done client-side to preserve grouped ad context
     let query = supabase
       .from('swipe_library_items')
       .select(
-        'id, organization_id, ad_account_id, element_type, text_content, image_thumbnail, image_mime_type, meta_ad_id, meta_campaign_name, meta_adset_name, performance_snapshot, content_hash, tags, notes, is_pinned, saved_by, created_at, updated_at',
+        'id, organization_id, ad_account_id, element_type, text_content, image_thumbnail, image_mime_type, meta_ad_id, meta_campaign_name, meta_adset_name, performance_snapshot, content_hash, tags, notes, is_pinned, saved_by, created_at, updated_at, group_id, campaign_type',
         { count: 'exact' }
       )
       .eq('organization_id', auth.organizationId)
       .eq('ad_account_id', adAccountId);
-
-    if (elementType) {
-      query = query.eq('element_type', elementType);
-    }
 
     // Filter by conversion type stored in the performance_snapshot JSONB.
     // Include items without conversion_type (saved before this feature) so they aren't hidden.
@@ -2131,28 +2128,38 @@ async function handleSwipeList(req: VercelRequest, res: VercelResponse) {
       query = query.or('performance_snapshot->>conversion_type.eq.lead,performance_snapshot->>conversion_type.eq.both,performance_snapshot->>conversion_type.is.null');
     }
 
-    if (search) {
-      query = query.ilike('text_content', `%${search}%`);
+    if (campaignType) {
+      query = query.eq('campaign_type', campaignType);
     }
 
-    // Sort: pinned items first, then by user-selected sort
+    if (search) {
+      // Wrap ilike values in double quotes so PostgREST treats commas/parens as literal text
+      const escaped = search.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      query = query.or(`text_content.ilike."%${escaped}%",meta_campaign_name.ilike."%${escaped}%"`);
+    }
+
+    // Sort: pinned items first, then group elements together, then by user-selected sort
     switch (sort) {
       case 'oldest':
         query = query.order('is_pinned', { ascending: false })
-          .order('created_at', { ascending: true });
+          .order('created_at', { ascending: true })
+          .order('group_id').order('element_type');
         break;
       case 'cvr':
         query = query.order('is_pinned', { ascending: false })
-          .order('performance_snapshot->cvr', { ascending: false, nullsFirst: false });
+          .order('performance_snapshot->cvr', { ascending: false, nullsFirst: false })
+          .order('group_id').order('element_type');
         break;
       case 'cpa':
         query = query.order('is_pinned', { ascending: false })
-          .order('performance_snapshot->cpa', { ascending: true, nullsFirst: false });
+          .order('performance_snapshot->cpa', { ascending: true, nullsFirst: false })
+          .order('group_id').order('element_type');
         break;
       case 'newest':
       default:
         query = query.order('is_pinned', { ascending: false })
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .order('group_id').order('element_type');
         break;
     }
 
@@ -2200,6 +2207,8 @@ async function handleSwipeSave(req: VercelRequest, res: VercelResponse) {
       performance_snapshot?: Record<string, unknown>;
       content_hash: string;
       tags?: string[];
+      group_id?: string;
+      campaign_type?: string;
     }) => ({
       organization_id: auth.organizationId,
       ad_account_id,
@@ -2215,6 +2224,8 @@ async function handleSwipeSave(req: VercelRequest, res: VercelResponse) {
       content_hash: item.content_hash,
       tags: item.tags || [],
       saved_by: auth.userId,
+      group_id: item.group_id || item.meta_ad_id || crypto.randomUUID(),
+      campaign_type: item.campaign_type || null,
     }));
 
     // ignoreDuplicates: true — silently skips rows that match the unique constraint
@@ -2222,7 +2233,7 @@ async function handleSwipeSave(req: VercelRequest, res: VercelResponse) {
     const { data, error } = await supabase
       .from('swipe_library_items')
       .upsert(rows, {
-        onConflict: 'organization_id,ad_account_id,element_type,content_hash',
+        onConflict: 'organization_id,ad_account_id,element_type,content_hash,group_id',
         ignoreDuplicates: true,
       })
       .select('id, element_type, content_hash');
@@ -2348,18 +2359,26 @@ async function handleSwipeCheck(req: VercelRequest, res: VercelResponse) {
   const auth = await authenticateRequest(req);
   if (!auth) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { ad_account_id, content_hashes } = req.body;
+  const { ad_account_id, content_hashes, group_ids } = req.body;
   if (!ad_account_id || !Array.isArray(content_hashes) || content_hashes.length === 0) {
     return res.status(400).json({ error: 'ad_account_id and content_hashes[] required' });
   }
 
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('swipe_library_items')
-      .select('content_hash')
+      .select('content_hash, group_id')
       .eq('organization_id', auth.organizationId)
       .eq('ad_account_id', ad_account_id)
       .in('content_hash', content_hashes);
+
+    // When group_ids provided, only match items in those groups
+    // This prevents false "Saved" states when different ads share the same content
+    if (Array.isArray(group_ids) && group_ids.length > 0) {
+      query = query.in('group_id', group_ids);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 

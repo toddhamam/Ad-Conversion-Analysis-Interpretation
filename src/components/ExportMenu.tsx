@@ -46,9 +46,15 @@ const METRIC_FORMATS: Record<string, MetricFormat> = {
 };
 
 export function formatMetricForExport(metricId: string, value: number): string {
+  // Handle null, undefined, string '—', or NaN passed as value (e.g. account-level metrics
+  // that can't be split by campaign type are passed as '—' from Dashboard)
+  if (value === null || value === undefined || typeof value !== 'number' || isNaN(value)) {
+    return '—';
+  }
+
   const format = METRIC_FORMATS[metricId] || 'number';
 
-  if (value === 0 || (isNaN(value) && format !== 'number')) {
+  if (value === 0) {
     // For currency/multiplier, show dash for zero (matches dashboard display)
     if (['currency', 'currency_precise', 'multiplier'].includes(format)) return '—';
   }

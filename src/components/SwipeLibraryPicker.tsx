@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   fetchSwipeLibrary,
   fetchSwipeImage,
+  groupSwipeItems,
   type SwipeLibraryItem,
   type SwipeElementType,
+  type SwipeAdGroup,
 } from '../services/swipeLibraryApi';
 import Loading from './Loading';
 import '../pages/SwipeLibrary.css';
@@ -26,11 +28,13 @@ const SwipeLibraryPicker = ({
   const [items, setItems] = useState<SwipeLibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeType, setActiveType] = useState<SwipeElementType | 'all'>(
-    elementTypes.length === 1 ? elementTypes[0] : 'all'
-  );
+
+  // Selection: which element types are selected from which groups
+  const [selectedElements, setSelectedElements] = useState<Map<string, Set<SwipeElementType>>>(new Map());
+
+  // Expanded groups
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   // Image data cache for selected images
   const [imageDataCache, setImageDataCache] = useState<Map<string, { data: string; mime: string }>>(new Map());
@@ -40,16 +44,12 @@ const SwipeLibraryPicker = ({
       setLoading(true);
       setError(null);
       try {
-        // Load all types we need
         const result = await fetchSwipeLibrary(adAccountId, {
-          element_type: activeType === 'all' ? undefined : activeType,
           search: searchQuery.trim() || undefined,
           sort: 'newest',
-          limit: 100,
+          limit: 500,
         });
-        // Filter to only allowed types
-        const filtered = result.items.filter(i => elementTypes.includes(i.element_type));
-        setItems(filtered);
+        setItems(result.items);
       } catch (err: unknown) {
         console.error('Failed to load swipe library:', err);
         setError(err instanceof Error ? err.message : 'Failed to load');
@@ -58,23 +58,106 @@ const SwipeLibraryPicker = ({
       }
     };
     load();
-  }, [adAccountId, elementTypes, activeType, searchQuery]);
+  }, [adAccountId, searchQuery]);
 
-  const toggleSelect = (item: SwipeLibraryItem) => {
-    if (!multiSelect) {
-      setSelectedIds(new Set([item.id]));
-      return;
-    }
-    setSelectedIds(prev => {
+  // Group items, filter to groups containing at least one of the requested elementTypes
+  const groups = useMemo(() => {
+    const allGroups = groupSwipeItems(items);
+    return allGroups.filter(g =>
+      elementTypes.some(t => {
+        if (t === 'headline') return g.headline !== null;
+        if (t === 'body_copy') return g.bodyCopy !== null;
+        if (t === 'image') return g.image !== null;
+        return false;
+      })
+    );
+  }, [items, elementTypes]);
+
+  const toggleExpand = (groupId: string) => {
+    setExpandedGroups(prev => {
       const next = new Set(prev);
-      if (next.has(item.id)) next.delete(item.id);
-      else next.add(item.id);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
       return next;
     });
   };
 
+  const toggleElementSelect = (groupId: string, elementType: SwipeElementType) => {
+    if (!elementTypes.includes(elementType)) return;
+
+    setSelectedElements(prev => {
+      const next = new Map(prev);
+
+      if (!multiSelect) {
+        // Single select mode: clear everything, select just this one
+        next.clear();
+        next.set(groupId, new Set([elementType]));
+        return next;
+      }
+
+      const current = next.get(groupId) || new Set<SwipeElementType>();
+      const updated = new Set(current);
+      if (updated.has(elementType)) {
+        updated.delete(elementType);
+        if (updated.size === 0) next.delete(groupId);
+        else next.set(groupId, updated);
+      } else {
+        updated.add(elementType);
+        next.set(groupId, updated);
+      }
+      return next;
+    });
+  };
+
+  // Quick-select: clicking the group row toggles all selectable elements
+  const toggleGroupSelect = (group: SwipeAdGroup) => {
+    const groupId = group.groupId;
+    const current = selectedElements.get(groupId);
+    const selectableTypes = elementTypes.filter(t => {
+      if (t === 'headline') return group.headline !== null;
+      if (t === 'body_copy') return group.bodyCopy !== null;
+      if (t === 'image') return group.image !== null;
+      return false;
+    });
+
+    if (!multiSelect) {
+      // Single select: toggle expand
+      toggleExpand(groupId);
+      return;
+    }
+
+    setSelectedElements(prev => {
+      const next = new Map(prev);
+      if (current && current.size === selectableTypes.length) {
+        // All selected — deselect all
+        next.delete(groupId);
+      } else {
+        // Select all selectable
+        next.set(groupId, new Set(selectableTypes));
+      }
+      return next;
+    });
+  };
+
+  const totalSelectedCount = useMemo(() => {
+    let count = 0;
+    for (const types of selectedElements.values()) count += types.size;
+    return count;
+  }, [selectedElements]);
+
   const handleConfirm = async () => {
-    const selected = items.filter(i => selectedIds.has(i.id));
+    const selected: SwipeLibraryItem[] = [];
+    for (const [groupId, types] of selectedElements) {
+      const group = groups.find(g => g.groupId === groupId);
+      if (!group) continue;
+      for (const t of types) {
+        let item: SwipeLibraryItem | null = null;
+        if (t === 'headline') item = group.headline;
+        else if (t === 'body_copy') item = group.bodyCopy;
+        else if (t === 'image') item = group.image;
+        if (item) selected.push(item);
+      }
+    }
 
     // For image items, fetch full image data before confirming
     const imageItems = selected.filter(i => i.element_type === 'image');
@@ -87,7 +170,6 @@ const SwipeLibraryPicker = ({
             next.set(img.id, { data: data.image_data, mime: data.image_mime_type });
             return next;
           });
-          // Attach to the item for the consumer
           (img as SwipeLibraryItem & { _fullImageData?: string; _fullImageMime?: string })._fullImageData = data.image_data;
           (img as SwipeLibraryItem & { _fullImageData?: string; _fullImageMime?: string })._fullImageMime = data.image_mime_type;
         } catch (err: unknown) {
@@ -103,20 +185,11 @@ const SwipeLibraryPicker = ({
     onSelect(selected);
   };
 
-  const showTypeTabs = elementTypes.length > 1;
-  const typeTabs: { label: string; value: SwipeElementType | 'all' }[] = [
-    { label: 'All', value: 'all' },
-    ...elementTypes.map(t => ({
-      label: t === 'headline' ? 'Headlines' : t === 'body_copy' ? 'Body Copy' : 'Images',
-      value: t,
-    })),
-  ];
-
-  // Pinned first
-  const sortedItems = [...items].sort((a, b) => {
-    if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
-    return 0;
-  });
+  const getElementLabel = (type: SwipeElementType): string => {
+    if (type === 'headline') return 'Headline';
+    if (type === 'body_copy') return 'Body Copy';
+    return 'Image';
+  };
 
   return (
     <div className="swipe-modal-overlay" onClick={onClose}>
@@ -128,26 +201,13 @@ const SwipeLibraryPicker = ({
 
         {/* Filters */}
         <div className="swipe-picker-filters">
-          {showTypeTabs && (
-            <div className="swipe-type-tabs">
-              {typeTabs.map(tab => (
-                <button
-                  key={tab.value}
-                  className={`swipe-type-tab ${activeType === tab.value ? 'active' : ''}`}
-                  onClick={() => setActiveType(tab.value)}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          )}
           <input
             type="text"
             className="swipe-search-input"
-            placeholder="Search..."
+            placeholder="Search ads or campaigns..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            style={{ width: '100%', marginTop: showTypeTabs ? '8px' : 0 }}
+            style={{ width: '100%' }}
           />
         </div>
 
@@ -157,52 +217,114 @@ const SwipeLibraryPicker = ({
             <Loading size="small" message="ConversionIQ™ loading library..." />
           ) : error ? (
             <div className="swipe-error">{error}</div>
-          ) : sortedItems.length === 0 ? (
+          ) : groups.length === 0 ? (
             <div className="swipe-picker-empty">
-              No saved items found. Save elements from Meta Ads first.
+              No saved ads found. Save ads from Meta Ads first.
             </div>
           ) : (
             <div className="swipe-picker-list">
-              {sortedItems.map(item => (
-                <div
-                  key={item.id}
-                  className={`swipe-picker-item ${selectedIds.has(item.id) ? 'selected' : ''}`}
-                  onClick={() => toggleSelect(item)}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(item.id)}
-                    onChange={() => toggleSelect(item)}
-                    onClick={e => e.stopPropagation()}
-                    className="swipe-card-check"
-                  />
-                  <div className="swipe-picker-item-content">
-                    {item.element_type === 'image' ? (
-                      <div className="swipe-picker-thumb">
-                        {item.image_thumbnail ? (
+              {groups.map(group => {
+                const isExpanded = expandedGroups.has(group.groupId);
+                const groupSelected = selectedElements.get(group.groupId);
+
+                return (
+                  <div key={group.groupId} className={`swipe-picker-group ${isExpanded ? 'expanded' : ''}`}>
+                    {/* Group summary row */}
+                    <div
+                      className="swipe-picker-group-header"
+                      onClick={() => toggleGroupSelect(group)}
+                    >
+                      <button
+                        className="swipe-picker-expand-btn"
+                        onClick={(e) => { e.stopPropagation(); toggleExpand(group.groupId); }}
+                        title={isExpanded ? 'Collapse' : 'Expand'}
+                      >
+                        {isExpanded ? '▼' : '▶'}
+                      </button>
+
+                      {group.image?.image_thumbnail && (
+                        <div className="swipe-picker-group-thumb">
                           <img
-                            src={`data:${item.image_mime_type || 'image/jpeg'};base64,${item.image_thumbnail}`}
-                            alt="Saved"
+                            src={`data:${group.image.image_mime_type || 'image/jpeg'};base64,${group.image.image_thumbnail}`}
+                            alt=""
                           />
-                        ) : (
-                          <span>🖼️</span>
+                        </div>
+                      )}
+
+                      <div className="swipe-picker-group-info">
+                        <span className="swipe-picker-group-title">
+                          {group.headline?.text_content || group.campaignName || 'Saved Ad'}
+                        </span>
+                        <span className="swipe-picker-group-meta">
+                          {group.items.length} element{group.items.length > 1 ? 's' : ''}
+                          {group.performance.cvr != null && ` · ${group.performance.cvr.toFixed(1)}% CVR`}
+                        </span>
+                      </div>
+
+                      {group.isPinned && <span title="Pinned" style={{ fontSize: '12px' }}>📌</span>}
+                    </div>
+
+                    {/* Expanded: element-level checkboxes */}
+                    {isExpanded && (
+                      <div className="swipe-picker-elements">
+                        {group.headline && (
+                          <label
+                            className={`swipe-picker-element-row ${!elementTypes.includes('headline') ? 'disabled' : ''} ${groupSelected?.has('headline') ? 'selected' : ''}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={groupSelected?.has('headline') || false}
+                              disabled={!elementTypes.includes('headline')}
+                              onChange={() => toggleElementSelect(group.groupId, 'headline')}
+                              className="swipe-card-check"
+                            />
+                            <span className="swipe-picker-element-type">{getElementLabel('headline')}</span>
+                            <span className="swipe-picker-element-preview">{group.headline.text_content}</span>
+                          </label>
+                        )}
+                        {group.bodyCopy && (
+                          <label
+                            className={`swipe-picker-element-row ${!elementTypes.includes('body_copy') ? 'disabled' : ''} ${groupSelected?.has('body_copy') ? 'selected' : ''}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={groupSelected?.has('body_copy') || false}
+                              disabled={!elementTypes.includes('body_copy')}
+                              onChange={() => toggleElementSelect(group.groupId, 'body_copy')}
+                              className="swipe-card-check"
+                            />
+                            <span className="swipe-picker-element-type">{getElementLabel('body_copy')}</span>
+                            <span className="swipe-picker-element-preview">{group.bodyCopy.text_content}</span>
+                          </label>
+                        )}
+                        {group.image && (
+                          <label
+                            className={`swipe-picker-element-row ${!elementTypes.includes('image') ? 'disabled' : ''} ${groupSelected?.has('image') ? 'selected' : ''}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={groupSelected?.has('image') || false}
+                              disabled={!elementTypes.includes('image')}
+                              onChange={() => toggleElementSelect(group.groupId, 'image')}
+                              className="swipe-card-check"
+                            />
+                            <span className="swipe-picker-element-type">{getElementLabel('image')}</span>
+                            {group.image.image_thumbnail ? (
+                              <img
+                                src={`data:${group.image.image_mime_type || 'image/jpeg'};base64,${group.image.image_thumbnail}`}
+                                alt=""
+                                className="swipe-picker-element-thumb"
+                              />
+                            ) : (
+                              <span className="swipe-picker-element-preview">🖼️ Image</span>
+                            )}
+                          </label>
                         )}
                       </div>
-                    ) : (
-                      <p className="swipe-picker-text">{item.text_content}</p>
                     )}
                   </div>
-                  <div className="swipe-picker-item-meta">
-                    <span className="swipe-type-badge">
-                      {item.element_type === 'body_copy' ? 'Body' : item.element_type === 'headline' ? 'Headline' : 'Image'}
-                    </span>
-                    {item.performance_snapshot.cvr != null && (
-                      <span className="swipe-perf-badge">{item.performance_snapshot.cvr.toFixed(1)}% CVR</span>
-                    )}
-                    {item.is_pinned && <span title="Pinned">📌</span>}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -210,14 +332,14 @@ const SwipeLibraryPicker = ({
         {/* Footer */}
         <div className="swipe-picker-footer">
           <span className="swipe-picker-count">
-            {selectedIds.size} selected
+            {totalSelectedCount} element{totalSelectedCount !== 1 ? 's' : ''} selected
           </span>
           <div className="swipe-picker-footer-actions">
             <button className="swipe-modal-cancel" onClick={onClose}>Cancel</button>
             <button
               className="swipe-modal-save"
               onClick={handleConfirm}
-              disabled={selectedIds.size === 0}
+              disabled={totalSelectedCount === 0}
             >
               Use Selected
             </button>
