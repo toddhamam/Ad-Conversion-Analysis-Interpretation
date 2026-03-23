@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-03-23 — Fix Meta Ads sync performance + DateRangePicker clipping
+
+### What
+Fixed two issues on the Meta Ads page: (1) the DateRangePicker dropdown preset options were clipped/invisible due to the parent container's overflow rules, and (2) syncing with "Maximum" date range was extremely slow (~5 minutes for 20 ads) due to individual API calls compounded by the policy guard's throttling delays.
+
+### Fixed
+- **DateRangePicker dropdown clipping** — Preset options were hidden because `.main-content` has `overflow-x: hidden` which per CSS spec creates a clipping boundary for absolutely-positioned descendants. Switched dropdown to `position: fixed` with dynamically calculated coordinates from the trigger button's bounding rect, so the dropdown floats above all containers.
+- **Slow Meta Ads sync (~5 min for 20 ads)** — Replaced 20+ individual creative detail API calls with batched `?ids=` requests (up to 50 IDs per batch). Reduces total API calls from N+1 to ~ceil(N/50)+1. Each batch still routes through `guardedFetch` for rate limit compliance.
+- **Potential infinite pagination loop** — Added empty-page guard to `fetchAdInsights` pagination: if Meta returns a cursor but an empty data page, the loop now breaks instead of endlessly requesting the next page.
+- **Backend proxy rejecting batch requests** — The proxy's endpoint validation (`!endpoint`) rejected empty-string endpoints, but Meta's `?ids=` batch endpoint uses the Graph API root (empty path). Updated validation to allow empty endpoint when batch `ids` parameter is present.
+
+### Changed
+- **`src/services/metaApi.ts`** — Replaced `batchProcess()` + individual `fetchAdCreativeDetails()` with `fetchAdCreativeDetailsBatch()` and `fetchAllCreativeDetails()` using Meta's `?ids=` endpoint. Chunks processed sequentially through `guardedFetch`. Diagnostic logs wrapped in `import.meta.env.DEV` guard.
+- **`src/components/DateRangePicker.tsx`** — Added `triggerRef` for button positioning, `useEffect` to compute fixed dropdown coordinates on open, updated click-outside handler to exclude trigger button.
+- **`src/components/DateRangePicker.css`** — Changed `.date-range-dropdown` from `position: absolute` to `position: fixed`. Tablet media query uses `!important` overrides for centered mobile layout.
+- **`api/meta.ts`** — Relaxed proxy endpoint validation to allow empty string for `?ids=` batch lookups.
+
+---
+
 ## 2026-03-23 — Fix Swipe Library image saving + add save progress feedback
 
 ### What

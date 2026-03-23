@@ -38,15 +38,12 @@
 }
 
 .date-range-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  position: fixed;
   background: var(--bg-card);
   border: 1px solid var(--border-primary);
   border-radius: 12px;
   box-shadow: var(--shadow-lg);
   z-index: 1000;
-  overflow: hidden;
 }
 
 .date-range-content {
@@ -279,11 +276,10 @@
 /* Tablet breakpoint - 768px */
 @media (max-width: 768px) {
   .date-range-dropdown {
-    position: fixed;
-    top: 50%;
-    left: 50%;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
     transform: translate(-50%, -50%);
-    right: auto;
     max-width: calc(100vw - 32px);
     max-height: calc(100vh - 32px);
     overflow-y: auto;
