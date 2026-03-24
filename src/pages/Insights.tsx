@@ -129,6 +129,10 @@ const Insights = () => {
       return;
     }
 
+    setLoading(true);
+    setError(null);
+    setLoadingMessage('ConversionIQ™ preparing analysis...');
+
     // Reserve credits before analysis
     let transactionId: string | undefined;
     try {
@@ -136,6 +140,8 @@ const Insights = () => {
       transactionId = reservation.transactionId;
     } catch (err: unknown) {
       if (err instanceof InsufficientCreditsError) {
+        setLoading(false);
+        setLoadingMessage('');
         setCreditModalData({ remaining: err.creditsRemaining, required: err.creditsRequired });
         setShowCreditModal(true);
         return;
@@ -143,8 +149,7 @@ const Insights = () => {
       console.warn('Credit reservation failed, proceeding:', err);
     }
 
-    setLoading(true);
-    setError(null);
+    // Clear previous analysis only after credits are confirmed
     setAnalysis(null);
     setLoadingMessage('Fetching ad data...');
 

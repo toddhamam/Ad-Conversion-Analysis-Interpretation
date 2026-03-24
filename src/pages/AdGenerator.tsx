@@ -889,6 +889,11 @@ const AdGenerator = () => {
       return;
     }
 
+    // Show loading immediately for instant feedback
+    setIsGeneratingCreatives(true);
+    setError(null);
+    setGenerationProgress('ConversionIQ™ preparing generation...');
+
     // Determine credit action type and reserve credits
     const creditActionType: CreditActionType = adType === 'video' ? 'video_ad'
       : adType === 'text' ? 'text_ad'
@@ -900,6 +905,8 @@ const AdGenerator = () => {
       transactionId = reservation.transactionId;
     } catch (err: unknown) {
       if (err instanceof InsufficientCreditsError) {
+        setIsGeneratingCreatives(false);
+        setGenerationProgress('');
         setCreditModalData({ remaining: err.creditsRemaining, required: err.creditsRequired });
         setShowCreditModal(true);
         return;
@@ -929,8 +936,6 @@ const AdGenerator = () => {
       }
     }
 
-    setIsGeneratingCreatives(true);
-    setError(null);
     setGenerationProgress(adType === 'text'
       ? 'ConversionIQ™ rendering text creatives...'
       : adType === 'image'
