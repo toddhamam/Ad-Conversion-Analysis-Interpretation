@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-03-24 — Instant button feedback for Channel Analysis & Creative Generation
+
+### What
+Eliminated a 1–3 second delay between clicking action buttons and seeing loading feedback in ConversionIQ™ Channel Analysis and CreativeIQ Ad Generator.
+
+### Root Cause
+Both `runAnalysis` (Insights) and `handleGenerateCreatives` (AdGenerator) awaited `reserveCredits()` before setting loading state. The network round-trip for credit reservation caused a noticeable dead zone where the button appeared unresponsive.
+
+### Fixed
+- **Insights.tsx** — Moved `setLoading(true)` before the `reserveCredits()` call so the spinner appears instantly. Deferred `setAnalysis(null)` until after credit reservation succeeds to avoid wiping existing results on insufficient credits.
+- **AdGenerator.tsx** — Moved `setIsGeneratingCreatives(true)` before the `reserveCredits()` call. Added proper cleanup (reset loading + progress) on the insufficient-credits early return path.
+- Loading messages use ConversionIQ™ branded copy ("ConversionIQ™ preparing analysis/generation...").
+
+---
+
 ## 2026-03-23 — Fix Swipe Library saves failing with 500 due to stale DB constraint
 
 ### What
