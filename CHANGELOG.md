@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-03-24 — Add "From Swipe Library" as a first-class CreativeIQ copy source
+
+### What
+Added a 4th copy source mode ("From Swipe Library") to CreativeIQ so users can pull saved winning headlines and body copy from the Swipe Library directly into the ad generation workflow. Previously, swipe library selections in Step 1 were silently destroyed when the user advanced — the picker could browse and select, but selections never reached the pipeline.
+
+### Changes
+- **AdGenerator.tsx** — Added `'swipe'` to the `CopySource` union type. New `handleCopySourceChange` branch auto-opens the picker. New `buildSwipeCopyOptions` helper DRYs up CopyOption construction. New swipe-mode branch in `handleSwipeLibrarySelect` merges selections across retries, auto-selects within Step 2 limits (max 4 headlines, 3 body texts), and requires both headline AND body text before advancing. Added deduplication to the existing append path to prevent duplicate React keys. Added "From Swipe Library" button, swipe-mode action area in Step 1 with status/error feedback, mode-specific labels in Steps 2 and 3, and conditional hiding of the generic library button in swipe mode.
+- **AdGenerator.css** — Updated `.copy-source-options` grid from `repeat(3, 1fr)` to `repeat(4, 1fr)`. Added `@media (max-width: 900px)` breakpoint for `repeat(2, 1fr)` tablet layout.
+
+### User Flow
+1. Select "From Swipe Library" → picker auto-opens
+2. Pick headlines + body copy → auto-advances to Step 2 with items pre-selected
+3. Proceed to Step 3 → generate AI images for the proven swipe copy
+4. Partial selections (headlines only) stay on Step 1 with guidance; reopening the picker merges new picks with existing ones
+
+---
+
 ## 2026-03-24 — Fix CreativeIQ product selector not loading products from Integrations
 
 ### What

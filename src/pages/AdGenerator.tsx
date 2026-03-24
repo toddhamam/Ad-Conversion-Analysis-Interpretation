@@ -156,7 +156,7 @@ function formatDate(isoString: string): string {
 }
 
 type WorkflowStep = 'config' | 'copy-selection' | 'final-config';
-type CopySource = 'generate' | 'import' | 'manual';
+type CopySource = 'generate' | 'import' | 'manual' | 'swipe';
 
 const IMPORT_DATE_OPTIONS: { id: DatePreset; label: string }[] = [
   { id: 'last_7d', label: 'Last 7 days' },
@@ -1056,6 +1056,9 @@ const AdGenerator = () => {
       setManualBodyTexts(['']);
       setManualCTAs(['']);
     }
+    if (source === 'swipe') {
+      openSwipePicker('step1', ['headline', 'body_copy']);
+    }
   };
 
   // Import top-performing copy from Meta ad account
@@ -1141,6 +1144,25 @@ const AdGenerator = () => {
     setCurrentStep('final-config');
   };
 
+  // Build CopyOption[] from swipe library items (shared helper)
+  const buildSwipeCopyOptions = (items: SwipeLibraryItem[]) => {
+    const newHeadlines: CopyOption[] = items
+      .filter(i => i.element_type === 'headline')
+      .map(i => ({
+        id: `swipe_h_${i.id}`,
+        text: i.text_content || '',
+        rationale: `Saved${i.performance_snapshot.cvr ? ` • ${i.performance_snapshot.cvr.toFixed(1)}% CVR` : ''}${i.performance_snapshot.cpa ? ` • $${i.performance_snapshot.cpa.toFixed(2)} CPA` : ''}`,
+      }));
+    const newBodyTexts: CopyOption[] = items
+      .filter(i => i.element_type === 'body_copy')
+      .map(i => ({
+        id: `swipe_b_${i.id}`,
+        text: i.text_content || '',
+        rationale: `Saved${i.performance_snapshot.cvr ? ` • ${i.performance_snapshot.cvr.toFixed(1)}% CVR` : ''}${i.performance_snapshot.cpa ? ` • $${i.performance_snapshot.cpa.toFixed(2)} CPA` : ''}`,
+      }));
+    return { newHeadlines, newBodyTexts };
+  };
+
   // Handle Swipe Library picker selection
   const handleSwipeLibrarySelect = (items: SwipeLibraryItem[]) => {
     setShowSwipePicker(false);
@@ -1151,35 +1173,57 @@ const AdGenerator = () => {
       const bodies = items.filter(i => i.element_type === 'body_copy').map(i => i.text_content || '');
       if (headlines.length > 0) setManualHeadlines(headlines);
       if (bodies.length > 0) setManualBodyTexts(bodies);
+    } else if (swipePickerContext === 'step1' && copySource === 'swipe') {
+      // Swipe mode primary flow — merge with existing, auto-select within limits, advance
+      const { newHeadlines, newBodyTexts } = buildSwipeCopyOptions(items);
+
+      // Merge with any previously picked swipe items (supports incremental selection across retries)
+      const existingHeadlines = copyOptions?.headlines || [];
+      const existingBodyTexts = copyOptions?.bodyTexts || [];
+      const existingHeadlineIds = new Set(existingHeadlines.map(h => h.id));
+      const existingBodyTextIds = new Set(existingBodyTexts.map(b => b.id));
+      const mergedHeadlines = [...existingHeadlines, ...newHeadlines.filter(h => !existingHeadlineIds.has(h.id))];
+      const mergedBodyTexts = [...existingBodyTexts, ...newBodyTexts.filter(b => !existingBodyTextIds.has(b.id))];
+
+      // Require at least 1 headline AND 1 body text before advancing
+      if (mergedHeadlines.length > 0 && mergedBodyTexts.length > 0) {
+        setCopyOptions({ headlines: mergedHeadlines, bodyTexts: mergedBodyTexts, callToActions: [] });
+        // Auto-select up to Step 2 limits (max 4 headlines, max 3 body texts)
+        setSelectedHeadlines(mergedHeadlines.slice(0, 4).map(h => h.id));
+        setSelectedBodyTexts(mergedBodyTexts.slice(0, 3).map(b => b.id));
+        setSelectedCTAs([]);
+        setCurrentStep('copy-selection');
+      } else {
+        // Partial selection — stay on Step 1, merge what we have so user sees feedback
+        if (mergedHeadlines.length > 0 || mergedBodyTexts.length > 0) {
+          setCopyOptions({ headlines: mergedHeadlines, bodyTexts: mergedBodyTexts, callToActions: [] });
+          setError(
+            mergedHeadlines.length === 0
+              ? 'Please also select at least one headline from the Swipe Library to continue.'
+              : 'Please also select at least one body copy from the Swipe Library to continue.'
+          );
+        }
+      }
     } else if (swipePickerContext === 'step1' || swipePickerContext === 'step2') {
-      // Append to existing copyOptions
-      const newHeadlines: CopyOption[] = items
-        .filter(i => i.element_type === 'headline')
-        .map(i => ({
-          id: `swipe_h_${i.id}`,
-          text: i.text_content || '',
-          rationale: `Saved${i.performance_snapshot.cvr ? ` • ${i.performance_snapshot.cvr.toFixed(1)}% CVR` : ''}${i.performance_snapshot.cpa ? ` • $${i.performance_snapshot.cpa.toFixed(2)} CPA` : ''}`,
-        }));
-      const newBodyTexts: CopyOption[] = items
-        .filter(i => i.element_type === 'body_copy')
-        .map(i => ({
-          id: `swipe_b_${i.id}`,
-          text: i.text_content || '',
-          rationale: `Saved${i.performance_snapshot.cvr ? ` • ${i.performance_snapshot.cvr.toFixed(1)}% CVR` : ''}${i.performance_snapshot.cpa ? ` • $${i.performance_snapshot.cpa.toFixed(2)} CPA` : ''}`,
-        }));
+      // Append to existing copyOptions (supplement for generate/import modes, or add-more in Step 2)
+      const { newHeadlines, newBodyTexts } = buildSwipeCopyOptions(items);
+
+      // Deduplicate: filter out items whose IDs already exist in copyOptions
+      const existingHeadlineIds = new Set(copyOptions?.headlines.map(h => h.id) || []);
+      const existingBodyTextIds = new Set(copyOptions?.bodyTexts.map(b => b.id) || []);
+      const dedupedHeadlines = newHeadlines.filter(h => !existingHeadlineIds.has(h.id));
+      const dedupedBodyTexts = newBodyTexts.filter(b => !existingBodyTextIds.has(b.id));
 
       if (copyOptions) {
-        // Step 2: append to existing options
         setCopyOptions({
           ...copyOptions,
-          headlines: [...copyOptions.headlines, ...newHeadlines],
-          bodyTexts: [...copyOptions.bodyTexts, ...newBodyTexts],
+          headlines: [...copyOptions.headlines, ...dedupedHeadlines],
+          bodyTexts: [...copyOptions.bodyTexts, ...dedupedBodyTexts],
         });
       } else {
-        // Step 1 (generate/import mode): pre-populate so they show in Step 2
         setCopyOptions({
-          headlines: newHeadlines,
-          bodyTexts: newBodyTexts,
+          headlines: dedupedHeadlines,
+          bodyTexts: dedupedBodyTexts,
           callToActions: [],
         });
       }
@@ -1579,7 +1623,7 @@ const AdGenerator = () => {
           {/* Copy Source Selection */}
           <div className="config-section">
             <label className="config-label">Copy Source</label>
-            <p className="config-hint">Generate new copy with AI, import winning copy from your ad account, or enter your own</p>
+            <p className="config-hint">Generate new copy with AI, import from your ad account, enter your own, or pick from your Swipe Library</p>
             <div className="copy-source-options">
               <button
                 className={`copy-source-btn ${copySource === 'generate' ? 'active' : ''}`}
@@ -1602,10 +1646,19 @@ const AdGenerator = () => {
                 <span className="copy-source-name">Enter Manually</span>
                 <span className="copy-source-desc">Paste your own copy</span>
               </button>
+              <button
+                className={`copy-source-btn ${copySource === 'swipe' ? 'active' : ''}`}
+                onClick={() => handleCopySourceChange('swipe')}
+                disabled={!currentAccount?.ad_account_id}
+                title={!currentAccount?.ad_account_id ? 'Connect a Meta ad account to use Swipe Library' : undefined}
+              >
+                <span className="copy-source-name">From Swipe Library</span>
+                <span className="copy-source-desc">Reuse saved winning copy</span>
+              </button>
             </div>
 
-            {/* Swipe Library Button — available for all copy source modes */}
-            {currentAccount?.ad_account_id && (
+            {/* Swipe Library Button — available for non-swipe copy source modes */}
+            {currentAccount?.ad_account_id && copySource !== 'swipe' && (
               <button
                 type="button"
                 className="swipe-library-inline-btn"
@@ -1968,6 +2021,39 @@ const AdGenerator = () => {
             </>
           )}
 
+          {/* Swipe Library: Primary action area */}
+          {copySource === 'swipe' && (
+            <div className="config-section" style={{ textAlign: 'center', padding: '24px 16px' }}>
+              {copyOptions && (copyOptions.headlines.length > 0 || copyOptions.bodyTexts.length > 0) ? (
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '16px', fontSize: '14px' }}>
+                  {copyOptions.headlines.length} headline{copyOptions.headlines.length !== 1 ? 's' : ''} and {copyOptions.bodyTexts.length} body cop{copyOptions.bodyTexts.length !== 1 ? 'ies' : 'y'} selected.
+                  {(copyOptions.headlines.length === 0 || copyOptions.bodyTexts.length === 0) && (
+                    <span style={{ display: 'block', color: '#f59e0b', marginTop: '8px', fontWeight: 500 }}>
+                      {copyOptions.headlines.length === 0
+                        ? 'Select at least one headline to continue.'
+                        : 'Select at least one body copy to continue.'}
+                    </span>
+                  )}
+                </p>
+              ) : (
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '16px', fontSize: '14px' }}>
+                  Select headlines and body copy from your saved winning ads
+                </p>
+              )}
+              <button
+                type="button"
+                className="generate-btn step-btn"
+                onClick={() => openSwipePicker('step1', ['headline', 'body_copy'])}
+                disabled={!currentAccount?.ad_account_id}
+              >
+                <span className="generate-icon">🔖</span>
+                {copyOptions && (copyOptions.headlines.length > 0 || copyOptions.bodyTexts.length > 0)
+                  ? 'Re-select from Swipe Library'
+                  : 'Select from Swipe Library'}
+              </button>
+            </div>
+          )}
+
           {/* Generate Copy Options Button — AI generation only */}
           {copySource === 'generate' && (
             <button
@@ -2026,7 +2112,7 @@ const AdGenerator = () => {
               </>
             ) : (
               <span className="summary-item">
-                <span className="summary-label">Source:</span> Imported from Ads
+                <span className="summary-label">Source:</span> {copySource === 'swipe' ? 'Swipe Library' : copySource === 'import' ? 'Imported from Ads' : 'Manually Entered'}
               </span>
             )}
           </div>
@@ -2145,7 +2231,7 @@ const AdGenerator = () => {
               ) : (
                 <div className="summary-card">
                   <span className="summary-card-label">Copy Source</span>
-                  <span className="summary-card-value">{copySource === 'import' ? 'Imported from Ads' : 'Manually Entered'}</span>
+                  <span className="summary-card-value">{copySource === 'swipe' ? 'Swipe Library' : copySource === 'import' ? 'Imported from Ads' : 'Manually Entered'}</span>
                 </div>
               )}
               <div className="summary-card">
