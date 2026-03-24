@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-03-24 — Fix CreativeIQ product selector not loading products from Integrations
+
+### What
+Fixed the CreativeIQ ad builder showing "No products defined yet" even when products were uploaded and saved in Integrations for the current ad account. Users couldn't select which product to promote — the AI was only referencing products from channel analysis cache instead.
+
+### Root Cause
+The product loading `useEffect` in AdGenerator.tsx had an empty dependency array (`[]`) and only read from scoped localStorage. When products were saved via Integrations (which writes metadata to Supabase), AdGenerator never picked them up because:
+1. The effect only ran once on mount, not when fresh account data arrived from the async `fetchAdAccounts()` call
+2. There was no fallback to read from `currentAccount.products` (Supabase metadata available via AdAccountContext)
+3. A localStorage parse failure would skip the Supabase fallback entirely due to a single shared try/catch
+
+### Fixed
+- **AdGenerator.tsx** — Rewrote the product loading effect with a two-tier strategy: reads scoped localStorage first (full data with images), falls back to `currentAccount.products` from Supabase metadata (no images, but product name/author/description still available for AI copy generation). Isolated the localStorage parse in its own try/catch so corrupt data falls through to the Supabase fallback. Added `currentAccount?.products` and `currentAccount?.ad_account_id` as dependencies so the effect re-runs when the authoritative fetch replaces stale cached data.
+
+---
+
 ## 2026-03-24 — Instant button feedback for Channel Analysis & Creative Generation
 
 ### What

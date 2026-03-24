@@ -362,22 +362,47 @@ const AdGenerator = () => {
     setImageCacheCount(0);
   };
 
-  // Load products from localStorage on mount
+  // Load products from scoped localStorage, falling back to Supabase metadata
+  // from currentAccount.products when localStorage is empty or corrupt.
+  // Depends on currentAccount?.products so the effect re-runs when the
+  // authoritative fetch replaces stale cached data on the same account.
   useEffect(() => {
+    // 1. Primary: scoped localStorage (full data with images)
     try {
       const storedProducts = getScopedItem(PRODUCTS_STORAGE_KEY);
       if (storedProducts) {
         const parsed: ProductContext[] = JSON.parse(storedProducts);
-        setProducts(parsed);
-        setSelectedProductId(prev => {
-          if (!prev && parsed.length === 1) return parsed[0].id;
-          return prev;
-        });
+        if (parsed.length > 0) {
+          setProducts(parsed);
+          setSelectedProductId(prev => {
+            if (!prev && parsed.length === 1) return parsed[0].id;
+            return prev;
+          });
+          return;
+        }
       }
     } catch {
-      console.warn('Failed to load products from localStorage');
+      // localStorage missing or corrupt — fall through to Supabase metadata
     }
-  }, []);
+
+    // 2. Fallback: Supabase metadata via currentAccount (no images)
+    if (currentAccount?.products?.length) {
+      const fromMeta: ProductContext[] = currentAccount.products.map(meta => ({
+        ...meta,
+        productImages: [],
+      }));
+      setProducts(fromMeta);
+      setSelectedProductId(prev => {
+        if (!prev && fromMeta.length === 1) return fromMeta[0].id;
+        return prev;
+      });
+      return;
+    }
+
+    // 3. No products from either source — clear state
+    setProducts([]);
+    setSelectedProductId(null);
+  }, [currentAccount?.products, currentAccount?.ad_account_id]);
 
   // Load saved Ad Library inspirations from localStorage
   useEffect(() => {
