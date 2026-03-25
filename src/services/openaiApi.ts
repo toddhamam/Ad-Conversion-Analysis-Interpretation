@@ -353,7 +353,9 @@ function sanitizeCopyText(text: string): string {
 // =============================================================================
 // VIDEO CONFIGURATION - Veo 3.1 video generation options
 // =============================================================================
-export type VideoAspectRatio = '16:9' | '9:16';
+// Veo 3.1 natively supports only 16:9 and 9:16. The 4:5 option generates at
+// 9:16 and crops client-side to 1080×1350 — the optimal Meta feed aspect ratio.
+export type VideoAspectRatio = '4:5' | '16:9' | '9:16';
 export type VideoDuration = 4 | 6 | 8;
 export type VideoResolution = '720p' | '1080p';
 // Only one model is available — 'standard' maps to veo-3.1-generate-preview.
@@ -376,6 +378,13 @@ export interface VideoSizeConfig {
 }
 
 export const VIDEO_ASPECT_RATIO_OPTIONS: VideoSizeConfig[] = [
+  {
+    id: '4:5',
+    name: 'Meta Feed',
+    description: 'Optimal for Facebook & Instagram feed',
+    dimensions: '1080×1350',
+    icon: '📐',
+  },
   {
     id: '9:16',
     name: 'Portrait/Story',
@@ -408,7 +417,7 @@ export const VIDEO_MODEL_OPTIONS: { id: VideoModel; name: string; description: s
 ];
 
 export const DEFAULT_VIDEO_CONFIG: VideoConfig = {
-  aspectRatio: '9:16',
+  aspectRatio: '4:5',
   duration: 8,
   resolution: '720p',
   model: 'standard',
@@ -4188,6 +4197,7 @@ Return JSON only:
  * Product context, hook-first prompts, channel analysis integration,
  * ad library inspirations, UGC audio cues, configurable model/duration/aspect/resolution.
  *
+ * When 4:5 aspect ratio is requested, generates at 9:16 and crops to 4:5 client-side.
  * Note: Veo 3.1 does not support inlineData for image-to-video on the Gemini API.
  */
 export async function generateAdVideoWithVeo(config: {
@@ -4220,7 +4230,11 @@ export async function generateAdVideoWithVeo(config: {
   const variationIdx = config.variationIndex ?? 0;
   const totalVars = config.totalVariations ?? 1;
 
-  console.log(`🎬 Generating video ${variationIdx + 1}/${totalVars} with Veo (${modelId}), ${durationSec}s ${videoConfig.aspectRatio} ${videoConfig.resolution}`);
+  // 4:5 is not natively supported by Veo — generate at 9:16 and crop after download
+  const is4x5 = videoConfig.aspectRatio === '4:5';
+  const veoAspectRatio = is4x5 ? '9:16' as const : videoConfig.aspectRatio === '16:9' ? '16:9' as const : '9:16' as const;
+
+  console.log(`🎬 Generating video ${variationIdx + 1}/${totalVars} with Veo (${modelId}), ${durationSec}s ${videoConfig.aspectRatio}${is4x5 ? ' (via 9:16→crop)' : ''} ${videoConfig.resolution}`);
 
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
   const conceptAngle = config.conceptType ? CONCEPT_ANGLES[config.conceptType] : null;
@@ -4239,11 +4253,25 @@ export async function generateAdVideoWithVeo(config: {
 
   // Hook-first structure: the opening seconds are everything
   promptParts.push(
-    `Create a ${durationSec}-second social media advertisement video (${videoConfig.aspectRatio} aspect ratio).`,
+    `Create a ${durationSec}-second social media advertisement video (${veoAspectRatio} aspect ratio).`,
     '',
     `HOOK (first 1-2 seconds) — THIS IS THE MOST IMPORTANT PART:`,
     `Open with an attention-grabbing visual that stops the scroll.`,
   );
+
+  // 4:5 composition guidance — the video will be center-cropped from 9:16
+  if (is4x5) {
+    promptParts.push(
+      '',
+      'CRITICAL FRAMING CONSTRAINT (4:5 crop):',
+      'This 9:16 video will be center-cropped to 4:5 aspect ratio for Meta feeds.',
+      'The top 15% and bottom 15% of the frame WILL BE CUT OFF.',
+      '- Keep ALL important content (faces, text, product, action) in the center 70% of the vertical frame',
+      '- Place text overlays in the center-middle area, never near the very top or bottom edge',
+      '- Frame subjects from chest/shoulders up, not full-body shots',
+      '- Avoid placing any critical visual elements in the top or bottom margins',
+    );
+  }
 
   // Use winning headline patterns for the hook
   if (winningPatterns?.headlines?.length) {
@@ -4344,23 +4372,31 @@ export async function generateAdVideoWithVeo(config: {
     promptParts.push(`Supporting message: "${bodyText}"`, '');
   }
 
-  // Video structure guidance
+  // Video structure guidance — optimized for Meta feed autoplay behavior
+  const bodyEnd = Math.floor(durationSec * 0.7);
   promptParts.push(
-    'VIDEO STRUCTURE:',
-    `- 0-2s: HOOK — scroll-stopping opening with "${headline}"`,
-    `- 2-${Math.floor(durationSec * 0.7)}s: BODY — demonstrate value, show the product/outcome`,
-    `- ${Math.floor(durationSec * 0.7)}-${durationSec}s: CTA — clear call to action with urgency`,
+    'VIDEO STRUCTURE (optimized for Meta feed autoplay):',
+    `- 0-1s: PATTERN INTERRUPT — a jarring visual change, unexpected motion, or bold text flash that breaks the scroll. The viewer decides in under 1 second whether to stop. This must feel different from everything else in their feed.`,
+    `- 1-2s: HOOK — immediately deliver the core promise or provoke curiosity with "${headline}". Show, don't tell.`,
+    `- 2-${bodyEnd}s: BODY — demonstrate the transformation, mechanism, or proof. Show the product/outcome in action. Build desire with before/after contrast if applicable.`,
+    `- ${bodyEnd}-${durationSec}s: CTA — clear, urgent call to action. End on a strong visual that makes the viewer want to learn more.`,
+    '',
+    'PACING:',
+    '- Cut every 1.5-2 seconds — short attention span, every moment must earn its screen time',
+    '- No static frames longer than 1.5 seconds — always have motion, transitions, or text animating',
+    '- Build visual intensity toward the CTA — start simple, end dynamic',
     ''
   );
 
   // UGC-style direction + audio cues (Veo 3.1 native audio)
   promptParts.push(
     'STYLE & AUDIO:',
-    '- UGC (user-generated content) aesthetic — authentic, relatable, not overly polished',
-    '- Dynamic motion with smooth transitions between scenes',
-    `- Include a confident voiceover saying: "${headline}"`,
-    '- Ambient sound cues that match the scene (subtle, not overpowering)',
-    '- Text overlays with the headline at key moments — large, bold, readable on mobile',
+    '- UGC (user-generated content) aesthetic — authentic, relatable, shot-on-phone feel, NOT corporate or stock-footage-like',
+    '- Quick, punchy transitions — jump cuts, zoom-ins, swipe transitions',
+    `- Confident, energetic voiceover delivering: "${headline}" — speak with authority and conviction`,
+    '- Background music: upbeat, trending, energetic — the kind that makes people watch longer',
+    '- Text overlays: LARGE, bold, high-contrast against background, centered in frame, readable even on small mobile screens without sound',
+    '- Captions/subtitles for key spoken words — 85% of Meta videos are watched on mute',
   );
 
   // Variation diversity
@@ -4393,7 +4429,7 @@ export async function generateAdVideoWithVeo(config: {
   // Only these four params are accepted by the Gemini API predictLongRunning endpoint:
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parameters: Record<string, any> = {
-    aspectRatio: videoConfig.aspectRatio,
+    aspectRatio: veoAspectRatio,
     durationSeconds: durationSec,
     resolution: videoConfig.resolution,
     negativePrompt: 'blurry, low quality, distorted, watermark',
@@ -4475,8 +4511,9 @@ export async function generateAdVideoWithVeo(config: {
       let videoUrl = '';
       if (videoResponse.ok) {
         const videoBlob = await videoResponse.blob();
-        videoUrl = URL.createObjectURL(videoBlob);
         console.log('✅ Veo video downloaded to blob successfully');
+
+        videoUrl = URL.createObjectURL(videoBlob);
       } else {
         console.warn('⚠️ Video download failed, preview unavailable. File ref preserved for publish.');
       }

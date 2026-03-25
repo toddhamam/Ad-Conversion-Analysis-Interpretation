@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-03-25 — Add 4:5 Meta Feed video aspect ratio and improve video ad prompts
+
+### What
+Added 4:5 aspect ratio as the default video format for CreativeIQ video ads — the optimal ratio for Facebook and Instagram feed placements. Also improved the Veo 3.1 video prompt for higher-converting ads with better pacing, hook structure, and mute-friendly direction.
+
+### How it works
+Veo 3.1 only supports 16:9 and 9:16 natively. When 4:5 is selected, the system generates at 9:16 with a prompt constraint that keeps all important content (faces, text, product) in the center 70% of the frame. The preview uses CSS `object-fit: cover` with a 4:5 aspect ratio to show an accurate representation of how the ad will appear in Meta feeds. Meta receives the full 9:16 video and auto-crops per placement — feed shows the 4:5 center, stories/reels get the full frame.
+
+### Changes
+- **openaiApi.ts** — Added `'4:5'` to `VideoAspectRatio` type. Added "Meta Feed" option (first in list, default). When 4:5 is selected, Veo receives `9:16` with a "CRITICAL FRAMING CONSTRAINT" prompt section. Improved video structure prompt: added pattern interrupt (0-1s), faster pacing guidance (cut every 1.5-2s), caption/mute awareness, and UGC-specific direction.
+- **GeneratedAdCard.tsx** — Added CSS-based 4:5 cropping via `object-fit: cover` and `aspect-ratio: 4/5` for videos with 4:5 aspect ratio.
+
+---
+
 ## 2026-03-24 — Add "From Swipe Library" as a first-class CreativeIQ copy source
 
 ### What
