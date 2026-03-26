@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-03-26 — Add YouTube transcript analysis for authentic video ad generation
+
+### What
+Added backend and service-layer infrastructure to extract YouTube video transcripts and analyze them with GPT-5.4 for converting organic content into high-performing Meta video and image ads. Also added backend routes for chunked video upload to Meta (for future "Upload Your Clip" feature).
+
+### How it works
+1. **YouTube Transcript Extraction** — Backend scrapes the YouTube watch page, parses `ytInitialPlayerResponse` for caption tracks (priority: manual EN > auto EN > manual any > auto any), downloads timed-text XML, and returns parsed segments with timestamps. Long transcripts are truncated to the first 15 minutes.
+2. **AI Transcript Analysis** — GPT-5.4 receives the timed transcript (with `[M:SS]` timestamps) and extracts: hook moments with real timestamps, recurring themes, language patterns (tone, vocabulary, cadence, signature phrases), audience pain points, and pre-formatted headlines/body texts using the creator's authentic voice.
+3. **Prompt Injection** — YouTube analysis is threaded through `generateAdPackage` → `regenerateAllImages` → `generateAdImage`/`generateAdImageWithGemini` and `generateAdVideoWithVeo`. Each variation rotates through extracted hooks so different ads use different proven moments.
+4. **Chunked Video Upload** — Three new backend routes (`video-direct-start`, `video-direct-transfer`, `video-direct-finish`) implement Meta's chunked upload protocol for direct video file uploads with processing status polling.
+
+### Changes
+- **api/meta.ts** — Added 4 new route cases: `youtube-transcript`, `video-direct-start`, `video-direct-transfer`, `video-direct-finish`. Added `handleYouTubeTranscript` (YouTube page scraping, caption parsing, segment extraction), `handleVideoDirectStart` (Meta upload session init), `handleVideoDirectTransfer` (chunked binary upload via multipart/form-data), `handleVideoDirectFinish` (upload finalization with 60s processing poll).
+- **src/services/openaiApi.ts** — Added `YouTubeAnalysis` interface. Added `fetchYouTubeTranscript()` (calls backend proxy) and `analyzeYouTubeTranscript()` (GPT-5.4 analysis with timed transcript). Added `youtubeAnalysis?` config option to `generateAdImage`, `generateAdImageWithGemini`, `generateAdVideoWithVeo`, `regenerateAllImages`, and `generateAdPackage`. Added YouTube prompt blocks in both Gemini (image) and Veo (video) prompt builders with hook rotation per variation.
+
+---
+
 ## 2026-03-25 — Add 4:5 Meta Feed video aspect ratio and improve video ad prompts
 
 ### What
