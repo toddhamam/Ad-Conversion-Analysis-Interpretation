@@ -16,7 +16,6 @@ Added backend and service-layer infrastructure to extract YouTube video transcri
 - **src/services/openaiApi.ts** — Added `YouTubeAnalysis` interface. Added `fetchYouTubeTranscript()` (calls backend proxy) and `analyzeYouTubeTranscript()` (GPT-5.4 analysis with timed transcript). Added `youtubeAnalysis?` config option to `generateAdImage`, `generateAdImageWithGemini`, `generateAdVideoWithVeo`, `regenerateAllImages`, and `generateAdPackage`. Added YouTube prompt blocks in both Gemini (image) and Veo (video) prompt builders with hook rotation per variation.
 
 ---
-
 ## 2026-03-25 — Add 4:5 Meta Feed video aspect ratio and improve video ad prompts
 
 ### What
