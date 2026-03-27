@@ -739,32 +739,6 @@ export interface CopyOptionsResult {
   callToActions: CopyOption[];
 }
 
-// YouTube transcript analysis for organic content → ad conversion
-export interface YouTubeAnalysis {
-  videoId: string;
-  videoTitle: string;
-  hooks: Array<{
-    timestamp: string;        // "0:15"
-    quote: string;            // Creator's exact words
-    hookType: string;         // "curiosity gap", "bold claim", "question", etc.
-    adPotential: string;      // Why this works as an ad hook
-  }>;
-  themes: Array<{
-    theme: string;
-    relevantQuotes: string[];
-    adAngle: string;          // How to position this as an ad angle
-  }>;
-  languagePatterns: {
-    tone: string;             // e.g., "conversational, authoritative"
-    vocabulary: string;       // e.g., "accessible, no jargon"
-    cadence: string;          // e.g., "short punchy sentences"
-    distinctPhrases: string[];
-  };
-  audiencePainPoints: string[];
-  headlines: CopyOption[];    // Pre-formatted for Step 2 copy selection
-  bodyTexts: CopyOption[];    // Pre-formatted for Step 2 copy selection
-}
-
 /**
  * Make a request to OpenAI API (text-only)
  */
@@ -3382,8 +3356,6 @@ export async function generateAdImage(config: {
   };
   // Ad Library inspirations for thematic direction
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
-  // YouTube organic content insights
-  youtubeAnalysis?: YouTubeAnalysis;
   // Headline to render directly into the generated image
   headlineText?: string;
   // Business type + campaign intent for hybrid accounts
@@ -3419,8 +3391,6 @@ async function generateAdImageWithGemini(config: {
   };
   // Ad Library inspirations for thematic direction
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
-  // YouTube organic content insights
-  youtubeAnalysis?: YouTubeAnalysis;
   // Headline to render directly into the generated image
   headlineText?: string;
   // Business type + campaign intent for hybrid accounts
@@ -3654,21 +3624,6 @@ Explore fresh visual directions while maintaining professional quality.`,
       promptParts.push(`  ${i + 1}. ${insp.pageName} (ran ${insp.durationDays} days): ${bodyPreview}`);
     });
     promptParts.push('');
-  }
-
-  // YouTube organic content insights — authentic creator voice (image version)
-  if (config.youtubeAnalysis && config.youtubeAnalysis.hooks.length > 0) {
-    const yt = config.youtubeAnalysis;
-    const hook = yt.hooks[config.variationIndex % Math.max(yt.hooks.length, 1)];
-    promptParts.push('AUTHENTIC ORGANIC CONTENT INSIGHTS (from creator\'s YouTube):');
-    promptParts.push(`Creator's proven hook: "${hook.quote}"`);
-    if (yt.languagePatterns) {
-      promptParts.push(`Creator's voice: ${yt.languagePatterns.tone}`);
-    }
-    if (yt.audiencePainPoints.length > 0) {
-      promptParts.push(`Pain points that resonate: ${yt.audiencePainPoints.slice(0, 3).join(', ')}`);
-    }
-    promptParts.push('Create an image that visually represents this authentic messaging.', '');
   }
 
   if (config.headlineText) {
@@ -4257,8 +4212,6 @@ export async function generateAdVideoWithVeo(config: {
   productContext?: ProductContext;
   // Competitor ad inspirations from Ad Library
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
-  // YouTube organic content insights for authentic ad generation
-  youtubeAnalysis?: YouTubeAnalysis;
   // Which variation this is (for prompt variety)
   variationIndex?: number;
   totalVariations?: number;
@@ -4411,32 +4364,6 @@ export async function generateAdVideoWithVeo(config: {
       const bodyPreview = insp.adCreativeBodies[0]?.substring(0, 150) || 'N/A';
       promptParts.push(`  ${i + 1}. ${insp.pageName} (ran ${insp.durationDays} days): ${bodyPreview}`);
     });
-    promptParts.push('');
-  }
-
-  // YouTube organic content insights — authentic creator voice
-  if (config.youtubeAnalysis && config.youtubeAnalysis.hooks.length > 0) {
-    const yt = config.youtubeAnalysis;
-    const hook = yt.hooks[variationIdx % Math.max(yt.hooks.length, 1)];
-    promptParts.push('', 'AUTHENTIC ORGANIC CONTENT INSIGHTS (from creator\'s YouTube):');
-    promptParts.push(`Video: "${yt.videoTitle}"`);
-    promptParts.push(`Creator's proven hook: "${hook.quote}" (${hook.hookType})`);
-    promptParts.push('Use the CREATOR\'S ACTUAL WORDS and phrasing in the opening hook — authenticity converts.');
-    if (yt.languagePatterns) {
-      promptParts.push(`Creator's voice: ${yt.languagePatterns.tone}, ${yt.languagePatterns.cadence}`);
-      if (yt.languagePatterns.distinctPhrases.length > 0) {
-        promptParts.push(`Creator's signature phrases: "${yt.languagePatterns.distinctPhrases.slice(0, 3).join('", "')}"`);
-      }
-    }
-    if (yt.audiencePainPoints.length > 0) {
-      promptParts.push(`Pain points that resonate: ${yt.audiencePainPoints.slice(0, 3).join(', ')}`);
-    }
-    promptParts.push(
-      '',
-      'CRITICAL: This video ad should feel like an organic extension of the creator\'s YouTube content.',
-      'Use their natural speaking style, vocabulary, and energy level. The viewer should feel like',
-      'they\'re watching a clip from the creator\'s channel, not a polished corporate ad.',
-    );
     promptParts.push('');
   }
 
@@ -4628,7 +4555,6 @@ export async function regenerateAllImages(config: {
   imageSize?: ImageSize;
   productContext?: ProductContext;
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
-  youtubeAnalysis?: YouTubeAnalysis;
   imageHeadlines?: string[];
   onProgress?: (message: string) => void;
   businessType?: import('../types/organization').BusinessType;
@@ -4721,7 +4647,6 @@ export async function regenerateAllImages(config: {
         productContext: config.productContext,
         precomputedRefs,
         adLibraryInspirations: config.adLibraryInspirations,
-        youtubeAnalysis: config.youtubeAnalysis,
         headlineText,
         businessType: config.businessType,
         campaignIntent: config.campaignIntent,
@@ -4798,8 +4723,6 @@ export async function generateAdPackage(config: {
   productContext?: ProductContext;
   // Ad Library inspirations for competitor/cross-industry reference
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
-  // YouTube organic content insights for authentic ad generation
-  youtubeAnalysis?: YouTubeAnalysis;
   // Headlines to render directly into images, rotated across variations
   imageHeadlines?: string[];
   // Video generation configuration (aspect ratio, duration, resolution, model)
@@ -4855,7 +4778,6 @@ export async function generateAdPackage(config: {
       imageSize: config.imageSize,
       productContext: config.productContext,
       adLibraryInspirations: config.adLibraryInspirations,
-      youtubeAnalysis: config.youtubeAnalysis,
       imageHeadlines: config.imageHeadlines,
       onProgress: config.onProgress,
       businessType: config.businessType,
@@ -4912,7 +4834,6 @@ export async function generateAdPackage(config: {
             videoConfig,
             productContext: config.productContext,
             adLibraryInspirations: config.adLibraryInspirations,
-            youtubeAnalysis: config.youtubeAnalysis,
             variationIndex: i,
             totalVariations: variationCount,
             businessType: config.businessType,
@@ -5147,152 +5068,4 @@ Respond in JSON format:
     console.error('Failed to parse text ad copy:', error);
     throw new Error('Failed to generate text ad copy suggestions');
   }
-}
-
-// ─── YouTube Transcript Analysis ──────────────────────────────────────────────
-
-/**
- * Fetch a YouTube video's transcript via the backend proxy.
- * The backend scrapes the YouTube page for caption tracks and returns parsed segments.
- */
-export async function fetchYouTubeTranscript(videoId: string): Promise<{
-  videoId: string;
-  title: string;
-  transcript: string;
-  segments: Array<{ start: number; text: string }>;
-  language: string;
-  truncated: boolean;
-}> {
-  const token = await getAuthToken();
-  const res = await fetch('/api/meta/youtube-transcript', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ videoId }),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(err.error || err.message || `Failed to fetch transcript (${res.status})`);
-  }
-
-  return res.json();
-}
-
-/**
- * Analyze a YouTube transcript with GPT-5.4 to extract high-converting hooks,
- * themes, language patterns, and pre-formatted copy options for ad generation.
- */
-export async function analyzeYouTubeTranscript(config: {
-  videoId: string;
-  videoTitle: string;
-  transcript: string;
-  segments: Array<{ start: number; text: string }>;
-  productContext?: ProductContext;
-  analysisData?: ChannelAnalysisResult | null;
-  businessType?: string;
-  campaignIntent?: string;
-}): Promise<YouTubeAnalysis> {
-  const systemPrompt = `You are an elite direct-response advertising analyst specializing in converting organic YouTube content into high-performing Meta (Facebook/Instagram) video and image ads.
-
-Your task: Analyze the following YouTube video transcript and extract the elements that would make compelling paid ads. Focus on:
-1. HOOK MOMENTS — timestamps where the creator says something that would stop a scroll on social media
-2. THEMES — recurring ideas/angles that clearly resonate with the audience
-3. LANGUAGE PATTERNS — the creator's natural voice, tone, and signature phrases
-4. AD COPY — headlines and body texts derived from the creator's actual words
-
-The resulting ads must sound authentically like the creator — not like generic AI copywriting. Preserve their vocabulary, cadence, and energy.
-
-Return valid JSON matching this schema:
-{
-  "hooks": [{ "timestamp": "0:15", "quote": "exact words", "hookType": "curiosity gap|bold claim|question|story open|stat reveal|contrarian", "adPotential": "why this works as an ad hook" }],
-  "themes": [{ "theme": "theme name", "relevantQuotes": ["quote1", "quote2"], "adAngle": "how to position as ad" }],
-  "languagePatterns": { "tone": "description", "vocabulary": "description", "cadence": "description", "distinctPhrases": ["phrase1", "phrase2"] },
-  "audiencePainPoints": ["pain point 1", "pain point 2"],
-  "headlines": [{ "text": "headline text", "revisedPrompt": "From YouTube: timestamp" }],
-  "bodyTexts": [{ "text": "body text (2-3 sentences)", "revisedPrompt": "From YouTube: theme/quote" }]
-}`;
-
-  // Build timed transcript so the model can provide real timestamps for hooks
-  const timedTranscript = config.segments.length > 0
-    ? config.segments.map(s => {
-        const mins = Math.floor(s.start / 60);
-        const secs = Math.floor(s.start % 60);
-        return `[${mins}:${secs.toString().padStart(2, '0')}] ${s.text}`;
-      }).join('\n')
-    : config.transcript;
-
-  let userPrompt = `VIDEO: "${config.videoTitle}"\n\nTIMED TRANSCRIPT:\n${timedTranscript}`;
-
-  if (config.productContext) {
-    userPrompt += `\n\nPRODUCT CONTEXT:\n- Name: ${config.productContext.name}\n- By: ${config.productContext.author}\n- Description: ${config.productContext.description}`;
-  }
-
-  if (config.analysisData?.winningPatterns) {
-    const wp = config.analysisData.winningPatterns;
-    if (wp.headlines?.length) {
-      userPrompt += `\n\nWINNING AD PATTERNS (from account data):\n- Headline patterns that convert: ${wp.headlines.slice(0, 3).join(', ')}`;
-    }
-    if (wp.emotionalTriggers?.length) {
-      userPrompt += `\n- Emotional triggers that work: ${wp.emotionalTriggers.slice(0, 3).join(', ')}`;
-    }
-  }
-
-  if (config.businessType) {
-    userPrompt += `\n\nBusiness type: ${config.businessType}`;
-  }
-  if (config.campaignIntent) {
-    userPrompt += `\nCampaign intent: ${config.campaignIntent}`;
-  }
-
-  userPrompt += '\n\nExtract 5-8 hooks, 3-5 themes, 6-8 headlines, and 4-6 body texts. Return JSON only.';
-
-  const responseText = await callOpenAI(
-    [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
-    {
-      maxTokens: 4096,
-      reasoningEffort: 'high' as ReasoningEffort,
-      responseFormat: { type: 'json_object' },
-    }
-  );
-
-  // Parse the JSON response — handle markdown code blocks if present
-  let jsonStr = responseText.trim();
-  if (jsonStr.startsWith('```')) {
-    jsonStr = jsonStr.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
-  }
-
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(jsonStr);
-  } catch {
-    console.error('Failed to parse YouTube analysis JSON:', jsonStr.substring(0, 200));
-    throw new Error('Failed to parse YouTube analysis response');
-  }
-
-  return {
-    videoId: config.videoId,
-    videoTitle: config.videoTitle,
-    hooks: Array.isArray(parsed.hooks) ? parsed.hooks as YouTubeAnalysis['hooks'] : [],
-    themes: Array.isArray(parsed.themes) ? parsed.themes as YouTubeAnalysis['themes'] : [],
-    languagePatterns: (parsed.languagePatterns as YouTubeAnalysis['languagePatterns']) || {
-      tone: '', vocabulary: '', cadence: '', distinctPhrases: [],
-    },
-    audiencePainPoints: Array.isArray(parsed.audiencePainPoints) ? parsed.audiencePainPoints as string[] : [],
-    headlines: Array.isArray(parsed.headlines) ? (parsed.headlines as Array<{ text: string; revisedPrompt?: string }>).map((h, i) => ({
-      id: `yt-headline-${i}`,
-      text: h.text || '',
-      rationale: h.revisedPrompt || 'From YouTube',
-    })) : [],
-    bodyTexts: Array.isArray(parsed.bodyTexts) ? (parsed.bodyTexts as Array<{ text: string; revisedPrompt?: string }>).map((b, i) => ({
-      id: `yt-body-${i}`,
-      text: b.text || '',
-      rationale: b.revisedPrompt || 'From YouTube',
-    })) : [],
-  };
 }

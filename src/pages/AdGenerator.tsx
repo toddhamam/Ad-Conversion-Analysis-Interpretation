@@ -10,8 +10,6 @@ import {
   generateAdImage,
   regenerateAllImages,
   generateAdVideoWithVeo,
-  fetchYouTubeTranscript,
-  analyzeYouTubeTranscript,
   CONCEPT_ANGLES,
   IMAGE_SIZE_OPTIONS,
   DEFAULT_IMAGE_SIZE,
@@ -34,7 +32,6 @@ import {
   type VideoDuration,
   type VideoModel,
   type TextAdCopyResult,
-  type YouTubeAnalysis,
 } from '../services/openaiApi';
 import { TEXT_AD_STYLES, getDefaultStyleId, generateTextAdImage, getStyleById, registerCustomBrandStyle, CUSTOM_BRAND_ID } from '../services/textAdCanvas';
 import type { TextAdStyle } from '../services/textAdCanvas';
@@ -159,7 +156,7 @@ function formatDate(isoString: string): string {
 }
 
 type WorkflowStep = 'config' | 'copy-selection' | 'final-config';
-type CopySource = 'generate' | 'import' | 'manual' | 'swipe' | 'youtube';
+type CopySource = 'generate' | 'import' | 'manual' | 'swipe';
 
 const IMPORT_DATE_OPTIONS: { id: DatePreset; label: string }[] = [
   { id: 'last_7d', label: 'Last 7 days' },
@@ -274,12 +271,6 @@ const AdGenerator = () => {
   const [manualCTAs, setManualCTAs] = useState<string[]>(['']);
   const [isImportingCopy, setIsImportingCopy] = useState(false);
   const [importDatePreset, setImportDatePreset] = useState<DatePreset>('last_30d');
-
-  // YouTube copy source
-  const [youtubeUrl, setYoutubeUrl] = useState('');
-  const [youtubeAnalysis, setYoutubeAnalysis] = useState<YouTubeAnalysis | null>(null);
-  const [isAnalyzingYouTube, setIsAnalyzingYouTube] = useState(false);
-  const [youtubeProgress, setYoutubeProgress] = useState('');
 
   // Product context
   const [products, setProducts] = useState<ProductContext[]>([]);
@@ -1008,7 +999,6 @@ const AdGenerator = () => {
           anchorText: textAdAnchorText || undefined,
           styleIds: selectedTextStyles,
         } : undefined,
-        youtubeAnalysis: copySource === 'youtube' ? youtubeAnalysis || undefined : undefined,
         onProgress: setGenerationProgress,
         businessType,
         campaignIntent: effectiveIntent,
@@ -1061,16 +1051,6 @@ const AdGenerator = () => {
     setSelectedBodyTexts([]);
     setSelectedCTAs([]);
     setError(null);
-    // Clear YouTube state when switching away — prevents stale analysis leaking into other flows
-    if (source !== 'youtube') {
-      setYoutubeAnalysis(null);
-      setYoutubeUrl('');
-      setYoutubeProgress('');
-    } else {
-      setYoutubeUrl('');
-      setYoutubeAnalysis(null);
-      setYoutubeProgress('');
-    }
     if (source === 'manual') {
       setManualHeadlines(['']);
       setManualBodyTexts(['']);
@@ -1140,67 +1120,6 @@ const AdGenerator = () => {
       setError(err instanceof Error ? err.message : 'Failed to import copy from ad account.');
     } finally {
       setIsImportingCopy(false);
-    }
-  };
-
-  // Analyze YouTube video transcript and extract copy
-  const handleYouTubeAnalyze = async () => {
-    if (!youtubeUrl.trim()) return;
-
-    // Extract video ID from URL
-    const urlMatch = youtubeUrl.match(/(?:v=|\/shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-    if (!urlMatch) {
-      setError('Invalid YouTube URL. Paste a link like https://youtube.com/watch?v=...');
-      return;
-    }
-    const videoId = urlMatch[1];
-
-    setIsAnalyzingYouTube(true);
-    setError(null);
-    setYoutubeProgress('ConversionIQ\u2122 fetching transcript...');
-
-    try {
-      // Step 1: Fetch transcript from backend
-      const transcriptResult = await fetchYouTubeTranscript(videoId);
-      if (!transcriptResult.transcript || transcriptResult.transcript.length < 50) {
-        setError('This video has no captions/subtitles available. Try a different video.');
-        return;
-      }
-
-      setYoutubeProgress('ConversionIQ\u2122 analyzing your content for hooks & patterns...');
-
-      // Step 2: AI analysis of the transcript
-      const analysis = await analyzeYouTubeTranscript({
-        videoId,
-        transcript: transcriptResult.transcript,
-        segments: transcriptResult.segments,
-        videoTitle: transcriptResult.title || 'Untitled',
-        productContext: selectedProduct || undefined,
-      });
-
-      setYoutubeAnalysis(analysis);
-
-      // Step 3: Use the pre-formatted copy options from the analysis
-      const headlines = analysis.headlines;
-      const bodyTexts = analysis.bodyTexts;
-
-      if (headlines.length === 0) {
-        setError('Could not extract usable copy from the transcript. Try a different video.');
-        return;
-      }
-
-      setCopyOptions({ headlines, bodyTexts, callToActions: [] });
-      setSelectedHeadlines([]);
-      setSelectedBodyTexts([]);
-      setSelectedCTAs([]);
-      setYoutubeProgress('');
-      setCurrentStep('copy-selection');
-    } catch (err: unknown) {
-      console.error('YouTube analysis failed:', err);
-      setError(err instanceof Error ? err.message : 'Failed to analyze YouTube video.');
-    } finally {
-      setIsAnalyzingYouTube(false);
-      setYoutubeProgress('');
     }
   };
 
@@ -1704,7 +1623,7 @@ const AdGenerator = () => {
           {/* Copy Source Selection */}
           <div className="config-section">
             <label className="config-label">Copy Source</label>
-            <p className="config-hint">Generate new copy with AI, import from ads, enter your own, use your Swipe Library, or extract from YouTube</p>
+            <p className="config-hint">Generate new copy with AI, import from ads, enter your own, or use your Swipe Library</p>
             <div className="copy-source-options">
               <button
                 className={`copy-source-btn ${copySource === 'generate' ? 'active' : ''}`}
@@ -1735,13 +1654,6 @@ const AdGenerator = () => {
               >
                 <span className="copy-source-name">From Swipe Library</span>
                 <span className="copy-source-desc">Reuse saved winning copy</span>
-              </button>
-              <button
-                className={`copy-source-btn ${copySource === 'youtube' ? 'active' : ''}`}
-                onClick={() => handleCopySourceChange('youtube')}
-              >
-                <span className="copy-source-name">From YouTube</span>
-                <span className="copy-source-desc">Use your organic content</span>
               </button>
             </div>
 
@@ -2107,83 +2019,6 @@ const AdGenerator = () => {
                 Continue to Generate Creatives
               </button>
             </>
-          )}
-
-          {/* YouTube Copy Source */}
-          {copySource === 'youtube' && (
-            <div className="config-section">
-              <label className="config-label">YouTube Video URL</label>
-              <p className="config-hint">
-                Paste a YouTube video link — ConversionIQ&#8482; will extract your best hooks and speaking style to create authentic ad copy
-              </p>
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                <input
-                  type="text"
-                  className="manual-entry-input"
-                  value={youtubeUrl}
-                  onChange={(e) => setYoutubeUrl(e.target.value)}
-                  placeholder="https://youtube.com/watch?v=..."
-                  disabled={isAnalyzingYouTube}
-                  style={{ flex: 1 }}
-                />
-                <button
-                  className="generate-btn"
-                  onClick={handleYouTubeAnalyze}
-                  disabled={!youtubeUrl.trim() || isAnalyzingYouTube}
-                  style={{ whiteSpace: 'nowrap', padding: '10px 20px' }}
-                >
-                  {isAnalyzingYouTube ? 'Analyzing...' : 'Analyze'}
-                </button>
-              </div>
-              {youtubeProgress && (
-                <p style={{ color: 'var(--accent-violet)', fontSize: '13px', fontWeight: 500, marginTop: '4px' }}>
-                  {youtubeProgress}
-                </p>
-              )}
-              {youtubeAnalysis && (
-                <div className="youtube-analysis-summary" style={{
-                  marginTop: '16px',
-                  padding: '16px',
-                  background: 'var(--bg-secondary)',
-                  borderRadius: 'var(--radius-md, 8px)',
-                  border: '1px solid var(--border-primary)',
-                }}>
-                  <h4 style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    Analysis Complete
-                  </h4>
-                  {youtubeAnalysis.hooks.length > 0 && (
-                    <div style={{ marginBottom: '12px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                        Top Hooks Found
-                      </span>
-                      <ul style={{ margin: '6px 0 0', padding: '0 0 0 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                        {youtubeAnalysis.hooks.slice(0, 3).map((hook, i) => (
-                          <li key={i} style={{ marginBottom: '4px' }}>
-                            <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>[{hook.timestamp}]</span>{' '}
-                            &ldquo;{hook.quote}&rdquo;
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {youtubeAnalysis.themes.slice(0, 4).map((t, i) => (
-                      <span key={i} style={{
-                        padding: '3px 10px',
-                        background: 'rgba(168, 85, 247, 0.08)',
-                        border: '1px solid rgba(168, 85, 247, 0.15)',
-                        borderRadius: '100px',
-                        fontSize: '11px',
-                        color: 'var(--accent-violet)',
-                        fontWeight: 500,
-                      }}>
-                        {t.theme}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
           )}
 
           {/* Swipe Library: Primary action area */}
