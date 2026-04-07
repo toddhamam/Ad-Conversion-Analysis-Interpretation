@@ -19,6 +19,7 @@ export interface CachedImage {
   mimeType: string;
   capturedAt: number;
   conversionRate?: number; // For sorting by performance
+  conversions?: number;    // Absolute conversion count from the ad
   // Quality metadata for filtering out low-res images
   width?: number;
   height?: number;
@@ -190,7 +191,7 @@ export function getTopHighQualityCachedImages(
   count: number = 3,
   minQuality: number = 60
 ): CachedImage[] {
-  const allImages = getAllCachedImages();
+  const allImages = getAllCachedImages(); // Already sorted by CVR descending
   const highQualityImages = allImages.filter(img => (img.qualityScore ?? 0) >= minQuality);
 
   console.log(`🔍 Quality filter: ${highQualityImages.length}/${allImages.length} images meet quality >= ${minQuality}`);
@@ -198,6 +199,26 @@ export function getTopHighQualityCachedImages(
   if (highQualityImages.length < count && allImages.length > highQualityImages.length) {
     const skippedCount = allImages.length - highQualityImages.length;
     console.log(`⚠️ Filtered out ${skippedCount} low-quality images (quality < ${minQuality})`);
+  }
+
+  // Ensure the highest-converting image (by absolute count) is always included,
+  // even if it doesn't have the highest CVR. This prevents the reference set
+  // from missing the ad with the most proven conversions.
+  if (highQualityImages.length > 1) {
+    let highestConvIdx = 0;
+    for (let i = 1; i < highQualityImages.length; i++) {
+      if ((highQualityImages[i].conversions ?? 0) > (highQualityImages[highestConvIdx].conversions ?? 0)) {
+        highestConvIdx = i;
+      }
+    }
+    // If the highest-converting image isn't already in the top N (by CVR), swap it in
+    if (highestConvIdx >= count && (highQualityImages[highestConvIdx].conversions ?? 0) > 0) {
+      const result = highQualityImages.slice(0, count);
+      // Replace the last slot with the highest-converting image
+      result[count - 1] = highQualityImages[highestConvIdx];
+      console.log(`📊 Swapped in highest-converting image (${highQualityImages[highestConvIdx].conversions} conversions) to reference set`);
+      return result;
+    }
   }
 
   return highQualityImages.slice(0, count);
@@ -300,7 +321,8 @@ export async function storeImageFromUrl(
   conversionRate: number = 5,
   minQualityScore: number = 40, // Reject thumbnails by default
   headline?: string,
-  bodyText?: string
+  bodyText?: string,
+  conversions?: number
 ): Promise<CachedImage | null> {
   // Check if already cached
   const existing = getCachedImage(adId);
@@ -365,6 +387,7 @@ export async function storeImageFromUrl(
         base64Data,
         capturedAt: Date.now(),
         conversionRate,
+        conversions,
         // Quality metadata
         width,
         height,
@@ -492,6 +515,118 @@ export async function uploadBrandImages(
 
   console.log(`📸 Uploaded ${results.length} brand images total`);
   return results;
+}
+
+/**
+ * Get detailed cache statistics including conversion data
+ */
+export function getDetailedCacheStats(): {
+  count: number;
+  topConversions: number;
+  topConversionRate: number;
+  highestConvertingAdId: string | null;
+  highestCVRAdId: string | null;
+} {
+  const images = getAllCachedImages();
+  if (images.length === 0) {
+    return { count: 0, topConversions: 0, topConversionRate: 0, highestConvertingAdId: null, highestCVRAdId: null };
+  }
+
+  let topConversions = 0;
+  let topConversionRate = 0;
+  let highestConvertingAdId: string | null = null;
+  let highestCVRAdId: string | null = null;
+
+  for (const img of images) {
+    if ((img.conversions ?? 0) > topConversions) {
+      topConversions = img.conversions ?? 0;
+      highestConvertingAdId = img.adId;
+    }
+    if ((img.conversionRate ?? 0) > topConversionRate) {
+      topConversionRate = img.conversionRate ?? 0;
+      highestCVRAdId = img.adId;
+    }
+  }
+
+  return { count: images.length, topConversions, topConversionRate, highestConvertingAdId, highestCVRAdId };
+}
+
+/**
+ * Auto-fetch images from converting ads into the cache.
+ * Called by both MetaAds (after sync) and AdGenerator (on mount).
+ * Prioritizes ads with most conversions, then highest CVR.
+ */
+export async function autoFetchConvertingAdImages(
+  creatives: Array<{
+    id: string;
+    imageUrl?: string;
+    conversionRate: number;
+    conversions: number;
+    headline?: string;
+    bodySnippet?: string;
+  }>,
+  options?: {
+    maxImages?: number;
+    minQuality?: number;
+    onProgress?: (loaded: number, total: number) => void;
+  }
+): Promise<{ loaded: number; alreadyCached: number; failed: number }> {
+  const maxImages = options?.maxImages ?? 20;
+  const minQuality = options?.minQuality ?? 60;
+
+  // Filter to ads with conversions and images, sort by conversions (then CVR)
+  const candidates = creatives
+    .filter(c => c.imageUrl && c.conversions > 0)
+    .sort((a, b) => b.conversions - a.conversions || b.conversionRate - a.conversionRate);
+
+  if (candidates.length === 0) {
+    return { loaded: 0, alreadyCached: 0, failed: 0 };
+  }
+
+  console.log(`🔄 Auto-fetching up to ${maxImages} converting ad images (${candidates.length} candidates)`);
+
+  let loaded = 0;
+  let alreadyCached = 0;
+  let failed = 0;
+
+  for (const creative of candidates) {
+    if (loaded + alreadyCached >= maxImages) break;
+
+    // Check if already cached with sufficient quality
+    const existing = getCachedImage(creative.id);
+    if (existing && (existing.qualityScore ?? 0) >= minQuality) {
+      // Update conversions data if missing on existing cache entry
+      if (existing.conversions === undefined && creative.conversions > 0) {
+        const cache = getCache();
+        cache.images[creative.id] = { ...existing, conversions: creative.conversions, conversionRate: creative.conversionRate };
+        saveCache(cache);
+      }
+      alreadyCached++;
+      continue;
+    }
+
+    const cached = await storeImageFromUrl(
+      creative.imageUrl!,
+      creative.id,
+      creative.conversionRate,
+      minQuality,
+      creative.headline,
+      creative.bodySnippet,
+      creative.conversions
+    );
+
+    if (cached && (cached.qualityScore ?? 0) >= minQuality) {
+      loaded++;
+      console.log(`✅ Cached reference #${loaded}: ${creative.id} (${creative.conversions} conv, ${creative.conversionRate.toFixed(1)}% CVR)`);
+    } else {
+      failed++;
+    }
+
+    options?.onProgress?.(loaded + alreadyCached, Math.min(candidates.length, maxImages));
+  }
+
+  console.log(`📸 Auto-fetch complete: ${loaded} loaded, ${alreadyCached} already cached, ${failed} failed`);
+  return { loaded, alreadyCached, failed };
 }
 
 // ─── Semantic Image Selection (Embedding-Based) ─────────────────────────────────

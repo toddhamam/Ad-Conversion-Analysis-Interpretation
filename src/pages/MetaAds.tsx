@@ -18,9 +18,9 @@ import {
   getCacheStats,
   getCachedImage,
   getAllCachedImages,
-  getTopHighQualityCachedImages,
   storeImageFromUrl,
-  clearLegacyCache
+  clearLegacyCache,
+  autoFetchConvertingAdImages
 } from '../services/imageCache';
 import Loading from '../components/Loading';
 import { ArrowDownWideNarrow, Check, Database, Filter, Info, Layers, RefreshCw } from 'lucide-react';
@@ -248,7 +248,8 @@ const MetaAds = () => {
         creative.conversionRate,
         undefined,
         creative.headline,
-        creative.bodySnippet
+        creative.bodySnippet,
+        creative.conversions
       );
       if (cached) {
         refreshCachedIds();
@@ -540,94 +541,25 @@ const MetaAds = () => {
     }
   }, [currentAccount?.ad_account_id]);
 
-  // Auto-fetch top performing ad images until we have 3 HIGH-QUALITY references
-  // This ensures we always have enough quality references for ad generation
+  // Auto-fetch converting ad images as references for CreativeIQ generation
+  // Delegates to shared autoFetchConvertingAdImages which caches up to 20 images
   const autoFetchTopImages = useCallback(async (creativesData: AdCreative[]) => {
     if (autoFetchingRefsRef.current) return;
 
-    const TARGET_HIGH_QUALITY_COUNT = 3;
-    const MIN_QUALITY_SCORE = 60; // Same threshold as used in ad generation
-
-    // First, clear any old cached images without quality tracking
+    // Clear any old cached images without quality tracking
     const legacyCleared = clearLegacyCache();
     if (legacyCleared > 0) {
       console.log(`🗑️ Cleared ${legacyCleared} legacy images without quality data`);
     }
 
-    // Check how many high-quality images we already have
-    const existingHighQuality = getTopHighQualityCachedImages(TARGET_HIGH_QUALITY_COUNT, MIN_QUALITY_SCORE);
-    if (existingHighQuality.length >= TARGET_HIGH_QUALITY_COUNT) {
-      console.log(`✅ Already have ${existingHighQuality.length} high-quality reference images`);
-      return;
-    }
-
-    const needed = TARGET_HIGH_QUALITY_COUNT - existingHighQuality.length;
-    console.log(`🔄 Need ${needed} more high-quality reference images (have ${existingHighQuality.length}/${TARGET_HIGH_QUALITY_COUNT})`);
-
-    // Get ALL ads with images, sorted by conversion rate
-    const allWithImages = creativesData
-      .filter(c => c.imageUrl && c.conversionRate > 0)
-      .sort((a, b) => b.conversionRate - a.conversionRate);
-
-    if (allWithImages.length === 0) {
-      console.log('⚠️ No ads with images found');
-      return;
-    }
-
     autoFetchingRefsRef.current = true;
-    console.log(`🔄 Will try up to ${allWithImages.length} ads to find ${needed} high-quality images...`);
 
-    let successCount = 0;
-    let attemptCount = 0;
+    const result = await autoFetchConvertingAdImages(creativesData, {
+      maxImages: 20,
+      minQuality: 60,
+    });
 
-    for (const creative of allWithImages) {
-      // Stop if we have enough high-quality images
-      if (successCount >= needed) {
-        console.log(`✅ Successfully cached ${successCount} high-quality images`);
-        break;
-      }
-
-      // Skip if already cached (check if it's high quality)
-      const existingCached = getCachedImage(creative.id);
-      if (existingCached) {
-        if ((existingCached.qualityScore ?? 0) >= MIN_QUALITY_SCORE) {
-          console.log(`✅ Already have high-quality cache for: ${creative.id}`);
-          continue;
-        } else {
-          console.log(`⏭️ Skipping ${creative.id} - already cached but low quality (${existingCached.qualityScore})`);
-          continue;
-        }
-      }
-
-      attemptCount++;
-      console.log(`📥 Attempting ad #${attemptCount}: ${creative.id} (${creative.conversionRate.toFixed(1)}% conv rate)`);
-
-      const cached = await storeImageFromUrl(
-        creative.imageUrl!,
-        creative.id,
-        creative.conversionRate,
-        MIN_QUALITY_SCORE, // Pass the minimum quality threshold
-        creative.headline,
-        creative.bodySnippet
-      );
-
-      if (cached && (cached.qualityScore ?? 0) >= MIN_QUALITY_SCORE) {
-        successCount++;
-        console.log(`✅ Cached HIGH-QUALITY reference #${successCount}: ${creative.id} (${cached.width}x${cached.height}, Q:${cached.qualityScore})`);
-      } else if (cached) {
-        console.log(`⚠️ Cached but below quality threshold: ${creative.id} (Q:${cached.qualityScore} < ${MIN_QUALITY_SCORE})`);
-      } else {
-        console.log(`❌ Failed to cache: ${creative.id}`);
-      }
-    }
-
-    // Final status
-    const finalCount = getTopHighQualityCachedImages(TARGET_HIGH_QUALITY_COUNT, MIN_QUALITY_SCORE).length;
-    if (finalCount >= TARGET_HIGH_QUALITY_COUNT) {
-      console.log(`✅ SUCCESS: Have ${finalCount} high-quality reference images for ad generation`);
-    } else {
-      console.log(`⚠️ WARNING: Only ${finalCount}/${TARGET_HIGH_QUALITY_COUNT} high-quality images available. Generated ads may not match brand style.`);
-    }
+    console.log(`📸 Auto-fetch from sync: ${result.loaded} loaded, ${result.alreadyCached} already cached, ${result.failed} failed`);
 
     refreshCachedIds();
     autoFetchingRefsRef.current = false;

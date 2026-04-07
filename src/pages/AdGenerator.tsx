@@ -35,7 +35,7 @@ import {
 } from '../services/openaiApi';
 import { TEXT_AD_STYLES, getDefaultStyleId, generateTextAdImage, getStyleById, registerCustomBrandStyle, CUSTOM_BRAND_ID } from '../services/textAdCanvas';
 import type { TextAdStyle } from '../services/textAdCanvas';
-import { getCacheStats as getImageCacheStats, uploadBrandImages, clearImageCache } from '../services/imageCache';
+import { getCacheStats as getImageCacheStats, getDetailedCacheStats, uploadBrandImages, clearImageCache, autoFetchConvertingAdImages } from '../services/imageCache';
 import { fetchAdCreatives, type DatePreset } from '../services/metaApi';
 import GeneratedAdCard from '../components/GeneratedAdCard';
 import CopySelectionPanel from '../components/CopySelectionPanel';
@@ -317,6 +317,11 @@ const AdGenerator = () => {
   // Image cache status for brand-informed generation
   const [imageCacheCount, setImageCacheCount] = useState(0);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
+  const [isAutoFetchingRefs, setIsAutoFetchingRefs] = useState(false);
+  const [autoFetchProgress, setAutoFetchProgress] = useState<{ loaded: number; total: number } | null>(null);
+  const [refTopConversions, setRefTopConversions] = useState(0);
+  const [refTopCVR, setRefTopCVR] = useState(0);
+  const autoFetchTriggeredRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Creative variation control (0 = identical to references, 100 = completely different)
@@ -342,8 +347,10 @@ const AdGenerator = () => {
     setIsUploadingImages(true);
     try {
       const uploaded = await uploadBrandImages(files);
-      const stats = getImageCacheStats();
+      const stats = getDetailedCacheStats();
       setImageCacheCount(stats.count);
+      setRefTopConversions(stats.topConversions);
+      setRefTopCVR(stats.topConversionRate);
       console.log(`✅ Uploaded ${uploaded.length} images, cache now has ${stats.count} images`);
     } catch (err) {
       console.error('Failed to upload images:', err);
@@ -360,6 +367,8 @@ const AdGenerator = () => {
   const handleClearImageCache = () => {
     clearImageCache();
     setImageCacheCount(0);
+    setRefTopConversions(0);
+    setRefTopCVR(0);
   };
 
   // Load products from scoped localStorage, falling back to Supabase metadata
@@ -451,10 +460,14 @@ const AdGenerator = () => {
     const cached = getCachedAnalysis(businessType);
     setAnalysisData(cached);
 
-    // Check image cache status
+    // Check image cache status and update detailed stats
     const imageStats = getImageCacheStats();
     setImageCacheCount(imageStats.count);
     debugLog(`Image cache: ${imageStats.count} reference images available`);
+
+    const detailedStats = getDetailedCacheStats();
+    setRefTopConversions(detailedStats.topConversions);
+    setRefTopCVR(detailedStats.topConversionRate);
 
     // Load previously generated ads from localStorage using deferred callback
     // Short delay prevents blocking the initial render
@@ -518,6 +531,62 @@ const AdGenerator = () => {
 
     return () => clearTimeout(loadTimerId);
   }, []);
+
+  // Auto-fetch converting ad images when account resolves or changes
+  const lastFetchedAccountRef = useRef<string | null>(null);
+  useEffect(() => {
+    const accountId = currentAccount?.ad_account_id || 'default';
+
+    // Skip if we already fetched for this account
+    if (lastFetchedAccountRef.current === accountId) return;
+    // Skip if another fetch is in progress
+    if (autoFetchTriggeredRef.current) return;
+
+    // Refresh cache stats for the (possibly new) account
+    const imageStats = getImageCacheStats();
+    setImageCacheCount(imageStats.count);
+    const detailedStats = getDetailedCacheStats();
+    setRefTopConversions(detailedStats.topConversions);
+    setRefTopCVR(detailedStats.topConversionRate);
+
+    const syncKey = `ci_meta_ads_sync_${accountId}`;
+    try {
+      const syncDataRaw = localStorage.getItem(syncKey);
+      if (!syncDataRaw) return;
+      const syncData = JSON.parse(syncDataRaw);
+      const convertingCreatives = (syncData.creatives || []).filter(
+        (c: { conversions?: number; imageUrl?: string }) => (c.conversions ?? 0) > 0 && c.imageUrl
+      );
+      if (convertingCreatives.length === 0) return;
+
+      // Mark this account as fetching
+      lastFetchedAccountRef.current = accountId;
+      autoFetchTriggeredRef.current = true;
+      setIsAutoFetchingRefs(true);
+      setAutoFetchProgress({ loaded: 0, total: Math.min(convertingCreatives.length, 20) });
+
+      autoFetchConvertingAdImages(convertingCreatives, {
+        onProgress: (loaded, total) => {
+          setAutoFetchProgress({ loaded, total });
+          const stats = getDetailedCacheStats();
+          setImageCacheCount(stats.count);
+          setRefTopConversions(stats.topConversions);
+          setRefTopCVR(stats.topConversionRate);
+        },
+      }).then(() => {
+        const finalStats = getDetailedCacheStats();
+        setImageCacheCount(finalStats.count);
+        setRefTopConversions(finalStats.topConversions);
+        setRefTopCVR(finalStats.topConversionRate);
+      }).finally(() => {
+        setIsAutoFetchingRefs(false);
+        setAutoFetchProgress(null);
+        autoFetchTriggeredRef.current = false;
+      });
+    } catch {
+      // Non-critical — sync cache may not exist yet
+    }
+  }, [currentAccount?.ad_account_id]);
 
   // Save generated ads to localStorage whenever they change
   // Uses short setTimeout to avoid blocking the main thread during renders
@@ -1504,13 +1573,27 @@ const AdGenerator = () => {
         )}
       </div>
 
-      {/* Image Reference Status - Critical for brand-informed generation */}
-      <div className={`analysis-status ${imageCacheCount > 0 ? 'has-data' : 'no-data'}`} style={{ marginTop: '8px' }}>
-        {imageCacheCount > 0 ? (
+      {/* Image Reference Status - Auto-loaded from converting ads */}
+      <div className={`analysis-status ${imageCacheCount > 0 ? 'has-data' : isAutoFetchingRefs ? 'loading-data' : 'no-data'}`} style={{ marginTop: '8px' }}>
+        {isAutoFetchingRefs ? (
+          <>
+            <span className="status-icon" style={{ animation: 'spin 1s linear infinite' }}>⟳</span>
+            <span className="status-text">
+              ConversionIQ™ loading reference images from your converting ads...
+              {autoFetchProgress && ` (${autoFetchProgress.loaded} of ${autoFetchProgress.total})`}
+            </span>
+          </>
+        ) : imageCacheCount > 0 ? (
           <>
             <span className="status-icon">✓</span>
             <span className="status-text">
-              {imageCacheCount} reference image{imageCacheCount !== 1 ? 's' : ''} cached for brand-informed generation
+              {imageCacheCount} reference image{imageCacheCount !== 1 ? 's' : ''} from converting ads
+              {refTopConversions > 0 && (
+                <span style={{ marginLeft: '8px', color: 'var(--text-muted)', fontSize: '12px' }}>
+                  Best: {refTopConversions} conversion{refTopConversions !== 1 ? 's' : ''}
+                  {refTopCVR > 0 && ` · Highest CVR: ${refTopCVR.toFixed(1)}%`}
+                </span>
+              )}
             </span>
             <button
               className="status-action-btn"
@@ -1532,15 +1615,16 @@ const AdGenerator = () => {
           <>
             <span className="status-icon">!</span>
             <span className="status-text">
-              No reference images.{' '}
+              No converting ad images found.{' '}
+              <Link to="/channels/meta-ads" className="status-link">Sync your Meta Ads</Link>
+              {' '}to auto-load references, or{' '}
               <button
                 className="status-link-btn"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploadingImages}
               >
-                {isUploadingImages ? 'Uploading...' : 'Upload your top-performing ad images'}
-              </button>{' '}
-              for brand-consistent generation.
+                {isUploadingImages ? 'Uploading...' : 'upload images manually'}
+              </button>.
             </span>
           </>
         )}
