@@ -10,6 +10,7 @@ import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedSto
 import { isEmbeddingAvailable, embedMultimodal, cosineSimilarity } from './embeddingService';
 import { getEmbedding, setEmbedding, getEmbeddings, computeImageHash } from './embeddingStore';
 import type { EmbeddingTaskType } from './embeddingService';
+import { fetchImageViaBackend } from './swipeLibraryApi';
 
 const IMAGE_CACHE_KEY = 'conversion_intelligence_image_cache';
 
@@ -311,9 +312,68 @@ async function getImageDimensions(blob: Blob): Promise<{ width: number; height: 
 }
 
 /**
- * Fetch an image via CORS proxy and store it in the cache
- * This solves the Facebook CDN authentication/CORS issue
- * Now includes quality tracking - rejects low-quality images
+ * Helper to build a CachedImage from base64 data, checking quality
+ */
+async function buildCachedImage(
+  base64Data: string,
+  mimeType: string,
+  adId: string,
+  conversionRate: number,
+  minQualityScore: number,
+  headline?: string,
+  bodyText?: string,
+  conversions?: number
+): Promise<CachedImage | null> {
+  // Decode base64 to blob for dimension checking
+  const binaryString = atob(base64Data);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  const blob = new Blob([bytes], { type: mimeType });
+
+  const dimensions = await getImageDimensions(blob);
+  if (!dimensions) {
+    console.log(`⚠️ Could not determine image dimensions for ${adId}`);
+    return null;
+  }
+
+  const { width, height } = dimensions;
+  const qualityScore = calculateQualityScore(width, height);
+  const fileSize = blob.size;
+
+  if (qualityScore < minQualityScore) {
+    console.log(`⚠️ Image quality too low (${qualityScore} < ${minQualityScore}), skipping ${adId}`);
+    return null;
+  }
+
+  const cachedImage: CachedImage = {
+    adId,
+    mimeType,
+    base64Data,
+    capturedAt: Date.now(),
+    conversionRate,
+    conversions,
+    width,
+    height,
+    fileSize,
+    qualityScore,
+    headline: headline?.slice(0, 200),
+    bodyText: bodyText?.slice(0, 200),
+  };
+
+  const cache = getCache();
+  cache.images[adId] = cachedImage;
+  saveCache(cache);
+
+  console.log(`✅ Cached image for ad ${adId}: ${width}x${height}, quality ${qualityScore}`);
+  return cachedImage;
+}
+
+/**
+ * Fetch an image and store it in the cache.
+ * Primary: uses backend /api/meta/image-fetch (server-side, no CORS issues).
+ * Fallback: tries third-party CORS proxies (unreliable, may be down).
  */
 export async function storeImageFromUrl(
   imageUrl: string,
@@ -331,16 +391,32 @@ export async function storeImageFromUrl(
     return existing;
   }
 
-  // Try each CORS proxy
+  // Primary: fetch via backend proxy (server-side, no CORS issues, handles auth)
+  try {
+    console.log(`📥 Fetching image via backend proxy for ad ${adId}...`);
+    const result = await fetchImageViaBackend(imageUrl);
+    if (result?.base64Data && result?.mimeType) {
+      const cached = await buildCachedImage(
+        result.base64Data, result.mimeType, adId, conversionRate, minQualityScore,
+        headline, bodyText, conversions
+      );
+      if (cached) return cached;
+      // If buildCachedImage returned null, quality was too low — don't retry via proxies
+      return null;
+    }
+    console.log(`⚠️ Backend proxy returned no data, trying CORS proxies...`);
+  } catch (error) {
+    console.log(`⚠️ Backend proxy failed, trying CORS proxies:`, error);
+  }
+
+  // Fallback: try third-party CORS proxies
   for (const proxy of CORS_PROXIES) {
     try {
       const proxyUrl = proxy + encodeURIComponent(imageUrl);
-      console.log(`📥 Trying to fetch via CORS proxy: ${proxy.substring(0, 30)}...`);
+      console.log(`📥 Trying CORS proxy: ${proxy.substring(0, 30)}...`);
 
       const response = await fetch(proxyUrl, {
-        headers: {
-          'Accept': 'image/*',
-        },
+        headers: { 'Accept': 'image/*' },
       });
 
       if (!response.ok) {
@@ -350,13 +426,11 @@ export async function storeImageFromUrl(
 
       const blob = await response.blob();
 
-      // Verify it's actually an image
       if (!blob.type.startsWith('image/')) {
         console.log(`⚠️ Response is not an image (${blob.type}), trying next...`);
         continue;
       }
 
-      // Get image dimensions for quality scoring
       const dimensions = await getImageDimensions(blob);
       if (!dimensions) {
         console.log(`⚠️ Could not determine image dimensions, trying next...`);
@@ -367,15 +441,11 @@ export async function storeImageFromUrl(
       const qualityScore = calculateQualityScore(width, height);
       const fileSize = blob.size;
 
-      console.log(`📐 Image dimensions: ${width}x${height}, quality score: ${qualityScore}, size: ${Math.round(fileSize / 1024)}KB`);
-
-      // Reject low-quality images
       if (qualityScore < minQualityScore) {
-        console.log(`⚠️ Image quality too low (${qualityScore} < ${minQualityScore}), skipping this image`);
-        return null; // Don't try other proxies - the image itself is low quality
+        console.log(`⚠️ Image quality too low (${qualityScore} < ${minQualityScore}), skipping`);
+        return null;
       }
 
-      // Convert to base64
       const arrayBuffer = await blob.arrayBuffer();
       const base64Data = btoa(
         new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
@@ -388,22 +458,19 @@ export async function storeImageFromUrl(
         capturedAt: Date.now(),
         conversionRate,
         conversions,
-        // Quality metadata
         width,
         height,
         fileSize,
         qualityScore,
-        // Text metadata for embedding
         headline: headline?.slice(0, 200),
         bodyText: bodyText?.slice(0, 200),
       };
 
-      // Store in cache
       const cache = getCache();
       cache.images[adId] = cachedImage;
       saveCache(cache);
 
-      console.log(`✅ Cached high-quality image for ad ${adId}: ${width}x${height}, quality ${qualityScore}`);
+      console.log(`✅ Cached image for ad ${adId}: ${width}x${height}, quality ${qualityScore}`);
       return cachedImage;
     } catch (error) {
       console.log(`⚠️ CORS proxy failed:`, error);
@@ -411,7 +478,7 @@ export async function storeImageFromUrl(
     }
   }
 
-  console.log(`❌ All CORS proxies failed for ad ${adId}`);
+  console.log(`❌ All fetch methods failed for ad ${adId}`);
   return null;
 }
 
