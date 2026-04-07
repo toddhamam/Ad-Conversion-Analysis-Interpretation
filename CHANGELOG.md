@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-04-07 — Auto-load converting ad reference images for CreativeIQ generation
+
+### What
+CreativeIQ Ad Generator now automatically loads reference images from your converting ads (synced via Meta Ads) instead of requiring manual uploads. The system notes each image's conversion count and CVR, passes this data to Gemini so it prioritizes the visual patterns from your highest-performing ads.
+
+### Changes
+- **imageCache.ts** — Added `conversions` field to `CachedImage`. New `getDetailedCacheStats()` returns top conversion count, top CVR, and best-performer ad IDs. New shared `autoFetchConvertingAdImages()` function fetches up to 20 converting ad images (sorted by conversion count, then CVR). Updated `getTopHighQualityCachedImages()` to ensure the highest-converting image (by absolute count) is always in the reference set, even if another image has a higher CVR.
+- **AdGenerator.tsx** — Auto-loads reference images on mount by reading the Meta Ads sync cache from localStorage. Reactive to account changes (re-triggers when `currentAccount` resolves or switches). UI shows loading progress, conversion stats (best conversions count + highest CVR), and links to sync Meta Ads when no data exists.
+- **openaiApi.ts** — New `buildRefConversionContext()` generates per-image conversion metadata (labels HIGHEST CONVERTING / HIGHEST CVR). Gemini prompt now includes "CONVERSION PERFORMANCE DATA" section telling the model to prioritize visual patterns from the best-performing references. Both single-image and batch generation paths pass conversion context.
+- **MetaAds.tsx** — Replaced 90-line manual `autoFetchTopImages` with a slim wrapper around the shared `autoFetchConvertingAdImages()` (max 20 images). "Use as Reference" button now passes `conversions` count.
+- **AdGenerator.css** — Added `.analysis-status.loading-data` violet-themed class for auto-fetch loading state.
+
+---
+
 ## 2026-03-27 — Remove YouTube transcript analysis feature
 
 ### What

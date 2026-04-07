@@ -3181,6 +3181,36 @@ Return JSON only:
 }
 
 /**
+ * Build conversion context strings for reference images.
+ * Identifies highest-converting and highest-CVR images for Gemini prompt.
+ */
+function buildRefConversionContext(cachedImages: import('./imageCache').CachedImage[]): string[] {
+  if (cachedImages.length === 0) return [];
+
+  // Find the best performers
+  let highestConvIdx = 0;
+  let highestCVRIdx = 0;
+  for (let i = 1; i < cachedImages.length; i++) {
+    if ((cachedImages[i].conversions ?? 0) > (cachedImages[highestConvIdx].conversions ?? 0)) {
+      highestConvIdx = i;
+    }
+    if ((cachedImages[i].conversionRate ?? 0) > (cachedImages[highestCVRIdx].conversionRate ?? 0)) {
+      highestCVRIdx = i;
+    }
+  }
+
+  return cachedImages.map((img, i) => {
+    const conv = img.conversions ?? 0;
+    const cvr = img.conversionRate ?? 0;
+    const labels: string[] = [];
+    if (i === highestConvIdx && conv > 0) labels.push('HIGHEST CONVERTING');
+    if (i === highestCVRIdx && cvr > 0 && highestCVRIdx !== highestConvIdx) labels.push('HIGHEST CVR');
+    const label = labels.length > 0 ? ` — ${labels.join(', ')}` : '';
+    return `Reference image ${i + 1}: ${conv} conversion${conv !== 1 ? 's' : ''} (${cvr.toFixed(1)}% CVR)${label}`;
+  });
+}
+
+/**
  * Analyze reference images to extract specific visual characteristics
  * This enables precise style replication in generated images
  */
@@ -3353,6 +3383,7 @@ export async function generateAdImage(config: {
   precomputedRefs?: {
     referenceImages: Array<{ data: string; mimeType: string }>;
     refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
+    refConversionContext?: string[];
   };
   // Ad Library inspirations for thematic direction
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
@@ -3388,6 +3419,7 @@ async function generateAdImageWithGemini(config: {
   precomputedRefs?: {
     referenceImages: Array<{ data: string; mimeType: string }>;
     refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
+    refConversionContext?: string[];
   };
   // Ad Library inspirations for thematic direction
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
@@ -3408,11 +3440,15 @@ async function generateAdImageWithGemini(config: {
 
   let referenceImages: Array<{ data: string; mimeType: string }>;
   let refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
+  let refConversionContext: string[] = [];
 
   if (config.precomputedRefs) {
     // Use pre-computed references (avoids redundant API calls during parallel generation)
     referenceImages = config.precomputedRefs.referenceImages;
     refAnalysis = config.precomputedRefs.refAnalysis;
+    if (config.precomputedRefs.refConversionContext) {
+      refConversionContext = config.precomputedRefs.refConversionContext;
+    }
     console.log(`📸 Using pre-computed reference data (${referenceImages.length} images)`);
   } else {
     // Compute references on-the-fly (single image regeneration)
@@ -3426,6 +3462,9 @@ async function generateAdImageWithGemini(config: {
       mimeType: cached.mimeType
     }));
 
+    // Build conversion context for each reference image
+    refConversionContext = buildRefConversionContext(cachedImages);
+
     if (config.productContext?.productImages?.length) {
       const productImgs = config.productContext.productImages.slice(0, 3);
       productImgs.forEach(img => {
@@ -3436,9 +3475,9 @@ async function generateAdImageWithGemini(config: {
 
     if (cachedImages.length > 0) {
       console.log('📸 Using high-quality reference images:',
-        cachedImages.map(c => `${c.width}x${c.height} (Q:${c.qualityScore}, ${c.conversionRate?.toFixed(1)}%)`).join(', '));
+        cachedImages.map(c => `${c.width}x${c.height} (Q:${c.qualityScore}, ${c.conversions ?? '?'} conv, ${c.conversionRate?.toFixed(1)}%)`).join(', '));
     } else {
-      console.log('⚠️ No high-quality cached images available. Visit Meta Ads page and cache higher-resolution images.');
+      console.log('⚠️ No high-quality cached images available. Sync Meta Ads to auto-load converting ad references.');
     }
 
     refAnalysis = await analyzeReferenceImages(referenceImages);
@@ -3536,9 +3575,19 @@ Explore fresh visual directions while maintaining professional quality.`,
     const adRefCount = referenceImages.length - productImgCount;
     promptParts.push(
       `I have attached ${referenceImages.length} REFERENCE IMAGES.`,
-      adRefCount > 0 ? `${adRefCount} are from top-performing ads - match their visual style.` : '',
+      adRefCount > 0 ? `${adRefCount} are from ads with PROVEN CONVERSIONS - match their visual style, prioritizing the highest-converting image's approach.` : '',
       productImgCount > 0 ? `${productImgCount} are PRODUCT MOCKUP images - the generated image MUST depict this exact product.` : '',
-      'You MUST study these images and match their visual style as specified above.',
+    );
+
+    // Include per-image conversion data so Gemini prioritizes the best-performing styles
+    if (refConversionContext.length > 0) {
+      promptParts.push('', 'CONVERSION PERFORMANCE DATA (prioritize visual patterns from highest-converting images):');
+      refConversionContext.forEach(line => promptParts.push(`  ${line}`));
+    }
+
+    promptParts.push(
+      '',
+      'You MUST study these images and match the visual style of the highest-converting references.',
       ''
     );
   }
@@ -4567,6 +4616,7 @@ export async function regenerateAllImages(config: {
   let precomputedRefs: {
     referenceImages: Array<{ data: string; mimeType: string }>;
     refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
+    refConversionContext?: string[];
   } | undefined;
 
   if (USE_GEMINI_FOR_IMAGES && isGeminiConfigured()) {
@@ -4607,6 +4657,9 @@ export async function regenerateAllImages(config: {
       cachedImages = getTopHighQualityCachedImages(3, MIN_QUALITY_SCORE);
     }
 
+    // Build conversion context for Gemini prompt
+    const refConversionContext = buildRefConversionContext(cachedImages);
+
     const referenceImages: Array<{ data: string; mimeType: string }> = cachedImages.map(cached => ({
       data: cached.base64Data,
       mimeType: cached.mimeType
@@ -4622,7 +4675,7 @@ export async function regenerateAllImages(config: {
     console.log(`📸 Pre-computing reference analysis for ${referenceImages.length} images (shared across ${config.variationCount} variations)`);
     config.onProgress?.('ConversionIQ™ analyzing reference styles...');
     const refAnalysis = await analyzeReferenceImages(referenceImages);
-    precomputedRefs = { referenceImages, refAnalysis };
+    precomputedRefs = { referenceImages, refAnalysis, refConversionContext };
   }
 
   // Generate images with concurrency limit of 2 to prevent memory exhaustion
