@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-04-08 — Fix reference image fetching and robustness
+
+### What
+Fixed the auto-load reference images feature: images were stuck at "0 of 20" because both third-party CORS proxies (corsproxy.io, allorigins.win) are down. Also fixed account-switch races, stale conversion metadata, and cache eviction dropping the highest-converting image.
+
+### Changes
+- **imageCache.ts** — Now fetches images via the existing backend `/api/meta/image-fetch` route (server-side, no CORS) as the primary method, with broken CORS proxies as last-resort fallback. Cache eviction now protects the highest-converting image from being dropped. Conversion metadata is always refreshed on re-syncs (not just when undefined). Added `buildCachedImage` helper to deduplicate quality-check logic.
+- **AdGenerator.tsx** — Extracted auto-fetch into a `runAutoFetch` callback. Account switches during in-flight fetches now queue the new account ID and re-trigger automatically when the current fetch completes (via `pendingAccountRef`).
+
+---
+
 ## 2026-04-07 — Auto-load converting ad reference images for CreativeIQ generation
 
 ### What
