@@ -32,6 +32,7 @@ import {
   fetchImageViaBackend,
   type SwipeLibrarySavePayload,
 } from '../services/swipeLibraryApi';
+import { getScopedItem, setScopedItem } from '../lib/scopedStorage';
 import './MetaAds.css';
 
 // --- Meta Ads persistent sync cache (localStorage) ---
@@ -689,8 +690,11 @@ const MetaAds = () => {
       setSyncedDateRange(syncDateRange);
       setBusinessTypeMismatch(false);
 
-      // Auto-fetch top performing images as references
-      autoFetchTopImages(creativesData);
+      // Auto-fetch top performing images as references (fresh sync — always run)
+      const freshAccountId = currentAccount?.ad_account_id || 'default';
+      autoFetchTopImages(creativesData).then(() => {
+        setScopedItem('ci_ref_fetch_marker', JSON.stringify({ accountId: freshAccountId, syncedAt: now }));
+      });
 
       // Check which ads are already saved to Swipe Library
       checkSavedAds(creativesData);
@@ -742,8 +746,23 @@ const MetaAds = () => {
         setBusinessTypeMismatch(true);
       }
 
-      // Background tasks on cached data
-      autoFetchTopImages(cached.creatives);
+      // Background tasks on cached data — skip image fetch if already cached from this sync
+      const markerRaw = getScopedItem('ci_ref_fetch_marker');
+      const accountId = currentAccount?.ad_account_id || 'default';
+      let skipImageFetch = false;
+      if (markerRaw) {
+        try {
+          const marker = JSON.parse(markerRaw);
+          if (marker.accountId === accountId && marker.syncedAt === cached.syncedAt) {
+            skipImageFetch = true;
+          }
+        } catch { /* proceed with fetch */ }
+      }
+      if (!skipImageFetch) {
+        autoFetchTopImages(cached.creatives).then(() => {
+          setScopedItem('ci_ref_fetch_marker', JSON.stringify({ accountId, syncedAt: cached.syncedAt }));
+        });
+      }
       checkSavedAds(cached.creatives);
     } else {
       // First visit — default to 'maximum' for the best coverage

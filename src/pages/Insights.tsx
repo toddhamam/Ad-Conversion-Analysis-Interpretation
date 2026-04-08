@@ -19,7 +19,7 @@ import {
   Construction
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { getScopedItem, setScopedItem } from '../lib/scopedStorage';
+import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
 import { useAdAccount } from '../contexts/AdAccountContext';
 import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
 import { reserveCredits, confirmCredits, refundCredits, InsufficientCreditsError } from '../services/stripeApi';
@@ -89,6 +89,8 @@ function setCachedAnalysis(channel: Channel, analysis: ChannelAnalysisResult, bu
     parsed[channel] = analysis;
     parsed._businessType = businessType;
     setScopedItem(CACHE_KEY, JSON.stringify(parsed));
+    // Invalidate reference image fetch marker so AdGenerator re-fetches on next visit
+    removeScopedItem('ci_ref_fetch_marker');
   } catch {
     // Ignore cache errors
   }
