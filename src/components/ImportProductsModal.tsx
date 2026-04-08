@@ -68,13 +68,14 @@ export default function ImportProductsModal({
   }
 
   function selectAllFromAccount(products: ProductContext[]) {
+    const importable = products.filter(p => !isAlreadyImported(p));
     setSelectedProducts(prev => {
       const next = new Map(prev);
-      const allSelected = products.every(p => next.has(p.id));
+      const allSelected = importable.every(p => next.has(p.id));
       if (allSelected) {
-        products.forEach(p => next.delete(p.id));
+        importable.forEach(p => next.delete(p.id));
       } else {
-        products.forEach(p => next.set(p.id, p));
+        importable.forEach(p => next.set(p.id, p));
       }
       return next;
     });
