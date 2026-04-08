@@ -128,6 +128,7 @@ public/
 | `src/components/SEO.tsx` | Centralized SEO component for meta tags and structured data |
 | `src/components/GeneratedAdCard.tsx` | Generated ad display with lazy images, copy clipboard, image regeneration |
 | `src/components/CopySelectionPanel.tsx` | Multi-select UI for choosing headlines, body copy, and CTAs |
+| `src/components/ImportImagesModal.tsx` | Cross-account reference image import modal with scan/merge/cap logic |
 | `src/pages/Products.tsx` | Product CRUD manager (name, author, description, URL, mockup images) |
 | `public/robots.txt` | Search engine crawl directives (allows AI bots for GEO) |
 | `public/sitemap.xml` | XML sitemap for search engine indexing |

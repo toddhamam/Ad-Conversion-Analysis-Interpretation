@@ -1,0 +1,7 @@
+/* ImportImagesModal extends the shared .import-modal-* classes from ImportAnalysisModal.css.
+   Only additional styles specific to the image import modal are defined here. */
+
+.import-images-current {
+  color: var(--text-muted);
+  font-size: 13px;
+}

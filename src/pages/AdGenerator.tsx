@@ -47,6 +47,7 @@ import type { AdLibraryInspiration } from '../types';
 import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
 import { useAdAccount } from '../contexts/AdAccountContext';
 import { getCachedAnalysis, getImportMetadata, type ImportMetadata } from '../lib/channelAnalysisCache';
+import ImportImagesModal, { getAvailableImageImports, importImages } from '../components/ImportImagesModal';
 import SwipeLibraryPicker from '../components/SwipeLibraryPicker';
 import { fetchSwipeImage, type SwipeLibraryItem, type SwipeElementType } from '../services/swipeLibraryApi';
 import { reserveCredits, confirmCredits, refundCredits, InsufficientCreditsError, checkCredits } from '../services/stripeApi';
@@ -137,7 +138,7 @@ const IMPORT_DATE_OPTIONS: { id: DatePreset; label: string }[] = [
 
 const AdGenerator = () => {
   const navigate = useNavigate();
-  const { currentAccount, accountBusinessType: businessType, isMultiAccount } = useAdAccount();
+  const { currentAccount, accounts, accountBusinessType: businessType, isMultiAccount } = useAdAccount();
 
   // Campaign intent — controls AI prompts + publisher defaults.
   // Default based on business type; user can override (e.g. quiz funnel).
@@ -295,6 +296,7 @@ const AdGenerator = () => {
   const [refTopCVR, setRefTopCVR] = useState(0);
   const autoFetchTriggeredRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showImageImportModal, setShowImageImportModal] = useState(false);
 
   // Creative variation control (0 = identical to references, 100 = completely different)
   const [similarityValue, setSimilarityValue] = useState(30); // Default: 30% variation (70% similar)
@@ -343,6 +345,24 @@ const AdGenerator = () => {
     setRefTopConversions(0);
     setRefTopCVR(0);
   };
+
+  // Handle import of reference images from another account
+  const handleImageImport = useCallback((sourceAccountId: string): number => {
+    const accountId = currentAccount?.ad_account_id;
+    // Build the scoped key the same way scopedStorage does
+    const currentCacheKey = accountId
+      ? `conversion_intelligence_image_cache_${accountId}`
+      : 'conversion_intelligence_image_cache';
+
+    const count = importImages(sourceAccountId, currentCacheKey);
+    if (count > 0) {
+      const stats = getDetailedCacheStats();
+      setImageCacheCount(stats.count);
+      setRefTopConversions(stats.topConversions);
+      setRefTopCVR(stats.topConversionRate);
+    }
+    return count;
+  }, [currentAccount?.ad_account_id]);
 
   // Load products from scoped localStorage, falling back to Supabase metadata
   // from currentAccount.products when localStorage is empty or corrupt.
@@ -1623,6 +1643,15 @@ const AdGenerator = () => {
             >
               + Add More
             </button>
+            {isMultiAccount && accounts.length > 1 && (
+              <button
+                className="status-action-btn"
+                onClick={() => setShowImageImportModal(true)}
+                style={{ marginLeft: '8px' }}
+              >
+                Import from Account
+              </button>
+            )}
             <button
               className="status-action-btn clear-btn"
               onClick={handleClearImageCache}
@@ -1645,6 +1674,17 @@ const AdGenerator = () => {
               >
                 {isUploadingImages ? 'Uploading...' : 'upload images manually'}
               </button>.
+              {isMultiAccount && accounts.length > 1 && (
+                <>
+                  {' '}Or{' '}
+                  <button
+                    className="status-link-btn"
+                    onClick={() => setShowImageImportModal(true)}
+                  >
+                    import from another account
+                  </button>.
+                </>
+              )}
             </span>
           </>
         )}
@@ -3001,6 +3041,16 @@ const AdGenerator = () => {
           creditsRemaining={creditModalData.remaining}
           creditsRequired={creditModalData.required}
           onClose={() => setShowCreditModal(false)}
+        />
+      )}
+
+      {/* Import Reference Images Modal */}
+      {showImageImportModal && (
+        <ImportImagesModal
+          availableImports={getAvailableImageImports(accounts, currentAccount?.ad_account_id || null)}
+          currentImageCount={imageCacheCount}
+          onImport={handleImageImport}
+          onClose={() => setShowImageImportModal(false)}
         />
       )}
     </div>
