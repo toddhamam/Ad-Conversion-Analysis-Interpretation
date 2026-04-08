@@ -51,6 +51,19 @@ export interface ProductMetadata {
   createdAt: string;
 }
 
+/** Reference image metadata stored in Supabase (no base64 — that stays in localStorage) */
+export interface ReferenceImageMetadata {
+  adId: string;
+  conversionRate?: number;
+  conversions?: number;
+  qualityScore?: number;
+  width?: number;
+  height?: number;
+  headline?: string;
+  bodyText?: string;
+  capturedAt: number;
+}
+
 /** Info about an activated ad account (from organization_ad_accounts table) */
 export interface AdAccountInfo {
   id: string;              // UUID from organization_ad_accounts
@@ -63,6 +76,7 @@ export interface AdAccountInfo {
   currency: string | null;
   business_type: import('../types/organization').BusinessType | null;
   products: ProductMetadata[] | null;
+  reference_image_metadata: ReferenceImageMetadata[] | null;
 }
 
 export interface OrgMetaIds {
@@ -2442,6 +2456,7 @@ export async function configureAdAccount(adAccountId: string, config: {
   pixelId?: string | null;
   businessType?: import('../types/organization').BusinessType | null;
   products?: ProductMetadata[];
+  reference_image_metadata?: ReferenceImageMetadata[];
 }): Promise<void> {
   const token = await getAuthToken();
   const res = await fetch('/api/meta/ad-accounts', {
@@ -2457,10 +2472,28 @@ export async function configureAdAccount(adAccountId: string, config: {
       pixelId: config.pixelId,
       businessType: config.businessType,
       ...(config.products !== undefined ? { products: config.products } : {}),
+      ...(config.reference_image_metadata !== undefined ? { reference_image_metadata: config.reference_image_metadata } : {}),
     }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || `Failed to configure ad account (${res.status})`);
+  }
+}
+
+/**
+ * Persist reference image metadata (without base64) to Supabase so other
+ * ad accounts can see it for cross-account import. Non-fatal — failures
+ * are logged but don't block the user.
+ */
+export async function saveReferenceImageMetadata(
+  adAccountId: string,
+  metadata: ReferenceImageMetadata[],
+): Promise<void> {
+  try {
+    await configureAdAccount(adAccountId, { reference_image_metadata: metadata });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    console.warn('Failed to persist reference image metadata to Supabase:', msg);
   }
 }

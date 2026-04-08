@@ -35,8 +35,8 @@ import {
 } from '../services/openaiApi';
 import { TEXT_AD_STYLES, getDefaultStyleId, generateTextAdImage, getStyleById, registerCustomBrandStyle, CUSTOM_BRAND_ID } from '../services/textAdCanvas';
 import type { TextAdStyle } from '../services/textAdCanvas';
-import { getCacheStats as getImageCacheStats, getDetailedCacheStats, uploadBrandImages, clearImageCache, autoFetchConvertingAdImages } from '../services/imageCache';
-import { fetchAdCreatives, type DatePreset } from '../services/metaApi';
+import { getCacheStats as getImageCacheStats, getDetailedCacheStats, uploadBrandImages, clearImageCache, autoFetchConvertingAdImages, extractImageMetadata } from '../services/imageCache';
+import { fetchAdCreatives, saveReferenceImageMetadata, type DatePreset } from '../services/metaApi';
 import GeneratedAdCard from '../components/GeneratedAdCard';
 import CopySelectionPanel from '../components/CopySelectionPanel';
 import AdLibraryBrowser from '../components/AdLibraryBrowser';
@@ -326,6 +326,11 @@ const AdGenerator = () => {
       setRefTopConversions(stats.topConversions);
       setRefTopCVR(stats.topConversionRate);
       console.log(`✅ Uploaded ${uploaded.length} images, cache now has ${stats.count} images`);
+      // Persist metadata to Supabase for cross-account import
+      const accountId = currentAccount?.ad_account_id;
+      if (accountId && uploaded.length > 0) {
+        saveReferenceImageMetadata(accountId, extractImageMetadata());
+      }
     } catch (err) {
       console.error('Failed to upload images:', err);
     } finally {
@@ -585,6 +590,11 @@ const AdGenerator = () => {
         setRefTopCVR(finalStats.topConversionRate);
         // Mark that reference images are cached for this sync version
         setScopedItem(REF_FETCH_MARKER_KEY, JSON.stringify({ accountId, syncedAt }));
+        // Persist metadata to Supabase so other accounts can see it for import
+        const metadata = extractImageMetadata();
+        if (metadata.length > 0) {
+          saveReferenceImageMetadata(accountId, metadata);
+        }
       }).finally(() => {
         setIsAutoFetchingRefs(false);
         setAutoFetchProgress(null);
