@@ -16,17 +16,26 @@ import {
   ScanSearch,
   AlertTriangle,
   BarChart3,
-  Construction
+  Construction,
+  Download,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
 import { useAdAccount } from '../contexts/AdAccountContext';
 import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
 import { reserveCredits, confirmCredits, refundCredits, InsufficientCreditsError } from '../services/stripeApi';
 import CreditExhaustionModal from '../components/CreditExhaustionModal';
+import ImportAnalysisModal from '../components/ImportAnalysisModal';
+import {
+  getCachedAnalysis,
+  setCachedAnalysis,
+  getImportMetadata,
+  getAvailableImports,
+  importAnalysis,
+  clearImportMetadata,
+  type Channel,
+  type ImportMetadata,
+} from '../lib/channelAnalysisCache';
 import './Insights.css';
-
-type Channel = 'meta' | 'google' | 'tiktok' | 'email';
 
 interface ChannelConfig {
   id: Channel;
@@ -62,58 +71,36 @@ function convertToAdCreativeData(creative: AdCreative): AdCreativeData {
   };
 }
 
-// Local storage key for caching analysis (scoped per ad account)
-const CACHE_KEY = 'channel_analysis_cache';
-
-function getCachedAnalysis(channel: Channel, businessType: string): ChannelAnalysisResult | null {
-  try {
-    const cache = getScopedItem(CACHE_KEY);
-    if (cache) {
-      const parsed = JSON.parse(cache);
-      // Invalidate cache if businessType has changed
-      if (parsed._businessType && parsed._businessType !== businessType) {
-        return null;
-      }
-      return parsed[channel] || null;
-    }
-  } catch {
-    // Ignore cache errors
-  }
-  return null;
-}
-
-function setCachedAnalysis(channel: Channel, analysis: ChannelAnalysisResult, businessType: string): void {
-  try {
-    const cache = getScopedItem(CACHE_KEY);
-    const parsed = cache ? JSON.parse(cache) : {};
-    parsed[channel] = analysis;
-    parsed._businessType = businessType;
-    setScopedItem(CACHE_KEY, JSON.stringify(parsed));
-    // Invalidate reference image fetch marker so AdGenerator re-fetches on next visit
-    removeScopedItem('ci_ref_fetch_marker');
-  } catch {
-    // Ignore cache errors
-  }
-}
-
 const Insights = () => {
-  const { accountBusinessType: businessType } = useAdAccount();
+  const { accountBusinessType: businessType, accounts, currentAccount, isMultiAccount } = useAdAccount();
   const [selectedChannel, setSelectedChannel] = useState<Channel>('meta');
   const [analysis, setAnalysis] = useState<ChannelAnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [adsCount, setAdsCount] = useState(0);
-  // Load cached analysis when channel changes
+  const [importMeta, setImportMeta] = useState<ImportMetadata | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+
+  // Load cached analysis + import metadata when channel changes
   useEffect(() => {
     const cached = getCachedAnalysis(selectedChannel, businessType);
-    if (cached) {
-      setAnalysis(cached);
-    } else {
-      setAnalysis(null);
-    }
+    setAnalysis(cached);
+    setImportMeta(getImportMetadata(selectedChannel));
     setError(null);
   }, [selectedChannel, businessType]);
+
+  const canImport = isMultiAccount && accounts.length > 1;
+
+  const handleImport = useCallback((sourceAccountId: string): boolean => {
+    const success = importAnalysis(selectedChannel, sourceAccountId, accounts, businessType);
+    if (success) {
+      const cached = getCachedAnalysis(selectedChannel, businessType);
+      setAnalysis(cached);
+      setImportMeta(getImportMetadata(selectedChannel));
+    }
+    return success;
+  }, [selectedChannel, accounts, businessType]);
 
   // Credit exhaustion modal state
   const [showCreditModal, setShowCreditModal] = useState(false);
@@ -189,10 +176,12 @@ const Insights = () => {
       // Confirm credit consumption on success
       if (transactionId) confirmCredits(transactionId);
 
-      // Cache the result
+      // Cache the result and clear any import provenance (native replaces imported)
       setCachedAnalysis(selectedChannel, result, businessType);
+      clearImportMetadata(selectedChannel);
 
       setAnalysis(result);
+      setImportMeta(null);
     } catch (err: any) {
       // Refund credits on failure
       if (transactionId) refundCredits(transactionId);
@@ -256,12 +245,37 @@ const Insights = () => {
           )}
         </button>
 
+        {canImport && !loading && (
+          <button
+            className="import-analysis-btn"
+            onClick={() => setShowImportModal(true)}
+            disabled={!selectedChannelConfig?.available}
+          >
+            <span className="btn-icon"><Download size={18} strokeWidth={1.5} /></span>
+            Import from Account
+          </button>
+        )}
+
         {analysis && (
           <span className="last-analyzed">
             Last analyzed: {new Date(analysis.analyzedAt).toLocaleString()}
           </span>
         )}
       </div>
+
+      {/* Import Provenance Banner */}
+      {!loading && analysis && importMeta && (
+        <div className="import-provenance-banner">
+          <span className="provenance-icon"><Download size={16} strokeWidth={1.5} /></span>
+          <span className="provenance-text">
+            Imported from <strong>{importMeta.adAccountName}</strong> on {new Date(importMeta.importedAt).toLocaleDateString()}
+            {importMeta.sourceBusinessType !== businessType && (
+              <span className="provenance-type-note"> (originally {importMeta.sourceBusinessType})</span>
+            )}
+          </span>
+          <span className="provenance-hint">Run your own analysis to replace</span>
+        </div>
+      )}
 
       {/* Error Display */}
       {error && (
@@ -288,6 +302,14 @@ const Insights = () => {
           <h3>No Analysis Yet</h3>
           <p>Click "Run Channel Analysis" to generate AI-powered insights for your {selectedChannelConfig.name} advertising account.</p>
           <p className="empty-note">This will analyze all your ads and identify patterns, winning elements, and strategic recommendations.</p>
+          {canImport && (
+            <button
+              className="import-empty-link"
+              onClick={() => setShowImportModal(true)}
+            >
+              Or import analysis from another ad account
+            </button>
+          )}
         </div>
       )}
 
@@ -311,6 +333,16 @@ const Insights = () => {
           creditsRemaining={creditModalData.remaining}
           creditsRequired={creditModalData.required}
           onClose={() => setShowCreditModal(false)}
+        />
+      )}
+
+      {/* Import Analysis Modal */}
+      {showImportModal && (
+        <ImportAnalysisModal
+          availableImports={getAvailableImports(accounts, currentAccount?.ad_account_id || null, selectedChannel)}
+          currentBusinessType={businessType}
+          onImport={handleImport}
+          onClose={() => setShowImportModal(false)}
         />
       )}
     </div>

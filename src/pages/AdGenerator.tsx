@@ -46,6 +46,7 @@ import { setPublishData } from '../services/publishStore';
 import type { AdLibraryInspiration } from '../types';
 import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
 import { useAdAccount } from '../contexts/AdAccountContext';
+import { getCachedAnalysis, getImportMetadata, type ImportMetadata } from '../lib/channelAnalysisCache';
 import SwipeLibraryPicker from '../components/SwipeLibraryPicker';
 import { fetchSwipeImage, type SwipeLibraryItem, type SwipeElementType } from '../services/swipeLibraryApi';
 import { reserveCredits, confirmCredits, refundCredits, InsufficientCreditsError, checkCredits } from '../services/stripeApi';
@@ -53,7 +54,6 @@ import type { CreditActionType, CampaignIntent } from '../types/organization';
 import CreditExhaustionModal from '../components/CreditExhaustionModal';
 import './AdGenerator.css';
 
-const CACHE_KEY = 'channel_analysis_cache';
 const GENERATED_ADS_STORAGE_KEY = 'conversion_intelligence_generated_ads';
 const PRODUCTS_STORAGE_KEY = 'convertra_products';
 const INSPIRATIONS_STORAGE_KEY = 'ci_ad_library_inspirations';
@@ -113,37 +113,7 @@ const CONCEPT_OPTIONS = Object.entries(CONCEPT_ANGLES).map(([id, config]) => ({
   ...config,
 }));
 
-function getCachedAnalysis(currentBusinessType: string): ChannelAnalysisResult | null {
-  try {
-    const cache = getScopedItem(CACHE_KEY);
-    if (cache) {
-      const parsed = JSON.parse(cache);
-      // Invalidate cache if businessType has changed
-      if (parsed._businessType && parsed._businessType !== currentBusinessType) {
-        console.log('⚠️ Cached analysis businessType mismatch — invalidating');
-        return null;
-      }
-      const analysis = parsed['meta'] || null;
-      if (analysis) {
-        console.log('📊 Loaded cached analysis data:');
-        console.log('  - Channel:', analysis.channelName);
-        console.log('  - Analyzed at:', analysis.analyzedAt);
-        console.log('  - Health score:', analysis.overallHealthScore);
-        console.log('  - Total ads analyzed:', analysis.performanceBreakdown?.totalAdsAnalyzed);
-        console.log('  - Top ads count:', analysis.topAds?.length || 0);
-        console.log('  - Winning patterns:', analysis.winningPatterns ? 'Yes' : 'No');
-        console.log('  - Executive summary:', analysis.executiveSummary?.substring(0, 100) + '...');
-      } else {
-        console.log('⚠️ No Meta analysis found in cache');
-      }
-      return analysis;
-    }
-    console.log('⚠️ No analysis cache found in localStorage');
-  } catch (error) {
-    console.error('❌ Error loading cached analysis:', error);
-  }
-  return null;
-}
+// getCachedAnalysis is now imported from ../lib/channelAnalysisCache
 
 function formatDate(isoString: string): string {
   const date = new Date(isoString);
@@ -167,7 +137,7 @@ const IMPORT_DATE_OPTIONS: { id: DatePreset; label: string }[] = [
 
 const AdGenerator = () => {
   const navigate = useNavigate();
-  const { currentAccount, accountBusinessType: businessType } = useAdAccount();
+  const { currentAccount, accountBusinessType: businessType, isMultiAccount } = useAdAccount();
 
   // Campaign intent — controls AI prompts + publisher defaults.
   // Default based on business type; user can override (e.g. quiz funnel).
@@ -202,6 +172,7 @@ const AdGenerator = () => {
   const [conceptType, setConceptType] = useState<ConceptType>('auto');
   const [variationCount, setVariationCount] = useState(2);
   const [analysisData, setAnalysisData] = useState<ChannelAnalysisResult | null>(null);
+  const [analysisImportMeta, setAnalysisImportMeta] = useState<ImportMetadata | null>(null);
   const [imageSize, setImageSize] = useState<ImageSize>(DEFAULT_IMAGE_SIZE);
   const [copyLength, setCopyLength] = useState<CopyLength>(DEFAULT_COPY_LENGTH);
 
@@ -459,8 +430,9 @@ const AdGenerator = () => {
   useEffect(() => {
     debugLog('Mount effect starting');
 
-    const cached = getCachedAnalysis(businessType);
+    const cached = getCachedAnalysis('meta', businessType);
     setAnalysisData(cached);
+    setAnalysisImportMeta(getImportMetadata('meta'));
 
     // Check image cache status and update detailed stats
     const imageStats = getImageCacheStats();
@@ -1589,7 +1561,11 @@ const AdGenerator = () => {
           <>
             <span className="status-icon">✓</span>
             <span className="status-text">
-              Analysis data loaded (analyzed {formatDate(analysisData!.analyzedAt)})
+              {analysisImportMeta ? (
+                <>Analysis data loaded from <strong>{analysisImportMeta.adAccountName}</strong> (analyzed {formatDate(analysisData!.analyzedAt)})</>
+              ) : (
+                <>Analysis data loaded (analyzed {formatDate(analysisData!.analyzedAt)})</>
+              )}
             </span>
           </>
         ) : (
@@ -1599,7 +1575,15 @@ const AdGenerator = () => {
               No analysis data found.{' '}
               <Link to="/insights" className="status-link">
                 Run channel analysis
-              </Link>{' '}
+              </Link>
+              {isMultiAccount && (
+                <>
+                  {' '}or{' '}
+                  <Link to="/insights" className="status-link">
+                    import from another account
+                  </Link>
+                </>
+              )}{' '}
               for better results.
             </span>
           </>
