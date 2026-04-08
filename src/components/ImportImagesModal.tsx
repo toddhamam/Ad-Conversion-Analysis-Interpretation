@@ -237,7 +237,7 @@ export function getSyncCreatives(sourceAccountId: string): SyncCreative[] {
 interface ImportImagesModalProps {
   availableImports: AvailableImageImport[];
   currentImageCount: number;
-  onImport: (sourceAccountId: string, source: 'local' | 'supabase' | 'sync') => number | Promise<number>;
+  onImport: (sourceAccountId: string, source: 'local' | 'supabase' | 'sync', onProgress?: (msg: string) => void) => number | Promise<number>;
   onClose: () => void;
 }
 
@@ -251,26 +251,31 @@ export default function ImportImagesModal({
   const [importedAccountId, setImportedAccountId] = useState<string | null>(null);
   const [importedCount, setImportedCount] = useState(0);
   const [importing, setImporting] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
 
   async function handleImport(account: AdAccountInfo, source: 'local' | 'supabase' | 'sync') {
     setError(null);
+    setProgress(null);
     setImporting(true);
     try {
-      const count = await onImport(account.ad_account_id, source);
+      const count = await onImport(account.ad_account_id, source, setProgress);
       if (count > 0) {
         setImportedAccountId(account.ad_account_id);
         setImportedCount(count);
+        setProgress(null);
         setTimeout(onClose, 800);
       } else if (count === 0) {
         setError('All images from this account already exist in your current cache.');
       } else {
-        // count < 0 indicates a write/verification failure
-        setError('Import failed — try clearing old generated ads to free up storage.');
+        // count < 0 indicates a fetch/write failure
+        setError('Could not fetch images — the ad image URLs may have expired. Try re-syncing Meta Ads on that account first.');
       }
-    } catch {
-      setError('Import failed — an unexpected error occurred.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setError(`Import failed: ${msg}`);
     } finally {
       setImporting(false);
+      setProgress(null);
     }
   }
 
@@ -306,6 +311,13 @@ export default function ImportImagesModal({
           <div className="import-modal-error">
             <span className="import-error-icon">!</span>
             {error}
+          </div>
+        )}
+
+        {importing && progress && (
+          <div className="import-modal-progress">
+            <span className="import-progress-spinner">⟳</span>
+            {progress}
           </div>
         )}
 
