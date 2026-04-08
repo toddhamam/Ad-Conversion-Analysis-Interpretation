@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { AdAccountInfo } from '../services/metaApi';
+import type { AdAccountInfo, ReferenceImageMetadata } from '../services/metaApi';
 import type { CachedImage } from '../services/imageCache';
 import './ImportImagesModal.css';
 
@@ -10,11 +10,15 @@ export interface AvailableImageImport {
   imageCount: number;
   topConversions: number;
   topCVR: number;
+  /** true when full base64 data is in localStorage (fast import) */
+  hasLocalData: boolean;
 }
 
 /**
- * Scan other activated accounts' localStorage for cached reference images.
- * Returns accounts that have image data available to import.
+ * Scan other activated accounts for available reference images.
+ * Merges two sources (same pattern as product import):
+ * - localStorage: full CachedImage with base64 (only available in the same browser)
+ * - Supabase: ReferenceImageMetadata without base64 (always available via account.reference_image_metadata)
  */
 export function getAvailableImageImports(
   accounts: AdAccountInfo[],
@@ -25,33 +29,50 @@ export function getAvailableImageImports(
   for (const account of accounts) {
     if (account.ad_account_id === currentAccountId) continue;
 
+    // Source 1: localStorage (full data with base64)
+    let localImages: CachedImage[] = [];
     const key = `${IMAGE_CACHE_KEY}_${account.ad_account_id}`;
     try {
       const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw) as { images?: Record<string, CachedImage> };
-      const images = parsed.images;
-      if (!images) continue;
+      if (raw) {
+        const parsed = JSON.parse(raw) as { images?: Record<string, CachedImage> };
+        if (parsed.images) localImages = Object.values(parsed.images);
+      }
+    } catch {
+      // Corrupted localStorage — proceed with Supabase only
+    }
 
-      const imageList = Object.values(images);
-      if (imageList.length === 0) continue;
+    // Source 2: Supabase metadata (no base64, but always available)
+    const supabaseMeta: ReferenceImageMetadata[] = account.reference_image_metadata || [];
 
-      let topConversions = 0;
-      let topCVR = 0;
-      for (const img of imageList) {
+    // Merge: localStorage has authoritative count when available,
+    // otherwise fall back to Supabase metadata
+    const imageCount = localImages.length > 0 ? localImages.length : supabaseMeta.length;
+    if (imageCount === 0) continue;
+
+    // Compute stats from whichever source has data
+    let topConversions = 0;
+    let topCVR = 0;
+
+    if (localImages.length > 0) {
+      for (const img of localImages) {
         if ((img.conversions ?? 0) > topConversions) topConversions = img.conversions ?? 0;
         if ((img.conversionRate ?? 0) > topCVR) topCVR = img.conversionRate ?? 0;
       }
-
-      results.push({
-        account,
-        imageCount: imageList.length,
-        topConversions,
-        topCVR,
-      });
-    } catch {
-      // Skip corrupted entries
+    } else {
+      for (const meta of supabaseMeta) {
+        if ((meta.conversions ?? 0) > topConversions) topConversions = meta.conversions ?? 0;
+        if ((meta.conversionRate ?? 0) > topCVR) topCVR = meta.conversionRate ?? 0;
+      }
     }
+
+    results.push({
+      account,
+      imageCount,
+      topConversions,
+      topCVR,
+      hasLocalData: localImages.length > 0,
+    });
   }
 
   return results;
@@ -234,7 +255,7 @@ export default function ImportImagesModal({
           </div>
         ) : (
           <div className="import-modal-accounts">
-            {availableImports.map(({ account, imageCount, topConversions, topCVR }) => {
+            {availableImports.map(({ account, imageCount, topConversions, topCVR, hasLocalData }) => {
               const isImported = importedAccountId === account.ad_account_id;
 
               return (
@@ -264,11 +285,17 @@ export default function ImportImagesModal({
                         </>
                       )}
                     </div>
+                    {!hasLocalData && (
+                      <div className="import-account-warning">
+                        <span className="import-warning-icon">&#9888;</span>
+                        Metadata only — sync this account's Meta Ads first for full image data.
+                      </div>
+                    )}
                   </div>
                   <button
                     className="import-account-btn"
                     onClick={() => handleImport(account)}
-                    disabled={isImported}
+                    disabled={isImported || !hasLocalData}
                   >
                     {isImported ? `${importedCount} Imported` : 'Import'}
                   </button>

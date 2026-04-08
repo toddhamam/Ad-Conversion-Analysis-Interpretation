@@ -295,6 +295,35 @@ export function getCacheStats(): { count: number; topConversionRate: number } {
 }
 
 /**
+ * Extract lightweight metadata from the image cache (no base64 data).
+ * Used to persist to Supabase so other accounts can see available images.
+ */
+export function extractImageMetadata(): Array<{
+  adId: string;
+  conversionRate?: number;
+  conversions?: number;
+  qualityScore?: number;
+  width?: number;
+  height?: number;
+  headline?: string;
+  bodyText?: string;
+  capturedAt: number;
+}> {
+  const images = getAllCachedImages();
+  return images.map(img => ({
+    adId: img.adId,
+    conversionRate: img.conversionRate,
+    conversions: img.conversions,
+    qualityScore: img.qualityScore,
+    width: img.width,
+    height: img.height,
+    headline: img.headline,
+    bodyText: img.bodyText,
+    capturedAt: img.capturedAt,
+  }));
+}
+
+/**
  * CORS proxy URLs to try for fetching Facebook CDN images
  */
 const CORS_PROXIES = [
