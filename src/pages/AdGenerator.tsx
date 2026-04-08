@@ -353,7 +353,11 @@ const AdGenerator = () => {
 
   // Handle import of reference images from another account.
   // Three sources: 'local' (instant copy), 'supabase' (metadata only), 'sync' (fetch from URLs).
-  const handleImageImport = useCallback(async (sourceAccountId: string, source: 'local' | 'supabase' | 'sync'): Promise<number> => {
+  const handleImageImport = useCallback(async (
+    sourceAccountId: string,
+    source: 'local' | 'supabase' | 'sync',
+    onProgress?: (msg: string) => void,
+  ): Promise<number> => {
     const accountId = currentAccount?.ad_account_id;
     const currentCacheKey = accountId
       ? `conversion_intelligence_image_cache_${accountId}`
@@ -376,12 +380,20 @@ const AdGenerator = () => {
       const creatives = getSyncCreatives(sourceAccountId);
       if (creatives.length === 0) return -1;
 
+      onProgress?.(`Found ${creatives.length} converting ads. Fetching images...`);
+
       const result = await autoFetchConvertingAdImages(creatives, {
         maxImages: 20,
         minQuality: 60,
+        onProgress: (loaded, total) => {
+          onProgress?.(`Fetching image ${loaded} of ${total}...`);
+        },
       });
 
+      console.log(`[ImageImport] sync fetch result: loaded=${result.loaded}, alreadyCached=${result.alreadyCached}, failed=${result.failed}`);
+
       if (result.loaded > 0) {
+        onProgress?.(`Imported ${result.loaded} images. Saving...`);
         const stats = getDetailedCacheStats();
         setImageCacheCount(stats.count);
         setRefTopConversions(stats.topConversions);
