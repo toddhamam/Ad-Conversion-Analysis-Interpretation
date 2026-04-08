@@ -1,8 +1,10 @@
 import { useState, useRef } from 'react';
-import { Plus, Pencil, Trash2, ImageIcon, X, Save } from 'lucide-react';
+import { Plus, Pencil, Trash2, ImageIcon, X, Save, Download } from 'lucide-react';
 import type { ProductMetadata } from '../services/metaApi';
 import type { ProductContext } from '../services/openaiApi';
 import { scopedKey } from '../lib/scopedStorage';
+import { useAdAccount } from '../contexts/AdAccountContext';
+import ImportProductsModal, { getAvailableProductImports } from './ImportProductsModal';
 import './ProductConfigurator.css';
 
 const PRODUCTS_STORAGE_KEY = 'convertra_products';
@@ -108,10 +110,14 @@ async function fileToBase64(file: File): Promise<string> {
 }
 
 export default function ProductConfigurator({ products, onProductsChange, adAccountId }: ProductConfiguratorProps) {
+  const { accounts, isMultiAccount } = useAdAccount();
   const [editingProduct, setEditingProduct] = useState<ProductContext | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const canImport = isMultiAccount && accounts.length > 1;
 
   /** Merge metadata with localStorage images to get a full ProductContext for editing */
   const hydrateForEdit = (meta: ProductMetadata): ProductContext => {
@@ -146,6 +152,12 @@ export default function ProductConfigurator({ products, onProductsChange, adAcco
         productImages: local?.productImages || [],
       };
     });
+  };
+
+  const handleImportProducts = (importedProducts: ProductContext[]): boolean => {
+    const currentFull = getFullProducts();
+    const merged = [...currentFull, ...importedProducts];
+    return persistChanges(merged);
   };
 
   const handleAddNew = () => {
@@ -341,10 +353,18 @@ export default function ProductConfigurator({ products, onProductsChange, adAcco
       {!editingProduct && products.length === 0 && (
         <div className="pc-empty">
           <span>No products configured</span>
-          <button className="pc-add-btn" onClick={handleAddNew}>
-            <Plus size={14} strokeWidth={2} />
-            Add Product
-          </button>
+          <div className="pc-empty-actions">
+            <button className="pc-add-btn" onClick={handleAddNew}>
+              <Plus size={14} strokeWidth={2} />
+              Add Product
+            </button>
+            {canImport && (
+              <button className="pc-import-btn" onClick={() => setShowImportModal(true)}>
+                <Download size={14} strokeWidth={2} />
+                Import from Account
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -377,11 +397,29 @@ export default function ProductConfigurator({ products, onProductsChange, adAcco
               </div>
             );
           })}
-          <button className="pc-add-btn pc-add-inline" onClick={handleAddNew}>
-            <Plus size={14} strokeWidth={2} />
-            Add Product
-          </button>
+          <div className="pc-inline-actions">
+            <button className="pc-add-btn pc-add-inline" onClick={handleAddNew}>
+              <Plus size={14} strokeWidth={2} />
+              Add Product
+            </button>
+            {canImport && (
+              <button className="pc-import-btn pc-add-inline" onClick={() => setShowImportModal(true)}>
+                <Download size={14} strokeWidth={2} />
+                Import
+              </button>
+            )}
+          </div>
         </div>
+      )}
+
+      {/* Import Products Modal */}
+      {showImportModal && (
+        <ImportProductsModal
+          availableImports={getAvailableProductImports(accounts, adAccountId || null)}
+          existingProductIds={new Set(products.map(p => `${p.name}::${p.author}`))}
+          onImport={handleImportProducts}
+          onClose={() => setShowImportModal(false)}
+        />
       )}
     </div>
   );
