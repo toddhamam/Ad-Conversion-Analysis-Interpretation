@@ -426,13 +426,16 @@ const AdGenerator = () => {
     });
   }, []);
 
-  // Load cached analysis and check image cache on mount
+  // Reload cached analysis when businessType changes (e.g. authoritative fetch resolves)
   useEffect(() => {
-    debugLog('Mount effect starting');
-
     const cached = getCachedAnalysis('meta', businessType);
     setAnalysisData(cached);
     setAnalysisImportMeta(getImportMetadata('meta'));
+  }, [businessType]);
+
+  // Load image cache and stored ads on mount
+  useEffect(() => {
+    debugLog('Mount effect starting');
 
     // Check image cache status and update detailed stats
     const imageStats = getImageCacheStats();
