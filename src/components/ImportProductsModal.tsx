@@ -19,10 +19,9 @@ const PRODUCTS_STORAGE_KEY = 'convertra_products';
 
 /**
  * Scan other activated accounts for products.
- * Checks localStorage first (full ProductContext with images), then falls back
- * to Supabase metadata from account.products (no images but has name/author/description).
- * This ensures products are discoverable even when localStorage doesn't have
- * data for accounts configured in other sessions or browsers.
+ * Merges localStorage (full ProductContext with images) with Supabase metadata
+ * (account.products) so that products added from other sessions/browsers are
+ * always visible, while localStorage entries retain their images.
  */
 export function getAvailableProductImports(
   accounts: AdAccountInfo[],
@@ -33,28 +32,34 @@ export function getAvailableProductImports(
   for (const account of accounts) {
     if (account.ad_account_id === currentAccountId) continue;
 
-    // Primary: localStorage (full ProductContext with images)
+    // Load localStorage products (full data with images)
+    let localProducts: ProductContext[] = [];
     const key = `${PRODUCTS_STORAGE_KEY}_${account.ad_account_id}`;
     try {
       const raw = localStorage.getItem(key);
       if (raw) {
-        const products = JSON.parse(raw) as ProductContext[];
-        if (Array.isArray(products) && products.length > 0) {
-          results.push({ account, products });
-          continue;
-        }
+        const parsed = JSON.parse(raw) as ProductContext[];
+        if (Array.isArray(parsed)) localProducts = parsed;
       }
     } catch {
-      // Fall through to Supabase metadata
+      // Corrupted localStorage — proceed with Supabase only
     }
 
-    // Fallback: Supabase metadata from account.products (no images)
-    if (account.products && account.products.length > 0) {
-      const products: ProductContext[] = account.products.map(meta => ({
-        ...meta,
-        productImages: [],
-      }));
-      results.push({ account, products });
+    // Load Supabase metadata (authoritative, no images)
+    const supabaseProducts = account.products || [];
+
+    // Merge: use localStorage entries (have images) where they exist,
+    // then add any Supabase-only products (added from other sessions/browsers)
+    const localIds = new Set(localProducts.map(p => p.id));
+    const merged: ProductContext[] = [...localProducts];
+    for (const meta of supabaseProducts) {
+      if (!localIds.has(meta.id)) {
+        merged.push({ ...meta, productImages: [] });
+      }
+    }
+
+    if (merged.length > 0) {
+      results.push({ account, products: merged });
     }
   }
 
