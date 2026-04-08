@@ -1,9 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Pencil, Trash2, ImageIcon, X, Save, ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, ImageIcon, X, Save, ArrowLeft, AlertTriangle, CheckCircle, Download } from 'lucide-react';
 import type { ProductContext } from '../services/openaiApi';
 import SEO from '../components/SEO';
 import { getScopedItem, setScopedItem } from '../lib/scopedStorage';
+import { useAdAccount } from '../contexts/AdAccountContext';
+import ImportProductsModal, { getAvailableProductImports } from '../components/ImportProductsModal';
 import './Products.css';
 
 const STORAGE_KEY = 'convertra_products';
@@ -48,16 +50,31 @@ function createEmptyProduct(): ProductContext {
 }
 
 const Products = () => {
+  const { accounts, currentAccount, isMultiAccount } = useAdAccount();
   const [products, setProducts] = useState<ProductContext[]>([]);
   const [editingProduct, setEditingProduct] = useState<ProductContext | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const canImport = isMultiAccount && accounts.length > 1;
 
   useEffect(() => {
     setProducts(loadProducts());
   }, []);
+
+  const handleImportProducts = useCallback((importedProducts: ProductContext[]): boolean => {
+    const merged = [...products, ...importedProducts];
+    const result = saveProducts(merged);
+    if (result.success) {
+      setProducts(merged);
+      setSaveSuccess(true);
+      return true;
+    }
+    return false;
+  }, [products]);
 
   // Auto-dismiss success message
   useEffect(() => {
@@ -162,10 +179,18 @@ const Products = () => {
           <p className="page-subtitle">Define your products for accurate ad copy and image generation</p>
         </div>
         {!editingProduct && (
-          <button className="add-product-btn" onClick={handleAddNew}>
-            <Plus size={18} strokeWidth={1.5} />
-            Add Product
-          </button>
+          <div className="page-header-actions">
+            <button className="add-product-btn" onClick={handleAddNew}>
+              <Plus size={18} strokeWidth={1.5} />
+              Add Product
+            </button>
+            {canImport && (
+              <button className="import-products-header-btn" onClick={() => setShowImportModal(true)}>
+                <Download size={18} strokeWidth={1.5} />
+                Import from Account
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -313,6 +338,14 @@ const Products = () => {
             <Plus size={18} strokeWidth={1.5} />
             Add Your First Product
           </button>
+          {canImport && (
+            <button
+              className="import-empty-link"
+              onClick={() => setShowImportModal(true)}
+            >
+              Or import products from another ad account
+            </button>
+          )}
         </div>
       ) : (
         <div className="products-list">
@@ -362,6 +395,16 @@ const Products = () => {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Import Products Modal */}
+      {showImportModal && (
+        <ImportProductsModal
+          availableImports={getAvailableProductImports(accounts, currentAccount?.ad_account_id || null)}
+          existingProductIds={new Set(products.map(p => `${p.name}::${p.author}`))}
+          onImport={handleImportProducts}
+          onClose={() => setShowImportModal(false)}
+        />
       )}
     </div>
   );

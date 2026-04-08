@@ -77,6 +77,50 @@
   box-shadow: var(--shadow-md);
 }
 
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.import-products-header-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.import-products-header-btn:hover {
+  border-color: var(--accent-violet);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.import-empty-link {
+  margin-top: 16px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--accent-violet);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.import-empty-link:hover {
+  color: var(--text-primary);
+}
+
 /* Product List */
 .products-list {
   display: flex;

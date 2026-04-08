@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-04-08 — Import products between ad accounts
+
+### What
+Multi-account orgs can now import products (with mockup images) from one ad account into another. Available in the Integrations configure panel, the standalone Products page, and the AdGenerator empty state. Supports individual product selection, duplicate detection, and storage quota error handling.
+
+### Changes
+- **src/components/ImportProductsModal.tsx** (new) — Modal with per-product checkboxes, product thumbnails, "Already exists" badge for duplicates, "Select all" per account (skips duplicates), storage error handling.
+- **src/components/ImportProductsModal.css** (new) — Modal styles with responsive layout.
+- **src/components/ProductConfigurator.tsx** — Added "Import from Account" button in both empty state and inline with existing products. Uses `useAdAccount()` for multi-account detection.
+- **src/components/ProductConfigurator.css** — Styles for import button and action layouts.
+- **src/pages/Products.tsx** — Added import button in header and import link in empty state.
+- **src/pages/Products.css** — Styles for import button and empty state link.
+- **src/pages/AdGenerator.tsx** — Split analysis load into own `useEffect` with `[businessType]` dependency so it re-runs when the authoritative business type resolves after mount.
+
+---
+
 ## 2026-04-08 — Persist reference images across page visits
 
 ### What
