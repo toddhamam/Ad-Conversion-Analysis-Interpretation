@@ -2,7 +2,7 @@
 // Consolidates getCachedAnalysis / setCachedAnalysis from Insights.tsx and AdGenerator.tsx
 // and adds cross-account import functionality.
 
-import { getScopedItem, setScopedItem } from './scopedStorage';
+import { getScopedItem, setScopedItem, removeScopedItem } from './scopedStorage';
 import type { ChannelAnalysisResult } from '../services/openaiApi';
 import type { AdAccountInfo } from '../services/metaApi';
 
@@ -50,6 +50,8 @@ export function setCachedAnalysis(channel: Channel, analysis: ChannelAnalysisRes
     parsed[channel] = analysis;
     parsed._businessType = businessType;
     setScopedItem(CACHE_KEY, JSON.stringify(parsed));
+    // Invalidate reference image fetch marker so AdGenerator re-fetches on next visit
+    removeScopedItem('ci_ref_fetch_marker');
   } catch {
     // Ignore cache errors
   }

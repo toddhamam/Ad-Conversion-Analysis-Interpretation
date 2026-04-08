@@ -57,6 +57,7 @@ import './AdGenerator.css';
 const GENERATED_ADS_STORAGE_KEY = 'conversion_intelligence_generated_ads';
 const PRODUCTS_STORAGE_KEY = 'convertra_products';
 const INSPIRATIONS_STORAGE_KEY = 'ci_ad_library_inspirations';
+const REF_FETCH_MARKER_KEY = 'ci_ref_fetch_marker';
 const MAX_SAVED_INSPIRATIONS = 20;
 const MAX_ACTIVE_INSPIRATIONS = 5;
 
@@ -337,6 +338,7 @@ const AdGenerator = () => {
   // Handle clear image cache
   const handleClearImageCache = () => {
     clearImageCache();
+    removeScopedItem(REF_FETCH_MARKER_KEY);
     setImageCacheCount(0);
     setRefTopConversions(0);
     setRefTopCVR(0);
@@ -521,10 +523,24 @@ const AdGenerator = () => {
       const syncDataRaw = localStorage.getItem(syncKey);
       if (!syncDataRaw) return;
       const syncData = JSON.parse(syncDataRaw);
+      const syncedAt = syncData.syncedAt as number | undefined;
       const convertingCreatives = (syncData.creatives || []).filter(
         (c: { conversions?: number; imageUrl?: string }) => (c.conversions ?? 0) > 0 && c.imageUrl
       );
       if (convertingCreatives.length === 0) return;
+
+      // Check if reference images are already cached from this exact sync data.
+      // Skip re-fetch if: same account, same sync version, and cache has images.
+      const markerRaw = getScopedItem(REF_FETCH_MARKER_KEY);
+      if (markerRaw && imageStats.count > 0) {
+        try {
+          const marker = JSON.parse(markerRaw);
+          if (marker.accountId === accountId && marker.syncedAt === syncedAt) {
+            lastFetchedAccountRef.current = accountId;
+            return;
+          }
+        } catch { /* invalid marker, proceed with fetch */ }
+      }
 
       lastFetchedAccountRef.current = accountId;
       autoFetchTriggeredRef.current = true;
@@ -544,6 +560,8 @@ const AdGenerator = () => {
         setImageCacheCount(finalStats.count);
         setRefTopConversions(finalStats.topConversions);
         setRefTopCVR(finalStats.topConversionRate);
+        // Mark that reference images are cached for this sync version
+        setScopedItem(REF_FETCH_MARKER_KEY, JSON.stringify({ accountId, syncedAt }));
       }).finally(() => {
         setIsAutoFetchingRefs(false);
         setAutoFetchProgress(null);

@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-04-08 — Persist reference images across page visits
+
+### What
+Reference images now stay cached and don't re-sync every time you visit the Ad Generator. Previously, navigating to CreativeIQ triggered a full image re-fetch (showing the loading progress bar) because the "already fetched" guard was stored in memory and reset on every page mount. Now, once 20/20 reference images are loaded, they persist until you run a new Meta Ads sync or channel analysis.
+
+### Changes
+- **AdGenerator.tsx** — Added a persistent localStorage marker (`ci_ref_fetch_marker`) that tracks which account + sync version the image cache was built from. `runAutoFetch` now checks this marker before fetching — if the cache is already current, it skips entirely. Marker is cleared when the user manually clears the image cache.
+- **MetaAds.tsx** — Fresh syncs save the marker after image fetch completes. Mount-from-cached-data path also checks the marker to skip redundant fetches. Imported `getScopedItem`/`setScopedItem` from scoped storage.
+- **channelAnalysisCache.ts** — Channel analysis completion now invalidates the reference image marker so the next AdGenerator visit will re-fetch with fresh context.
+
+---
+
 ## 2026-04-08 — Import channel analysis between ad accounts
 
 ### What
