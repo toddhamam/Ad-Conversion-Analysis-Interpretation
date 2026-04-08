@@ -65,7 +65,41 @@ export function getAvailableImageImports(
       continue;
     }
 
-    // Source 2: Supabase metadata (no base64, cross-browser)
+    // Source 2+3: Check sync cache first (actionable — has fetchable URLs),
+    // then fall back to Supabase metadata (informational only).
+    // Sync cache is preferred because it lets the user actually import images.
+    const syncKey = `${SYNC_CACHE_KEY}_${account.ad_account_id}`;
+    let syncConverting: SyncCreative[] = [];
+    try {
+      const raw = localStorage.getItem(syncKey);
+      if (raw) {
+        const syncData = JSON.parse(raw) as { creatives?: SyncCreative[] };
+        syncConverting = (syncData.creatives || []).filter(
+          (c: SyncCreative) => (c.conversions ?? 0) > 0 && c.imageUrl
+        );
+      }
+    } catch {
+      // Corrupted sync cache — proceed with Supabase fallback
+    }
+
+    if (syncConverting.length > 0) {
+      let topConversions = 0;
+      let topCVR = 0;
+      for (const c of syncConverting) {
+        if (c.conversions > topConversions) topConversions = c.conversions;
+        if (c.conversionRate > topCVR) topCVR = c.conversionRate;
+      }
+      results.push({
+        account,
+        imageCount: Math.min(syncConverting.length, 20),
+        topConversions,
+        topCVR,
+        source: 'sync',
+      });
+      continue;
+    }
+
+    // Supabase metadata (no fetchable data — informational only, button disabled)
     const supabaseMeta: ReferenceImageMetadata[] = account.reference_image_metadata || [];
     if (supabaseMeta.length > 0) {
       let topConversions = 0;
@@ -75,36 +109,6 @@ export function getAvailableImageImports(
         if ((meta.conversionRate ?? 0) > topCVR) topCVR = meta.conversionRate ?? 0;
       }
       results.push({ account, imageCount: supabaseMeta.length, topConversions, topCVR, source: 'supabase' });
-      continue;
-    }
-
-    // Source 3: Meta Ads sync cache (creative list — images need fetching)
-    const syncKey = `${SYNC_CACHE_KEY}_${account.ad_account_id}`;
-    try {
-      const raw = localStorage.getItem(syncKey);
-      if (raw) {
-        const syncData = JSON.parse(raw) as { creatives?: SyncCreative[] };
-        const converting = (syncData.creatives || []).filter(
-          (c: SyncCreative) => (c.conversions ?? 0) > 0 && c.imageUrl
-        );
-        if (converting.length > 0) {
-          let topConversions = 0;
-          let topCVR = 0;
-          for (const c of converting) {
-            if (c.conversions > topConversions) topConversions = c.conversions;
-            if (c.conversionRate > topCVR) topCVR = c.conversionRate;
-          }
-          results.push({
-            account,
-            imageCount: Math.min(converting.length, 20),
-            topConversions,
-            topCVR,
-            source: 'sync',
-          });
-        }
-      }
-    } catch {
-      // Corrupted sync cache — skip
     }
   }
 
@@ -344,11 +348,17 @@ export default function ImportImagesModal({
                         </>
                       )}
                     </div>
+                    {source === 'supabase' && (
+                      <div className="import-account-warning">
+                        <span className="import-warning-icon">&#9888;</span>
+                        Sync this account's Meta Ads on this device to enable import.
+                      </div>
+                    )}
                   </div>
                   <button
                     className="import-account-btn"
                     onClick={() => handleImport(account, source)}
-                    disabled={isImported || importing}
+                    disabled={isImported || importing || source === 'supabase'}
                   >
                     {isImported ? `${importedCount} Imported` : importing ? 'Fetching...' : source === 'sync' ? 'Fetch & Import' : 'Import'}
                   </button>

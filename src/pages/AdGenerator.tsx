@@ -381,8 +381,7 @@ const AdGenerator = () => {
         minQuality: 60,
       });
 
-      const total = result.loaded + result.alreadyCached;
-      if (total > 0) {
+      if (result.loaded > 0) {
         const stats = getDetailedCacheStats();
         setImageCacheCount(stats.count);
         setRefTopConversions(stats.topConversions);
@@ -392,7 +391,8 @@ const AdGenerator = () => {
           saveReferenceImageMetadata(accountId, extractImageMetadata());
         }
       }
-      return total > 0 ? total : -1;
+      // Only count genuinely new images, not already-cached ones
+      return result.loaded > 0 ? result.loaded : (result.alreadyCached > 0 ? 0 : -1);
     }
 
     // source === 'supabase': metadata-only, no image data to import
