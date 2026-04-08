@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   fetchAdCreatives,
   detectCampaignType,
+  saveReferenceImageMetadata,
   type AdCreative,
   type DatePreset,
   type DateRangeOptions,
@@ -20,7 +21,8 @@ import {
   getAllCachedImages,
   storeImageFromUrl,
   clearLegacyCache,
-  autoFetchConvertingAdImages
+  autoFetchConvertingAdImages,
+  extractImageMetadata
 } from '../services/imageCache';
 import Loading from '../components/Loading';
 import { ArrowDownWideNarrow, Check, Database, Filter, Info, Layers, RefreshCw } from 'lucide-react';
@@ -562,9 +564,16 @@ const MetaAds = () => {
 
     console.log(`📸 Auto-fetch from sync: ${result.loaded} loaded, ${result.alreadyCached} already cached, ${result.failed} failed`);
 
+    // Persist metadata to Supabase so other accounts can see it for import
+    const accountId = currentAccount?.ad_account_id;
+    const metadata = extractImageMetadata();
+    if (accountId && metadata.length > 0) {
+      saveReferenceImageMetadata(accountId, metadata);
+    }
+
     refreshCachedIds();
     autoFetchingRefsRef.current = false;
-  }, [refreshCachedIds]);
+  }, [refreshCachedIds, currentAccount?.ad_account_id]);
 
   // Date range state - default to maximum for first-time users (overridden from cache on mount)
   const defaultPreset: DatePreset = 'maximum';
