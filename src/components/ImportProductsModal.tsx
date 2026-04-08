@@ -18,8 +18,11 @@ interface ImportProductsModalProps {
 const PRODUCTS_STORAGE_KEY = 'convertra_products';
 
 /**
- * Scan other activated accounts' localStorage for products.
- * Returns accounts that have at least one product.
+ * Scan other activated accounts for products.
+ * Checks localStorage first (full ProductContext with images), then falls back
+ * to Supabase metadata from account.products (no images but has name/author/description).
+ * This ensures products are discoverable even when localStorage doesn't have
+ * data for accounts configured in other sessions or browsers.
  */
 export function getAvailableProductImports(
   accounts: AdAccountInfo[],
@@ -30,15 +33,28 @@ export function getAvailableProductImports(
   for (const account of accounts) {
     if (account.ad_account_id === currentAccountId) continue;
 
+    // Primary: localStorage (full ProductContext with images)
     const key = `${PRODUCTS_STORAGE_KEY}_${account.ad_account_id}`;
     try {
       const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      const products = JSON.parse(raw) as ProductContext[];
-      if (!Array.isArray(products) || products.length === 0) continue;
-      results.push({ account, products });
+      if (raw) {
+        const products = JSON.parse(raw) as ProductContext[];
+        if (Array.isArray(products) && products.length > 0) {
+          results.push({ account, products });
+          continue;
+        }
+      }
     } catch {
-      // Skip corrupted entries
+      // Fall through to Supabase metadata
+    }
+
+    // Fallback: Supabase metadata from account.products (no images)
+    if (account.products && account.products.length > 0) {
+      const products: ProductContext[] = account.products.map(meta => ({
+        ...meta,
+        productImages: [],
+      }));
+      results.push({ account, products });
     }
   }
 
