@@ -18,8 +18,10 @@ interface ImportProductsModalProps {
 const PRODUCTS_STORAGE_KEY = 'convertra_products';
 
 /**
- * Scan other activated accounts' localStorage for products.
- * Returns accounts that have at least one product.
+ * Scan other activated accounts for products.
+ * Merges localStorage (full ProductContext with images) with Supabase metadata
+ * (account.products) so that products added from other sessions/browsers are
+ * always visible, while localStorage entries retain their images.
  */
 export function getAvailableProductImports(
   accounts: AdAccountInfo[],
@@ -30,15 +32,34 @@ export function getAvailableProductImports(
   for (const account of accounts) {
     if (account.ad_account_id === currentAccountId) continue;
 
+    // Load localStorage products (full data with images)
+    let localProducts: ProductContext[] = [];
     const key = `${PRODUCTS_STORAGE_KEY}_${account.ad_account_id}`;
     try {
       const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      const products = JSON.parse(raw) as ProductContext[];
-      if (!Array.isArray(products) || products.length === 0) continue;
-      results.push({ account, products });
+      if (raw) {
+        const parsed = JSON.parse(raw) as ProductContext[];
+        if (Array.isArray(parsed)) localProducts = parsed;
+      }
     } catch {
-      // Skip corrupted entries
+      // Corrupted localStorage — proceed with Supabase only
+    }
+
+    // Load Supabase metadata (authoritative, no images)
+    const supabaseProducts = account.products || [];
+
+    // Merge: use localStorage entries (have images) where they exist,
+    // then add any Supabase-only products (added from other sessions/browsers)
+    const localIds = new Set(localProducts.map(p => p.id));
+    const merged: ProductContext[] = [...localProducts];
+    for (const meta of supabaseProducts) {
+      if (!localIds.has(meta.id)) {
+        merged.push({ ...meta, productImages: [] });
+      }
+    }
+
+    if (merged.length > 0) {
+      results.push({ account, products: merged });
     }
   }
 
