@@ -47,7 +47,7 @@ import type { AdLibraryInspiration } from '../types';
 import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
 import { useAdAccount } from '../contexts/AdAccountContext';
 import { getCachedAnalysis, getImportMetadata, type ImportMetadata } from '../lib/channelAnalysisCache';
-import ImportImagesModal, { getAvailableImageImports, importImages } from '../components/ImportImagesModal';
+import ImportImagesModal, { getAvailableImageImports, importImages, getSyncCreatives } from '../components/ImportImagesModal';
 import SwipeLibraryPicker from '../components/SwipeLibraryPicker';
 import { fetchSwipeImage, type SwipeLibraryItem, type SwipeElementType } from '../services/swipeLibraryApi';
 import { reserveCredits, confirmCredits, refundCredits, InsufficientCreditsError, checkCredits } from '../services/stripeApi';
@@ -351,22 +351,52 @@ const AdGenerator = () => {
     setRefTopCVR(0);
   };
 
-  // Handle import of reference images from another account
-  const handleImageImport = useCallback((sourceAccountId: string): number => {
+  // Handle import of reference images from another account.
+  // Three sources: 'local' (instant copy), 'supabase' (metadata only), 'sync' (fetch from URLs).
+  const handleImageImport = useCallback(async (sourceAccountId: string, source: 'local' | 'supabase' | 'sync'): Promise<number> => {
     const accountId = currentAccount?.ad_account_id;
-    // Build the scoped key the same way scopedStorage does
     const currentCacheKey = accountId
       ? `conversion_intelligence_image_cache_${accountId}`
       : 'conversion_intelligence_image_cache';
 
-    const count = importImages(sourceAccountId, currentCacheKey);
-    if (count > 0) {
-      const stats = getDetailedCacheStats();
-      setImageCacheCount(stats.count);
-      setRefTopConversions(stats.topConversions);
-      setRefTopCVR(stats.topConversionRate);
+    if (source === 'local') {
+      // Fast path: copy pre-cached base64 images directly
+      const count = importImages(sourceAccountId, currentCacheKey);
+      if (count > 0) {
+        const stats = getDetailedCacheStats();
+        setImageCacheCount(stats.count);
+        setRefTopConversions(stats.topConversions);
+        setRefTopCVR(stats.topConversionRate);
+      }
+      return count;
     }
-    return count;
+
+    if (source === 'sync') {
+      // Fetch images from the source account's sync cache creatives
+      const creatives = getSyncCreatives(sourceAccountId);
+      if (creatives.length === 0) return -1;
+
+      const result = await autoFetchConvertingAdImages(creatives, {
+        maxImages: 20,
+        minQuality: 60,
+      });
+
+      if (result.loaded > 0) {
+        const stats = getDetailedCacheStats();
+        setImageCacheCount(stats.count);
+        setRefTopConversions(stats.topConversions);
+        setRefTopCVR(stats.topConversionRate);
+        // Persist metadata to Supabase for future cross-account imports
+        if (accountId) {
+          saveReferenceImageMetadata(accountId, extractImageMetadata());
+        }
+      }
+      // Only count genuinely new images, not already-cached ones
+      return result.loaded > 0 ? result.loaded : (result.alreadyCached > 0 ? 0 : -1);
+    }
+
+    // source === 'supabase': metadata-only, no image data to import
+    return -1;
   }, [currentAccount?.ad_account_id]);
 
   // Load products from scoped localStorage, falling back to Supabase metadata
