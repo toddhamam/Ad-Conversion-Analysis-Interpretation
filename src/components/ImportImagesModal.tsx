@@ -4,21 +4,33 @@ import type { CachedImage } from '../services/imageCache';
 import './ImportImagesModal.css';
 
 const IMAGE_CACHE_KEY = 'conversion_intelligence_image_cache';
+const SYNC_CACHE_KEY = 'ci_meta_ads_sync';
+
+/** Minimal creative info from the Meta Ads sync cache */
+interface SyncCreative {
+  id: string;
+  imageUrl?: string;
+  conversions: number;
+  conversionRate: number;
+  headline?: string;
+  bodySnippet?: string;
+}
 
 export interface AvailableImageImport {
   account: AdAccountInfo;
   imageCount: number;
   topConversions: number;
   topCVR: number;
-  /** true when full base64 data is in localStorage (fast import) */
-  hasLocalData: boolean;
+  /** Which data source is available for this account */
+  source: 'local' | 'supabase' | 'sync';
 }
 
 /**
  * Scan other activated accounts for available reference images.
- * Merges two sources (same pattern as product import):
- * - localStorage: full CachedImage with base64 (only available in the same browser)
- * - Supabase: ReferenceImageMetadata without base64 (always available via account.reference_image_metadata)
+ * Checks three sources in priority order:
+ * 1. localStorage image cache (full base64 data — instant import)
+ * 2. Supabase metadata (lightweight, always available cross-browser)
+ * 3. Meta Ads sync cache (creative list with imageUrls — needs fetch on import)
  */
 export function getAvailableImageImports(
   accounts: AdAccountInfo[],
@@ -29,50 +41,71 @@ export function getAvailableImageImports(
   for (const account of accounts) {
     if (account.ad_account_id === currentAccountId) continue;
 
-    // Source 1: localStorage (full data with base64)
+    // Source 1: localStorage image cache (full data with base64)
     let localImages: CachedImage[] = [];
-    const key = `${IMAGE_CACHE_KEY}_${account.ad_account_id}`;
+    const cacheKey = `${IMAGE_CACHE_KEY}_${account.ad_account_id}`;
     try {
-      const raw = localStorage.getItem(key);
+      const raw = localStorage.getItem(cacheKey);
       if (raw) {
         const parsed = JSON.parse(raw) as { images?: Record<string, CachedImage> };
         if (parsed.images) localImages = Object.values(parsed.images);
       }
     } catch {
-      // Corrupted localStorage — proceed with Supabase only
+      // Corrupted localStorage — proceed with other sources
     }
 
-    // Source 2: Supabase metadata (no base64, but always available)
-    const supabaseMeta: ReferenceImageMetadata[] = account.reference_image_metadata || [];
-
-    // Merge: localStorage has authoritative count when available,
-    // otherwise fall back to Supabase metadata
-    const imageCount = localImages.length > 0 ? localImages.length : supabaseMeta.length;
-    if (imageCount === 0) continue;
-
-    // Compute stats from whichever source has data
-    let topConversions = 0;
-    let topCVR = 0;
-
     if (localImages.length > 0) {
+      let topConversions = 0;
+      let topCVR = 0;
       for (const img of localImages) {
         if ((img.conversions ?? 0) > topConversions) topConversions = img.conversions ?? 0;
         if ((img.conversionRate ?? 0) > topCVR) topCVR = img.conversionRate ?? 0;
       }
-    } else {
+      results.push({ account, imageCount: localImages.length, topConversions, topCVR, source: 'local' });
+      continue;
+    }
+
+    // Source 2: Supabase metadata (no base64, cross-browser)
+    const supabaseMeta: ReferenceImageMetadata[] = account.reference_image_metadata || [];
+    if (supabaseMeta.length > 0) {
+      let topConversions = 0;
+      let topCVR = 0;
       for (const meta of supabaseMeta) {
         if ((meta.conversions ?? 0) > topConversions) topConversions = meta.conversions ?? 0;
         if ((meta.conversionRate ?? 0) > topCVR) topCVR = meta.conversionRate ?? 0;
       }
+      results.push({ account, imageCount: supabaseMeta.length, topConversions, topCVR, source: 'supabase' });
+      continue;
     }
 
-    results.push({
-      account,
-      imageCount,
-      topConversions,
-      topCVR,
-      hasLocalData: localImages.length > 0,
-    });
+    // Source 3: Meta Ads sync cache (creative list — images need fetching)
+    const syncKey = `${SYNC_CACHE_KEY}_${account.ad_account_id}`;
+    try {
+      const raw = localStorage.getItem(syncKey);
+      if (raw) {
+        const syncData = JSON.parse(raw) as { creatives?: SyncCreative[] };
+        const converting = (syncData.creatives || []).filter(
+          (c: SyncCreative) => (c.conversions ?? 0) > 0 && c.imageUrl
+        );
+        if (converting.length > 0) {
+          let topConversions = 0;
+          let topCVR = 0;
+          for (const c of converting) {
+            if (c.conversions > topConversions) topConversions = c.conversions;
+            if (c.conversionRate > topCVR) topCVR = c.conversionRate;
+          }
+          results.push({
+            account,
+            imageCount: Math.min(converting.length, 20),
+            topConversions,
+            topCVR,
+            source: 'sync',
+          });
+        }
+      }
+    } catch {
+      // Corrupted sync cache — skip
+    }
   }
 
   return results;
@@ -179,10 +212,28 @@ export function importImages(
   return imported;
 }
 
+/**
+ * Get converting creatives from another account's Meta Ads sync cache.
+ * Used when the source account has sync data but no pre-cached images.
+ */
+export function getSyncCreatives(sourceAccountId: string): SyncCreative[] {
+  const syncKey = `${SYNC_CACHE_KEY}_${sourceAccountId}`;
+  try {
+    const raw = localStorage.getItem(syncKey);
+    if (!raw) return [];
+    const syncData = JSON.parse(raw) as { creatives?: SyncCreative[] };
+    return (syncData.creatives || [])
+      .filter((c: SyncCreative) => (c.conversions ?? 0) > 0 && c.imageUrl)
+      .sort((a: SyncCreative, b: SyncCreative) => b.conversions - a.conversions || b.conversionRate - a.conversionRate);
+  } catch {
+    return [];
+  }
+}
+
 interface ImportImagesModalProps {
   availableImports: AvailableImageImport[];
   currentImageCount: number;
-  onImport: (sourceAccountId: string) => number;
+  onImport: (sourceAccountId: string, source: 'local' | 'supabase' | 'sync') => number | Promise<number>;
   onClose: () => void;
 }
 
@@ -195,19 +246,27 @@ export default function ImportImagesModal({
   const [error, setError] = useState<string | null>(null);
   const [importedAccountId, setImportedAccountId] = useState<string | null>(null);
   const [importedCount, setImportedCount] = useState(0);
+  const [importing, setImporting] = useState(false);
 
-  function handleImport(account: AdAccountInfo) {
+  async function handleImport(account: AdAccountInfo, source: 'local' | 'supabase' | 'sync') {
     setError(null);
-    const count = onImport(account.ad_account_id);
-    if (count > 0) {
-      setImportedAccountId(account.ad_account_id);
-      setImportedCount(count);
-      setTimeout(onClose, 800);
-    } else if (count === 0) {
-      setError('All images from this account already exist in your current cache.');
-    } else {
-      // count < 0 indicates a write/verification failure
-      setError('Import failed — try clearing old generated ads to free up storage.');
+    setImporting(true);
+    try {
+      const count = await onImport(account.ad_account_id, source);
+      if (count > 0) {
+        setImportedAccountId(account.ad_account_id);
+        setImportedCount(count);
+        setTimeout(onClose, 800);
+      } else if (count === 0) {
+        setError('All images from this account already exist in your current cache.');
+      } else {
+        // count < 0 indicates a write/verification failure
+        setError('Import failed — try clearing old generated ads to free up storage.');
+      }
+    } catch {
+      setError('Import failed — an unexpected error occurred.');
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -255,7 +314,7 @@ export default function ImportImagesModal({
           </div>
         ) : (
           <div className="import-modal-accounts">
-            {availableImports.map(({ account, imageCount, topConversions, topCVR, hasLocalData }) => {
+            {availableImports.map(({ account, imageCount, topConversions, topCVR, source }) => {
               const isImported = importedAccountId === account.ad_account_id;
 
               return (
@@ -266,7 +325,7 @@ export default function ImportImagesModal({
                     </div>
                     <div className="import-account-details">
                       <span className="import-detail">
-                        {imageCount} image{imageCount !== 1 ? 's' : ''}
+                        {imageCount} {source === 'sync' ? 'converting ad' : 'image'}{imageCount !== 1 ? 's' : ''}
                       </span>
                       {topConversions > 0 && (
                         <>
@@ -285,19 +344,13 @@ export default function ImportImagesModal({
                         </>
                       )}
                     </div>
-                    {!hasLocalData && (
-                      <div className="import-account-warning">
-                        <span className="import-warning-icon">&#9888;</span>
-                        Metadata only — sync this account's Meta Ads first for full image data.
-                      </div>
-                    )}
                   </div>
                   <button
                     className="import-account-btn"
-                    onClick={() => handleImport(account)}
-                    disabled={isImported || !hasLocalData}
+                    onClick={() => handleImport(account, source)}
+                    disabled={isImported || importing}
                   >
-                    {isImported ? `${importedCount} Imported` : 'Import'}
+                    {isImported ? `${importedCount} Imported` : importing ? 'Fetching...' : source === 'sync' ? 'Fetch & Import' : 'Import'}
                   </button>
                 </div>
               );
