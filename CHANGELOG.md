@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-04-08 — Fix product import data sourcing and write verification
+
+### What
+Fixed two issues with the cross-account product import: products from other accounts weren't showing in the import modal when they existed only in Supabase (not localStorage), and the save could silently fail on storage quota without surfacing an error.
+
+### Changes
+- **src/components/ImportProductsModal.tsx** — `getAvailableProductImports()` now merges localStorage (has images) with Supabase metadata (`account.products`) so products added from other sessions/browsers are always visible instead of hidden by stale local cache.
+- **src/pages/Products.tsx** — `saveProducts()` now verifies the write with a read-back check after `setScopedItem()`, catching cases where the storage quota is exceeded but the error is silently swallowed.
+
+---
+
 ## 2026-04-08 — Import products between ad accounts
 
 ### What
