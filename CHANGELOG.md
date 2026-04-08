@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-04-08 — Import channel analysis between ad accounts
+
+### What
+Multi-account orgs can now import a ConversionIQ channel analysis from one ad account into another. This solves the cold-start problem for new or low-spend ad accounts — instead of running analysis on sparse data, users can import proven creative patterns from an established account to immediately inform CreativeIQ ad generation.
+
+### Changes
+- **src/lib/channelAnalysisCache.ts** (new) — Shared cache module consolidating duplicated `getCachedAnalysis`/`setCachedAnalysis` from Insights and AdGenerator. Adds `getAvailableImports()` to scan other accounts' localStorage for analyses, `importAnalysis()` to copy analysis with target business type and per-channel provenance metadata, `getImportMetadata()`/`clearImportMetadata()` for provenance tracking. Import provenance is stored per-channel (`_importedFrom_meta`, `_importedFrom_google`, etc.) so future channels don't interfere.
+- **src/components/ImportAnalysisModal.tsx** (new) — Modal listing other accounts that have analysis available, showing account name, analysis date, health score, and ad count. Yellow warning for business type mismatches. Error state for storage quota failures. Follows CreditExhaustionModal overlay/card pattern.
+- **src/components/ImportAnalysisModal.css** (new) — Modal styles with responsive mobile layout.
+- **src/pages/Insights.tsx** — Added "Import from Account" button in analysis controls (multi-account only). Added provenance banner showing source account name and date when viewing imported analysis. Added import link in empty state. Native analysis clears import provenance for that channel only. Migrated to shared cache module.
+- **src/pages/Insights.css** — Styles for import button, provenance banner, empty state import link with responsive breakpoints.
+- **src/pages/AdGenerator.tsx** — Status bar now shows "from [Account Name]" when using imported analysis. "No analysis" state mentions import option for multi-account orgs. Migrated to shared cache module.
+
+### Key design decisions
+- Import costs 0 credits (localStorage copy, no AI calls)
+- Business type mismatches: warned but allowed; target's business type is written to avoid cache invalidation
+- Phase 1 is same-browser only; server-side persistence is a future enhancement
+- `ChannelAnalysisResult` type is unchanged — provenance lives in the cache envelope, so zero changes to the AI generation pipeline
+
+---
+
 ## 2026-04-07 — Auto-load converting ad reference images for CreativeIQ generation
 
 ### What
