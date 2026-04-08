@@ -27,6 +27,14 @@ function saveProducts(products: ProductContext[]): { success: boolean; error?: s
     const sizeKB = (json.length / 1024).toFixed(0);
     console.log(`[Products] Saving ${products.length} product(s) (${sizeKB}KB)`);
     setScopedItem(STORAGE_KEY, json);
+    // Verify write succeeded — setScopedItem swallows quota errors after retry
+    const verify = getScopedItem(STORAGE_KEY);
+    if (verify !== json) {
+      return {
+        success: false,
+        error: 'Storage limit exceeded. Try removing some product images or reducing image quality.',
+      };
+    }
     return { success: true };
   } catch (err) {
     console.error('[Products] Failed to save:', err);
