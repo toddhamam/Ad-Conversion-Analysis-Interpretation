@@ -534,14 +534,9 @@ const AdGenerator = () => {
 
   // Auto-fetch converting ad images when account resolves or changes
   const lastFetchedAccountRef = useRef<string | null>(null);
-  useEffect(() => {
-    const accountId = currentAccount?.ad_account_id || 'default';
+  const pendingAccountRef = useRef<string | null>(null);
 
-    // Skip if we already fetched for this account
-    if (lastFetchedAccountRef.current === accountId) return;
-    // Skip if another fetch is in progress
-    if (autoFetchTriggeredRef.current) return;
-
+  const runAutoFetch = useCallback((accountId: string) => {
     // Refresh cache stats for the (possibly new) account
     const imageStats = getImageCacheStats();
     setImageCacheCount(imageStats.count);
@@ -559,7 +554,6 @@ const AdGenerator = () => {
       );
       if (convertingCreatives.length === 0) return;
 
-      // Mark this account as fetching
       lastFetchedAccountRef.current = accountId;
       autoFetchTriggeredRef.current = true;
       setIsAutoFetchingRefs(true);
@@ -582,11 +576,32 @@ const AdGenerator = () => {
         setIsAutoFetchingRefs(false);
         setAutoFetchProgress(null);
         autoFetchTriggeredRef.current = false;
+        // If account changed while we were fetching, re-trigger for the new account
+        if (pendingAccountRef.current && pendingAccountRef.current !== accountId) {
+          const next = pendingAccountRef.current;
+          pendingAccountRef.current = null;
+          runAutoFetch(next);
+        }
       });
     } catch {
       // Non-critical — sync cache may not exist yet
     }
-  }, [currentAccount?.ad_account_id]);
+  }, []);
+
+  useEffect(() => {
+    const accountId = currentAccount?.ad_account_id || 'default';
+
+    // Skip if we already fetched for this account
+    if (lastFetchedAccountRef.current === accountId) return;
+
+    // If a fetch is in progress for a different account, queue this one
+    if (autoFetchTriggeredRef.current) {
+      pendingAccountRef.current = accountId;
+      return;
+    }
+
+    runAutoFetch(accountId);
+  }, [currentAccount?.ad_account_id, runAutoFetch]);
 
   // Save generated ads to localStorage whenever they change
   // Uses short setTimeout to avoid blocking the main thread during renders

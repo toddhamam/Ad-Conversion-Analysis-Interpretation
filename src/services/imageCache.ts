@@ -72,11 +72,25 @@ function saveCache(cache: ImageCache): void {
     // Keep cache size manageable - store up to 20 images
     const imageIds = Object.keys(cache.images);
     if (imageIds.length > 20) {
+      const allImages = imageIds.map(id => cache.images[id]);
+
+      // Find the highest-converting image (by absolute count) to protect it from eviction
+      let highestConvImg: CachedImage | null = null;
+      for (const img of allImages) {
+        if ((img.conversions ?? 0) > (highestConvImg?.conversions ?? 0)) {
+          highestConvImg = img;
+        }
+      }
+
       // Sort by conversion rate and keep top 20
-      const sortedImages = imageIds
-        .map(id => cache.images[id])
+      const sortedImages = allImages
         .sort((a, b) => (b.conversionRate || 0) - (a.conversionRate || 0))
         .slice(0, 20);
+
+      // Ensure highest-converting image is retained even if its CVR is low
+      if (highestConvImg && (highestConvImg.conversions ?? 0) > 0 && !sortedImages.includes(highestConvImg)) {
+        sortedImages[sortedImages.length - 1] = highestConvImg;
+      }
 
       cache.images = {};
       sortedImages.forEach(img => {
@@ -662,8 +676,8 @@ export async function autoFetchConvertingAdImages(
     // Check if already cached with sufficient quality
     const existing = getCachedImage(creative.id);
     if (existing && (existing.qualityScore ?? 0) >= minQuality) {
-      // Update conversions data if missing on existing cache entry
-      if (existing.conversions === undefined && creative.conversions > 0) {
+      // Always refresh conversion metadata so stats stay current after re-syncs
+      if (existing.conversions !== creative.conversions || existing.conversionRate !== creative.conversionRate) {
         const cache = getCache();
         cache.images[creative.id] = { ...existing, conversions: creative.conversions, conversionRate: creative.conversionRate };
         saveCache(cache);
