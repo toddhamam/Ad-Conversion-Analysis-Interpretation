@@ -88,8 +88,11 @@ async function openaiProxy(
     }
   } catch (err: unknown) {
     if (fullContent) {
-      // Partial content is still usable — return what we have
-      console.warn('⚠️ SSE stream interrupted, returning partial content');
+      // Stream was interrupted (e.g. Vercel function timeout) — content is incomplete.
+      // Mark as truncated so callOpenAI's finish_reason check can surface a proper error
+      // instead of letting partial JSON silently fail during parsing.
+      console.warn('⚠️ SSE stream interrupted, returning partial content as truncated');
+      finishReason = 'length';
     } else {
       return new Response(JSON.stringify({
         error: { message: err instanceof Error ? err.message : 'AI stream failed' },
@@ -126,8 +129,8 @@ const DEFAULT_VISION_MODEL = 'gpt-5.4'; // GPT-5.4 has multimodal vision support
 
 // Reasoning configuration for GPT-5.4
 // All OpenAI calls now route through the backend proxy (api/meta.ts) which has
-// a 60-second Vercel function timeout (Hobby plan max). 'medium' keeps most
-// calls within that window; 'high'/'xhigh' risk FUNCTION_INVOCATION_TIMEOUT.
+// a 300-second Vercel function timeout. 'medium' keeps most calls well within
+// that window; 'high'/'xhigh' may approach the limit on complex prompts.
 type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'medium';
 const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'medium';
@@ -2873,8 +2876,15 @@ Return JSON only:
     return parsed;
   } catch (error) {
     console.error('❌ Failed to parse copy options:', error);
-    console.error('❌ Raw response (first 500 chars):', response.substring(0, 500));
-    throw new Error('Failed to generate copy options');
+    console.error('❌ Raw response length:', response.length, '| first 500 chars:', response.substring(0, 500));
+    // Surface a more specific message if the response looks truncated
+    if (!response || response.length === 0) {
+      throw new Error('Failed to generate copy options — AI returned an empty response. Please try again.');
+    }
+    if (response.length > 0 && !response.trim().endsWith('}')) {
+      throw new Error('Failed to generate copy options — AI response was cut short. Please try again.');
+    }
+    throw new Error('Failed to generate copy options — AI returned invalid data. Please try again.');
   }
 }
 

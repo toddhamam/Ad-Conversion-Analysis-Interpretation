@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-04-09 — Fix long-form copy generation timeout
+
+### What
+Long-form body copy generation ("Failed to generate copy options") was broken because the Vercel function timeout was too short. GPT-5.4 reasoning + long-form output (500-char body texts with multi-step arcs) consistently exceeded the 60-second limit, causing the SSE stream to be truncated mid-response. Short-form worked because its smaller prompt and 125-char output fit within the window.
+
+### Changes
+- **vercel.json** — Increased `maxDuration` from 60 to 300 seconds for `api/meta.ts`. Vercel now supports 300s on all plans; the 60s limit was outdated.
+- **src/services/openaiApi.ts** — When an SSE stream is interrupted with partial content, now sets `finishReason = 'length'` instead of silently defaulting to `'stop'`. This ensures truncation is properly detected and surfaced instead of failing with a generic JSON parse error.
+- **src/services/openaiApi.ts** — Improved error messages in `generateCopyOptions` catch block: distinguishes empty responses, truncated responses, and invalid data instead of the generic "Failed to generate copy options".
+- **src/services/openaiApi.ts** — Updated outdated comment about 60-second timeout to reflect 300-second limit.
+
+---
+
 ## 2026-04-08 — Fix product import data sourcing and write verification
 
 ### What
