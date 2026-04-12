@@ -1,5 +1,43 @@
 # Changelog
 
+## 2026-04-12 — Add LLM-maintained wiki knowledge base (Karpathy Wiki pattern)
+
+### What
+Set up a structured, agent-powered wiki at `.claude/wiki/` following Andrej Karpathy's LLM Wiki pattern. The LLM owns the wiki layer entirely — it creates pages, updates them, maintains cross-references, and keeps everything consistent. The human reads it via Obsidian; the LLM writes it.
+
+### Wiki Infrastructure
+- **`.claude/wiki/WIKI-CLAUDE.md`** — Schema and rules ("constitution") governing all wiki operations
+- **`.claude/wiki/index.md`** — Master index cataloging all 8 domains and 48 pages
+- **`.claude/wiki/log.md`** — Append-only chronological record of wiki operations
+- **`.claude/wiki/hot.md`** — ~500-word hot cache of most recent context for quick agent orientation
+- **`.claude/wiki/raw/`** — 12 immutable source documents staged for ingestion
+- **`.claude/wiki/domains/`** — 8 knowledge domains with cross-referenced wiki pages
+
+### Skill & Command
+- **`.claude/skills/wiki-query.md`** — Agent skill for query, ingest, and lint operations
+- **`.claude/commands/wiki.md`** — `/wiki` slash command dispatcher
+
+### Domains Created (8 domains, 48 pages)
+- **architecture** (8 pages) — System design, APIs, JWT auth, Supabase, multi-tenant credentials, Vercel deployment
+- **meta-ads** (6 pages) — Meta API proxy, ad publishing, rate limits, Ad Library, OAuth (FLB), App Review
+- **ai-integration** (5 pages) — GPT-5.4, Gemini image gen, creative pipeline, product context, SEO IQ
+- **billing** (3 pages) — Stripe checkout, subscription gating, known pitfalls
+- **product-strategy** (8 pages) — Philosophy, branding, code quality, UX, SEO/GEO, AI feature standards
+- **ci-cd** (4 pages) — PR review, Sentry monitoring, health monitor, auto-fix
+- **outreach** (10 pages) — Cold email strategy, PWOC framework, enrichment, warmup, templates, orchestrator
+- **infrastructure** (4 pages) — VPS deployment, OpenClaw architecture, Leads CLI, cron automation
+
+### Sources Ingested (12)
+`claude-md.md`, `rules-md.md`, `operations-guide.md`, `ops-runbook.md`, `cold-email-resources.md`, plus 7 OpenClaw skill definitions (cold-outreach, lead-enrichment, email-warmup, follow-up-sequences, gmail-send, gmail-read, prospect-research)
+
+### Obsidian Integration
+Created symlink at `~/Documents/Obsidian-Vaults/Convertra-Wiki → .claude/wiki/` for live Obsidian browsing. All `[[wikilinks]]` are Obsidian-compatible. Changes to the wiki appear in Obsidian immediately via the symlink.
+
+### CLAUDE.md Updated
+Added comprehensive wiki section documenting current state, commands, ingestion workflow, Obsidian integration, and the symlink path.
+
+---
+
 ## 2026-04-12 — Integrate Anthropic Managed Agents into outreach pipeline
 
 ### What
