@@ -14,6 +14,11 @@ EXPERIMENTS_PATH = DATA_DIR / "experiments.json"
 RESOURCES_PATH = DATA_DIR / "resources.md"
 ENV_PATH = BASE_DIR / ".env"
 
+# Managed Agents data files
+AGENT_LEARNINGS_PATH = DATA_DIR / "agent_learnings.json"
+AGENT_SHADOW_LOG_PATH = DATA_DIR / "agent_shadow_log.json"
+AGENT_COST_LEDGER_PATH = DATA_DIR / "agent_cost_ledger.json"
+
 # Meta Graph API
 GRAPH_API_VERSION = "v24.0"
 GRAPH_API_BASE = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
@@ -77,6 +82,20 @@ def save_config(config):
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with open(CONFIG_PATH, "w") as f:
         json.dump(config, f, indent=2)
+
+
+def get_anthropic_key():
+    """Get Anthropic API key from environment."""
+    return os.environ.get("ANTHROPIC_API_KEY", "")
+
+
+def agents_configured():
+    """Check if managed agents environment variables are set."""
+    return bool(
+        os.environ.get("ANTHROPIC_API_KEY")
+        and os.environ.get("AGENT_ENVIRONMENT_ID")
+        and os.environ.get("USE_MANAGED_AGENTS", "").lower() == "true"
+    )
 
 
 def _default_config():

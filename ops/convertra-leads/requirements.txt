@@ -5,3 +5,5 @@ ddgs>=8.0.0
 # transitive dep of ddgs — not declared in its package metadata, causes silent
 # ModuleNotFoundError crashes without it (discovered 2026-03-05)
 typing_extensions==4.15.0
+# Managed Agents API — raw HTTP + SSE streaming (avoids anthropic SDK version churn)
+httpx>=0.27.0

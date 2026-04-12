@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-04-12 — Integrate Anthropic Managed Agents into outreach pipeline
+
+### What
+Added a managed agents integration layer to the Convertra Leads outreach pipeline. The system can now optionally use Anthropic's hosted AI agents for deep prospect research, adaptive email drafting, and intelligent reply classification — with automatic fallback to the existing deterministic modules when agents are disabled, unavailable, or over budget.
+
+### New Files
+- **`ops/convertra-leads/spike_agent.py`** — Phase 0 standalone script to prove the Managed Agents SSE event loop works from VPS before touching production code
+- **`ops/convertra-leads/modules/agents.py`** — Core integration layer: SSE streaming event loop, custom tool round-trips, feature flags (`USE_MANAGED_AGENTS`, `AGENT_SHADOW_MODE`), daily budget cap with auto-fallback, PII-minimized message builders, and shadow mode comparison logging
+- **`ops/convertra-leads/data/agent_learnings.json`** — Empty accumulator for drafter outcome learnings (pre-memory store)
+- **`ops/convertra-leads/tests/test_agents.py`** — 8 unit test classes covering custom tool roundtrips, classifier stage mapping, fallback behavior, budget enforcement, shadow mode no-write policy, session timeouts, schema validation, and hook provenance
+
+### Modified Files
+- **`ops/convertra-leads/config.py`** — Added `AGENT_*_PATH` constants, `get_anthropic_key()`, `agents_configured()` helpers
+- **`ops/convertra-leads/requirements.txt`** — Added `httpx>=0.27.0` for raw HTTP + SSE streaming
+- **`ops/convertra-leads/orchestrator.py`** — Added 3 wrapper functions (`_run_research`, `_run_drafting`, `_run_classification`) that encapsulate agent-first-with-fallback logic; replaced all 8 direct `batch_research()`/`batch_draft()`/`_classify_reply()` call sites; `company_intel` merges via `.update()` to preserve Ad Library fields
+- **`ops/convertra-leads/modules/drafter.py`** — Renamed `_build_prompt()` → `build_prompt()` for agent reuse
+
+### Architecture
+- Agents run on Anthropic's infrastructure (8GB containers), not on VPS
+- `USE_MANAGED_AGENTS=false` reverts everything instantly — zero risk
+- `AGENT_SHADOW_MODE=true` runs both paths, logs comparison, uses fallback result
+- `$5/day` budget cap auto-disables agents when exceeded
+- Agent tools restricted to `web_search` + `web_fetch` only (no bash/file access)
+- Classification mapping: POSITIVE→replied_interested, DEFERRAL→replied_not_now, NEGATIVE→replied_not_interested, UNSUBSCRIBE→opted_out
+
+---
+
 ## 2026-04-09 — Fix long-form copy generation timeout
 
 ### What
