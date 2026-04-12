@@ -27,6 +27,130 @@ Added a managed agents integration layer to the Convertra Leads outreach pipelin
 
 ---
 
+## 2026-04-09 — Fix long-form copy generation timeout
+
+### What
+Long-form body copy generation ("Failed to generate copy options") was broken because the Vercel function timeout was too short. GPT-5.4 reasoning + long-form output (500-char body texts with multi-step arcs) consistently exceeded the 60-second limit, causing the SSE stream to be truncated mid-response. Short-form worked because its smaller prompt and 125-char output fit within the window.
+
+### Changes
+- **vercel.json** — Increased `maxDuration` from 60 to 300 seconds for `api/meta.ts`. Vercel now supports 300s on all plans; the 60s limit was outdated.
+- **src/services/openaiApi.ts** — When an SSE stream is interrupted with partial content, now sets `finishReason = 'length'` instead of silently defaulting to `'stop'`. This ensures truncation is properly detected and surfaced instead of failing with a generic JSON parse error.
+- **src/services/openaiApi.ts** — Improved error messages in `generateCopyOptions` catch block: distinguishes empty responses, truncated responses, and invalid data instead of the generic "Failed to generate copy options".
+- **src/services/openaiApi.ts** — Updated outdated comment about 60-second timeout to reflect 300-second limit.
+
+---
+
+## 2026-04-08 — Fix product import data sourcing and write verification
+
+### What
+Fixed two issues with the cross-account product import: products from other accounts weren't showing in the import modal when they existed only in Supabase (not localStorage), and the save could silently fail on storage quota without surfacing an error.
+
+### Changes
+- **src/components/ImportProductsModal.tsx** — `getAvailableProductImports()` now merges localStorage (has images) with Supabase metadata (`account.products`) so products added from other sessions/browsers are always visible instead of hidden by stale local cache.
+- **src/pages/Products.tsx** — `saveProducts()` now verifies the write with a read-back check after `setScopedItem()`, catching cases where the storage quota is exceeded but the error is silently swallowed.
+
+---
+
+## 2026-04-08 — Import products between ad accounts
+
+### What
+Multi-account orgs can now import products (with mockup images) from one ad account into another. Available in the Integrations configure panel, the standalone Products page, and the AdGenerator empty state. Supports individual product selection, duplicate detection, and storage quota error handling.
+
+### Changes
+- **src/components/ImportProductsModal.tsx** (new) — Modal with per-product checkboxes, product thumbnails, "Already exists" badge for duplicates, "Select all" per account (skips duplicates), storage error handling.
+- **src/components/ImportProductsModal.css** (new) — Modal styles with responsive layout.
+- **src/components/ProductConfigurator.tsx** — Added "Import from Account" button in both empty state and inline with existing products. Uses `useAdAccount()` for multi-account detection.
+- **src/components/ProductConfigurator.css** — Styles for import button and action layouts.
+- **src/pages/Products.tsx** — Added import button in header and import link in empty state.
+- **src/pages/Products.css** — Styles for import button and empty state link.
+- **src/pages/AdGenerator.tsx** — Split analysis load into own `useEffect` with `[businessType]` dependency so it re-runs when the authoritative business type resolves after mount.
+
+---
+
+## 2026-04-08 — Persist reference images across page visits
+
+### What
+Reference images now stay cached and don't re-sync every time you visit the Ad Generator. Previously, navigating to CreativeIQ triggered a full image re-fetch (showing the loading progress bar) because the "already fetched" guard was stored in memory and reset on every page mount. Now, once 20/20 reference images are loaded, they persist until you run a new Meta Ads sync or channel analysis.
+
+### Changes
+- **AdGenerator.tsx** — Added a persistent localStorage marker (`ci_ref_fetch_marker`) that tracks which account + sync version the image cache was built from. `runAutoFetch` now checks this marker before fetching — if the cache is already current, it skips entirely. Marker is cleared when the user manually clears the image cache.
+- **MetaAds.tsx** — Fresh syncs save the marker after image fetch completes. Mount-from-cached-data path also checks the marker to skip redundant fetches. Imported `getScopedItem`/`setScopedItem` from scoped storage.
+- **channelAnalysisCache.ts** — Channel analysis completion now invalidates the reference image marker so the next AdGenerator visit will re-fetch with fresh context.
+
+---
+
+## 2026-04-08 — Import channel analysis between ad accounts
+
+### What
+Multi-account orgs can now import a ConversionIQ channel analysis from one ad account into another. This solves the cold-start problem for new or low-spend ad accounts — instead of running analysis on sparse data, users can import proven creative patterns from an established account to immediately inform CreativeIQ ad generation.
+
+### Changes
+- **src/lib/channelAnalysisCache.ts** (new) — Shared cache module consolidating duplicated `getCachedAnalysis`/`setCachedAnalysis` from Insights and AdGenerator. Adds `getAvailableImports()` to scan other accounts' localStorage for analyses, `importAnalysis()` to copy analysis with target business type and per-channel provenance metadata, `getImportMetadata()`/`clearImportMetadata()` for provenance tracking. Import provenance is stored per-channel (`_importedFrom_meta`, `_importedFrom_google`, etc.) so future channels don't interfere.
+- **src/components/ImportAnalysisModal.tsx** (new) — Modal listing other accounts that have analysis available, showing account name, analysis date, health score, and ad count. Yellow warning for business type mismatches. Error state for storage quota failures. Follows CreditExhaustionModal overlay/card pattern.
+- **src/components/ImportAnalysisModal.css** (new) — Modal styles with responsive mobile layout.
+- **src/pages/Insights.tsx** — Added "Import from Account" button in analysis controls (multi-account only). Added provenance banner showing source account name and date when viewing imported analysis. Added import link in empty state. Native analysis clears import provenance for that channel only. Migrated to shared cache module.
+- **src/pages/Insights.css** — Styles for import button, provenance banner, empty state import link with responsive breakpoints.
+- **src/pages/AdGenerator.tsx** — Status bar now shows "from [Account Name]" when using imported analysis. "No analysis" state mentions import option for multi-account orgs. Migrated to shared cache module.
+
+### Key design decisions
+- Import costs 0 credits (localStorage copy, no AI calls)
+- Business type mismatches: warned but allowed; target's business type is written to avoid cache invalidation
+- Phase 1 is same-browser only; server-side persistence is a future enhancement
+- `ChannelAnalysisResult` type is unchanged — provenance lives in the cache envelope, so zero changes to the AI generation pipeline
+
+---
+
+## 2026-04-08 — Fix reference image fetching and robustness
+
+### What
+Fixed the auto-load reference images feature: images were stuck at "0 of 20" because both third-party CORS proxies (corsproxy.io, allorigins.win) are down. Also fixed account-switch races, stale conversion metadata, and cache eviction dropping the highest-converting image.
+
+### Changes
+- **imageCache.ts** — Now fetches images via the existing backend `/api/meta/image-fetch` route (server-side, no CORS) as the primary method, with broken CORS proxies as last-resort fallback. Cache eviction now protects the highest-converting image from being dropped. Conversion metadata is always refreshed on re-syncs (not just when undefined). Added `buildCachedImage` helper to deduplicate quality-check logic.
+- **AdGenerator.tsx** — Extracted auto-fetch into a `runAutoFetch` callback. Account switches during in-flight fetches now queue the new account ID and re-trigger automatically when the current fetch completes (via `pendingAccountRef`).
+
+---
+
+## 2026-04-07 — Auto-load converting ad reference images for CreativeIQ generation
+
+### What
+CreativeIQ Ad Generator now automatically loads reference images from your converting ads (synced via Meta Ads) instead of requiring manual uploads. The system notes each image's conversion count and CVR, passes this data to Gemini so it prioritizes the visual patterns from your highest-performing ads.
+
+### Changes
+- **imageCache.ts** — Added `conversions` field to `CachedImage`. New `getDetailedCacheStats()` returns top conversion count, top CVR, and best-performer ad IDs. New shared `autoFetchConvertingAdImages()` function fetches up to 20 converting ad images (sorted by conversion count, then CVR). Updated `getTopHighQualityCachedImages()` to ensure the highest-converting image (by absolute count) is always in the reference set, even if another image has a higher CVR.
+- **AdGenerator.tsx** — Auto-loads reference images on mount by reading the Meta Ads sync cache from localStorage. Reactive to account changes (re-triggers when `currentAccount` resolves or switches). UI shows loading progress, conversion stats (best conversions count + highest CVR), and links to sync Meta Ads when no data exists.
+- **openaiApi.ts** — New `buildRefConversionContext()` generates per-image conversion metadata (labels HIGHEST CONVERTING / HIGHEST CVR). Gemini prompt now includes "CONVERSION PERFORMANCE DATA" section telling the model to prioritize visual patterns from the best-performing references. Both single-image and batch generation paths pass conversion context.
+- **MetaAds.tsx** — Replaced 90-line manual `autoFetchTopImages` with a slim wrapper around the shared `autoFetchConvertingAdImages()` (max 20 images). "Use as Reference" button now passes `conversions` count.
+- **AdGenerator.css** — Added `.analysis-status.loading-data` violet-themed class for auto-fetch loading state.
+
+---
+
+## 2026-03-27 — Remove YouTube transcript analysis feature
+
+### What
+Removed the "From YouTube" copy source from CreativeIQ. The feature was too complex to implement well internally — better suited for an external Opus-style service.
+
+### Changes
+- **api/meta.ts** — Removed 4 route cases (`youtube-transcript`, `video-direct-start`, `video-direct-transfer`, `video-direct-finish`) and their handler functions.
+- **src/services/openaiApi.ts** — Removed `YouTubeAnalysis` interface, `fetchYouTubeTranscript()`, `analyzeYouTubeTranscript()`, and all `youtubeAnalysis` config threading through image/video generation functions.
+- **src/pages/AdGenerator.tsx** — Removed `'youtube'` from `CopySource` type, YouTube state variables, `handleYouTubeAnalyze()` handler, and "From YouTube" button/UI.
+- **src/pages/AdGenerator.css** — Reverted `.copy-source-options` grid back to `repeat(4, 1fr)`.
+
+---
+## 2026-03-25 — Add 4:5 Meta Feed video aspect ratio and improve video ad prompts
+
+### What
+Added 4:5 aspect ratio as the default video format for CreativeIQ video ads — the optimal ratio for Facebook and Instagram feed placements. Also improved the Veo 3.1 video prompt for higher-converting ads with better pacing, hook structure, and mute-friendly direction.
+
+### How it works
+Veo 3.1 only supports 16:9 and 9:16 natively. When 4:5 is selected, the system generates at 9:16 with a prompt constraint that keeps all important content (faces, text, product) in the center 70% of the frame. The preview uses CSS `object-fit: cover` with a 4:5 aspect ratio to show an accurate representation of how the ad will appear in Meta feeds. Meta receives the full 9:16 video and auto-crops per placement — feed shows the 4:5 center, stories/reels get the full frame.
+
+### Changes
+- **openaiApi.ts** — Added `'4:5'` to `VideoAspectRatio` type. Added "Meta Feed" option (first in list, default). When 4:5 is selected, Veo receives `9:16` with a "CRITICAL FRAMING CONSTRAINT" prompt section. Improved video structure prompt: added pattern interrupt (0-1s), faster pacing guidance (cut every 1.5-2s), caption/mute awareness, and UGC-specific direction.
+- **GeneratedAdCard.tsx** — Added CSS-based 4:5 cropping via `object-fit: cover` and `aspect-ratio: 4/5` for videos with 4:5 aspect ratio.
+
+---
+
 ## 2026-03-24 — Add "From Swipe Library" as a first-class CreativeIQ copy source
 
 ### What

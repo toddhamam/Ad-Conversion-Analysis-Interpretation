@@ -120,6 +120,91 @@
   color: var(--text-secondary);
 }
 
+/* Import from Account button */
+.import-analysis-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.import-analysis-btn:hover:not(:disabled) {
+  border-color: var(--accent-violet);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.import-analysis-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Import Provenance Banner */
+.import-provenance-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(168, 85, 247, 0.05);
+  border: 1px solid rgba(168, 85, 247, 0.15);
+  border-radius: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.provenance-icon {
+  color: var(--accent-violet);
+  flex-shrink: 0;
+}
+
+.provenance-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.provenance-text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.provenance-type-note {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.provenance-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* Empty state import link */
+.import-empty-link {
+  margin-top: 16px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--accent-violet);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.import-empty-link:hover {
+  color: var(--text-primary);
+}
+
 /* Error State */
 .insights-error {
   display: flex;
@@ -425,6 +510,24 @@
     width: 100%;
     justify-content: center;
     min-height: 44px;
+  }
+
+  .import-analysis-btn {
+    padding: 12px 20px;
+    font-size: 13px;
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .import-provenance-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .provenance-hint {
+    margin-left: 0;
   }
 
   .insight-card {

@@ -1,0 +1,32 @@
+/* ImportImagesModal extends the shared .import-modal-* classes from ImportAnalysisModal.css.
+   Only additional styles specific to the image import modal are defined here. */
+
+.import-images-current {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.import-modal-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.import-progress-spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

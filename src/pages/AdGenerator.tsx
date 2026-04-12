@@ -35,8 +35,8 @@ import {
 } from '../services/openaiApi';
 import { TEXT_AD_STYLES, getDefaultStyleId, generateTextAdImage, getStyleById, registerCustomBrandStyle, CUSTOM_BRAND_ID } from '../services/textAdCanvas';
 import type { TextAdStyle } from '../services/textAdCanvas';
-import { getCacheStats as getImageCacheStats, uploadBrandImages, clearImageCache } from '../services/imageCache';
-import { fetchAdCreatives, type DatePreset } from '../services/metaApi';
+import { getCacheStats as getImageCacheStats, getDetailedCacheStats, uploadBrandImages, clearImageCache, autoFetchConvertingAdImages, extractImageMetadata } from '../services/imageCache';
+import { fetchAdCreatives, saveReferenceImageMetadata, type DatePreset } from '../services/metaApi';
 import GeneratedAdCard from '../components/GeneratedAdCard';
 import CopySelectionPanel from '../components/CopySelectionPanel';
 import AdLibraryBrowser from '../components/AdLibraryBrowser';
@@ -46,6 +46,8 @@ import { setPublishData } from '../services/publishStore';
 import type { AdLibraryInspiration } from '../types';
 import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
 import { useAdAccount } from '../contexts/AdAccountContext';
+import { getCachedAnalysis, getImportMetadata, type ImportMetadata } from '../lib/channelAnalysisCache';
+import ImportImagesModal, { getAvailableImageImports, importImages, getSyncCreatives } from '../components/ImportImagesModal';
 import SwipeLibraryPicker from '../components/SwipeLibraryPicker';
 import { fetchSwipeImage, type SwipeLibraryItem, type SwipeElementType } from '../services/swipeLibraryApi';
 import { reserveCredits, confirmCredits, refundCredits, InsufficientCreditsError, checkCredits } from '../services/stripeApi';
@@ -53,10 +55,10 @@ import type { CreditActionType, CampaignIntent } from '../types/organization';
 import CreditExhaustionModal from '../components/CreditExhaustionModal';
 import './AdGenerator.css';
 
-const CACHE_KEY = 'channel_analysis_cache';
 const GENERATED_ADS_STORAGE_KEY = 'conversion_intelligence_generated_ads';
 const PRODUCTS_STORAGE_KEY = 'convertra_products';
 const INSPIRATIONS_STORAGE_KEY = 'ci_ad_library_inspirations';
+const REF_FETCH_MARKER_KEY = 'ci_ref_fetch_marker';
 const MAX_SAVED_INSPIRATIONS = 20;
 const MAX_ACTIVE_INSPIRATIONS = 5;
 
@@ -112,37 +114,7 @@ const CONCEPT_OPTIONS = Object.entries(CONCEPT_ANGLES).map(([id, config]) => ({
   ...config,
 }));
 
-function getCachedAnalysis(currentBusinessType: string): ChannelAnalysisResult | null {
-  try {
-    const cache = getScopedItem(CACHE_KEY);
-    if (cache) {
-      const parsed = JSON.parse(cache);
-      // Invalidate cache if businessType has changed
-      if (parsed._businessType && parsed._businessType !== currentBusinessType) {
-        console.log('⚠️ Cached analysis businessType mismatch — invalidating');
-        return null;
-      }
-      const analysis = parsed['meta'] || null;
-      if (analysis) {
-        console.log('📊 Loaded cached analysis data:');
-        console.log('  - Channel:', analysis.channelName);
-        console.log('  - Analyzed at:', analysis.analyzedAt);
-        console.log('  - Health score:', analysis.overallHealthScore);
-        console.log('  - Total ads analyzed:', analysis.performanceBreakdown?.totalAdsAnalyzed);
-        console.log('  - Top ads count:', analysis.topAds?.length || 0);
-        console.log('  - Winning patterns:', analysis.winningPatterns ? 'Yes' : 'No');
-        console.log('  - Executive summary:', analysis.executiveSummary?.substring(0, 100) + '...');
-      } else {
-        console.log('⚠️ No Meta analysis found in cache');
-      }
-      return analysis;
-    }
-    console.log('⚠️ No analysis cache found in localStorage');
-  } catch (error) {
-    console.error('❌ Error loading cached analysis:', error);
-  }
-  return null;
-}
+// getCachedAnalysis is now imported from ../lib/channelAnalysisCache
 
 function formatDate(isoString: string): string {
   const date = new Date(isoString);
@@ -166,7 +138,7 @@ const IMPORT_DATE_OPTIONS: { id: DatePreset; label: string }[] = [
 
 const AdGenerator = () => {
   const navigate = useNavigate();
-  const { currentAccount, accountBusinessType: businessType } = useAdAccount();
+  const { currentAccount, accounts, accountBusinessType: businessType, isMultiAccount } = useAdAccount();
 
   // Campaign intent — controls AI prompts + publisher defaults.
   // Default based on business type; user can override (e.g. quiz funnel).
@@ -201,6 +173,7 @@ const AdGenerator = () => {
   const [conceptType, setConceptType] = useState<ConceptType>('auto');
   const [variationCount, setVariationCount] = useState(2);
   const [analysisData, setAnalysisData] = useState<ChannelAnalysisResult | null>(null);
+  const [analysisImportMeta, setAnalysisImportMeta] = useState<ImportMetadata | null>(null);
   const [imageSize, setImageSize] = useState<ImageSize>(DEFAULT_IMAGE_SIZE);
   const [copyLength, setCopyLength] = useState<CopyLength>(DEFAULT_COPY_LENGTH);
 
@@ -317,7 +290,13 @@ const AdGenerator = () => {
   // Image cache status for brand-informed generation
   const [imageCacheCount, setImageCacheCount] = useState(0);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
+  const [isAutoFetchingRefs, setIsAutoFetchingRefs] = useState(false);
+  const [autoFetchProgress, setAutoFetchProgress] = useState<{ loaded: number; total: number } | null>(null);
+  const [refTopConversions, setRefTopConversions] = useState(0);
+  const [refTopCVR, setRefTopCVR] = useState(0);
+  const autoFetchTriggeredRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showImageImportModal, setShowImageImportModal] = useState(false);
 
   // Creative variation control (0 = identical to references, 100 = completely different)
   const [similarityValue, setSimilarityValue] = useState(30); // Default: 30% variation (70% similar)
@@ -342,9 +321,16 @@ const AdGenerator = () => {
     setIsUploadingImages(true);
     try {
       const uploaded = await uploadBrandImages(files);
-      const stats = getImageCacheStats();
+      const stats = getDetailedCacheStats();
       setImageCacheCount(stats.count);
+      setRefTopConversions(stats.topConversions);
+      setRefTopCVR(stats.topConversionRate);
       console.log(`✅ Uploaded ${uploaded.length} images, cache now has ${stats.count} images`);
+      // Persist metadata to Supabase for cross-account import
+      const accountId = currentAccount?.ad_account_id;
+      if (accountId && uploaded.length > 0) {
+        saveReferenceImageMetadata(accountId, extractImageMetadata());
+      }
     } catch (err) {
       console.error('Failed to upload images:', err);
     } finally {
@@ -359,8 +345,71 @@ const AdGenerator = () => {
   // Handle clear image cache
   const handleClearImageCache = () => {
     clearImageCache();
+    removeScopedItem(REF_FETCH_MARKER_KEY);
     setImageCacheCount(0);
+    setRefTopConversions(0);
+    setRefTopCVR(0);
   };
+
+  // Handle import of reference images from another account.
+  // Three sources: 'local' (instant copy), 'supabase' (metadata only), 'sync' (fetch from URLs).
+  const handleImageImport = useCallback(async (
+    sourceAccountId: string,
+    source: 'local' | 'supabase' | 'sync',
+    onProgress?: (msg: string) => void,
+  ): Promise<number> => {
+    const accountId = currentAccount?.ad_account_id;
+    const currentCacheKey = accountId
+      ? `conversion_intelligence_image_cache_${accountId}`
+      : 'conversion_intelligence_image_cache';
+
+    if (source === 'local') {
+      // Fast path: copy pre-cached base64 images directly
+      const count = importImages(sourceAccountId, currentCacheKey);
+      if (count > 0) {
+        const stats = getDetailedCacheStats();
+        setImageCacheCount(stats.count);
+        setRefTopConversions(stats.topConversions);
+        setRefTopCVR(stats.topConversionRate);
+      }
+      return count;
+    }
+
+    if (source === 'sync') {
+      // Fetch images from the source account's sync cache creatives
+      const creatives = getSyncCreatives(sourceAccountId);
+      if (creatives.length === 0) return -1;
+
+      onProgress?.(`Found ${creatives.length} converting ads. Fetching images...`);
+
+      const result = await autoFetchConvertingAdImages(creatives, {
+        maxImages: 20,
+        minQuality: 60,
+        onProgress: (loaded, total) => {
+          onProgress?.(`Fetching image ${loaded} of ${total}...`);
+        },
+      });
+
+      console.log(`[ImageImport] sync fetch result: loaded=${result.loaded}, alreadyCached=${result.alreadyCached}, failed=${result.failed}`);
+
+      if (result.loaded > 0) {
+        onProgress?.(`Imported ${result.loaded} images. Saving...`);
+        const stats = getDetailedCacheStats();
+        setImageCacheCount(stats.count);
+        setRefTopConversions(stats.topConversions);
+        setRefTopCVR(stats.topConversionRate);
+        // Persist metadata to Supabase for future cross-account imports
+        if (accountId) {
+          saveReferenceImageMetadata(accountId, extractImageMetadata());
+        }
+      }
+      // Only count genuinely new images, not already-cached ones
+      return result.loaded > 0 ? result.loaded : (result.alreadyCached > 0 ? 0 : -1);
+    }
+
+    // source === 'supabase': metadata-only, no image data to import
+    return -1;
+  }, [currentAccount?.ad_account_id]);
 
   // Load products from scoped localStorage, falling back to Supabase metadata
   // from currentAccount.products when localStorage is empty or corrupt.
@@ -444,17 +493,25 @@ const AdGenerator = () => {
     });
   }, []);
 
-  // Load cached analysis and check image cache on mount
+  // Reload cached analysis when businessType changes (e.g. authoritative fetch resolves)
+  useEffect(() => {
+    const cached = getCachedAnalysis('meta', businessType);
+    setAnalysisData(cached);
+    setAnalysisImportMeta(getImportMetadata('meta'));
+  }, [businessType]);
+
+  // Load image cache and stored ads on mount
   useEffect(() => {
     debugLog('Mount effect starting');
 
-    const cached = getCachedAnalysis(businessType);
-    setAnalysisData(cached);
-
-    // Check image cache status
+    // Check image cache status and update detailed stats
     const imageStats = getImageCacheStats();
     setImageCacheCount(imageStats.count);
     debugLog(`Image cache: ${imageStats.count} reference images available`);
+
+    const detailedStats = getDetailedCacheStats();
+    setRefTopConversions(detailedStats.topConversions);
+    setRefTopCVR(detailedStats.topConversionRate);
 
     // Load previously generated ads from localStorage using deferred callback
     // Short delay prevents blocking the initial render
@@ -518,6 +575,98 @@ const AdGenerator = () => {
 
     return () => clearTimeout(loadTimerId);
   }, []);
+
+  // Auto-fetch converting ad images when account resolves or changes
+  const lastFetchedAccountRef = useRef<string | null>(null);
+  const pendingAccountRef = useRef<string | null>(null);
+
+  const runAutoFetch = useCallback((accountId: string) => {
+    // Refresh cache stats for the (possibly new) account
+    const imageStats = getImageCacheStats();
+    setImageCacheCount(imageStats.count);
+    const detailedStats = getDetailedCacheStats();
+    setRefTopConversions(detailedStats.topConversions);
+    setRefTopCVR(detailedStats.topConversionRate);
+
+    const syncKey = `ci_meta_ads_sync_${accountId}`;
+    try {
+      const syncDataRaw = localStorage.getItem(syncKey);
+      if (!syncDataRaw) return;
+      const syncData = JSON.parse(syncDataRaw);
+      const syncedAt = syncData.syncedAt as number | undefined;
+      const convertingCreatives = (syncData.creatives || []).filter(
+        (c: { conversions?: number; imageUrl?: string }) => (c.conversions ?? 0) > 0 && c.imageUrl
+      );
+      if (convertingCreatives.length === 0) return;
+
+      // Check if reference images are already cached from this exact sync data.
+      // Skip re-fetch if: same account, same sync version, and cache has images.
+      const markerRaw = getScopedItem(REF_FETCH_MARKER_KEY);
+      if (markerRaw && imageStats.count > 0) {
+        try {
+          const marker = JSON.parse(markerRaw);
+          if (marker.accountId === accountId && marker.syncedAt === syncedAt) {
+            lastFetchedAccountRef.current = accountId;
+            return;
+          }
+        } catch { /* invalid marker, proceed with fetch */ }
+      }
+
+      lastFetchedAccountRef.current = accountId;
+      autoFetchTriggeredRef.current = true;
+      setIsAutoFetchingRefs(true);
+      setAutoFetchProgress({ loaded: 0, total: Math.min(convertingCreatives.length, 20) });
+
+      autoFetchConvertingAdImages(convertingCreatives, {
+        onProgress: (loaded, total) => {
+          setAutoFetchProgress({ loaded, total });
+          const stats = getDetailedCacheStats();
+          setImageCacheCount(stats.count);
+          setRefTopConversions(stats.topConversions);
+          setRefTopCVR(stats.topConversionRate);
+        },
+      }).then(() => {
+        const finalStats = getDetailedCacheStats();
+        setImageCacheCount(finalStats.count);
+        setRefTopConversions(finalStats.topConversions);
+        setRefTopCVR(finalStats.topConversionRate);
+        // Mark that reference images are cached for this sync version
+        setScopedItem(REF_FETCH_MARKER_KEY, JSON.stringify({ accountId, syncedAt }));
+        // Persist metadata to Supabase so other accounts can see it for import
+        const metadata = extractImageMetadata();
+        if (metadata.length > 0) {
+          saveReferenceImageMetadata(accountId, metadata);
+        }
+      }).finally(() => {
+        setIsAutoFetchingRefs(false);
+        setAutoFetchProgress(null);
+        autoFetchTriggeredRef.current = false;
+        // If account changed while we were fetching, re-trigger for the new account
+        if (pendingAccountRef.current && pendingAccountRef.current !== accountId) {
+          const next = pendingAccountRef.current;
+          pendingAccountRef.current = null;
+          runAutoFetch(next);
+        }
+      });
+    } catch {
+      // Non-critical — sync cache may not exist yet
+    }
+  }, []);
+
+  useEffect(() => {
+    const accountId = currentAccount?.ad_account_id || 'default';
+
+    // Skip if we already fetched for this account
+    if (lastFetchedAccountRef.current === accountId) return;
+
+    // If a fetch is in progress for a different account, queue this one
+    if (autoFetchTriggeredRef.current) {
+      pendingAccountRef.current = accountId;
+      return;
+    }
+
+    runAutoFetch(accountId);
+  }, [currentAccount?.ad_account_id, runAutoFetch]);
 
   // Save generated ads to localStorage whenever they change
   // Uses short setTimeout to avoid blocking the main thread during renders
@@ -1487,7 +1636,11 @@ const AdGenerator = () => {
           <>
             <span className="status-icon">✓</span>
             <span className="status-text">
-              Analysis data loaded (analyzed {formatDate(analysisData!.analyzedAt)})
+              {analysisImportMeta ? (
+                <>Analysis data loaded from <strong>{analysisImportMeta.adAccountName}</strong> (analyzed {formatDate(analysisData!.analyzedAt)})</>
+              ) : (
+                <>Analysis data loaded (analyzed {formatDate(analysisData!.analyzedAt)})</>
+              )}
             </span>
           </>
         ) : (
@@ -1497,20 +1650,42 @@ const AdGenerator = () => {
               No analysis data found.{' '}
               <Link to="/insights" className="status-link">
                 Run channel analysis
-              </Link>{' '}
+              </Link>
+              {isMultiAccount && (
+                <>
+                  {' '}or{' '}
+                  <Link to="/insights" className="status-link">
+                    import from another account
+                  </Link>
+                </>
+              )}{' '}
               for better results.
             </span>
           </>
         )}
       </div>
 
-      {/* Image Reference Status - Critical for brand-informed generation */}
-      <div className={`analysis-status ${imageCacheCount > 0 ? 'has-data' : 'no-data'}`} style={{ marginTop: '8px' }}>
-        {imageCacheCount > 0 ? (
+      {/* Image Reference Status - Auto-loaded from converting ads */}
+      <div className={`analysis-status ${imageCacheCount > 0 ? 'has-data' : isAutoFetchingRefs ? 'loading-data' : 'no-data'}`} style={{ marginTop: '8px' }}>
+        {isAutoFetchingRefs ? (
+          <>
+            <span className="status-icon" style={{ animation: 'spin 1s linear infinite' }}>⟳</span>
+            <span className="status-text">
+              ConversionIQ™ loading reference images from your converting ads...
+              {autoFetchProgress && ` (${autoFetchProgress.loaded} of ${autoFetchProgress.total})`}
+            </span>
+          </>
+        ) : imageCacheCount > 0 ? (
           <>
             <span className="status-icon">✓</span>
             <span className="status-text">
-              {imageCacheCount} reference image{imageCacheCount !== 1 ? 's' : ''} cached for brand-informed generation
+              {imageCacheCount} reference image{imageCacheCount !== 1 ? 's' : ''} from converting ads
+              {refTopConversions > 0 && (
+                <span style={{ marginLeft: '8px', color: 'var(--text-muted)', fontSize: '12px' }}>
+                  Best: {refTopConversions} conversion{refTopConversions !== 1 ? 's' : ''}
+                  {refTopCVR > 0 && ` · Highest CVR: ${refTopCVR.toFixed(1)}%`}
+                </span>
+              )}
             </span>
             <button
               className="status-action-btn"
@@ -1520,6 +1695,15 @@ const AdGenerator = () => {
             >
               + Add More
             </button>
+            {isMultiAccount && accounts.length > 1 && (
+              <button
+                className="status-action-btn"
+                onClick={() => setShowImageImportModal(true)}
+                style={{ marginLeft: '8px' }}
+              >
+                Import from Account
+              </button>
+            )}
             <button
               className="status-action-btn clear-btn"
               onClick={handleClearImageCache}
@@ -1532,15 +1716,27 @@ const AdGenerator = () => {
           <>
             <span className="status-icon">!</span>
             <span className="status-text">
-              No reference images.{' '}
+              No converting ad images found.{' '}
+              <Link to="/channels/meta-ads" className="status-link">Sync your Meta Ads</Link>
+              {' '}to auto-load references, or{' '}
               <button
                 className="status-link-btn"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploadingImages}
               >
-                {isUploadingImages ? 'Uploading...' : 'Upload your top-performing ad images'}
-              </button>{' '}
-              for brand-consistent generation.
+                {isUploadingImages ? 'Uploading...' : 'upload images manually'}
+              </button>.
+              {isMultiAccount && accounts.length > 1 && (
+                <>
+                  {' '}Or{' '}
+                  <button
+                    className="status-link-btn"
+                    onClick={() => setShowImageImportModal(true)}
+                  >
+                    import from another account
+                  </button>.
+                </>
+              )}
             </span>
           </>
         )}
@@ -1623,7 +1819,7 @@ const AdGenerator = () => {
           {/* Copy Source Selection */}
           <div className="config-section">
             <label className="config-label">Copy Source</label>
-            <p className="config-hint">Generate new copy with AI, import from your ad account, enter your own, or pick from your Swipe Library</p>
+            <p className="config-hint">Generate new copy with AI, import from ads, enter your own, or use your Swipe Library</p>
             <div className="copy-source-options">
               <button
                 className={`copy-source-btn ${copySource === 'generate' ? 'active' : ''}`}
@@ -2897,6 +3093,16 @@ const AdGenerator = () => {
           creditsRemaining={creditModalData.remaining}
           creditsRequired={creditModalData.required}
           onClose={() => setShowCreditModal(false)}
+        />
+      )}
+
+      {/* Import Reference Images Modal */}
+      {showImageImportModal && (
+        <ImportImagesModal
+          availableImports={getAvailableImageImports(accounts, currentAccount?.ad_account_id || null)}
+          currentImageCount={imageCacheCount}
+          onImport={handleImageImport}
+          onClose={() => setShowImageImportModal(false)}
         />
       )}
     </div>

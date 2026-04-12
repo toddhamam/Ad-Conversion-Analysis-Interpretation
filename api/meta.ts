@@ -730,7 +730,7 @@ async function handleUpdateSelection(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { adAccountId, pageId, pixelId, products } = req.body || {};
+  const { adAccountId, pageId, pixelId, products, reference_image_metadata } = req.body || {};
 
   if (!adAccountId) {
     return res.status(400).json({ error: 'adAccountId is required' });
@@ -790,6 +790,7 @@ async function handleUpdateSelection(req: VercelRequest, res: VercelResponse) {
         account_status: selectedAccount?.account_status || null,
         currency: selectedAccount?.currency || null,
         ...(products !== undefined ? { products } : {}),
+        ...(reference_image_metadata !== undefined ? { reference_image_metadata } : {}),
         updated_at: new Date().toISOString(),
       }, { onConflict: 'organization_id,ad_account_id' });
     await updateSeatCount(auth.organizationId);
@@ -1964,7 +1965,7 @@ async function handleAdAccountsWrite(
   res: VercelResponse,
   auth: AuthContext
 ) {
-  const { action, adAccountId, adAccountName, pageId, pixelId, currency, businessType, products } = req.body || {};
+  const { action, adAccountId, adAccountName, pageId, pixelId, currency, businessType, products, reference_image_metadata } = req.body || {};
 
   if (!action || !adAccountId) {
     return res.status(400).json({ error: 'action and adAccountId are required' });
@@ -2073,6 +2074,7 @@ async function handleAdAccountsWrite(
         pixel_id: pixelId !== undefined ? (pixelId || null) : undefined,
         business_type: businessType !== undefined ? (businessType || null) : undefined,
         products: products !== undefined ? products : undefined,
+        reference_image_metadata: reference_image_metadata !== undefined ? reference_image_metadata : undefined,
         updated_at: new Date().toISOString(),
       })
       .eq('organization_id', auth.organizationId)

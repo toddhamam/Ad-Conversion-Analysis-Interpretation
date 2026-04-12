@@ -10,6 +10,7 @@ import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedSto
 import { isEmbeddingAvailable, embedMultimodal, cosineSimilarity } from './embeddingService';
 import { getEmbedding, setEmbedding, getEmbeddings, computeImageHash } from './embeddingStore';
 import type { EmbeddingTaskType } from './embeddingService';
+import { fetchImageViaBackend } from './swipeLibraryApi';
 
 const IMAGE_CACHE_KEY = 'conversion_intelligence_image_cache';
 
@@ -19,6 +20,7 @@ export interface CachedImage {
   mimeType: string;
   capturedAt: number;
   conversionRate?: number; // For sorting by performance
+  conversions?: number;    // Absolute conversion count from the ad
   // Quality metadata for filtering out low-res images
   width?: number;
   height?: number;
@@ -70,11 +72,25 @@ function saveCache(cache: ImageCache): void {
     // Keep cache size manageable - store up to 20 images
     const imageIds = Object.keys(cache.images);
     if (imageIds.length > 20) {
+      const allImages = imageIds.map(id => cache.images[id]);
+
+      // Find the highest-converting image (by absolute count) to protect it from eviction
+      let highestConvImg: CachedImage | null = null;
+      for (const img of allImages) {
+        if ((img.conversions ?? 0) > (highestConvImg?.conversions ?? 0)) {
+          highestConvImg = img;
+        }
+      }
+
       // Sort by conversion rate and keep top 20
-      const sortedImages = imageIds
-        .map(id => cache.images[id])
+      const sortedImages = allImages
         .sort((a, b) => (b.conversionRate || 0) - (a.conversionRate || 0))
         .slice(0, 20);
+
+      // Ensure highest-converting image is retained even if its CVR is low
+      if (highestConvImg && (highestConvImg.conversions ?? 0) > 0 && !sortedImages.includes(highestConvImg)) {
+        sortedImages[sortedImages.length - 1] = highestConvImg;
+      }
 
       cache.images = {};
       sortedImages.forEach(img => {
@@ -190,7 +206,7 @@ export function getTopHighQualityCachedImages(
   count: number = 3,
   minQuality: number = 60
 ): CachedImage[] {
-  const allImages = getAllCachedImages();
+  const allImages = getAllCachedImages(); // Already sorted by CVR descending
   const highQualityImages = allImages.filter(img => (img.qualityScore ?? 0) >= minQuality);
 
   console.log(`🔍 Quality filter: ${highQualityImages.length}/${allImages.length} images meet quality >= ${minQuality}`);
@@ -198,6 +214,26 @@ export function getTopHighQualityCachedImages(
   if (highQualityImages.length < count && allImages.length > highQualityImages.length) {
     const skippedCount = allImages.length - highQualityImages.length;
     console.log(`⚠️ Filtered out ${skippedCount} low-quality images (quality < ${minQuality})`);
+  }
+
+  // Ensure the highest-converting image (by absolute count) is always included,
+  // even if it doesn't have the highest CVR. This prevents the reference set
+  // from missing the ad with the most proven conversions.
+  if (highQualityImages.length > 1) {
+    let highestConvIdx = 0;
+    for (let i = 1; i < highQualityImages.length; i++) {
+      if ((highQualityImages[i].conversions ?? 0) > (highQualityImages[highestConvIdx].conversions ?? 0)) {
+        highestConvIdx = i;
+      }
+    }
+    // If the highest-converting image isn't already in the top N (by CVR), swap it in
+    if (highestConvIdx >= count && (highQualityImages[highestConvIdx].conversions ?? 0) > 0) {
+      const result = highQualityImages.slice(0, count);
+      // Replace the last slot with the highest-converting image
+      result[count - 1] = highQualityImages[highestConvIdx];
+      console.log(`📊 Swapped in highest-converting image (${highQualityImages[highestConvIdx].conversions} conversions) to reference set`);
+      return result;
+    }
   }
 
   return highQualityImages.slice(0, count);
@@ -259,6 +295,35 @@ export function getCacheStats(): { count: number; topConversionRate: number } {
 }
 
 /**
+ * Extract lightweight metadata from the image cache (no base64 data).
+ * Used to persist to Supabase so other accounts can see available images.
+ */
+export function extractImageMetadata(): Array<{
+  adId: string;
+  conversionRate?: number;
+  conversions?: number;
+  qualityScore?: number;
+  width?: number;
+  height?: number;
+  headline?: string;
+  bodyText?: string;
+  capturedAt: number;
+}> {
+  const images = getAllCachedImages();
+  return images.map(img => ({
+    adId: img.adId,
+    conversionRate: img.conversionRate,
+    conversions: img.conversions,
+    qualityScore: img.qualityScore,
+    width: img.width,
+    height: img.height,
+    headline: img.headline,
+    bodyText: img.bodyText,
+    capturedAt: img.capturedAt,
+  }));
+}
+
+/**
  * CORS proxy URLs to try for fetching Facebook CDN images
  */
 const CORS_PROXIES = [
@@ -290,9 +355,68 @@ async function getImageDimensions(blob: Blob): Promise<{ width: number; height: 
 }
 
 /**
- * Fetch an image via CORS proxy and store it in the cache
- * This solves the Facebook CDN authentication/CORS issue
- * Now includes quality tracking - rejects low-quality images
+ * Helper to build a CachedImage from base64 data, checking quality
+ */
+async function buildCachedImage(
+  base64Data: string,
+  mimeType: string,
+  adId: string,
+  conversionRate: number,
+  minQualityScore: number,
+  headline?: string,
+  bodyText?: string,
+  conversions?: number
+): Promise<CachedImage | null> {
+  // Decode base64 to blob for dimension checking
+  const binaryString = atob(base64Data);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  const blob = new Blob([bytes], { type: mimeType });
+
+  const dimensions = await getImageDimensions(blob);
+  if (!dimensions) {
+    console.log(`⚠️ Could not determine image dimensions for ${adId}`);
+    return null;
+  }
+
+  const { width, height } = dimensions;
+  const qualityScore = calculateQualityScore(width, height);
+  const fileSize = blob.size;
+
+  if (qualityScore < minQualityScore) {
+    console.log(`⚠️ Image quality too low (${qualityScore} < ${minQualityScore}), skipping ${adId}`);
+    return null;
+  }
+
+  const cachedImage: CachedImage = {
+    adId,
+    mimeType,
+    base64Data,
+    capturedAt: Date.now(),
+    conversionRate,
+    conversions,
+    width,
+    height,
+    fileSize,
+    qualityScore,
+    headline: headline?.slice(0, 200),
+    bodyText: bodyText?.slice(0, 200),
+  };
+
+  const cache = getCache();
+  cache.images[adId] = cachedImage;
+  saveCache(cache);
+
+  console.log(`✅ Cached image for ad ${adId}: ${width}x${height}, quality ${qualityScore}`);
+  return cachedImage;
+}
+
+/**
+ * Fetch an image and store it in the cache.
+ * Primary: uses backend /api/meta/image-fetch (server-side, no CORS issues).
+ * Fallback: tries third-party CORS proxies (unreliable, may be down).
  */
 export async function storeImageFromUrl(
   imageUrl: string,
@@ -300,7 +424,8 @@ export async function storeImageFromUrl(
   conversionRate: number = 5,
   minQualityScore: number = 40, // Reject thumbnails by default
   headline?: string,
-  bodyText?: string
+  bodyText?: string,
+  conversions?: number
 ): Promise<CachedImage | null> {
   // Check if already cached
   const existing = getCachedImage(adId);
@@ -309,16 +434,32 @@ export async function storeImageFromUrl(
     return existing;
   }
 
-  // Try each CORS proxy
+  // Primary: fetch via backend proxy (server-side, no CORS issues, handles auth)
+  try {
+    console.log(`📥 Fetching image via backend proxy for ad ${adId}...`);
+    const result = await fetchImageViaBackend(imageUrl);
+    if (result?.base64Data && result?.mimeType) {
+      const cached = await buildCachedImage(
+        result.base64Data, result.mimeType, adId, conversionRate, minQualityScore,
+        headline, bodyText, conversions
+      );
+      if (cached) return cached;
+      // If buildCachedImage returned null, quality was too low — don't retry via proxies
+      return null;
+    }
+    console.log(`⚠️ Backend proxy returned no data, trying CORS proxies...`);
+  } catch (error) {
+    console.log(`⚠️ Backend proxy failed, trying CORS proxies:`, error);
+  }
+
+  // Fallback: try third-party CORS proxies
   for (const proxy of CORS_PROXIES) {
     try {
       const proxyUrl = proxy + encodeURIComponent(imageUrl);
-      console.log(`📥 Trying to fetch via CORS proxy: ${proxy.substring(0, 30)}...`);
+      console.log(`📥 Trying CORS proxy: ${proxy.substring(0, 30)}...`);
 
       const response = await fetch(proxyUrl, {
-        headers: {
-          'Accept': 'image/*',
-        },
+        headers: { 'Accept': 'image/*' },
       });
 
       if (!response.ok) {
@@ -328,13 +469,11 @@ export async function storeImageFromUrl(
 
       const blob = await response.blob();
 
-      // Verify it's actually an image
       if (!blob.type.startsWith('image/')) {
         console.log(`⚠️ Response is not an image (${blob.type}), trying next...`);
         continue;
       }
 
-      // Get image dimensions for quality scoring
       const dimensions = await getImageDimensions(blob);
       if (!dimensions) {
         console.log(`⚠️ Could not determine image dimensions, trying next...`);
@@ -345,15 +484,11 @@ export async function storeImageFromUrl(
       const qualityScore = calculateQualityScore(width, height);
       const fileSize = blob.size;
 
-      console.log(`📐 Image dimensions: ${width}x${height}, quality score: ${qualityScore}, size: ${Math.round(fileSize / 1024)}KB`);
-
-      // Reject low-quality images
       if (qualityScore < minQualityScore) {
-        console.log(`⚠️ Image quality too low (${qualityScore} < ${minQualityScore}), skipping this image`);
-        return null; // Don't try other proxies - the image itself is low quality
+        console.log(`⚠️ Image quality too low (${qualityScore} < ${minQualityScore}), skipping`);
+        return null;
       }
 
-      // Convert to base64
       const arrayBuffer = await blob.arrayBuffer();
       const base64Data = btoa(
         new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
@@ -365,22 +500,20 @@ export async function storeImageFromUrl(
         base64Data,
         capturedAt: Date.now(),
         conversionRate,
-        // Quality metadata
+        conversions,
         width,
         height,
         fileSize,
         qualityScore,
-        // Text metadata for embedding
         headline: headline?.slice(0, 200),
         bodyText: bodyText?.slice(0, 200),
       };
 
-      // Store in cache
       const cache = getCache();
       cache.images[adId] = cachedImage;
       saveCache(cache);
 
-      console.log(`✅ Cached high-quality image for ad ${adId}: ${width}x${height}, quality ${qualityScore}`);
+      console.log(`✅ Cached image for ad ${adId}: ${width}x${height}, quality ${qualityScore}`);
       return cachedImage;
     } catch (error) {
       console.log(`⚠️ CORS proxy failed:`, error);
@@ -388,7 +521,7 @@ export async function storeImageFromUrl(
     }
   }
 
-  console.log(`❌ All CORS proxies failed for ad ${adId}`);
+  console.log(`❌ All fetch methods failed for ad ${adId}`);
   return null;
 }
 
@@ -492,6 +625,118 @@ export async function uploadBrandImages(
 
   console.log(`📸 Uploaded ${results.length} brand images total`);
   return results;
+}
+
+/**
+ * Get detailed cache statistics including conversion data
+ */
+export function getDetailedCacheStats(): {
+  count: number;
+  topConversions: number;
+  topConversionRate: number;
+  highestConvertingAdId: string | null;
+  highestCVRAdId: string | null;
+} {
+  const images = getAllCachedImages();
+  if (images.length === 0) {
+    return { count: 0, topConversions: 0, topConversionRate: 0, highestConvertingAdId: null, highestCVRAdId: null };
+  }
+
+  let topConversions = 0;
+  let topConversionRate = 0;
+  let highestConvertingAdId: string | null = null;
+  let highestCVRAdId: string | null = null;
+
+  for (const img of images) {
+    if ((img.conversions ?? 0) > topConversions) {
+      topConversions = img.conversions ?? 0;
+      highestConvertingAdId = img.adId;
+    }
+    if ((img.conversionRate ?? 0) > topConversionRate) {
+      topConversionRate = img.conversionRate ?? 0;
+      highestCVRAdId = img.adId;
+    }
+  }
+
+  return { count: images.length, topConversions, topConversionRate, highestConvertingAdId, highestCVRAdId };
+}
+
+/**
+ * Auto-fetch images from converting ads into the cache.
+ * Called by both MetaAds (after sync) and AdGenerator (on mount).
+ * Prioritizes ads with most conversions, then highest CVR.
+ */
+export async function autoFetchConvertingAdImages(
+  creatives: Array<{
+    id: string;
+    imageUrl?: string;
+    conversionRate: number;
+    conversions: number;
+    headline?: string;
+    bodySnippet?: string;
+  }>,
+  options?: {
+    maxImages?: number;
+    minQuality?: number;
+    onProgress?: (loaded: number, total: number) => void;
+  }
+): Promise<{ loaded: number; alreadyCached: number; failed: number }> {
+  const maxImages = options?.maxImages ?? 20;
+  const minQuality = options?.minQuality ?? 60;
+
+  // Filter to ads with conversions and images, sort by conversions (then CVR)
+  const candidates = creatives
+    .filter(c => c.imageUrl && c.conversions > 0)
+    .sort((a, b) => b.conversions - a.conversions || b.conversionRate - a.conversionRate);
+
+  if (candidates.length === 0) {
+    return { loaded: 0, alreadyCached: 0, failed: 0 };
+  }
+
+  console.log(`🔄 Auto-fetching up to ${maxImages} converting ad images (${candidates.length} candidates)`);
+
+  let loaded = 0;
+  let alreadyCached = 0;
+  let failed = 0;
+
+  for (const creative of candidates) {
+    if (loaded + alreadyCached >= maxImages) break;
+
+    // Check if already cached with sufficient quality
+    const existing = getCachedImage(creative.id);
+    if (existing && (existing.qualityScore ?? 0) >= minQuality) {
+      // Always refresh conversion metadata so stats stay current after re-syncs
+      if (existing.conversions !== creative.conversions || existing.conversionRate !== creative.conversionRate) {
+        const cache = getCache();
+        cache.images[creative.id] = { ...existing, conversions: creative.conversions, conversionRate: creative.conversionRate };
+        saveCache(cache);
+      }
+      alreadyCached++;
+      continue;
+    }
+
+    const cached = await storeImageFromUrl(
+      creative.imageUrl!,
+      creative.id,
+      creative.conversionRate,
+      minQuality,
+      creative.headline,
+      creative.bodySnippet,
+      creative.conversions
+    );
+
+    if (cached && (cached.qualityScore ?? 0) >= minQuality) {
+      loaded++;
+      console.log(`✅ Cached reference #${loaded}: ${creative.id} (${creative.conversions} conv, ${creative.conversionRate.toFixed(1)}% CVR)`);
+    } else {
+      failed++;
+    }
+
+    options?.onProgress?.(loaded + alreadyCached, Math.min(candidates.length, maxImages));
+  }
+
+  console.log(`📸 Auto-fetch complete: ${loaded} loaded, ${alreadyCached} already cached, ${failed} failed`);
+  return { loaded, alreadyCached, failed };
 }
 
 // ─── Semantic Image Selection (Embedding-Based) ─────────────────────────────────

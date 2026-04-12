@@ -323,6 +323,11 @@ const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, o
                         preload="metadata"
                         playsInline
                         onError={() => handleVideoLoadError(vidIdx)}
+                        style={video.aspectRatio === '4:5' ? {
+                          width: '100%',
+                          aspectRatio: '4 / 5',
+                          objectFit: 'cover',
+                        } : undefined}
                       >
                         Your browser does not support the video tag.
                       </video>

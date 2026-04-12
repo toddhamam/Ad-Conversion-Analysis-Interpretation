@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/meta.ts": { "maxDuration": 60 }
+    "api/meta.ts": { "maxDuration": 300 }
   },
   "rewrites": [
     { "source": "/api/seo-iq/:path(.*)", "destination": "/api/seoiq?route=:path" },

@@ -88,8 +88,11 @@ async function openaiProxy(
     }
   } catch (err: unknown) {
     if (fullContent) {
-      // Partial content is still usable — return what we have
-      console.warn('⚠️ SSE stream interrupted, returning partial content');
+      // Stream was interrupted (e.g. Vercel function timeout) — content is incomplete.
+      // Mark as truncated so callOpenAI's finish_reason check can surface a proper error
+      // instead of letting partial JSON silently fail during parsing.
+      console.warn('⚠️ SSE stream interrupted, returning partial content as truncated');
+      finishReason = 'length';
     } else {
       return new Response(JSON.stringify({
         error: { message: err instanceof Error ? err.message : 'AI stream failed' },
@@ -126,8 +129,8 @@ const DEFAULT_VISION_MODEL = 'gpt-5.4'; // GPT-5.4 has multimodal vision support
 
 // Reasoning configuration for GPT-5.4
 // All OpenAI calls now route through the backend proxy (api/meta.ts) which has
-// a 60-second Vercel function timeout (Hobby plan max). 'medium' keeps most
-// calls within that window; 'high'/'xhigh' risk FUNCTION_INVOCATION_TIMEOUT.
+// a 300-second Vercel function timeout. 'medium' keeps most calls well within
+// that window; 'high'/'xhigh' may approach the limit on complex prompts.
 type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'medium';
 const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'medium';
@@ -353,7 +356,9 @@ function sanitizeCopyText(text: string): string {
 // =============================================================================
 // VIDEO CONFIGURATION - Veo 3.1 video generation options
 // =============================================================================
-export type VideoAspectRatio = '16:9' | '9:16';
+// Veo 3.1 natively supports only 16:9 and 9:16. The 4:5 option generates at
+// 9:16 and crops client-side to 1080×1350 — the optimal Meta feed aspect ratio.
+export type VideoAspectRatio = '4:5' | '16:9' | '9:16';
 export type VideoDuration = 4 | 6 | 8;
 export type VideoResolution = '720p' | '1080p';
 // Only one model is available — 'standard' maps to veo-3.1-generate-preview.
@@ -376,6 +381,13 @@ export interface VideoSizeConfig {
 }
 
 export const VIDEO_ASPECT_RATIO_OPTIONS: VideoSizeConfig[] = [
+  {
+    id: '4:5',
+    name: 'Meta Feed',
+    description: 'Optimal for Facebook & Instagram feed',
+    dimensions: '1080×1350',
+    icon: '📐',
+  },
   {
     id: '9:16',
     name: 'Portrait/Story',
@@ -408,7 +420,7 @@ export const VIDEO_MODEL_OPTIONS: { id: VideoModel; name: string; description: s
 ];
 
 export const DEFAULT_VIDEO_CONFIG: VideoConfig = {
-  aspectRatio: '9:16',
+  aspectRatio: '4:5',
   duration: 8,
   resolution: '720p',
   model: 'standard',
@@ -2864,8 +2876,15 @@ Return JSON only:
     return parsed;
   } catch (error) {
     console.error('❌ Failed to parse copy options:', error);
-    console.error('❌ Raw response (first 500 chars):', response.substring(0, 500));
-    throw new Error('Failed to generate copy options');
+    console.error('❌ Raw response length:', response.length, '| first 500 chars:', response.substring(0, 500));
+    // Surface a more specific message if the response looks truncated
+    if (!response || response.length === 0) {
+      throw new Error('Failed to generate copy options — AI returned an empty response. Please try again.');
+    }
+    if (response.length > 0 && !response.trim().endsWith('}')) {
+      throw new Error('Failed to generate copy options — AI response was cut short. Please try again.');
+    }
+    throw new Error('Failed to generate copy options — AI returned invalid data. Please try again.');
   }
 }
 
@@ -3172,6 +3191,36 @@ Return JSON only:
 }
 
 /**
+ * Build conversion context strings for reference images.
+ * Identifies highest-converting and highest-CVR images for Gemini prompt.
+ */
+function buildRefConversionContext(cachedImages: import('./imageCache').CachedImage[]): string[] {
+  if (cachedImages.length === 0) return [];
+
+  // Find the best performers
+  let highestConvIdx = 0;
+  let highestCVRIdx = 0;
+  for (let i = 1; i < cachedImages.length; i++) {
+    if ((cachedImages[i].conversions ?? 0) > (cachedImages[highestConvIdx].conversions ?? 0)) {
+      highestConvIdx = i;
+    }
+    if ((cachedImages[i].conversionRate ?? 0) > (cachedImages[highestCVRIdx].conversionRate ?? 0)) {
+      highestCVRIdx = i;
+    }
+  }
+
+  return cachedImages.map((img, i) => {
+    const conv = img.conversions ?? 0;
+    const cvr = img.conversionRate ?? 0;
+    const labels: string[] = [];
+    if (i === highestConvIdx && conv > 0) labels.push('HIGHEST CONVERTING');
+    if (i === highestCVRIdx && cvr > 0 && highestCVRIdx !== highestConvIdx) labels.push('HIGHEST CVR');
+    const label = labels.length > 0 ? ` — ${labels.join(', ')}` : '';
+    return `Reference image ${i + 1}: ${conv} conversion${conv !== 1 ? 's' : ''} (${cvr.toFixed(1)}% CVR)${label}`;
+  });
+}
+
+/**
  * Analyze reference images to extract specific visual characteristics
  * This enables precise style replication in generated images
  */
@@ -3344,6 +3393,7 @@ export async function generateAdImage(config: {
   precomputedRefs?: {
     referenceImages: Array<{ data: string; mimeType: string }>;
     refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
+    refConversionContext?: string[];
   };
   // Ad Library inspirations for thematic direction
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
@@ -3379,6 +3429,7 @@ async function generateAdImageWithGemini(config: {
   precomputedRefs?: {
     referenceImages: Array<{ data: string; mimeType: string }>;
     refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
+    refConversionContext?: string[];
   };
   // Ad Library inspirations for thematic direction
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
@@ -3399,11 +3450,15 @@ async function generateAdImageWithGemini(config: {
 
   let referenceImages: Array<{ data: string; mimeType: string }>;
   let refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
+  let refConversionContext: string[] = [];
 
   if (config.precomputedRefs) {
     // Use pre-computed references (avoids redundant API calls during parallel generation)
     referenceImages = config.precomputedRefs.referenceImages;
     refAnalysis = config.precomputedRefs.refAnalysis;
+    if (config.precomputedRefs.refConversionContext) {
+      refConversionContext = config.precomputedRefs.refConversionContext;
+    }
     console.log(`📸 Using pre-computed reference data (${referenceImages.length} images)`);
   } else {
     // Compute references on-the-fly (single image regeneration)
@@ -3417,6 +3472,9 @@ async function generateAdImageWithGemini(config: {
       mimeType: cached.mimeType
     }));
 
+    // Build conversion context for each reference image
+    refConversionContext = buildRefConversionContext(cachedImages);
+
     if (config.productContext?.productImages?.length) {
       const productImgs = config.productContext.productImages.slice(0, 3);
       productImgs.forEach(img => {
@@ -3427,9 +3485,9 @@ async function generateAdImageWithGemini(config: {
 
     if (cachedImages.length > 0) {
       console.log('📸 Using high-quality reference images:',
-        cachedImages.map(c => `${c.width}x${c.height} (Q:${c.qualityScore}, ${c.conversionRate?.toFixed(1)}%)`).join(', '));
+        cachedImages.map(c => `${c.width}x${c.height} (Q:${c.qualityScore}, ${c.conversions ?? '?'} conv, ${c.conversionRate?.toFixed(1)}%)`).join(', '));
     } else {
-      console.log('⚠️ No high-quality cached images available. Visit Meta Ads page and cache higher-resolution images.');
+      console.log('⚠️ No high-quality cached images available. Sync Meta Ads to auto-load converting ad references.');
     }
 
     refAnalysis = await analyzeReferenceImages(referenceImages);
@@ -3527,9 +3585,19 @@ Explore fresh visual directions while maintaining professional quality.`,
     const adRefCount = referenceImages.length - productImgCount;
     promptParts.push(
       `I have attached ${referenceImages.length} REFERENCE IMAGES.`,
-      adRefCount > 0 ? `${adRefCount} are from top-performing ads - match their visual style.` : '',
+      adRefCount > 0 ? `${adRefCount} are from ads with PROVEN CONVERSIONS - match their visual style, prioritizing the highest-converting image's approach.` : '',
       productImgCount > 0 ? `${productImgCount} are PRODUCT MOCKUP images - the generated image MUST depict this exact product.` : '',
-      'You MUST study these images and match their visual style as specified above.',
+    );
+
+    // Include per-image conversion data so Gemini prioritizes the best-performing styles
+    if (refConversionContext.length > 0) {
+      promptParts.push('', 'CONVERSION PERFORMANCE DATA (prioritize visual patterns from highest-converting images):');
+      refConversionContext.forEach(line => promptParts.push(`  ${line}`));
+    }
+
+    promptParts.push(
+      '',
+      'You MUST study these images and match the visual style of the highest-converting references.',
       ''
     );
   }
@@ -4188,6 +4256,7 @@ Return JSON only:
  * Product context, hook-first prompts, channel analysis integration,
  * ad library inspirations, UGC audio cues, configurable model/duration/aspect/resolution.
  *
+ * When 4:5 aspect ratio is requested, generates at 9:16 and crops to 4:5 client-side.
  * Note: Veo 3.1 does not support inlineData for image-to-video on the Gemini API.
  */
 export async function generateAdVideoWithVeo(config: {
@@ -4220,7 +4289,11 @@ export async function generateAdVideoWithVeo(config: {
   const variationIdx = config.variationIndex ?? 0;
   const totalVars = config.totalVariations ?? 1;
 
-  console.log(`🎬 Generating video ${variationIdx + 1}/${totalVars} with Veo (${modelId}), ${durationSec}s ${videoConfig.aspectRatio} ${videoConfig.resolution}`);
+  // 4:5 is not natively supported by Veo — generate at 9:16 and crop after download
+  const is4x5 = videoConfig.aspectRatio === '4:5';
+  const veoAspectRatio = is4x5 ? '9:16' as const : videoConfig.aspectRatio === '16:9' ? '16:9' as const : '9:16' as const;
+
+  console.log(`🎬 Generating video ${variationIdx + 1}/${totalVars} with Veo (${modelId}), ${durationSec}s ${videoConfig.aspectRatio}${is4x5 ? ' (via 9:16→crop)' : ''} ${videoConfig.resolution}`);
 
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
   const conceptAngle = config.conceptType ? CONCEPT_ANGLES[config.conceptType] : null;
@@ -4239,11 +4312,25 @@ export async function generateAdVideoWithVeo(config: {
 
   // Hook-first structure: the opening seconds are everything
   promptParts.push(
-    `Create a ${durationSec}-second social media advertisement video (${videoConfig.aspectRatio} aspect ratio).`,
+    `Create a ${durationSec}-second social media advertisement video (${veoAspectRatio} aspect ratio).`,
     '',
     `HOOK (first 1-2 seconds) — THIS IS THE MOST IMPORTANT PART:`,
     `Open with an attention-grabbing visual that stops the scroll.`,
   );
+
+  // 4:5 composition guidance — the video will be center-cropped from 9:16
+  if (is4x5) {
+    promptParts.push(
+      '',
+      'CRITICAL FRAMING CONSTRAINT (4:5 crop):',
+      'This 9:16 video will be center-cropped to 4:5 aspect ratio for Meta feeds.',
+      'The top 15% and bottom 15% of the frame WILL BE CUT OFF.',
+      '- Keep ALL important content (faces, text, product, action) in the center 70% of the vertical frame',
+      '- Place text overlays in the center-middle area, never near the very top or bottom edge',
+      '- Frame subjects from chest/shoulders up, not full-body shots',
+      '- Avoid placing any critical visual elements in the top or bottom margins',
+    );
+  }
 
   // Use winning headline patterns for the hook
   if (winningPatterns?.headlines?.length) {
@@ -4344,23 +4431,31 @@ export async function generateAdVideoWithVeo(config: {
     promptParts.push(`Supporting message: "${bodyText}"`, '');
   }
 
-  // Video structure guidance
+  // Video structure guidance — optimized for Meta feed autoplay behavior
+  const bodyEnd = Math.floor(durationSec * 0.7);
   promptParts.push(
-    'VIDEO STRUCTURE:',
-    `- 0-2s: HOOK — scroll-stopping opening with "${headline}"`,
-    `- 2-${Math.floor(durationSec * 0.7)}s: BODY — demonstrate value, show the product/outcome`,
-    `- ${Math.floor(durationSec * 0.7)}-${durationSec}s: CTA — clear call to action with urgency`,
+    'VIDEO STRUCTURE (optimized for Meta feed autoplay):',
+    `- 0-1s: PATTERN INTERRUPT — a jarring visual change, unexpected motion, or bold text flash that breaks the scroll. The viewer decides in under 1 second whether to stop. This must feel different from everything else in their feed.`,
+    `- 1-2s: HOOK — immediately deliver the core promise or provoke curiosity with "${headline}". Show, don't tell.`,
+    `- 2-${bodyEnd}s: BODY — demonstrate the transformation, mechanism, or proof. Show the product/outcome in action. Build desire with before/after contrast if applicable.`,
+    `- ${bodyEnd}-${durationSec}s: CTA — clear, urgent call to action. End on a strong visual that makes the viewer want to learn more.`,
+    '',
+    'PACING:',
+    '- Cut every 1.5-2 seconds — short attention span, every moment must earn its screen time',
+    '- No static frames longer than 1.5 seconds — always have motion, transitions, or text animating',
+    '- Build visual intensity toward the CTA — start simple, end dynamic',
     ''
   );
 
   // UGC-style direction + audio cues (Veo 3.1 native audio)
   promptParts.push(
     'STYLE & AUDIO:',
-    '- UGC (user-generated content) aesthetic — authentic, relatable, not overly polished',
-    '- Dynamic motion with smooth transitions between scenes',
-    `- Include a confident voiceover saying: "${headline}"`,
-    '- Ambient sound cues that match the scene (subtle, not overpowering)',
-    '- Text overlays with the headline at key moments — large, bold, readable on mobile',
+    '- UGC (user-generated content) aesthetic — authentic, relatable, shot-on-phone feel, NOT corporate or stock-footage-like',
+    '- Quick, punchy transitions — jump cuts, zoom-ins, swipe transitions',
+    `- Confident, energetic voiceover delivering: "${headline}" — speak with authority and conviction`,
+    '- Background music: upbeat, trending, energetic — the kind that makes people watch longer',
+    '- Text overlays: LARGE, bold, high-contrast against background, centered in frame, readable even on small mobile screens without sound',
+    '- Captions/subtitles for key spoken words — 85% of Meta videos are watched on mute',
   );
 
   // Variation diversity
@@ -4393,7 +4488,7 @@ export async function generateAdVideoWithVeo(config: {
   // Only these four params are accepted by the Gemini API predictLongRunning endpoint:
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parameters: Record<string, any> = {
-    aspectRatio: videoConfig.aspectRatio,
+    aspectRatio: veoAspectRatio,
     durationSeconds: durationSec,
     resolution: videoConfig.resolution,
     negativePrompt: 'blurry, low quality, distorted, watermark',
@@ -4475,8 +4570,9 @@ export async function generateAdVideoWithVeo(config: {
       let videoUrl = '';
       if (videoResponse.ok) {
         const videoBlob = await videoResponse.blob();
-        videoUrl = URL.createObjectURL(videoBlob);
         console.log('✅ Veo video downloaded to blob successfully');
+
+        videoUrl = URL.createObjectURL(videoBlob);
       } else {
         console.warn('⚠️ Video download failed, preview unavailable. File ref preserved for publish.');
       }
@@ -4530,6 +4626,7 @@ export async function regenerateAllImages(config: {
   let precomputedRefs: {
     referenceImages: Array<{ data: string; mimeType: string }>;
     refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
+    refConversionContext?: string[];
   } | undefined;
 
   if (USE_GEMINI_FOR_IMAGES && isGeminiConfigured()) {
@@ -4570,6 +4667,9 @@ export async function regenerateAllImages(config: {
       cachedImages = getTopHighQualityCachedImages(3, MIN_QUALITY_SCORE);
     }
 
+    // Build conversion context for Gemini prompt
+    const refConversionContext = buildRefConversionContext(cachedImages);
+
     const referenceImages: Array<{ data: string; mimeType: string }> = cachedImages.map(cached => ({
       data: cached.base64Data,
       mimeType: cached.mimeType
@@ -4585,7 +4685,7 @@ export async function regenerateAllImages(config: {
     console.log(`📸 Pre-computing reference analysis for ${referenceImages.length} images (shared across ${config.variationCount} variations)`);
     config.onProgress?.('ConversionIQ™ analyzing reference styles...');
     const refAnalysis = await analyzeReferenceImages(referenceImages);
-    precomputedRefs = { referenceImages, refAnalysis };
+    precomputedRefs = { referenceImages, refAnalysis, refConversionContext };
   }
 
   // Generate images with concurrency limit of 2 to prevent memory exhaustion

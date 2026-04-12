@@ -119,6 +119,7 @@ export function AdAccountProvider({ children }: { children: React.ReactNode }) {
             currency: null,
             business_type: null,
             products: null,
+            reference_image_metadata: null,
           };
           setCurrentAccount(defaultAccount);
           setMetaCurrentAccount(defaultAccount);

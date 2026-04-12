@@ -159,6 +159,42 @@
   margin-top: 2px;
 }
 
+/* Import button */
+.pc-import-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.pc-import-btn:hover {
+  border-color: var(--accent-violet);
+  color: var(--text-primary);
+}
+
+.pc-empty-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.pc-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
 /* Form */
 .pc-form {
   background: var(--bg-secondary);
