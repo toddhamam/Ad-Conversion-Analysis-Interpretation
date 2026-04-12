@@ -52,13 +52,56 @@ import Loading from '../components/Loading';
 
 ## Wiki Knowledge Base
 
-This project maintains a structured knowledge base at `.claude/wiki/`. Use the `/wiki` command to query, ingest, or lint the wiki. Read `.claude/wiki/WIKI-CLAUDE.md` for the full schema.
+This project maintains a structured, LLM-maintained knowledge base at `.claude/wiki/` following the Karpathy Wiki pattern. The LLM owns the wiki layer entirely — it creates pages, updates them, maintains cross-references, and keeps everything consistent. The human reads it (via Obsidian); the LLM writes it.
+
+### Commands
 
 | Command | Purpose |
 |---------|---------|
 | `/wiki what do we know about X?` | Query the knowledge base |
 | `/wiki ingest` | Ingest new raw sources from `.claude/wiki/raw/` |
 | `/wiki lint` | Run health check for contradictions, orphans, gaps |
+
+### Wiki Schema & Rules
+
+Read `.claude/wiki/WIKI-CLAUDE.md` for the full schema. Key rules:
+- **Always read `index.md` first** — it catalogs every domain and page
+- **Token efficiency** — agents load only the 2-3 relevant pages, not everything
+- **Cross-reference liberally** — every page should link to related pages with `[[wikilinks]]`
+- **A single source should touch 10-15 wiki pages** — if only creating 1-2, you're not cross-referencing enough
+- **Always update `index.md`, `log.md`, and `hot.md`** after any ingest or modification
+
+### Current Wiki State (8 domains, 48 pages)
+
+| Domain | Pages | Focus |
+|--------|-------|-------|
+| `architecture` | 8 | System design, APIs, auth, Supabase, Vercel deployment |
+| `meta-ads` | 6 | Meta API proxy, publishing, rate limits, OAuth, App Review |
+| `ai-integration` | 5 | GPT-5.4, Gemini, creative pipeline, SEO IQ |
+| `billing` | 3 | Stripe checkout, subscription gating, pitfalls |
+| `product-strategy` | 8 | Philosophy, branding, code quality, UX, SEO/GEO |
+| `ci-cd` | 4 | PR review, Sentry, health monitor, auto-fix |
+| `outreach` | 10 | Cold email, enrichment, warmup, templates, orchestrator |
+| `infrastructure` | 4 | VPS, OpenClaw, Leads CLI, cron automation |
+
+### Obsidian Integration
+
+The wiki is browsable in Obsidian via a symlink:
+
+```
+~/Documents/Obsidian-Vaults/Convertra-Wiki → .claude/wiki/
+```
+
+All `[[wikilinks]]` are Obsidian-compatible. The symlink is live — any ingestions or updates to `.claude/wiki/` appear in Obsidian immediately (and vice versa). Open the vault in Obsidian at `Documents/Obsidian-Vaults/Convertra-Wiki`.
+
+### Ingesting New Knowledge
+
+To add new knowledge to the wiki:
+
+1. **Add the source document** to `.claude/wiki/raw/` (immutable after adding — never modify files in `raw/`)
+2. **Run `/wiki ingest`** — the agent reads the source, creates/updates 10-15 wiki pages across relevant domains, adds cross-references, and updates `index.md`, `log.md`, `hot.md`
+3. **Changes appear in Obsidian** automatically via the symlink — no manual steps needed
+4. **Commit the wiki changes** to git — the wiki is version-controlled infrastructure, not gitignored
 
 ## Project Structure
 
