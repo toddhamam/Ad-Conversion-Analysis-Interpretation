@@ -261,8 +261,7 @@ def run_campaign(niches, include_jobs=False, campaign_name=None):
     else:
         # Phase 2: Research
         log.info("Phase 2: Research...")
-        from modules.research import batch_research
-        research_result = batch_research(stage="discovered")
+        research_result = _run_research(stage="discovered")
         results["research"] = {"researched": research_result.get("researched", 0)}
         log.info(f"  Researched: {research_result.get('researched', 0)} prospects")
 
@@ -320,9 +319,8 @@ def run_campaign(niches, include_jobs=False, campaign_name=None):
         )
 
         # Phase 5: AI Draft emails (ONLY AI step, warm+ leads)
-        log.info("Phase 5: AI email drafting (GPT-5.2)...")
-        from modules.drafter import batch_draft
-        draft_result = batch_draft(stage="researched", score_min=5)
+        log.info("Phase 5: AI email drafting...")
+        draft_result = _run_drafting(stage="researched", score_min=5)
         results["drafting"] = {
             "drafted": draft_result.get("drafted", 0),
             "fallback": draft_result.get("fallback", 0),
@@ -354,6 +352,220 @@ def run_campaign(niches, include_jobs=False, campaign_name=None):
 
     log.info("=== CAMPAIGN PIPELINE COMPLETE ===")
     return results
+
+
+# ──────────────────────────────────────────────────────────────────────
+# AGENT WRAPPERS — agent-first with deterministic fallback
+# ──────────────────────────────────────────────────────────────────────
+
+
+def _run_research(stage="discovered"):
+    """Wraps batch_research() with managed agent research + fallback.
+
+    Integration points: ~264, ~971, ~1279, ~1440
+    """
+    from modules.research import batch_research
+
+    try:
+        from modules.agents import agents_enabled, is_shadow_mode, research_prospect, log_shadow_comparison
+    except ImportError:
+        return batch_research(stage=stage)
+
+    if not agents_enabled():
+        return batch_research(stage=stage)
+
+    if is_shadow_mode():
+        # Shadow mode: snapshot candidates, run deterministic, then agent (read-only)
+        from modules.pipeline import load_pipeline, get_prospect
+        data = load_pipeline()
+        candidates = [
+            p["id"] for p in data["prospects"]
+            if p.get("stage") == stage and not p.get("company_intel", {}).get("tech_stack")
+        ]
+
+        # Run deterministic research (advances stages, writes pipeline)
+        result = batch_research(stage=stage)
+
+        # Run agent on same candidates (read-only — log only, never write)
+        for pid in candidates:
+            prospect = get_prospect(pid)
+            if prospect:
+                agent_result = research_prospect(prospect)
+                log_shadow_comparison(pid, agent_result, prospect.get("company_intel", {}))
+
+        return result
+
+    # Live mode: agent-first with fallback
+    from modules.pipeline import load_pipeline, update_prospect
+    from modules.research import scrape_company
+
+    data = load_pipeline()
+    researched = 0
+    results = []
+
+    for prospect in data["prospects"]:
+        if prospect.get("stage") != stage:
+            continue
+        if prospect.get("company_intel", {}).get("tech_stack"):
+            continue
+
+        url = prospect.get("company_url", "")
+        if not url:
+            continue
+
+        # Try agent first
+        agent_result = research_prospect(prospect)
+
+        if agent_result:
+            # Agent succeeded — merge into existing intel to preserve Ad Library fields
+            intel = prospect.get("company_intel", {})
+            intel.update(agent_result.get("company_intel", {}))
+            hooks = [h["hook"] for h in agent_result.get("personalization_hooks", []) if h.get("hook")]
+            pains = agent_result.get("pain_signals", [])
+
+            updates = {
+                "company_intel": intel,
+                "personalization_hooks": hooks,
+                "pain_signals": pains,
+                "stage": "researched",
+            }
+            if agent_result.get("company_name"):
+                updates["company"] = agent_result["company_name"]
+            if agent_result.get("contact_name") and not prospect.get("name"):
+                updates["name"] = agent_result["contact_name"]
+            if agent_result.get("contact_role") and not prospect.get("role"):
+                updates["role"] = agent_result["contact_role"]
+
+            update_prospect(prospect["id"], updates)
+            researched += 1
+        else:
+            # Agent failed — fallback to deterministic scraper, merge into existing intel
+            research = scrape_company(url)
+            signals = research.get("signals", {})
+            intel = prospect.get("company_intel", {})
+            intel.update({
+                "tech_stack": signals.get("tech_stack", []),
+                "estimated_employees": signals.get("team_size", ""),
+                "funding": signals.get("funding", ""),
+                "hiring_signals": signals.get("hiring_signals", []),
+                "content_marketing": signals.get("content_marketing", False),
+                "dead_website": signals.get("dead_website", False),
+                "has_meta_pixel": signals.get("has_meta_pixel", False),
+                "has_google_ads": signals.get("has_google_ads", False),
+                "is_ecommerce_store": signals.get("is_ecommerce_store", False),
+                "contacts": signals.get("contacts", []),
+            })
+            update_prospect(prospect["id"], {
+                "company_intel": intel,
+                "stage": "researched",
+            })
+            researched += 1
+
+    return {"researched": researched, "results": results}
+
+
+def _run_drafting(stage="researched", score_min=8):
+    """Wraps batch_draft() with managed agent drafting + fallback.
+
+    Integration points: ~324, ~1117, ~1321, ~1471
+    """
+    from modules.drafter import batch_draft
+
+    try:
+        from modules.agents import agents_enabled, draft_email_agent, LEARNINGS_PATH, _load_json
+    except ImportError:
+        return batch_draft(stage=stage, score_min=score_min)
+
+    if not agents_enabled():
+        return batch_draft(stage=stage, score_min=score_min)
+
+    # Load learnings for drafter context
+    learnings = _load_json(LEARNINGS_PATH, default={})
+
+    from modules.pipeline import list_prospects, update_prospect, update_stage
+
+    result_obj = list_prospects(stage=stage, score_min=score_min)
+    prospects = result_obj.get("prospects", [])
+
+    stats = {"drafted": 0, "fallback": 0, "skipped": 0, "errors": 0, "results": []}
+
+    for prospect in prospects:
+        pid = prospect.get("id", "")
+
+        # Skip if already has a draft
+        existing_draft = prospect.get("draft_email", {})
+        if isinstance(existing_draft, dict) and existing_draft.get("body"):
+            stats["skipped"] += 1
+            continue
+        if not prospect.get("email"):
+            stats["skipped"] += 1
+            continue
+
+        # Try agent first
+        agent_result = draft_email_agent(prospect, learnings)
+
+        if agent_result and agent_result.get("subject") and agent_result.get("body"):
+            update_prospect(pid, {
+                "draft_email": {
+                    "subject": agent_result["subject"],
+                    "body": agent_result["body"],
+                }
+            })
+            update_stage(pid, "ready_to_send", interaction={
+                "type": "email_drafted",
+                "notes": "Email drafted via managed agent",
+            })
+            stats["drafted"] += 1
+            stats["results"].append({"id": pid, "method": "agent", "status": "drafted"})
+        else:
+            # Fallback to GPT-5.4 drafter
+            from modules.drafter import draft_email
+            draft_result = draft_email(prospect)
+
+            if draft_result["status"] == "error":
+                stats["errors"] += 1
+                continue
+
+            update_prospect(pid, {
+                "draft_email": {
+                    "subject": draft_result["subject"],
+                    "body": draft_result["body"],
+                }
+            })
+            update_stage(pid, "ready_to_send", interaction={
+                "type": "email_drafted",
+                "notes": f"Email drafted via {draft_result['method']} (agent fallback)",
+            })
+            if draft_result["method"] == "ai":
+                stats["drafted"] += 1
+            else:
+                stats["fallback"] += 1
+            stats["results"].append({"id": pid, "method": draft_result["method"], "status": "drafted"})
+
+    return stats
+
+
+def _run_classification(body_preview, prospect_id=None):
+    """Wraps _classify_reply() with managed agent classification + fallback.
+
+    Returns: str — pipeline stage (replied_interested, replied_not_interested, replied_not_now)
+    """
+    try:
+        from modules.agents import agents_enabled, classify_reply_agent
+    except ImportError:
+        return _classify_reply(body_preview)
+
+    if not agents_enabled():
+        return _classify_reply(body_preview)
+
+    # Try agent first (sends raw reply text, no PII)
+    agent_result = classify_reply_agent(body_preview, prospect_id)
+
+    if agent_result and agent_result.get("stage"):
+        return agent_result["stage"]
+
+    # Fallback to keyword-based classification
+    return _classify_reply(body_preview)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -419,7 +631,7 @@ def _process_inbox():
         if pid:
             try:
                 body = reply.get("body_preview", "").lower()
-                classification = _classify_reply(body)
+                classification = _run_classification(body, prospect_id=pid)
                 update_stage(pid, classification, interaction={
                     "type": "email_received",
                     "date": datetime.now().isoformat() + "Z",
@@ -968,8 +1180,7 @@ def run_prospect_hunt(target=20, niches=None, include_jobs=True, max_rounds=10,
         if discovered > 0:
             # Phase 2: Research
             log.info(f"  Researching...")
-            from modules.research import batch_research
-            research_result = batch_research(stage="discovered")
+            research_result = _run_research(stage="discovered")
             researched = research_result.get("researched", 0)
             log.info(f"  Researched: {researched}")
 
@@ -1106,7 +1317,6 @@ def _run_enrichment_pass(email_score_min):
             log.error(f"    Enrichment failed: {e}")
 
     from modules.email_finder import batch_find_emails
-    from modules.drafter import batch_draft
 
     email_result = batch_find_emails(stage="researched", score_min=email_score_min, skip_enrichment=True)
     log.info(
@@ -1114,7 +1324,7 @@ def _run_enrichment_pass(email_score_min):
         f"{email_result.get('not_found', 0)} not found"
     )
 
-    draft_result = batch_draft(stage="researched", score_min=email_score_min)
+    draft_result = _run_drafting(stage="researched", score_min=email_score_min)
     log.info(
         f"    Drafted: {draft_result.get('drafted', 0)} "
         f"(AI: {draft_result.get('drafted', 0) - draft_result.get('fallback', 0)}, "
@@ -1276,8 +1486,7 @@ def run_import(csv_path, campaign="sales-nav", source="sales_navigator",
 
     # Step 2: Research company websites (tech stack, hiring, pain signals, contacts)
     log.info("Step 2: Researching company websites...")
-    from modules.research import batch_research
-    research_result = batch_research(stage="discovered")
+    research_result = _run_research(stage="discovered")
     researched_count = research_result.get("researched", 0)
     skipped_no_url = sum(
         1 for r in research_result.get("results", [])
@@ -1317,8 +1526,7 @@ def run_import(csv_path, campaign="sales-nav", source="sales_navigator",
 
     # Step 5: Draft personalized emails for high-scoring prospects with emails
     log.info(f"Step 5: Drafting emails (score >= {score_threshold})...")
-    from modules.drafter import batch_draft
-    draft_result = batch_draft(stage="researched", score_min=score_threshold)
+    draft_result = _run_drafting(stage="researched", score_min=score_threshold)
     results["drafting"] = {
         "drafted": draft_result.get("drafted", 0),
         "ai_generated": draft_result.get("ai_generated", 0),
@@ -1437,8 +1645,7 @@ def run_vayne_import(sales_nav_url, name=None, limit=None, campaign=None,
 
     # Step 2: Research company websites
     log.info("Step 2: Researching company websites...")
-    from modules.research import batch_research
-    research_result = batch_research(stage="discovered")
+    research_result = _run_research(stage="discovered")
     researched_count = research_result.get("researched", 0)
     results["research"] = {"researched": researched_count}
     log.info(f"  Researched: {researched_count} companies")
@@ -1467,8 +1674,7 @@ def run_vayne_import(sales_nav_url, name=None, limit=None, campaign=None,
 
     # Step 5: Draft personalized emails
     log.info(f"Step 5: Drafting emails (score >= {score_threshold})...")
-    from modules.drafter import batch_draft
-    draft_result = batch_draft(stage="researched", score_min=score_threshold)
+    draft_result = _run_drafting(stage="researched", score_min=score_threshold)
     results["drafting"] = {
         "drafted": draft_result.get("drafted", 0),
     }

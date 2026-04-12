@@ -103,7 +103,7 @@ def draft_email(prospect):
         return {"status": "fallback", "method": "template", **result}
 
     try:
-        system_msg, user_msg = _build_prompt(prospect)
+        system_msg, user_msg = build_prompt(prospect)
         response = _call_openai(api_key, system_msg, user_msg)
 
         if response is None:
@@ -180,8 +180,10 @@ def batch_draft(stage="researched", score_min=8):
     return stats
 
 
-def _build_prompt(prospect):
-    """Build the GPT-5.2 system + user prompt from prospect data.
+def build_prompt(prospect):
+    """Build the GPT-5.4 system + user prompt from prospect data.
+
+    Public interface: also used by managed agent drafter for prompt reuse.
 
     Returns:
         tuple: (system_message: str, user_message: str)
