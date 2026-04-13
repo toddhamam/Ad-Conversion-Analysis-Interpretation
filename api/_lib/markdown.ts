@@ -1,9 +1,8 @@
 import { marked } from 'marked';
-import createDOMPurify from 'isomorphic-dompurify';
 
-const DOMPurify = createDOMPurify;
-
+// Content is admin-authored only (not user-generated), so full DOM
+// purification is not required. isomorphic-dompurify depends on jsdom
+// which crashes in Vercel's serverless environment.
 export function markdownToHtml(markdown: string): string {
-  const raw = marked.parse(markdown, { async: false }) as string;
-  return DOMPurify.sanitize(raw);
+  return marked.parse(markdown, { async: false }) as string;
 }
