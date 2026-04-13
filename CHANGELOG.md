@@ -1,5 +1,45 @@
 # Changelog
 
+## 2026-04-13 — Add GEO/SEO blog, FAQ, and content hub (Mintlify-inspired)
+
+### What
+Added a premium editorial blog/FAQ section optimized for GEO (Generative Engine Optimization) to get Convertra cited by AI engines (ChatGPT, Gemini, Perplexity) when CMOs ask questions like "Do I need AI for my ad creatives?" Modeled after Mintlify's docs UI patterns — three-column layout with sidebar nav, sticky TOC, and clean typography.
+
+### New Pages
+- **`/blog`** — Article hub with category filter pills, 2-column card grid, pagination
+- **`/blog/:slug`** — Article page with markdown rendering, auto-generated TOC, FAQ accordion, prev/next navigation
+- **`/faq`** — Aggregated FAQ page with search filter and expandable accordions
+
+### Backend
+- **`api/content.ts`** — Single catch-all serverless function handling content API (posts, post, faqs), server-side prerender (blog pages, FAQ, listing), dynamic sitemap, and admin CRUD
+- **`api/_lib/schema-builders.ts`** — Pure JSON-LD builders for Article, FAQPage, HowTo, and BreadcrumbList structured data (no React dependency)
+- **`api/_lib/markdown.ts`** — Server-side markdown-to-HTML with DOMPurify sanitization
+- **`supabase/migrations/021_blog_posts.sql`** — Database table with RLS, auto-updated_at trigger, slug format constraint, future-date protection
+
+### Billing Consolidation (Vercel function limit)
+- Merged `api/billing/checkout.ts` and `api/billing/portal.ts` into `api/billing/subscription.ts` as additional routes
+- Added Vercel rewrites so frontend URLs (`/api/billing/checkout`, `/api/billing/portal`) continue working unchanged
+- Freed 2 serverless function slots: **12/12 → 10/12 → 11/12** (with new `api/content.ts`)
+
+### SEO Fixes
+- Fixed canonical domain drift: `convertra.ai` → `convertraiq.com` in `SEO.tsx` and `robots.txt`
+- Replaced static `public/sitemap.xml` with dynamic sitemap via `api/content.ts` (includes blog URLs)
+- Removed auth-gated routes (`/dashboard`, `/channels`, etc.) from sitemap — they serve empty shells to crawlers
+- Added `Allow: /blog/` and `Allow: /faq` to `robots.txt`
+- Added `build.manifest: true` to `vite.config.ts` for prerender asset resolution
+
+### Wiki
+- Ingested 6 YouTube founder interview transcripts into new `growth-playbooks` domain (5 pages + source summary)
+- Fixed YAML frontmatter on all 6 growth-playbooks wiki pages (was missing per WIKI-CLAUDE.md schema)
+- Added `sources/source-yt-founder-interviews.md` source summary page
+
+### Files
+- **Created**: `api/content.ts`, `api/_lib/schema-builders.ts`, `api/_lib/markdown.ts`, `src/pages/blog/BlogHub.tsx`, `src/pages/blog/BlogPost.tsx`, `src/pages/blog/FAQPage.tsx`, `src/pages/blog/Blog.css`, `src/services/contentApi.ts`, `supabase/migrations/021_blog_posts.sql`
+- **Deleted**: `api/billing/checkout.ts`, `api/billing/portal.ts`, `public/sitemap.xml`
+- **Modified**: `vercel.json`, `src/App.tsx`, `src/components/SEO.tsx`, `src/pages/SalesLanding.tsx`, `public/robots.txt`, `vite.config.ts`, `api/billing/subscription.ts`, `package.json`, `CHANGELOG.md`
+
+---
+
 ## 2026-04-12 — Add LLM-maintained wiki knowledge base (Karpathy Wiki pattern)
 
 ### What

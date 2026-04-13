@@ -32,6 +32,9 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import CookiePolicy from './pages/CookiePolicy';
 import DataDeletion from './pages/DataDeletion';
+import BlogHub from './pages/blog/BlogHub';
+import BlogPost from './pages/blog/BlogPost';
+import FAQPage from './pages/blog/FAQPage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import OrganizationsList from './pages/admin/OrganizationsList';
 import CreateOrganization from './pages/admin/CreateOrganization';
@@ -91,6 +94,9 @@ function App() {
           <Route path="/terms" element={<TermsOfService />} />
           <Route path="/cookies" element={<CookiePolicy />} />
           <Route path="/data-deletion" element={<DataDeletion />} />
+          <Route path="/blog" element={<BlogHub />} />
+          <Route path="/blog/:slug" element={<BlogPost />} />
+          <Route path="/faq" element={<FAQPage />} />
 
           {/* Post-Signup Plan Selection (protected, no sidebar) */}
           <Route path="/choose-plan" element={

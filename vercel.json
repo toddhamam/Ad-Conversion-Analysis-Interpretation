@@ -10,7 +10,14 @@
     { "source": "/api/meta/:path(.*)", "destination": "/api/meta?route=:path" },
     { "source": "/api/ai/:path(.*)", "destination": "/api/meta?route=ai-:path" },
     { "source": "/api/feedback/:path(.*)", "destination": "/api/seoiq?route=feedback-:path" },
+    { "source": "/api/billing/checkout", "destination": "/api/billing/subscription?route=checkout" },
+    { "source": "/api/billing/portal", "destination": "/api/billing/subscription?route=portal" },
     { "source": "/api/billing/usage/:path(.*)", "destination": "/api/billing/subscription?route=:path" },
+    { "source": "/api/content/:path(.*)", "destination": "/api/content?route=:path" },
+    { "source": "/sitemap.xml", "destination": "/api/content?route=sitemap" },
+    { "source": "/blog/:slug", "destination": "/api/content?route=prerender&type=post&slug=:slug" },
+    { "source": "/blog", "destination": "/api/content?route=prerender&type=listing" },
+    { "source": "/faq", "destination": "/api/content?route=prerender&type=faq" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "crons": [

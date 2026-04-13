@@ -23,3 +23,16 @@ Pages created (48):
 Source summaries created (6): source-claude-md, source-rules-md, source-operations-guide, source-cold-email-resources, source-outreach-skills, source-ops-runbook
 
 Notes: First-ever wiki ingest. All 12 source documents processed. 48 wiki pages created across 8 domains with cross-references between them.
+
+---
+
+## [2026-04-13] ingest | Growth playbooks — 6 YouTube founder transcripts
+
+Sources: raw/yt-eugene-narrow-niche-saas.txt, raw/yt-arvo-ai-seo-case-study.txt, raw/yt-mike-5apps-200k-mrr.txt, raw/yt-cluely-6m-arr-mindshare.txt, raw/yt-crimeal-cold-calling.txt, raw/yt-poppy-ai-50m-valuation.txt
+
+Domain created: growth-playbooks
+
+Pages created (5):
+- growth-playbooks: founder-case-studies, distribution-strategies, pricing-tactics, product-market-fit-patterns, key-takeaways-for-convertra
+
+Notes: Synthesized 6 YouTube transcripts from AI SaaS founders who scaled to impressive MRR. Key findings: affiliate marketing is the #1 underutilized channel (Poppy: $150K from one TikTok), mass UGC creator networks drive app installs at scale (Cluely: 1M installs in 2 months), FAQ-style SEO articles get the most LLM citations, cold calling beats all digital channels for professional/enterprise sales, and pricing optimization alone can 3x revenue. All findings mapped to Convertra-specific recommendations.
