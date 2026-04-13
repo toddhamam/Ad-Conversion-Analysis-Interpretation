@@ -1,0 +1,752 @@
+
+0:00How much is Cle making right now? Yeah,
+0:011 secondwe're about to do 6 mil ARR. We're growing pretty [ __ ] quick. How old are you? I'm 21. 21 now? Yeah. When is Cle la la la la la la la la la la la la la la la la la la la launch? Cle la la
+0:099 secondsla la la la la la la la la la la la la la la la la launch April 20th. So like less than 2 months ago and you had 500k MR. Yeah. Yeah. It's pretty crazy. We're going super fast. That's actually crazy.
+0:1717 secondsWhat is Cluey at the high level? Clue is an AI assistant that sees what you see,
+0:2323 secondshears what you hear, and gives you live assistance without you having to prompt it. It's helpful for meetings, sales calls, interviews, and uh it's also
+0:3232 secondsinvisible to screen share. So, anytime you want to use AI without anybody knowing that you're using AI, use Cluey.
+0:3838 secondsAnd so, it's like constantly monitoring what's on your screen, listening to the audio, and you can basically ask it any question based off what's happening on your screen. Yeah, exactly. So, instead of having to screenshot stuff or screen
+0:4747 secondsrecord or prompt, Chad GBT is just observing what's going on, helping you live. Yeah. I mean, the problem with Chad GBT right now is that you have this super intelligent model, but it can only
+0:5454 secondsanswer the questions that you like type in. Mhm. Um, and this feels like a like why would you do that when the model can it can literally today it can take in
+1:021 minute, 2 secondsthe information on your screen. It can reason over that. It can take in an audio transcript and it can reason over that. And like like why limit it to only
+1:091 minute, 9 secondsthe text question that you ask it? It just feels like a extremely limited limited user experience when in reality it can just have more. And clearly we uh
+1:181 minute, 18 secondsjust it's like the 10x version of tragedy. Yeah. I saw Sam Parr literally like asking for something like this on Twitter the other day. Yeah. Yeah. Yeah.
+1:241 minute, 24 secondsI saw I saw that too. Yeah. It's so interesting. And this seems like the most intuitive way to use AI. Yeah, I agree. That's why it's like the first like good for you for spotting cuz I
+1:321 minute, 32 secondsfeel like it's about to be absolutely massive. How did you even get to this point in the first place? Cuz your path this seems like a very quick come up from what I've been summarizing on the
+1:401 minute, 40 secondsinternet. And so I'm very curious uh how the idea for the actual how did you even get this idea? Yeah, I mean before Cluey
+1:471 minute, 47 secondsthere was interview coder and man like I'll just give you like the full story of of of how everything happened.
+1:531 minute, 53 secondsthough. Most things start senior year of high school. Um, I get admitted to Harvard early. Um, I'm like captain of the math team, captain of the debate
+2:012 minutes, 1 secondteam. I think I'm going to be an investment banker, go work in econ. It's like the most lame [ __ ] ever. Um, but later that year, like I get a suspension for sneaking out of a school field trip
+2:092 minutes, 9 secondsum to meet my then girlfriend at the time. This gets reported to Harvard and Harvard finds out. They suspend me or they they resend their offer. So now it's like July, I can't go to college
+2:182 minutes, 18 secondsand like my my acceptance to Harvard just got revoked. So after that, me and my family and like ironically my family runs like a college prep consulting
+2:262 minutes, 26 secondsbusiness. So we literally teach kids how to get into Harvard and uh the youngest son just gets kicked out of Harvard. So now we're like, "Oh [ __ ] this is panic mode." Yeah. So So we we just decide,
+2:352 minutes, 35 secondslet's just keep quiet for a year and not tell anybody. Um and we'll go to college next year. Like we'll go to different college next year. But this ends up being like like a [ __ ] mentally
+2:432 minutes, 43 secondstorturous situation. Um I spent an entire year essentially just locked up in my room. I don't talk to anybody who's not my mom and my dad. And I almost never leave the house. I gain like 40 pounds. I I I program a [ __ ]
+2:542 minutes, 54 secondston. And um I jack off a bunch. And this is like the moment where I realize like, dude, my life is so different right now.
+3:013 minutes, 1 secondI need like I get this gigantic chip in my shoulder. I need to prove everyone wrong. This I cannot believe my life has come to this. Um and at that point, I'm like convinced I need to build a
+3:103 minutes, 10 secondsgigantic company so nobody will ever like look down on royally again. After this, uh I think for a while I'm not going to do college. And then my my
+3:183 minutes, 18 secondsparents are like, "You have to do college." So I say, "Okay, I'm going to try to go to San Francisco. This is where companies are built." And I fly out to San Francisco. And my mom says,
+3:253 minutes, 25 seconds"Okay, go to community college in in the Bay." So I go to community college in the Bay for a year. After that, my mom again says, "Okay, go transfer to like like let's just try to go to a good
+3:333 minutes, 33 secondsschool." Cuz like that's how Asian parents are. So I So I put in my applications again. I get accepted to Colombia as a transfer student. I transfer to Colombia. But the whole time
+3:403 minutes, 40 secondsI'm thinking like, "Dude, I'm already walked. I have to build a company." So the mid the first day I get to Columbia,
+3:463 minutes, 46 secondsI'm walking around asking every smart looking kid I know like, "Hey, do you want to start a company with me? Do you want to start a company with me?"
+3:503 minutes, 50 secondsBecause the intention here is just to look for a co-founder. And out of probably like 50 people I ask, there's one person that says yes. And that ends up being Neil, who's my current
+3:573 minutes, 57 secondsco-founder. And um Neil says yes. We start hacking on a bunch of side projects, but nothing takes off. Like we spend the whole semester working on
+4:054 minutes, 5 secondsbunch of different [ __ ] Just nothing is working except this one demo we did back in October. We we we made this really
+4:124 minutes, 12 secondsstupid tool. um to help you cheat on technical interviews. And we called it interview coder, which is probably like the dumbest [ __ ] name in history.
+4:194 minutes, 19 secondsLike we couldn't even get interview coder.com because we had no money. So we got interviewer.co. And um we we we made this demo, but the demo did pretty well on LinkedIn. It did like 500,000
+4:274 minutes, 27 secondsimpressions. And we we we're doing all this other [ __ ] and my mind just cannot get out of interview code. Like damn,
+4:344 minutes, 34 secondsthat demo we did, we got 500k impressions. Like I really feel like we're on to something there. And like like Neil doesn't seem to think so.
+4:404 minutes, 40 secondsNobody else in my life seems to think so. It's like pretty dangerous because we know this is a tool that lets you cheat on technical interviews for like software engineering jobs. So
+4:484 minutes, 48 secondsessentially like if you want to demo this product then I can just use it to cheat and get my own software engineering job. Um this is like a super [ __ ] risky play. So I keep pitching
+4:564 minutes, 56 secondsthis to Neil and I keep pitching this to my friends and they're like dude you really shouldn't do that. It's going to get you in a whole lot of trouble. Until at one point I'm like like [ __ ] it. I think I have to do this. My my my heart is already captured by interview coder.
+5:065 minutes, 6 secondsSo I I I go through an entire recruiting season. I I I record myself using this
+5:135 minutes, 13 secondsto get a bunch of different offers and I po I post them later like like after after just nothing's working. I I have the content. I'm just going to post it.
+5:205 minutes, 20 secondsSo I post it. Uh and the first video of me using it to get an Amazon offer sort of goes viral. Um sort of viral. It gets like 20,000 views. Um Amazon and an
+5:295 minutes, 29 secondsexecutive at Amazon sees the video. They tell Colombia like, "Hey, we saw this kid cheating. Um this is a really this is really bad news. Like you need to expel this kid or we're never going to
+5:375 minutes, 37 secondshire from your school anymore." Colombia los loose means this giant disciplinary hearing process and it's like it's like I I end up getting kicked out of school like like suspended because I built a
+5:465 minutes, 46 secondstool and Colombia takes the side of Amazon but throughout the whole process I'm tweeting every single update cuz I at this point I'm [ __ ] bro. Like my the school's getting mad at me, Amazon
+5:545 minutes, 54 secondsis mad at me. If I cannot see this through like like if if I can't get to the other side of this bridge, I have zero job prospects. I'm kicked out of school and I'm my my life is over. So,
+6:046 minutes, 4 secondsI'm tweeting hoping that the virality will convert into something and I end up just going super viral and it gives me the hype I need to raise around. Um, so
+6:126 minutes, 12 secondsI put some money together and now I'm like I'm like safe and uh I think like man, what is the what is the next big thing? Now I have $5 million. Um, cuz
+6:206 minutes, 20 secondsall all the crazy [ __ ] I did attracted the interest of investors in Silicon Valley. So, how do you cheat on So, you made a video documenting yourself cheating to get a job at Amazon. Yeah.
+6:296 minutes, 29 secondsAnd you built a tool to help you cheat to get a job at Amazon. David, how do you cheat on an interview? Okay. So, are they not just asking you questions like
+6:366 minutes, 36 secondsYeah. So, essentially right now, if you want to get a job as a software engineer, you need to answer this riddle that they'll give you. It's like a programming riddle like like like last
+6:456 minutes, 45 secondslike 10 years ago, they'd have asked you like I don't know like how many how many earths fit from the earth to the sun or like some other [ __ ] critical thinking riddle. And today, the modern
+6:526 minutes, 52 secondsequivalent, they'll ask you like some programming questions like I don't know like like how many in this graph like like how many ways different ways can I get from point A to point B? And it doesn't really test anything except your
+7:017 minutes, 1 secondability to memorize riddles. So every single engineer at a big tech company will have spent probably 300 hours of their life memorizing riddles. And obviously, bro, like like this is the
+7:097 minutes, 9 secondssmartest people in the world, like engineers that are capable of like curing [ __ ] cancer. They're out there studying riddles. And I think this is just like like stupid. And every
+7:167 minutes, 16 secondsinterview works the same way. You get sent uh the the the riddle and just go go go cut out a solution. So, it's very
+7:247 minutes, 24 secondseasy to just build a tool that takes a screenshot of the riddle, answers it using AI, and feeds you the code, and then wrap it in this uh tool that can't be detected by screen share. Okay. So,
+7:357 minutes, 35 secondsthat's what you built. So, they could like it would be a test. They'd ask you the question. It' be a programming question. You had to know like basically answer how to code just the proper way.
+7:437 minutes, 43 secondsYeah. And you just had this tool that could record your screen, see the question, and then answer it for you without it being seen on the other side.
+7:497 minutes, 49 secondsYeah. Exactly. And then you use that improved it by getting a job at Amazon. Yeah. Did you literally get a job offer?
+7:547 minutes, 54 secondsI I got a job offer. Yeah. But then you posted a YouTube video. Yeah. Yeah. Yeah. Oh my god. And then Amazon saw it.
+8:018 minutes, 1 secondYeah. And Amazon Amazon execs saw it and they they're just hella fraud because it's like, yo, like this kid is like cheating on my interview. They they they sent an angry email to Colombia and
+8:108 minutes, 10 secondsColombia is mad at me. And then Colombia suspended you. So you got rescended from Harvard and then kicked out of Columbia essentially. Yeah. Yeah. Exactly. And
+8:188 minutes, 18 secondsso, but then you use that as a way to raise money. Yeah. Yeah. And bro, like
+8:258 minutes, 25 secondsinvestors in Silicon Valley love seeing kids do crazy [ __ ] They're eager to put their money in people who are making big bets. There's just not enough people in
+8:338 minutes, 33 secondsthe world who are willing to do crazy [ __ ] that they they they saw the story and immediately like the interest was uh it was overwhelming like like I could
+8:408 minutes, 40 secondsnot like there was too much money that people were trying to give me. But you didn't pitch interview coder. you you kind of like realize that this screen
+8:478 minutes, 47 secondsrecording concept where AI can promise on your screen is a bigger vision. So it's not about just cheating on school.
+8:558 minutes, 55 secondsYeah. Yeah. I mean I mean we we built interview coder as like the ultimate way to use AI in an interview, but we realized like we literally spent months
+9:039 minutes, 3 secondsdeveloping this tool that would let you use AI without anybody knowing you're using AI. And this is like way bigger than just technical interviews for
+9:119 minutes, 11 secondssoftware engineer. Like if you're in a sales call and someone asks you a question, you have no idea how to answer the question. Then like like it'd be really helpful to have an AI in your ear
+9:199 minutes, 19 secondsjust tell you the answer. If I'm uh if I'm in a meeting with my boss discussing a promotion, he says some weird thing like like it'd be really helpful to have
+9:269 minutes, 26 secondsan AI just tell me what to say. And uh the the technology is is way more powerful than and like way bigger in scope than just technical interviews.
+9:349 minutes, 34 secondsAnd that's that's what I pitched to everyone in the valley and and they seem to agree and seem to think I was the I was the right guy to build it. So interesting. Okay. So, and is it
+9:429 minutes, 42 secondsmultimodal? Like, yeah. So, you can like it can see visually, it can listen to the actual like audio on your screen.
+9:489 minutes, 48 secondsYeah. And are is the interface just like you're prompting it like are you or like are you texting a model that's like overlaid like kind of a widget window on the side or can can you listen to it?
+9:589 minutes, 58 secondsCan it talk to you? It it doesn't talk.
+10:0010 minutesIt it it feeds you answers by text. But the the the the interesting thing here is uh if you want you don't ever have to
+10:0810 minutes, 8 secondsprompt Cluey. All you have to do is press a single command and it will like predict what you need. And I think this is um important like like if you go to
+10:1510 minutes, 15 secondschatbt and ask it what do you think I want right now. It has no idea what to give you because it doesn't know what you're doing. It can't hear what you're doing. It has no context about you other than like that's the problem with the chatbot is it knows nothing about you.
+10:2510 minutes, 25 secondsBut clearly has been listening. It's been seeing what you've been doing. It's been hearing what you've been saying. So obviously when you just ask it, hey AI, can you help me? Then it it should know.
+10:3310 minutes, 33 secondsIt should be able to proactively give you information without you having to ask it a specific question. And then what's stored? Is there like a knowledge base or what's the context window like?
+10:4110 minutes, 41 secondsYeah. How does that work? Yeah, I mean I mean you you you can personalize it however you want. There's like there's like a personalized page. You can add any information about that you want like
+10:4910 minutes, 49 secondsthat about you that you want cool to know. For example, I'm a sales rep at Verizon. Here's the product information.
+10:5410 minutes, 54 secondsWhen someone asks these types of questions, answer in this type of way.
+10:5710 minutes, 57 secondsLike like you you you can prompt it however you want. Okay. Interesting.
+11:0011 minutesIt's a really interesting product and the speed in which I have heard about you to the moment that you're here right now is pretty pretty interesting because
+11:0811 minutes, 8 secondsI think I saw a crazy tweet that was hilarious. Totally like not about this product whatsoever. It's a really funny Twitter with you with a dancer or a
+11:1711 minutes, 17 secondsTwitter post with you with a dancer and then I think maybe 48 hours later the co-founder of Wap Cam says the Cluey team's marketing is the best like we need to like do what they're doing.
+11:2911 minutes, 29 secondsand then another creative director of one of your content creators. So, I clearly like a 3 to 4 day period. Yeah.
+11:4011 minutes, 40 secondsWithout ever knowing what the product was and I go to the website, I'm like,
+11:4211 minutes, 42 seconds"Huh, that's actually a pretty interesting idea." Yeah. And so, the fact that I got hit that many times by people on your team or by you through
+11:5111 minutes, 51 secondsjust like the most non intuitive marketing is so fascinating to me. So, I would just love to hear about like your approach because obviously like it's the
+11:5911 minutes, 59 secondsproduct was baked in virality with your whole concept of like cheating on the interview and getting a job at Amazon,
+12:0412 minutes, 4 secondsbut now you've like carried that into so many different cool marketing concepts.
+12:1012 minutes, 10 secondsSo, I just love to hear how you think about marketing in general. Yeah. And I guess I like I think I saw a tweet about you talking about mind share and I thought cool way to think about it.
+12:1812 minutes, 18 secondsYeah. There's there's like several questions here. Um, I'll try to like clue is I think one of the first of its kind or probably the first of its kind.
+12:2812 minutes, 28 secondsWe consider ourselves a distribution first company where essentially we like like the core thesis is if you can get a billion views a month on anything does not matter if you're selling [ __ ]
+12:3812 minutes, 38 secondsperfume or software, people will buy and um you will become rich just because you've been able to grab attention. Right now with the rise of short form,
+12:4712 minutes, 47 secondsthere's a gi you don't need to make high quality one-hour long YouTube videos for people to watch your thing. You don't need to make these well thoughtout skits
+12:5512 minutes, 55 secondsanymore. You just need to post content and people will watch. There's this gigantic delta and this gigantic gap in the market where it's where you're able to very easily get a billion views a
+13:0313 minutes, 3 secondsmonth. Short form is like the dominant media factor. This means that for every single person who consumes content, the quantity of content they consume has
+13:1213 minutes, 12 secondsabout like 100xed. But the amount of people making content has not 100xed.
+13:1613 minutes, 16 secondsThere's like a gigantic delta and like not enough people make content for people to be able to like brain rot on.
+13:2213 minutes, 22 secondsUh meaning that there's a like the market hasn't yet adjusted for this. So the the value of a of a content creator is so [ __ ] high right now and they're
+13:3113 minutes, 31 secondsso underpaid for it. Every single influencer I reach out to makes like a like like they can't even make a living even though they have like 200,000 followers and they're the hottest alg in the world. Interesting. Uh yeah. The creators can't make a living. Yeah.
+13:4113 minutes, 41 secondsYeah. I mean I I mean like you have like 150 200k on TikTok. Your your videos each get like 5 million views and still like like you only get paid from creator fund cuz companies haven't caught on to
+13:4913 minutes, 49 secondsthe fact that uh if you want attention you don't pay millions of dollars for a celebrity right now. You pay like whatever retainer fee it takes to get the the 150k follower college kid with
+13:5713 minutes, 57 secondsextremely hot algol at the moment. How much Okay. I mean that makes so much sense. I mean it's our main strategy.
+14:0314 minutes, 3 secondsIt's Cali's main strategy. It's the Twitter guy's main strategy. It's what Oliver did back in the day. Like it is the method right now. Yeah. Exactly.
+14:1014 minutes, 10 secondsYeah. And I feel like people just don't I still don't get why everyone's not doing this, especially the bigger companies. Like I think like there's a
+14:1814 minutes, 18 secondsreason like like Twitter Cali the founders are what like 19 18 like like everyone is so young because you have to be young. You have to have your finger
+14:2514 minutes, 25 secondson the pulse of culture to know that oh this is the new method. And I think like everyone who leads like like I guarantee you the person who leads marketing like Facebook or something is like this is
+14:3214 minutes, 32 secondslike some like four-year-old like like like they they don't understand what what what the what the new what determines culture anymore. I think our average age of our marketing team is 21.5. Yeah, exactly. Very intentional.
+14:4314 minutes, 43 secondsYeah. Yeah. Yeah. Exactly. Exactly.
+14:4414 minutes, 44 secondsThere's a huge gap. Mass short form UGC is hands down the most effective marketing strategy for app founders out right now. It's exactly how Zach Yadagari scaled Cali to 30 million ARR.
+14:5414 minutes, 54 secondsIt's exactly how Alex Slater scaled Quitter to $500,000 per month. Clearly even used it to get to $6 million ARR.
+15:0115 minutes, 1 secondAnd it's what we do at [ __ ] In our first 60 days of doing mass short form UGC, we got over 10,914 videos posted, 72
+15:0915 minutes, 9 secondsmillion views, and over 500,000 users to sign up. We have hundreds of creators making content about [ __ ] every single day. And we don't have to create, edit,
+15:1715 minutes, 17 secondsor post any content ourselves. And the best part is we only pay after the views are generated, which means it's very cost effective. Whether you've raised money or you're bootstrapping your app,
+15:2815 minutes, 28 secondsthis is the only marketing strategy you need to get to seven figures in ARR. So,
+15:3215 minutes, 32 secondsif you're serious about growing your app and you want to start mass short form UGC, I put together a free 30-inute video for you showing you exactly how we do it step by step. I go through how we
+15:4115 minutes, 41 secondsrecruit creators, how we manage campaigns, how we share content briefs,
+15:4515 minutes, 45 secondstrack performance, and pay out creators automatically. By the end of the video,
+15:4915 minutes, 49 secondsyou'll know everything you need to launch your own mass short form UGC campaigns. So, if you want to watch the free video, click the first link in the description below. you see on on X and
+15:5815 minutes, 58 secondsLinkedIn or probably LinkedIn is a different piece entirely but on X at least the humor has not yet caught up to Instagram and like every person on
+16:0616 minutes, 6 secondsTwitter who is like outraged at the marketing that we're doing on Cluey if they scroll through the comment section of one like Instagram reel they would immediately realize oh like the world
+16:1316 minutes, 13 secondshas changed entirely and I just haven't caught up yet. There's Delta in pretty much every social media platform we're seeing. For example, X has not caught on
+16:2116 minutes, 21 secondsto the fact yet that culture rewards and the algorithm rewards extremely controversial things which is why which is why there's scenarios with us me and
+16:2916 minutes, 29 secondsa dancer and it's like this is such a ridiculous scenario and like like on X that's ridiculous enough to be the most viral thing of the day but on Instagram like I guarantee you this is never ever
+16:3716 minutes, 37 secondsgoing viral because it's not nearly controversial enough. On Instagram,
+16:4116 minutes, 41 secondsthere's the delta of like not everyone is posting, but people will literally watch thousands of reels a day, but there's not thousands of creators making good content today, which is why you'll
+16:4816 minutes, 48 secondssee the same Subway Surfer reel and you'll you'll see like the same post 100 times, but your mind will just like be okay with it cuz it's like you the same Reddit story overlaid over the Subway
+16:5716 minutes, 57 secondsSurfer thing like you'll just see that over and over again because there's not enough interesting content being posted.
+17:0117 minutes, 1 secondSo on Instagram, there's a problem of not enough people are posting interesting content. So you can get away with getting a really shitty like like video out, people will just watch it.
+17:0917 minutes, 9 secondsUm, so that's why clipping's working.
+17:1117 minutes, 11 secondsYes, exactly. That's why clipping is work. Like you have probably seen the same clip maybe like 20 30 times.
+17:1517 minutes, 15 secondsInteresting. Yeah. And and I I guess like at the team almost every day we're thinking about what are ways we can get more views on Cloey. Um not even Cloia
+17:2417 minutes, 24 secondsas a product, but just like the name Cloey. And uh this works several ways like like we have a gigantic UGC funnel.
+17:3117 minutes, 31 secondsMaybe not as big as the WP guys right now, but we're getting there. And we have about 50 creators who every day they're just pumping out content that's like cluey related. And um like
+17:3917 minutes, 39 secondsliterally it's just like like their their description is make make a post that has Cluey mentions clearly in some way and that's it. Um on on on on X and
+17:4717 minutes, 47 secondsTwitter like I'm I'm I'm actively trying to make controversial scenarios happen out of the blue because the algorithm rewards it and people there have not yet
+17:5517 minutes, 55 secondstapped into it. On LinkedIn I literally pay for a ghostriter who uh who is like generating LinkedIn LinkedIn content for me. every single social media al like
+18:0318 minutes, 3 secondsplatform has a there's a gigantic gap in those markets and we're trying to capture every single one of those markets and you've seen it convert pretty well. Yeah. Yeah. I mean um I I
+18:1218 minutes, 12 secondsthink I think we can do better on the conversion but we're not really going for conversion right now. We're going for for mind share and and this is the
+18:2018 minutes, 20 secondsthe when clearly launched April 20th like a less than two months ago. And you had 500k MR. Yeah. Yeah. It's pretty crazy. We're going super fast. I would
+18:2918 minutes, 29 secondssay it's converting. Yeah. Yeah, that's actually crazy. Yeah. I mean, I think this is um you you you you see the same sort of insane numbers with the Twitter guys, the Cali guys. Yeah. Yeah. Yeah.
+18:3918 minutes, 39 secondsIt's ridiculous for sure. I feel like we shouldn't even tell people this, but it is pretty nuts. We've gotten over a million installs just from short form alone in the last two months. And so,
+18:4618 minutes, 46 secondsyeah, it's just so powerful. How do you guys go about this? Cuz you guys do more like UGC creators that you like are have on retainer. You like this like a
+18:5418 minutes, 54 secondshundred, you did like this whole intern challenge thing. You hire all these different content creators. They all look very similar.
+19:0219 minutes, 2 secondsYeah. Yeah. I mean I mean I knew once once I started like I I I very quickly realized that there's a
+19:1019 minutes, 10 secondsinfluencers are not getting paid enough for the amount of views that they're able to get. Like our CMO Daniel Mintz
+19:1819 minutes, 18 secondshe only has 50,000 followers on Instagram but I guarantee you every single motivated Asian 20-year-old Asian kid in college knows who he is because he has extremely high algo pull in that
+19:2619 minutes, 26 secondsin that demographic. And that's how I knew about him. Every single person on the marketing team is someone that I've seen come up on my for you page and knew, oh, this person is hot right now
+19:3319 minutes, 33 secondsand I went out and like I I I convinced them to join. And so like like the marketing team is literally my timeline in person. And it's not just my
+19:4119 minutes, 41 secondstimeline. It's like everyone who's like me. Everyone who has a similar timeline to me, we just put their entire timeline into the marketing team. Interesting. So
+19:4919 minutes, 49 secondsyou consciously scrolled like you're looking for every Asian-American creator in kind of the tech space and so did you like train your algorithm to look for these people? Not even consciously. I
+19:5719 minutes, 57 secondsmean, this was like just a I I had already known this. Like, I bet you know, too, like like if someone asked you, "Hey, what are the 10 most common creators that you listen to that you watch?" Like, you would probably think
+20:0620 minutes, 6 secondsof them. Mhm. Yeah. Them are making content for us. Yeah. And like I I bet I bet like like like nine out of 10 of them are not making as much money as you
+20:1420 minutes, 14 secondswould expect. And if you wanted to pay them and just work for you full-time,
+20:1720 minutes, 17 secondsthen they'd probably be down cuz they're not making enough money. Mhm. 100%. It's very interesting. And so, you've built out like this huge is all in-house content. All in-house. Yeah.
+20:2720 minutes, 27 secondsInteresting. So, you have like these in-house How many in-house content creators do you have? Somewhere around 60. You have 60 in-house content
+20:3420 minutes, 34 secondscreators. Yeah, probably. Oh my god. And that's your pretty much your full marketing strategy of among many. I think short. Yeah.
+20:4220 minutes, 42 secondsYeah. For short form for UGC, this is our entire marketing strategy. Yeah.
+20:4620 minutes, 46 secondsInteresting. And then X your strategy is to just be controversial. I think I think it's a combination of a few
+20:5220 minutes, 52 secondsthings, but people like good engineers never post their work and good startups very rarely like they'll do a launch once every three months. Mhm. You can
+21:0121 minutes, 1 secondget away with doing a launch once every day and and people will watch it, but but people just haven't caught on cuz engineers just don't understand that
+21:0821 minutes, 8 secondslike there's so much more quantity of content that everyone is consuming. If you launch every day, you will get views every single day. And uh big companies
+21:1621 minutes, 16 secondswith impressive launches, they launch every year maybe. And it's just it's just like now there's 364 days of the year where you're not launching anything. Like I get I'll be launching
+21:2421 minutes, 24 secondssomething then like and I'll be posting every single day. Okay. I want to go through each one of your I kind of have like observed all of your marketing strategies. So I kind of want to go through exactly I'm very tactical here.
+21:3421 minutes, 34 secondsSo like how you like thought about each one. Yeah. And so well I kind of understand the short form. Got it. Mind share. I want I do want you to like
+21:4221 minutes, 42 secondsspecifically talk about this theory that you have. What is the difference between mind share and just like general brand awareness? Yeah. Yeah, I mean I I think
+21:4921 minutes, 49 secondsI think um there's products out there that get hundreds of millions of views a month, but will never ever get talked
+21:5721 minutes, 57 secondsabout at the lunch table. And I think if you want to be like the coolest thing and you want more than just uh to be like brain rot,
+22:0822 minutes, 8 secondsyou need people to talk about you. For example, like a really good I think like the subway surface clip. I guarantee you this probably gets maybe like a hundred
+22:1622 minutes, 16 secondsbillion views a month, but nobody goes around talking about subway surfers at the lunch table because there's there's not really any substance to talk about. There's no real narrative behind it.
+22:2422 minutes, 24 secondsIt's just, oh yeah, subway surfers like Minecraft parkour. There there's nothing to be talked about. But for a product like Cluey and for the marketing things
+22:3122 minutes, 31 secondsthat we do at Cluly, I mean, you uh you will watch like the craziest launch video. I'm on a date and it literally feels like a Black Mirror episode and
+22:3822 minutes, 38 secondsyou might get 12 million views, but you'll also end up getting like maybe like a hundred thousand people going around to all their friends saying,
+22:4422 minutes, 44 seconds"Hey, have you seen this thing? This is crazy." Or like like this is X. And it'll evoke some strong reaction out of them. And eventually once everyone has a strong reaction about you, this is a lot
+22:5322 minutes, 53 secondsmore powerful than just someone having seen one of your videos. Um, and th this is what I think the like the power of
+23:0023 minutesmind share is. Uh if you see you can see you can get away with having way less views as long as each of your views is way more powerful.
+23:1023 minutes, 10 secondsIf someone has seen the launch video once this probably has the same mental effect on them as seeing I don't know a stripe billboard a 100 times or like
+23:1923 minutes, 19 secondslike it's not about content to views it's about like the craziness of the views or like the quality of that.
+23:2323 minutes, 23 secondsThat's what will capture the mind of the consumer. So like how deep is the emotional cut? Yeah. Exactly. Exactly.
+23:2923 minutes, 29 secondsMhm. Interesting. Every single one of these like So, can we go through a few of your viral stunts or Yeah. What are
+23:3823 minutes, 38 secondsyour three favorite? Um, probably the launch video. Um, I think I think the the interview coder, like the entire
+23:4623 minutes, 46 secondsinterview coder saga is a big one. The launch video was a big one. And the 50 interns one was a big one. The the the dancer one was another one, but that was
+23:5423 minutes, 54 secondsthat was a lot less intentional on our part. It it was part of a commercial that we were shooting that we thought was going to be big, but it ended up being like the BTS the behind the scenes
+24:0224 minutes, 2 secondsof the commercial ended up getting way bigger than that. So that I I I can't really take any credit for that. But I mean it's also something that we did that was uh captured mind share.
+24:0924 minutes, 9 secondsEveryone was talking about it. We were literally the front page of Tech Twitter for probably like a full day or two just cuz um just just because the absurdity
+24:1624 minutes, 16 secondsof the situation. I think how I am now in contact with you is 100% because the definition of your approach of mind share. I saw that video. I saw that
+24:2524 minutes, 25 secondspicture. One person talked about it at work. Another person showed me a video at work. And within a 4-day period,
+24:3024 minutes, 30 secondsevery single person was talking about it in our office. Yeah, exactly. And they were showing me like bar for bar like this is like the coolest like [ __ ] ever.
+24:3724 minutes, 37 secondsAnd they were like thinking very positively of it. And it was just very cool to see how like fast that happened.
+24:4224 minutes, 42 secondsAnd now clearly like permanently ingrained in my mind product is very interesting without a single piece of content talking about the product. It's
+24:5024 minutes, 50 secondsvery interesting, bro. Okay. So talk to me about the 50 intern video. Yeah.
+24:5424 minutes, 54 secondsYeah, I think I subconsciously saw that on YouTube but didn't engage with it at all. But when I look back and I'm like,
+24:5924 minutes, 59 secondsI've seen that before. So idea, we essentially made a post saying we're hiring 50 interns um and we're just
+25:0625 minutes, 6 secondsgoing to like have you all in San Francisco and and this is like pretty ambiguous from from the start. I mean like the space is not big enough to
+25:1425 minutes, 14 secondshouse 50 interns. Like we could not have possibly had 50 interns there. What we could have had was a bunch of content creators making content for us. I think
+25:2125 minutes, 21 secondsum like the intention all along was to have a few people who would manage the creators and a bunch of creators and and this number would be honestly closer to
+25:2925 minutes, 29 secondsa thousand than it would be 50. But 50 is close enough where people think it's realistic like oh my god they're actually hiring like 50 regular software
+25:3725 minutes, 37 secondsengineering interns and this is going to be crazy. It's going to be a mess. I can't believe this. And the intention of the video was to evoke like a strong reaction out of people even though like
+25:4425 minutes, 44 secondslike on in all honesty what we're doing is pretty standard. We hire like a few intern managerial interns and we hire a bunch of content creators. Like this is a pretty standard marketing play. But in
+25:5225 minutes, 52 secondsreality, if you frame it like 50 interns, then people will be like, "What the fuck?" They'll repost it. They'll view it. They'll they'll they'll like be be in your comments hating on it. And um it captures mind share. And as a result,
+26:0326 minutes, 3 secondslike everyone knows about the Cluey interns and like Cluey intern is just a phrase that gets embedded into people's mind because it was such a big story
+26:1026 minutes, 10 secondseven though like even though like it's it's not really a crazy story like we manufactured it to be controversial and capture mind share. It was kind of just like the exclusion of info. Yeah. 50
+26:1926 minutes, 19 secondsinterned. Really? You're trying to hire 50 content creators. Yeah. Yeah.
+26:2126 minutes, 21 secondsExactly. But you hired a few people and they all managed the content creators,
+26:2426 minutes, 24 secondsbut it's that exclusion of that which kind of made it somewhat controversial.
+26:2826 minutes, 28 secondsYeah. Yeah. Yeah. Interesting. I think um another good example was probably the launch video. Like in reality, the launch video showed a demo of like very
+26:3726 minutes, 37 secondslittle. Like if Apple made that demo, it would have been realistic. If Google Glass made the demo, it would have been realistic. Metag Glasses made the demo like it would have been like like this
+26:4526 minutes, 45 secondsis the demo that you would expect, but we layer on top of it like cheat on everything and on top of that we made the demo about like me on a date just to give people that instinctive human
+26:5326 minutes, 53 secondssubconscious reaction of oh this is wrong and just to make it more controversial but in reality like all the technical capabilities that the
+27:0127 minutes, 1 secondglasses showed in the demo were really not all that crazy. is what every single research lab and big tech company in the world is building to right now on that future. But because we framed in a way
+27:0927 minutes, 9 secondsto be controversial, we're able to get way more views and the views are way more powerful and like stickier in people's mind like oh like like the date like the people doing like cheating on
+27:1827 minutes, 18 secondsdates cheat on everything like this this this this company is crazy. In reality like I it's not actually like a cheating app. I mean how do you cheat on a sales call? How do you cheat on a meeting?
+27:2727 minutes, 27 secondsLike cheat me. Explain the cheat on everything. Yeah. I mean I mean cheat is it's it's another thing that we do just to be more viral and be more
+27:3527 minutes, 35 secondscontroversial and be more sticky in people's heads is uh you call an app a cheating app and people are like oh what the [ __ ] like like cheat that's that's like a bad word but in reality like if
+27:4327 minutes, 43 secondswe're saying cheat on your sales calls I mean what sales rep doesn't want to be able to cheat and like like like make what does it even mean to cheat on a sales call? It makes no sense. If you think about it for longer than I know,
+27:5327 minutes, 53 secondslike a minute or two, then you will realize like, oh, like like cheat is just a clever marketing play to to get inside people's heads. And um that's exactly what it was. And it and it
+28:0128 minutes, 1 secondplayed out admittedly like a lot better than we thought it would. But yeah, I mean, you're able to make a make an app,
+28:0928 minutes, 9 secondsput a super controversial spin on it,
+28:1128 minutes, 11 secondsand just get tens of millions of views and 500k MR in two months. Yeah. Something like that. Yeah. Crazy, bro.
+28:1728 minutes, 17 secondsAnd so it was basically cheat on interviews, and you transitioned that into cheat on everything. The real like way to rationalize that is that you're just using AI on anything you're doing
+28:2528 minutes, 25 secondsand so it's a cheat code like you're but you're saying like again you're leaving stuff out and when people hear that it's like a very provocative
+28:3328 minutes, 33 secondsword has a slightly negative connotation and so it kind of like like it's just like gets their attention very quickly.
+28:3928 minutes, 39 secondsYeah. Exactly. Scroll stopper and then you intentionally layer in a video of you on a date with the language cheat on it. Yeah. Yeah. Yeah. Which is Yeah. Now
+28:4828 minutes, 48 secondsyou're just like this is like a complete mind [ __ ] of what you're expecting. And are you guys making glasses? Uh hardware
+28:5628 minutes, 56 secondsis like inevitably in our future, but not right now. I think there's too much to do in software and too much money to be made in software for us to to lose
+29:0329 minutes, 3 secondsthe focus on this. Interesting. And are you guys posting the 50 the 50 intern stuff? Was that just on X? Was that on short form? Was that on like YouTube?
+29:1129 minutes, 11 secondsLike what was the distribution strategy for that getting that video out? We posted it mainly expecting it to go viral on X. Um it did a lot of numbers
+29:2029 minutes, 20 secondson LinkedIn, but it didn't do very many numbers on IG, Tik Tok, just just as a function of I mean like the things that you think are crazy on X are just
+29:2829 minutes, 28 secondsthey're just not crazy at all on Instagram. Like nobody gives a [ __ ]
+29:3129 minutes, 31 secondsabout this cuz on Instagram there's people literally committing like felonies. They're like stealing cars. They're they're doing the craziest [ __ ]
+29:3729 minutes, 37 secondsever. But on X it's like oh my god you're hiring more than three interns.
+29:4029 minutes, 40 secondsLike this is ridiculous. Yeah. I think I think also on X especially in the YC tech it's all like these like PC like well put together intellectuals who use
+29:4829 minutes, 48 secondslike really fluffy language like you must create value for the ingenuity of the human like not even a sentence that
+29:5629 minutes, 56 secondsmakes sense but everybody talks and you're just coming in here with like these really punchy just like there just a ton of ju positions is really all I see it's so non-intuitive but you also
+30:0430 minutes, 4 secondsfit the mold because you got approved to Harvard and like yeah it's a very interesting very something I've noticed about you is you have two different ways talking like you like you can you can
+30:1330 minutes, 13 secondsturn on the white like the the tech talk you also turn on like the jin alpha jinz talk. Yeah. Yeah. I I think there something unique about like like cluey
+30:2130 minutes, 21 secondsand me as a whole. I think I'm I'm like one of the first founders who were like raised on TikTok and and like truly Gen Z. As a result I
+30:3130 minutes, 31 secondsI think I I I understand both and I think most people on tech just don't. Um like like I said the intersection of people who are big on tech Twitter and
+30:3830 minutes, 38 secondsalso people who understand IG Tik Tok is like zero. You're an engineer, right? Yeah. Like you can code and everything.
+30:4430 minutes, 44 secondsYeah. Yeah. Yeah. Very very not common for a person to be able to code and understand marketing. Do you feel like you're a better marketer or a better engineer? I thought I was a better
+30:5330 minutes, 53 secondsengineer but as I understand the algorithms more and more I've realized that I'm becoming a much better marketer. I think um there's a lot of
+31:0131 minutes, 1 secondengineers who are better than me, but I will not say that there's a lot of marketers who are better than me. I think I can pretty confidently say that I uh if there is something that I'm one
+31:0931 minutes, 9 secondsof the best in the world at, it's probably marketing. I think you've undoubtedly pro proved that. Yeah. Like very quickly. And your your edge is how your age like that is such an hack right
+31:1831 minutes, 18 secondsnow. Like everybody listening this podcast that wants to get into marketing, you have to have people under 25. Like I'm 28 and I'm out of the loop.
+31:2531 minutes, 25 secondsLike 100%. like what my 21-year-old like marketing team people do is just something I can't even like grasp at half the time. Yeah. Yeah. Exactly. It
+31:3231 minutes, 32 secondsdoesn't make sense. It doesn't make sense at all and it's changing so quickly and so it's like about being in there every single day like scroll like we have like literally mandatory
+31:4031 minutes, 40 secondsscrolling hours. Like I will like tell Harry to like get his reps in every single day. What's going on? I think it's like the most like the best investment you can hurt because like
+31:4831 minutes, 48 secondssomething can happen so quickly just three million views just Yeah, exactly.
+31:5231 minutes, 52 secondsIt's very interesting but you're an absolute savage at it. So, let's go into the dancing. The dancer, we'll say, use the popular language here. The dancer.
+31:5831 minutes, 58 secondsSo, the very first tweet I saw of you was the CEO of Cleuly getting a lap brand and just like the middle was it your office or was it like a where was
+32:0632 minutes, 6 secondsthat? Yeah. Yeah, this was in our office. Okay. So, what was the thought process behind this react like the video you were trying to make and how and what actually happened? Yeah. So, so we're
+32:1432 minutes, 14 secondswe're we're filming there's there's two main sorts of like company content that we push out as part of like Cloey and it's the launch videos which are like
+32:2232 minutes, 22 secondscinema quality like highrade make you think super dystopian and black mirroresque. There's also like uh we're trying to create this clue universe. I
+32:3032 minutes, 30 secondsthink Duolingo did this with with like the duo bird and they made sort of like a universe of characters around all centered around this duo bird and uh
+32:3832 minutes, 38 secondsright now we have so many interesting characters like our marketing team is all influencers. We have so many interesting characters here that it's very realistic for us to just make a
+32:4532 minutes, 45 secondsclue universe and just create skits about like random things that happened like like the the modern day short form equivalent of what reality TV used to be
+32:5232 minutes, 52 secondsin the past and people will just watch and be interested and develop like this parasocial connection with with all the all the all all the cast of this
+33:0033 minutesuniverse and this was supposed to be one of the episodes of the of the of the of like the clue universe is there's like always this new crazy [ __ ] that's
+33:0733 minutes, 7 secondshappening at the clue office like maybe like the next video would be like just 10 fursuits and like we're all just dressed up as like in as like furries like that. That's something we do as
+33:1633 minutes, 16 secondspart of the Clue universe. It's just just like a bunch of random skits that are like reality TV and this is going to be one of them is like the the CEO was
+33:2433 minutes, 24 secondscrazy and he just like get slap dances and [ __ ] Gotcha. So it was like a staged like reality TV show like bit that you were trying to make. Yeah.
+33:3033 minutes, 30 secondsBehind the scenes footage that someone actually like just like made it look literal. Yeah. Yeah. Yeah. That's what went mega viral on Twitter. Interesting.
+33:3933 minutes, 39 secondsOkay. Okay. So, one of my favorite things about you and something I genuinely envy cuz I feel like I have like made a personal brand and make a lot of content that's really educational, but it also feels like
+33:4733 minutes, 47 secondsalmost soulless cuz it's like pure like here's the information you want, but I'm not showing personality and that like makes me hesitant to like tweet like a a
+33:5633 minutes, 56 secondsreal take. And I think like over time that's like started to hurt me in a way where you're like I really envy your ability to just like rip what you're thinking like openly be controversial.
+34:0534 minutes, 5 secondsYeah. And I think a lot of people, especially in the tech world, be like,
+34:0834 minutes, 8 seconds"What do your investors think about that?" Like, what are people going to invest in you in the future? And you have a very interesting perspective on
+34:1534 minutes, 15 secondsit, which I really admire. So, I would love your take because you're literally tweeting pictures of you getting a lap dance from a from a Yeah. Yeah. on
+34:2434 minutes, 24 secondsTwitter in front of all your investors and all these people in the world when you're supposed to be some professional looking CEO. It's like the default mold
+34:3134 minutes, 31 secondspeople would expect. Yeah. Uh, so what's your thought process when you're posting stuff like this? I think generally people are like starving to see something real and nobody gives a [ __ ]
+34:4234 minutes, 42 secondsabout anything corporate. Like the death of a TV commercial, like TV commercialesque things have been dying for the last 20 years and I think
+34:5034 minutes, 50 secondsthey're officially dead. But for some reason, every company in the world clings to this attempt at being like corporate and um professional and oh we
+34:5834 minutes, 58 secondswe we don't do slip-ups. we're always on the right side of history and like all this other [ __ ] when in reality that's not what people want to see. They want to see something that's real and they want to see someone that's real and
+35:0635 minutes, 6 secondsthey want to see on the screen someone they can relate to. And um everyone talks about founder marketing and as a founder of a company you should be you
+35:1435 minutes, 14 secondsshould be like marketing and like like creating the audience and the audience of the company should be your audience.
+35:1835 minutes, 18 secondsBut if you really want to embody that then like like really [ __ ] act like your audience should be the company's audience. And if you have a controversial take, and I think you should share your controversial take
+35:2635 minutes, 26 secondsbecause I guarantee you there's more people on the internet that will agree with you than you think. And um this is what I try to live by. Like there are
+35:3435 minutes, 34 secondsenough people out there who think that Roy I agree with Royy's takes. This guy's real as [ __ ] for for the company
+35:4135 minutes, 41 secondsto succeed. And if if I believe in the idea of like founder marketing and if you believe in the founder of the idea of founder marketing, then I think you should you should embrace this. Your
+35:4935 minutes, 49 secondscompany should be your audience. And honestly, like if you're someone who like disagrees with every take I have,
+35:5435 minutes, 54 secondslike I don't [ __ ] watch you as a customer, bro. Like I don't I don't really need your money. And then and then the other side of this is I think companies actually never ever ever fail because the founder is too
+36:0236 minutes, 2 secondscontroversial. Like the biggest scandals are always with the biggest companies yet for some reason they just keep coming out unscathed. And the reason is
+36:0936 minutes, 9 secondstruly because like they they make enough money at at a certain point you make enough money you're big enough and it doesn't matter. Like another great example I think is like Jake Paul, Logan
+36:1736 minutes, 17 secondsPaul. Right now, there's no doubt in everyone's mind if Jake Paul wanted to sell to enterprise customers or like wanted to sell to businesses, he'd be able to. He's like big enough. He's
+36:2536 minutes, 25 secondsuntouchable now. But a few years ago when he was on the road to becoming untouchable, like this guy was going through every single scandal. He's literally the most controversial person on the internet. Even now he's hugely
+36:3336 minutes, 33 secondscontroversial. But if you told me Jake Paul made a big deal with Sony Pictures,
+36:3736 minutes, 37 secondslike I would not be shocked at all. Like of course he can pull it off. He's uh he's he's pushed through. And what that really means is like he's made enough money or he's captured enough attention
+36:4436 minutes, 44 secondsthat it doesn't matter anymore. he's like can come out of these controversial situations unscathed. And um the only way out is through for this kind of
+36:5236 minutes, 52 secondsthing. I I I've made my brand. I've gotten this far by being controversial.
+36:5636 minutes, 56 secondsAnd the only way out for me to become able to do this thing publicly without like fear of backlash is if I keep doing it and I eventually make it, which I
+37:0537 minutes, 5 secondsthink I think the Paul brothers have done. Yeah. It's very interesting,
+37:0837 minutes, 8 secondsespecially in the tech world. Like companies companies fail all the time.
+37:1237 minutes, 12 seconds90 plus% fail just because they didn't make enough money. Yeah. Yeah. And so if you're too scared to share your thoughts
+37:2137 minutes, 21 secondsor take social media seriously, you're actually doing the one thing that will almost certainly guarantee you fail.
+37:2737 minutes, 27 secondsYeah. Yeah. Yeah. I I I think so entirely. I think you're one of the first people to truly understand how important that is and to just go for it fullheartedly with a very self-aware approach.
+37:3837 minutes, 38 secondsYeah. I mean, I I I I hope so. I think um yeah companies die when the belief of the founder dies in the company and if
+37:4637 minutes, 46 secondsthe company is your identity and your identity is the company then it's hard for you to lose the you lose faith it's like at this point clearly is me like I
+37:5437 minutes, 54 secondsam Cluey and every single take that I take is essentially like my opinion is the opinion of the company and um vice versa so it's very hard for me to lose
+38:0238 minutes, 2 secondsbelief in this. How do you handle hate from it because you have to attract so much. Yeah. Yeah. I mean, I think um internet hate is pretty easy to like I I
+38:1138 minutes, 11 secondsfeel like for me personally, I've I've always been controversial. My takes have always been crazy and like like from like [ __ ] elementary school, there always be people who would be hating on
+38:1938 minutes, 19 secondsRoy just cuz man, this guy's a this guy's an [ __ ] Like this guy's cocky.
+38:2238 minutes, 22 secondsI hate this guy. And um I think I've I've grown like a thick skin because of it. And at this point, my there is such
+38:2938 minutes, 29 secondsa stark difference in the way that people interact with me in the real world and people interact with me online that it's just so easy to to block out
+38:3838 minutes, 38 secondsthe noise and realize that this is like the internet is not a real real real place. Like if I walked around San Francisco for 10 hours and I I have this giant sign that said I'm the guy behind
+38:4638 minutes, 46 secondsClo. I'm the guy who made made the Cleul launch video. Like like there's maybe like five people that will recognize me.
+38:5138 minutes, 51 secondsthe the bubble of people that know me is so much smaller than the the entire world. And in the entire world, like there's no [ __ ] that's gonna
+38:5938 minutes, 59 secondshate on you behind a screen that will go up to you and be like, "Bro, you need to stop building the [ __ ] cheating app."
+39:0439 minutes, 4 secondsLike like like people don't do this. And the the people that hate are never the people with the balls to actually do anything in person. Like my real world life is literally never ever ever going
+39:1139 minutes, 11 secondsto be affected in a negative net negative way by the the crazy [ __ ] I do online. Yeah. like like people hate behind a screen, but they will never hate in person. And as a as as a result,
+39:2239 minutes, 22 secondslike my my life is pretty much unaffected. The only thing that will ever happen to me is people will come up to me excitedly and say, "Hey, aren't you the clue guy?" And I bet [ __ ]
+39:2839 minutes, 28 secondslike 30% of those are people who have written hate comments about me before,
+39:3139 minutes, 31 secondstoo. I mean, like like real world is just so different. Interesting, bro. I I everything you tweeted, I'm like lowkey facts. Yeah. Yeah. You all like respect for being willing to post that online.
+39:4339 minutes, 43 secondsVery cool to me, bro. So, what about this? Uh you're doing this wide comment or afterparty literally tomorrow. Yep.
+39:5039 minutes, 50 secondsLike these are like this is like genius level creativity to like think about this and it's like is this for like recruiting? Yeah. I mean the can you
+39:5839 minutes, 58 secondsexplain what it is and what you're doing and why? Yeah. YC startup school is like the biggest event happening this summer and the brand name of Y Combinator has
+40:0640 minutes, 6 secondsgotten every single cracked college age engineer to come to San Francisco for two days. And um of course like like we we made we made this great video like
+40:1540 minutes, 15 secondssuper cinema quality video. We rented out like this very nice camera and a party bus to film like a super hype video because now like the engineers are [ __ ] in San Francisco. We just need to get a bunch of them at our house.
+40:2540 minutes, 25 secondsSell them on the idea of Cle and this would be like the strongest recruiting funnel ever. Um but as the intention behind the behind the afterparty, every
+40:3240 minutes, 32 secondsother company is is hosting some lame PC like networking event [ __ ] We're the only ones that are going to be throwing like an actual party cuz like these are college kids coming. These
+40:4040 minutes, 40 secondsaren't [ __ ] like like people want to have fun, you know? They like nobody wants to do the corporate [ __ ] networking like like this is so [ __ ]
+40:4640 minutes, 46 secondslame. They want to come. They want to have a good time with like with like new interesting people that they're meeting and we're going to be the ones that host the afterparty. And as a result,
+40:5440 minutes, 54 secondseveryone's going to leave and they're not going to remember the [ __ ]
+40:5540 minutes, 55 secondsPerplexity networking event that they had like no hate on Perplexity or anything, but they're going to remember the [ __ ] after party that they went to. As a result, when they apply to jobs in the future, like like every cracked
+41:0441 minutes, 4 secondsengineer that we invite is going to be thinking like, "Damn, I had a really good time in Kuey." That's so smart,
+41:0941 minutes, 9 secondsbro. And you guys make like the you put a lot of effort into these like you have like a little like trailer video to announce the afterparty. It's like there's humor in there. It's you like you're like the face of this stuff. And
+41:1741 minutes, 17 secondsyou made this uh invite only which I thought was pretty smart. Yeah. What was the thought process on invite only? I mean events need to be exclusive. If we
+41:2641 minutes, 26 secondsmade it open invite like we already there's literally a thousand people cumulative in all their DMs that are
+41:3241 minutes, 32 secondslike begging to get in. And this is another thing with like consumer hive mind. I mean, if it's an open invite, nobody's going to talk about it.
+41:4341 minutes, 43 secondsNobody's going to be like, "Oh, do you have a link? Like, like I'm trying to get in." But if it is invite only, then people are going to be asking like begging for an invite. They're going to be like, "Yo, I'm trying to go. I'm just
+41:5041 minutes, 50 secondstrying to see what's up." And if it's open invite, like you might get more people maybe, but you definitely won't get as many people who are interested.
+41:5741 minutes, 57 secondsWhat's the ratio going to look like at this party, bro? I I'm I'm being extremely selective with this. This is uh 50/50 or as close as I as I can get.
+42:0442 minutes, 4 secondsThat'll be unheard of in this world.
+42:0642 minutes, 6 secondsThat's what I'm saying that if if anyone could pull it off, it'd be us. Yeah.
+42:1042 minutes, 10 secondsFast. I believe it, bro. What about You have one of the funniest takes I've ever seen that people ask you if your girlfriend's distracting or having a girlfriend distracting. Yeah, bro. Like,
+42:1942 minutes, 19 secondsI feel like if you're a dude and you're out there grinding 12 hours a day, like you need you need a girl to come back home to. You can't just be like going
+42:2842 minutes, 28 secondslike jacking off at home alone. Like this is like the worst thing possible for your mental health. Back in the day,
+42:3242 minutes, 32 secondsif you were a caveman and you were out there like hunting bears the whole day and you came home, like even if you if you won or lost, like you would come back home to your cave woman and wife and you would [ __ ] and this would be
+42:4142 minutes, 41 secondslike the okay, my day is over and like regardless like I'm having a good time with my wife and like like like it's done. Like tomorrow is a better day. If you came home to your cave alone and you
+42:4842 minutes, 48 secondsjust had to jack off and just like like how many days could you go without catching a catching or catching like any meat? Like how how how how long could you fight? It's what it is what
+42:5742 minutes, 57 secondstechnically motivates you at a primal level. Exactly. I've been out here for two weeks separated from my girlfriend and it has like destroyed my ability to
+43:0543 minutes, 5 secondsfocus. That's what I'm saying. That's what I'm saying. Super unhealthy just to go home alone, look at porn or something. That's what I'm saying. I'm saying horrible for your productivity, mental health, clarity, everything.
+43:1343 minutes, 13 secondsThat's not how we designed. I just wonder if people that have never had girlfriends just don't know a difference or something. I don't understand either.
+43:1943 minutes, 19 secondsAnd they cope instead of like having to learn to go talk to a girl. They're just like, "This is for the grind. I got to be focused. I can't have a girl right now." Yeah, they I you're so based for
+43:2743 minutes, 27 secondssaying that because I am so much more productive with a girlfriend and more like it's just a better existence even though you do have to spend some time with them. But bro, it's just like Yeah,
+43:3643 minutes, 36 secondsexactly, bro. Like I think the ideal like the most productive level the most productive you will ever be is eight hours of deep focused work a day and
+43:4443 minutes, 44 secondsthen [ __ ] like you're chilling and you cannot chill as a man. So like a straight man if you don't have like a a a wife or a girlfriend to come home to
+43:5243 minutes, 52 secondschill with or at least like a hookup or like a friends of benefits or something like you just need to get that release out. I've been telling everybody the office we're girlfriend maxing this
+43:5943 minutes, 59 secondssummer. Everyone's got to get on it because it call Yeah. Those last four hours of if you're not spending time with your girlfriend, those last four hours of work are actually super
+44:0744 minutes, 7 secondsunproductive and you make really bad decisions. That's what I'm saying. Under the guys that you're being productive,
+44:1244 minutes, 12 secondsthe grind people are falling for this hustle bro culture way too hard, bro.
+44:1644 minutes, 16 secondsYeah, I agree. I think uh I I get a lot of work done and even me I don't think I can get more than eight hours of focus work in a day. Mhm. I think it's the
+44:2344 minutes, 23 secondsquality like a few quality good decisions just go a long way. It's much better than just forcing everything but there's always context for different seasons of
+44:3144 minutes, 31 secondsyour life. So I'm curious then you said you're trying to recruit creators. Yeah. From the Y comator
+44:3844 minutes, 38 secondsthing. Oh, like engineers mostly. I mean, yeah, like why commentators not attract the best creators that
+44:4644 minutes, 46 secondsyou Okay. So then how many engineers do you have versus creators? If you have you have three people that are like on your team and you just like pay these creators like probably like as
+44:5344 minutes, 53 secondscontractors or Yeah. Yeah. Just contractors. Like we we pay per video and then we do view bonuses. Like it's very similar to to how Walt does does clipping. It's the method, bro. Yeah.
+45:0245 minutes, 2 secondsYeah. Exactly. Straight up. It's the method. So how many engineers? Uh, we have three full-time, but probably gonna be five by the end of next week. Five engineers? Yeah, four or five. Yeah.
+45:1245 minutes, 12 secondsGotcha. How many do you think you need?
+45:1545 minutes, 15 secondsEngineers. I think um I've learned I'm I'm beginning to think that it's never a bad thing to have an
+45:2345 minutes, 23 secondsextra engineer or an extra engineer or two on hand. So, I think probably somewhere around six or seven will take us to the billion dollar valuation.
+45:3145 minutes, 31 secondsLike, you don't need that many. our engineers are like way more productive than they would have been 5 years ago pre AAI and everything like they they they ship a lot of code fast. So I'm I'm
+45:4045 minutes, 40 secondsI'm pretty happy with having maybe like six engineers total. Yeah. I think we're really trying to keep headcount under 50 like for eternity. Yeah. Yeah. Yeah. I
+45:4845 minutes, 48 secondsthink the a quality people with AI is becoming very real. Yeah. Exactly. We're very much trying to embody very early on. How do you see AI content creation
+45:5845 minutes, 58 secondsplaying out? Because that's something I'm like we're on the brink. Like V3 just came out. Yeah. Tried arcad like we're trying these other AI UGC stuff and it like V3 is actually like insane
+46:0746 minutes, 7 secondsbecause voice. Yeah. But I'm very curious what you like what your hypothesis for AI content is because it's like not real yet but it's also
+46:1446 minutes, 14 secondskind of real right now for the first time last few weeks. Feel like we're like very much on the cusp of AI content being a huge thing. Yeah. Yeah. I mean I mean it's it's like coming out in the
+46:2346 minutes, 23 secondsfuture, but I think there's literally infinite viral hooks or like types of videos that people will watch. And sure,
+46:3246 minutes, 32 secondsthere might be infinite ways that you can generate an AI, but there's also infinite ways that you can generate them without AI. And I think what the like
+46:3946 minutes, 39 secondsthere's like a final 10% I don't even know how to describe there's like a final 10% that V3 is missing. Like the human videos are still not exactly
+46:4746 minutes, 47 secondshuman. And the difference between a like the Instagram algorithm will really heavily reward something that feels real
+46:5446 minutes, 54 secondslike a like like a fake skit. If it feels real, you'll do you do 10 million views and if it doesn't feel real, then you get 1 mil. Um, and like like just AI
+47:0247 minutes, 2 secondsis not at the point where like like all of our UGC are like things that feel real. If you look at them with an objective eye, they they they're obviously fake, but if you're just like mindlessly scrolling, you you'll think,
+47:1147 minutes, 11 seconds"Oh, yeah, that's pretty real." And I guarantee you there's like not one of our viral videos that you could actually recreate with AI to the same effect. Um,
+47:1947 minutes, 19 secondsgenerally I'm bullish. I think AI content creation will fix the delta like like the the gap in the market where not enough content is being created. Like AI
+47:2747 minutes, 27 secondswill fill that gap. But um there I think there's some time until then. I think I think the subtlety that a lot of engineers won't pick up on what you just
+47:3347 minutes, 33 secondssaid is feel. Yeah. Yeah. The feeling that content invokes is what separates good from bad content. I'll watch uh I
+47:4247 minutes, 42 secondswatched the Greg Eisenberg podcast of this guy who had the best NAN automation that scraped the most popular 10 videos
+47:5047 minutes, 50 secondsand then it transcribed them and then it gave him four different hooks and then it sent him over here and he got 10 videos and he automatically had them posted to LinkedIn or something. Yeah.
+47:5747 minutes, 57 secondsAnd then he accidentally like he shows his LinkedIn and it gets like seven likes. Yeah. No one gives a [ __ ] if you automate something that doesn't work.
+48:0548 minutes, 5 secondsAnd a lot of the AI content feels super soulless. Yeah. and there's no like essence to it or doesn't provoke any feelings. You're not saying anything
+48:1348 minutes, 13 secondscontroversial or relevant to the day now. And so I've been very against AI content, especially any form of video or
+48:2148 minutes, 21 secondslike any form of like YouTube video or short form video, but it is very interesting to see what happens with these models. I'm curious if you were on
+48:2948 minutes, 29 secondstop of it or not yet. We we we tried we spent a lot of time testing, but it's just like it's just not there. Like text doesn't feel real. you have to look over
+48:3648 minutes, 36 secondswith the human eye and um the the videos don't feel real and you just need a human human in the loop and at this point just like let's just work with the human wait till the models get there.
+48:4548 minutes, 45 secondsWhat are your So what if you had to distill your marketing strategies into like buckets what are they? launch videos,
+48:5148 minutes, 51 secondscontroversial scenarios and UGC or more broadly even um marketing for conversion and marketing for hive mind.
+49:0549 minutes, 5 secondsUm there's many things that we post for the purpose of just being like controversial and crazy and getting people talking about it. For example,
+49:1249 minutes, 12 secondsthe 50 interns thing, this resulted in not much money flowing to Cluey, but it did result in a lot of people talking about it. Even the launch video, it didn't result in like that much money
+49:2049 minutes, 20 secondsbecause like like the product in the launch video is not the product we're actually selling. It's just loosely related, but it gets people talking about clearly. And um those things are
+49:2849 minutes, 28 secondsfor the purpose of hive mind and they're like they're like so relevant and important for all of my all of my Twitter is not actually or X is not
+49:3549 minutes, 35 secondsactually intended to be um highly converting. It's only intended to get people talking about Cluey. Um Instagram is where we have our UGC funnel and this
+49:4449 minutes, 44 secondsis these are the things that will scale like billions of views. Um we've done like over 20 million views to date um in
+49:5149 minutes, 51 secondsthe last like two and a half weeks and we're probably like this month alone we're probably going to do like our first month will be the first month that does 50 million views. It's like it's
+49:5849 minutes, 58 secondslike extremely rewarding and it's it's the most converting thing like you can actually show visuals of the product and make people like show a use case of it
+50:0650 minutes, 6 secondsworking and then like have people like click and download. Um but it will it just won't ever get people talking about the product. So it's more of that's your performance engine. Yeah. Exactly.
+50:1450 minutes, 14 secondsExactly. a little more education.
+50:1650 minutes, 16 secondsDo you guys pay Could you just break down how that works like in Yeah. Uh I think we we pay pretty close to market rate. I think we do a little bit more,
+50:2450 minutes, 24 secondsbut generally it's $25 to $40 a video. And every single video they post,
+50:2950 minutes, 29 secondsregardless of whether it gets zero views or a million, you get that that that flat. And then on top of that, there's performance view like bonuses per views.
+50:3750 minutes, 37 secondsIf you get 500,000 views, then we'll give you $500. If you get a million views, we'll give you we'll give you a,000 bucks. And there's like tears after that, but we haven't really gotten
+50:4550 minutes, 45 secondsto to many tiers after that. Um, if you're an app founder and you want to use the exact marketing strategy that Roy just mentioned, click the first link
+50:5350 minutes, 53 secondsin the description below. I put together a free 30-inute video breaking down how you can use mass short form UGC for your app. This is the growth hack right now,
+51:0151 minutes, 1 secondguys. And this attention arbitrage will not last forever. So, go watch the video, take action, your future self will thank you.
+51:0951 minutes, 9 secondsAnd for creators, we're all just like scrolling looking for creators. And as soon as we find someone who's like, "Oh [ __ ] this person seems pretty good."
+51:1651 minutes, 16 secondsWe'll send it to a group chat and then we'll we'll we'll we'll send them DMs and we'll try and talk to them and like try and poach them into into working for for us and making content for us. And
+51:2351 minutes, 23 secondsit's it's like pretty simple cuz like the guys that we'll find are half them will be like 3,000 followers, like 4,000 followers. Like they literally just started posting. But immediately you can
+51:3251 minutes, 32 secondsjust tell like, "Okay, this person has the right eye for content. These this person understands it. So let's just post them quick." And I think the biggest thing we look for is um just
+51:4051 minutes, 40 secondsgenerally if there is someone like watching that wants to try and do this on their own. There's a gigantic difference between someone who's posted maybe three videos and someone who's
+51:4751 minutes, 47 secondsposted zero videos. You think it's not it's like only three videos. It's not a lot. But 99% of people are so deeply uncomfortable with the idea of post like
+51:5551 minutes, 55 secondsthey will never post anything cuz they're so [ __ ] embarrassed. And once you get get past like three videos like you're you're past that point of oh [ __ ]
+52:0252 minutes, 2 secondsI'm I'm going to get judged by everybody I know for posting videos. And like like those are the people that you want. It's like going to the gym for the first time. Yes. Exactly. Go the first time.
+52:0952 minutes, 9 secondsExactly. Exactly. Interesting. I mean,
+52:1152 minutes, 11 secondsthat's exactly how we do it. Like you just look for people like you just spend hours like looking for the best UGC creators. People who like understand content. Like they have a structured hook. They understand how to tell story.
+52:2052 minutes, 20 secondsThey have decent editing that's more so just like pacing and like showing what you're saying with what is being displayed on screen. Just simple stuff like that and then reaching out to them,
+52:2952 minutes, 29 secondscutting a deal. People are way more willing to make videos than you think.
+52:3152 minutes, 31 secondsDo you recruit them into like a Discord or what do you guys do? Right now we have a Instagram group DM or we have like a couple of those podcast channel
+52:3852 minutes, 38 secondsor or just a group DM. Yeah, just we have like a few group DMs and and but like we're we're getting way too big.
+52:4352 minutes, 43 secondsWe're going to have to move it into a Discord. Move into a [ __ ] and we have you I'm going to have you talk to him and we'll show you how to do it cuz it's we built the perfect tool for you guys.
+52:5152 minutes, 51 secondsAwesome. Use it ourselves and it's going to be exactly what you need. And the best part is you don't pay unless they give views. Yeah. Exactly. Yeah. Yeah.
+52:5852 minutes, 58 secondsAnd you're not paying influencers that are influencers are ridiculous right now. Yeah. Yeah. I've been reaching out to every single YouTuber in existence and these brands are paying these people way too much money. Yeah. Yeah. Yeah.
+53:0853 minutes, 8 secondsIt's kind of crazy. Have you guys tried YouTube at all? No. No, we haven't tried YouTube. I I think I think the two platforms where we're still like waiting to see what exactly works is
+53:1753 minutes, 17 secondssurprisingly Tik Tok and YouTube. Like a lot of people try and group IG reals and Tik Tok together, but like the algorithm is very different. And um I think I I
+53:2653 minutes, 26 secondsthink we we still yet to crack Tik Tok like at least to the extent that IG we know Instagram you can do way you can get away with way more educational like step one step two step three step four
+53:3453 minutes, 34 secondsstep five where Tik Tok is people are really deep those people are cooked yeah I agree I agree entirely yeah their
+53:4253 minutes, 42 secondsattention span is done but it's better to definitely focus and nail those we only started our short form like in January
+53:4953 minutes, 49 secondsbut we've I think our our peak we got 22 million views in a week sick Yeah, it's the method, bro. That's what I'm saying.
+53:5653 minutes, 56 secondsI've had so many people on this podcast that just did the same thing and then we tried it and like it works better than you could ever even imagine. Yeah,
+54:0154 minutes, 1 secondexactly. There's such a gigantic gap in the market and it's just not tapped into because the people with money are not the people who scroll IG, Tik Tok, and like like they just don't understand
+54:1054 minutes, 10 secondsthat this is the way to do advertising in 2025. How's your life changed since you've since you started this? Man, that's a that's a good question, bro.
+54:1854 minutes, 18 secondsThere's been like I think February 1st of this year, literally like four just over 4 months ago is when I launched the
+54:2654 minutes, 26 secondspaid version of Interview Cutter. Since then, Interview Cutter blew up. Got like two 300 million views across socials. I put the round together and all of a
+54:3354 minutes, 33 secondssudden overnight I have $5 million in the bank account. I have like an actual company. We do the launch video and the whole time I'm like maybe interview
+54:4154 minutes, 41 secondscoder was a fluke. Maybe I don't actually understand virality the way that I do. but it's been disproven like a couple times and now I I I kind of showed myself and the world that I can
+54:4954 minutes, 49 secondskeep doing this just like at will almost and um like the team has grown from me and Neil coding in our dorm to like
+54:5754 minutes, 57 seconds[ __ ] like like like there's like 13 14 people running around the office and it's pretty crazy. There's so many ways that my life has changed. I think one of
+55:0455 minutes, 4 secondsthe biggest is um there like my internet persona has [ __ ] exploded and I I've I've had to
+55:1255 minutes, 12 secondsbecome much more intentional about delineating what's real and who my actual friends are versus like every
+55:2055 minutes, 20 secondsother person who like runs up and like oh like even like the people on the internet who are just hating. Um, and I'
+55:2655 minutes, 26 secondsI I think I've grown a lot closer to my family and my friends and like I I take for less for granted the the time that I spend with them in person. Um,
+55:3755 minutes, 37 secondsI think I've since leaving college like it sort of hit me that like holy [ __ ]
+55:4255 minutes, 42 secondsthis is like I I actually dropped out like I'm I'm done. There's no going back. This is my life for the next 80 years. And it's super fun but I think I'm like right now I'm looking for a life. I broke up with my girlfriend.
+55:5355 minutes, 53 seconds[ __ ] bro. I'm sorry. No, it's okay.
+55:5555 minutes, 55 secondsLike recently. Yeah, recently. Like two and a half weeks ago. Oh my god. It was heartbreaking. I'm sorry. Oh, it was good, bro. It was good. Yeah. And and then now now it's like I think I need
+56:0356 minutes, 3 secondssomething longer term. Interesting. Does it feel real that you're in this phase?
+56:0656 minutes, 6 secondsLike I I I struggle with this podcast because it's actually been so the how much success you've had so quickly.
+56:1456 minutes, 14 secondsYeah. Is like you're still experimenting with everything. So there's nothing like there's nothing to really look back on.
+56:1956 minutes, 19 secondsIt's just like you're so like in the first season right now. Yeah. I know. Does it feel real? Not really. I mean,
+56:2756 minutes, 27 secondsyeah. This is like literally, bro, I I cannot believe that February 1st is when I was in my dorm launching interview
+56:3456 minutes, 34 secondscoder. Um, it it it does it doesn't feel real. Like I feel like I've gone through pretty pretty unfortunately I've gone
+56:4256 minutes, 42 secondsthrough the entire hedonistic treadmill of life. Like I I I think I've I've experienced like the nice Michelin star dinner and I didn't really like it that much. I bought like the nice pair of
+56:5056 minutes, 50 secondsshoes that I wanted. I didn't really like it that much. Now, as a result,
+56:5356 minutes, 53 secondslike I feel like I I don't even have a monetary many monetary desires like that. Um, which I I never ever thought I
+57:0057 minuteswas gonna thought was gonna happen. Like I used to be the biggest [ __ ] hype beast back in middle school if I would like drop drop [ __ ] sneakers and like like resell sneakers and I would like like I I I wanted the the the like like
+57:0957 minutes, 9 secondsthe Jordan one Chicago so bad and all this [ __ ] and now like I feel um that that part of my life and that core desire has has has gone away. That's
+57:1857 minutes, 18 secondscrazy. It's happened so fast. Yeah, I know. And I don't even know right now if it's gotten to gotten to my head like and if I am a different person. I I
+57:2657 minutes, 26 secondsthink about this quite a bit like like I I don't know if I'm the same person that I was six months ago. I really hope I am and I think I've tried to stay true to
+57:3457 minutes, 34 secondsmy core desires and core values, but I mean like bro my life and my perspective on life and like my perspective on everything has changed so much. Um, one
+57:4357 minutes, 43 secondsI'd say one thing that I like probably the biggest material change in my mindset has been like uh you it's very
+57:5257 minutes, 52 secondshard to lose when you take the biggest risks ever. I people will often say this this concept of um it's it's easier to
+57:5957 minutes, 59 secondsdo like raise $100 million than it is to raise $1 million. It's easier to do things that are 100 times as hard that is than this or it's easier like 100
+58:0858 minutes, 8 secondsextra money than this to two extra money. I think um when you do something small um that's that's not very risk heavy. Like everyone wants to do that.
+58:1858 minutes, 18 secondsYou're competing with a million people.
+58:1958 minutes, 19 secondsBut when you go out there saying like I'm going to build [ __ ] brain chips or I'm going to I'm going to like make $100 million or I'm going to I'm going to do XYZ. Like there's very few people
+58:2658 minutes, 26 secondswho want to swing that big. And um as a result, your competition is almost none.
+58:3358 minutes, 33 secondsLike the risks that I've taken have been so big. I'm probably the first person in history to like intentionally get themselves kicked out of an Ivy League for the purpose of hyping up a
+58:4058 minutes, 40 secondsfundraiser that would have paid off. And I think interview coder like people said, "Oh,
+58:4858 minutes, 48 secondsyou just got lucky that it got viral."
+58:5058 minutes, 50 secondsBut in reality, I mean, how many other times in history has someone built a cheating tool, publicized the cheating tool and gotten kicked out of school for it? Like probably never in history. And
+58:5858 minutes, 58 secondsI think there's no universe where that didn't go viral. Um, and I think just generally when you swing big and take
+59:0459 minutes, 4 secondsbig risks, uh, you win. And, um, this is this is something that I've thought and I think that's that's warped my
+59:1359 minutes, 13 secondsperception on a lot of things like you need to take the biggest risk possible and swing the biggest you can at every single possible moment. Is that why you're comfortable raising so much money? Yeah. I mean, I think Yeah. Yeah.
+59:2459 minutes, 24 secondsYeah. This is like another example of that. Even when we did the the seed fund raise, we were sort of like trying to be conservative with the valuation and thinking like, oh, maybe maybe let's
+59:3259 minutes, 32 secondsraise at a less conserv like like a less gigantic number and maybe we'll only raise X when we could raise Y. Um, and I think that was like the only mistake of
+59:4059 minutes, 40 secondsmy fundraises. I could have just swang bigger cuz like literally it's been what two months and I'm already raising another round. Like like it things happen so [ __ ] quick. If you're not betting on yourself then who the [ __ ]
+59:5059 minutes, 50 secondsare you betting on? Like Yeah. Yeah. with with fundraising. My philosophy is you should fund raise the most amount you can when you don't need
+59:5959 minutes, 59 secondsit. And if you're raising any less because you're you're worried that the valuation is going to get too high,
+1:00:041 hour, 4 secondsyou're not going to be able to justify it, then you're just like like you're being a [ __ ] And and if you have that mindset, then you're never going to build a big business anyways. This like
+1:00:121 hour, 12 secondsI am getting so inspired by you because these are like I bootstrapped my entire way through my career. Yeah. Yeah. I I have a lot of respect for bootstrappers like like Zack Cali, Blake Anderson.
+1:00:231 hour, 23 secondsAlex from from Twitter. Like like I I respect these guys so much. Um I'm not against bootstrapping like like it's totally reasonable that you want
+1:00:311 hour, 31 secondsthe money to yourself. I think like if if you want to build like a trillion dollar business like you don't get there by worrying about your $30 million
+1:00:381 hour, 38 secondsvaluation right now. Like you get there by like think like just swing big like okay I've got a term sheet for 30 mil.
+1:00:451 hour, 45 secondsCan I get one for 50 mil? Can I get one for 100 mil? And just like like like building it building it up. So you don't think there's too much of a technical hurdle for you to make like this screen
+1:00:541 hour, 54 secondsrecording product and even if your your literal thought process is we're going to build one and when open AI or cloud have a similar one we think that ours is
+1:01:031 hour, 1 minute, 3 secondsgoing to be equal level of quality maybe like doesn't really matter how close it is but we're going to be able to outdistribute them and we'll just be the default one that people think of because
+1:01:121 hour, 1 minute, 12 secondswe have the brand name like is that genuinely like the bet you're taking that's among many that's one of the bets
+1:01:191 hour, 1 minute, 19 secondsI think um we'll we'll we'll get a little technical here, but like the research labs have sort of shown that
+1:01:271 hour, 1 minute, 27 secondsthey're not really willing to play at the application level. The race to AGI is too competitive and the first lab
+1:01:361 hour, 1 minute, 36 secondsthat gets AGI sort of like like wins everything. So I mean I mean they they sort of shown that they're more they would rather buy out the application
+1:01:451 hour, 1 minute, 45 secondslayer products like OpenAI's gigantic 100x AR acquisition of Windsurf and Kodium. I mean like like this is a ridiculous ridiculous acquisition.
+1:01:531 hour, 1 minute, 53 secondsThey've sort of shown that they'd rather buy out the companies and spend their time focusing on on on on building the the research. Um and I think this is
+1:02:021 hour, 2 minutes, 2 secondslike probably true for most things. Uh I don't think there will be like the OpenAI calendar that comes out soon.
+1:02:071 hour, 2 minutes, 7 secondsMaybe I'm wrong, but I think there's time for someone else to build the OpenAI the AI calendar and just get bought out by OpenAI. And right now,
+1:02:141 hour, 2 minutes, 14 secondswe're competing at the application level. And if we do succeed at the application level, then I think OpenAI is just not going to compete with us
+1:02:211 hour, 2 minutes, 21 secondshere. Um the the second thing I think is that
+1:02:301 hour, 2 minutes, 30 secondsclearly as a product and most AI products should be designed so that when the next model comes out that's twice as good your product will then get four
+1:02:391 hour, 2 minutes, 39 secondstimes as good and that's like how we've designed CLY in mind like we're waiting on the next release of the next great model cuz when that comes out clearly
+1:02:461 hour, 2 minutes, 46 secondsinherently gets so much better and um we're not betting like like we we we we hope the research labs get better and push out better models cuz cuz when they
+1:02:541 hour, 2 minutes, 54 secondsdo like clearly we'll get better and I honestly don't think that we're competing with OpenAI at at all really like this is an application layer
+1:03:011 hour, 3 minutes, 1 secondproduct and OpenAI is building uh they're building the models that support us. So the the the first part of the argument is that the research labs are
+1:03:101 hour, 3 minutes, 10 secondstoo involved with other things to in to throw themselves into the fight at the application layer. Um if that's the case
+1:03:161 hour, 3 minutes, 16 secondsthat and the day that the model that is multimodal that can take like a 10 billion token context um the day that
+1:03:251 hour, 3 minutes, 25 secondsmodel that is capable of being Jarvis comes out then everyone all of a sudden has access to build Jarvis and that day
+1:03:321 hour, 3 minutes, 32 secondsthe question is who builds Jarvis? Um who who gets to be the distributor of Jarvis? And I think it is the same same
+1:03:391 hour, 3 minutes, 39 secondssame reason for why Gmail beat Yahoo mail or why Google search beats Bing search. It's not because any of the technologies are inherently better. It's
+1:03:471 hour, 3 minutes, 47 secondsjust because one of them is cooler than the other. One of them has captured the hive mind better. And it's not a function of views. It's a function of like talked aboutness. And if the day
+1:03:551 hour, 3 minutes, 55 secondsthat GPT7 the the the API becomes public, if that day comes and clearly is the most hottest talked about thing in the world, then obviously we will be the
+1:04:051 hour, 4 minutes, 5 secondsbest distributor of Jarvis. And um so so that that is a twofold argument. First,
+1:04:091 hour, 4 minutes, 9 secondsthe race to AGI is too important, too competitive for research labs to really meaningfully invest in the application layer. And second, the day the models
+1:04:181 hour, 4 minutes, 18 secondscome out, that's when our virality and our hive mind is like really really powerful because uh our
+1:04:261 hour, 4 minutes, 26 secondsour our product will get literally 1 million times better. And if that's the case, then everyone's going to want one.
+1:04:321 hour, 4 minutes, 32 secondsSo you'll be a f first off since you're building that, you'll be the first one to be able to implement it. Exactly. So you already have the infrastructure interface and everything ready to go.
+1:04:401 hour, 4 minutes, 40 secondsAnd secondly, you've been building mind share. People already know you as this thing in a way. So you'll also have the mechanics to distribute faster. Yeah.
+1:04:481 hour, 4 minutes, 48 secondsAnd brand equity build. Yeah. Exactly. I think the technology is not super simple to build, but like you you get there
+1:04:561 hour, 4 minutes, 56 secondsiteratively. And if we're ready for the model to come by the time we're by the time it comes out, then um at that point like we will have literally years ahead
+1:05:041 hour, 5 minutes, 4 secondsof everyone else. Um because we're we're preparing for the world right now.
+1:05:081 hour, 5 minutes, 8 secondsInteresting, bro. What I think that's a I would 100% invest in that. In that pretty sold on that. Um I'm curious. I
+1:05:171 hour, 5 minutes, 17 secondswas thinking upstairs like I've interviewed so many of you like 18, 20,
+1:05:221 hour, 5 minutes, 22 seconds22 year old kids who are making millions of dollars with like AI apps, whatever.
+1:05:271 hour, 5 minutes, 27 secondsZach, Daniel Bittton, all you guys Blake,
+1:05:311 hour, 5 minutes, 31 secondshow do you guys how like how are you guys so switched on? How are you guys such clear thinkers? Like do you think
+1:05:391 hour, 5 minutes, 39 secondsit's like a born intelligence? Do you think you consumed the right Tik Tok algorithm as a kid? You think it was ner like your parents like I feel like your
+1:05:461 hour, 5 minutes, 46 secondsparents probably were they encouraging you to be an entrepreneur? Were they encouraging you to be like if you're getting into Harvard they really care about school? Like it that's a lot
+1:05:541 hour, 5 minutes, 54 secondsdifferent than being a 21-year-old founder. Yeah. I mean I I think all like like the common thread between all of us
+1:06:031 hour, 6 minutes, 3 secondsis like we're not the best engineers in the world. Um like none of us in no universe are any of us getting PhDs and willing to do research at like like
+1:06:111 hour, 6 minutes, 11 secondsOpenAI. We're not the smartest people in the world. But I think a common thread is that we're all tapped into the algorithm. Like we all probably spend a
+1:06:191 hour, 6 minutes, 19 secondsgigantic amount of time scrolling and we're all pretty smart, but in reality it's a combination of above average intelligence, um, having scrolled a [ __ ]
+1:06:281 hour, 6 minutes, 28 secondston and understanding the algorithm and the I guess the agency to start. But I think anybody is capable of having like
+1:06:371 hour, 6 minutes, 37 secondsI I was literally just going to say anyone is capable of having agency to like start things, but I'm not sure if that's entirely true. But this this is something that we all have. Like we all
+1:06:451 hour, 6 minutes, 45 secondssaw like, "Holy [ __ ] these stupidest videos get millions of views." We we'd go out and we'd talk to people and they'd explain like how they get millions of views and this seems simple.
+1:06:521 hour, 6 minutes, 52 secondsI can get millions of views and I can just build an app really quick with AI that like solves a problem. And you solve a problem and then you focus heavily on distribution and we're able
+1:07:001 hour, 7 minutesto win distribution because we've we've scrolled sufficiently. And I think this is uh like we are exhibit ABC of right now distribution is more important than
+1:07:081 hour, 7 minutes, 8 secondsproduct because with the like with AI things are so easy to build and MVPs are so easy to come by. You can
+1:07:171 hour, 7 minutes, 17 secondsmake something shippable so quick and you don't have to be a genius to do it.
+1:07:201 hour, 7 minutes, 20 secondsYou don't have to spend six months of your life coding to do it. There's like the ability to ship something has fundamentally been democratized. The only thing that has not been universally
+1:07:281 hour, 7 minutes, 28 secondsdistributed is the ability to is the the the understanding of what goes viral and the agency to act on that. Um
+1:07:371 hour, 7 minutes, 37 secondsI wouldn't say we're born geniuses or anything at all, but maybe we're born with something that makes us like just [ __ ] around and and try things. Um and
+1:07:461 hour, 7 minutes, 46 secondswe're probably all above average intelligence, although there's a belief and there's no correlation to intelligence and success in my opinion.
+1:07:521 hour, 7 minutes, 52 secondsLike you can there's a certain point where it can be very limiting because you like overthink or ever solve problems or so it's like you but you
+1:07:591 hour, 7 minutes, 59 secondsguys all think so clearly like it's like it all just like makes sense when I hear you guys talk and it's so interesting to me but I also see that one interesting
+1:08:071 hour, 8 minutes, 7 secondsthing about clearly was that I didn't it didn't seem like the most intrinsically viral product where with Cali like you
+1:08:141 hour, 8 minutes, 14 secondscan very visually show that especially in like a influencer's video of like a bodybuilder just like taking a picture of his food and then they see the logo like all of their strategies like and
+1:08:231 hour, 8 minutes, 23 secondsthe same with Twitter like it's a very like intrinsically controversial like it sticks out where clearly when I was researching you guys
+1:08:301 hour, 8 minutes, 30 secondsI'm like this isn't like the most like viral concept. Yeah. I think you're interview coder like you 100% planned
+1:08:381 hour, 8 minutes, 38 secondsthat with like virality in mind like genius launch strategy like you absolutely went for it but clearly itself doesn't seem like the most viral
+1:08:461 hour, 8 minutes, 46 secondsstrategy but you still found a way to implement those principles. Yeah. I think I think this is something that uh Zach and I seem to disagree on or not
+1:08:561 hour, 8 minutes, 56 secondsnot not not disagree, but we just have different thesis on this, but I I know every in every one of Zach's interviews,
+1:09:011 hour, 9 minutes, 1 secondhe'll say like your product and and even Blake and like the rest of those guys,
+1:09:041 hour, 9 minutes, 4 secondsthey'll say like your product needs to be visual and you need to be able to show like visual pictures of the product, but I actually think that
+1:09:121 hour, 9 minutes, 12 secondsthat that might be great for like conversion and UGC and we might explore that later, but in reality, if you want a truly viral mind share capturing
+1:09:201 hour, 9 minutes, 20 secondsmoment, it, but it's not the product that you need to make go viral. It's like the situation surrounding it. Like Cle as a pro like the launch video
+1:09:271 hour, 9 minutes, 27 secondsdidn't show Cluey at all. Um, it just showed like a a situ, it just manufactured a controversial situation
+1:09:351 hour, 9 minutes, 35 secondsand made Cleon Everything app. And even if you don't know what the product is,
+1:09:391 hour, 9 minutes, 39 secondsyou just know Kulie is the cheat on everything company. And that's like a talk about viral moment. And um, I think that that's like another way of capturing attention is you don't actually need your product to be viral.
+1:09:481 hour, 9 minutes, 48 secondsYou just need your product to be in a viral situation. And I think that's that's very different from from how uh how how the Cali guys approach it. Did
+1:09:571 hour, 9 minutes, 57 secondsyou guys make it visual though with the glasses? Yeah. Yeah. I I mean literally like we don't have the glasses like it's is not real. It does not exist. It
+1:10:041 hour, 10 minutes, 4 secondsprobably won't exist for like at least a few months and um people are like like but but we decided to make that the launch video cuz it's like a like eventually this is what Clo will look
+1:10:131 hour, 10 minutes, 13 secondslike and and it's like reasonable for us to think that there is some association.
+1:10:171 hour, 10 minutes, 17 secondsI think that that's an actual really important marketing principle that is not intuitive at all if you're not a true marketer. Yeah. The goal of
+1:10:241 hour, 10 minutes, 24 secondsmarketing is to explain a concept as simply as possible visually. And so you're explaining the points and you're showing the visual tools needed for people to get it exactly very quickly.
+1:10:341 hour, 10 minutes, 34 secondsBut even though it's not literally that's what it is, but they can at least understand the concept instantly. Yes.
+1:10:411 hour, 10 minutes, 41 secondsIs AI assistance without anybody knowing that you're using AI 24/7 all the time?
+1:10:451 hour, 10 minutes, 45 secondsYeah. That's so it's genius. Like that is like genius level marketing right there. I think Triumph, you know,
+1:10:501 hour, 10 minutes, 50 secondsTriumph of the game, the play paytoplay game. No, I don't. They have a good their ads are amazing cuz they just it's you basically are like the real product
+1:10:591 hour, 10 minutes, 59 secondsis you play one v one for a pot. Like you put money up and you play one v one,
+1:11:031 hour, 11 minutes, 3 secondsbut it's really hard to convey through a marketing message. Yeah. And so what they do instead is have just like they'll get like an influencer split screen playing a video game and they just have a money counter for like the
+1:11:121 hour, 11 minutes, 12 secondslonger you play like Flappy Bird. it just like starts at $1 just going one two three four all the way up really fast and so it's visually showing you play a game you make money even though
+1:11:201 hour, 11 minutes, 20 secondsthat's not the real game that they have inside your app but it's like I just think that's so important for people to understand for marketing and you guys embodied that very very well because
+1:11:281 hour, 11 minutes, 28 secondsyou're still you still believe in the principle I don't think you have the luxury because technically your app is supposed to be invisible yeah exactly it can't be that visible yeah that's very
+1:11:361 hour, 11 minutes, 36 secondscool bro is there anything else uh from a marketing lens that you guys have planned
+1:11:431 hour, 11 minutes, 43 secondsYeah, I mean I think um friend friend.com I don't know if you've seen the friend.com launch video but this was like this this was like the most it was avi
+1:11:521 hour, 11 minutes, 52 secondsand then I said the tri example as well that was like a trippy ass black mirror release then but then he stopped that sorry make your point yeah so like July
+1:12:011 hour, 12 minutes, 1 second2024 or June 2024 obviously Shiffman launches the most controversial viral demo of the year and it's like this huge he spent4 million dollars on it and it's
+1:12:091 hour, 12 minutes, 9 secondsthis like cinematic world where you walk around with a necklace that is your AI friend. And it's it essentially does pretty much what [ __ ] does. It sees what you see, hears what you hear, and
+1:12:171 hour, 12 minutes, 17 secondsit can talk to you. And it is your AI friend. And this concept is so [ __ ]
+1:12:221 hour, 12 minutes, 22 secondsviral. Like every single YouTuber in the world has something to say about it.
+1:12:251 hour, 12 minutes, 25 secondsEvery single person in tech has an opinion about it. And um then he just like leaves to go to work on it with in Japan with a bunch of engineers. And and he's working on the product right now.
+1:12:341 hour, 12 minutes, 34 secondsBut he showed everyone literally over a year ago if you want to go viral on Twitter, you have a cinematic
+1:12:411 hour, 12 minutes, 41 secondsopening shot with a very controversial story. Um, that sort of conveys what the product does. And this is exactly what we took. And like for some reason,
+1:12:491 hour, 12 minutes, 49 secondsnobody decided to implement that except us. And if you look at the friend.com launch video and then you look at our launch video side by side, you will
+1:12:561 hour, 12 minutes, 56 secondsnotice that everything from the timing of like the the the the logo getting put on the screen to like like the cinema quality and even the types of shots.
+1:13:031 hour, 13 minutes, 3 secondsLike there's a clear parallel here. Obby Shiffman gave everyone the the [ __ ]
+1:13:071 hour, 13 minutes, 7 secondsplaybook for how to make a Twitter launch go viral. And for some reason um we're the only ones that captured it.
+1:13:121 hour, 13 minutes, 12 secondsAnd I think this is not the this is not a one time only thing we can do. Like the 50 interns video was like another like like the first shot was kind of
+1:13:201 hour, 13 minutes, 20 secondscrazy and it made everyone talk you. It was another controversial thing. It's controversial plus cinematic and this just generated another five million views. And from now on I we just spent
+1:13:281 hour, 13 minutes, 28 seconds$100,000 on a camera. We're going to do this all in house. We're going to have like an in-house film studio almost. And now every single maybe 2 3 weeks every
+1:13:351 hour, 13 minutes, 35 secondstime we launch a feature we're not just going to launch it with like a explainer video. We're just going to launch it with like an actual [ __ ] launch video that's exactly the same quality as our
+1:13:431 hour, 13 minutes, 43 secondsoriginal launch video. because I think there's still literally hundreds of millions of views waiting to be ripped from this sort of content. Um that that'll be like the Twitter launch
+1:13:511 hour, 13 minutes, 51 secondsstrategy moving forward to buy an R mini Mini. I have no idea what the camera we have we we have like a video guy. He said this is the best camera in the world. We uh that's what we bought.
+1:13:581 hour, 13 minutes, 58 secondsYeah, that's so cool. And so you guys just I saw you also tweet I got I'm going to have to show all these tweets I'm talking about, but I saw you also tweet a video of a white commentator
+1:14:071 hour, 14 minutes, 7 secondsvideo that was cinematic and you had the take that cinematic videos do not equal virality. Yes. Yes. Yeah. So explain the nuance here cuz those could be contradicting statements but I understand what you're trying to say.
+1:14:161 hour, 14 minutes, 16 secondsYeah. Yeah. I mean I mean why why cominator is like a startup accelerator.
+1:14:201 hour, 14 minutes, 20 secondsIt's like the biggest startup accelerator in the world and they will often post launches of the startups that they incubate. So there was a recent I mean like like if you look at the recent
+1:14:281 hour, 14 minutes, 28 secondslaunches they get more and more cinematic. I think people are trying to emulate what I have done and what obvious AI has done with friend.com and
+1:14:361 hour, 14 minutes, 36 secondstry to get like spend a bunch of money on a on a quality cinematic launch video, but every single one of them is losing the controversial aspect of it.
+1:14:431 hour, 14 minutes, 43 secondsLike it's one thing to get people interested in opening scene like, "Wow,
+1:14:461 hour, 14 minutes, 46 secondsthey put a lot of money into this launch video. I wonder what the company is launching." And it's one thing to get them hooked, but after that, you need to immediately give them something to talk
+1:14:541 hour, 14 minutes, 54 secondsabout. And um if you just have like a plain launch video and you just put a bunch of money into like making it look pretty and cinematic, then that that's
+1:15:011 hour, 15 minutes, 1 secondthat's really only half the formula. The other half is like giving it actual meat to talk about. Um this is where like Hivemind comes in. This is why you need
+1:15:081 hour, 15 minutes, 8 secondsa launch to be controversial. Like you need to put your balls in the line. Like you're not just launching something,
+1:15:131 hour, 15 minutes, 13 secondsyou're launching something crazy. And if your tech isn't like [ __ ] AGI, then it's not going to be that crazy. So you need to make it crazy by making the
+1:15:211 hour, 15 minutes, 21 secondssituation crazy. M and um that's what friend.com did. That's what we did. And that's what like the other cinematic videos that are just flopping. They're
+1:15:281 hour, 15 minutes, 28 secondsall failing to doing failing to do. But you are visually showing the most extreme version of what the world could look like if your product at the product
+1:15:351 hour, 15 minutes, 35 secondsend state. Yeah, exactly. The the specific video that you're talking about is like um AI for furniture or AI for couches or something. And then they're
+1:15:421 hour, 15 minutes, 42 secondslike they're like automating some back office work for like furniture retailers. Um and uh e even something as boring as that. there's like ways to
+1:15:511 hour, 15 minutes, 51 secondsmake that controversial or talked about like you should be thinking when you launch your thing like what is the craziest way that this could affect the world that would get people talking and
+1:15:591 hour, 15 minutes, 59 secondsI think generally on on on on Twitter specifically uh you want to know that in the end state if every single person in
+1:16:071 hour, 16 minutes, 7 secondsthe world saw this 50% like like genu literally 50% would have a very strong negative reaction to this. These are the videos that will go mainstream viral and
+1:16:151 hour, 16 minutes, 15 secondsget crazy talked about. And if the number is not 50%, then you're probably not being ballsy enough with your tweet.
+1:16:201 hour, 16 minutes, 20 secondsDo you do you tweet a lot? Yeah, I've probably done like 3,000 tweets since February first. Really? Yeah. I was only seeing like one or two like like with including comments and everything. Okay.
+1:16:311 hour, 16 minutes, 31 secondsYeah. I I try to tweet every day. Once once or twice. Yeah. Are they all trying to be controversial or like like how much thought is going into each tweet?
+1:16:391 hour, 16 minutes, 39 secondsju I I don't care for I I don't aim for every single tweet to be mainstream viral. Um a lot of my tweets I just I
+1:16:471 hour, 16 minutes, 47 secondsjust tweet to keep my algo pull hot and like to keep the algorithm reminded that I'm I'm still out here tweeting. But um I aim every once in a while I'll aim to
+1:16:561 hour, 16 minutes, 56 secondstry and make something very viral. And in those are the cases like the 50 intern video or the launch video or like any other cinematic video that I'll put out like in the in the near future.
+1:17:061 hour, 17 minutes, 6 secondsSorry. Go ahead. Yeah. Yeah. And then those will be both cinematic and controversial. It'll give you something to talk about. What about the Cluey
+1:17:131 hour, 17 minutes, 13 secondsTwitter? Cluly Twitter. Yeah. Yeah. Do you are you a part of that strategy at all? Yeah. I I run the I run the entire thing. Click Twitter is like my extension of my personal account.
+1:17:221 hour, 17 minutes, 22 secondsExplain the strategy behind that cuz it's a you guys have there's something very cool about it is that you guys have a very branded voice. Yeah. And it's
+1:17:311 hour, 17 minutes, 31 secondslike a very like flag in the ground like this is us. Yeah. And I love it. Yeah.
+1:17:361 hour, 17 minutes, 36 secondsYeah. I mean, it's just like I don't know why people are so insistent on making their corporate accounts the most boring [ __ ] ever. It's just vanilla.
+1:17:451 hour, 17 minutes, 45 secondsLike if you like try and think about one corporate account who you can actually remember or you can actually think about. Like there's literally not one that comes to mind who I think is
+1:17:541 hour, 17 minutes, 54 secondsdistinctive. We just had this conversation. Yeah. Yeah. Exactly. You need like personal like people are starving to see something real. Like nobody wants to see the same corporate
+1:18:021 hour, 18 minutes, 2 seconds[ __ ] like like nobody ever ever ever wants to see it. Um, and I think it it like this is like another con another another downstream of founder marketing.
+1:18:101 hour, 18 minutes, 10 secondsAnd it's like the company voice needs to be the founder's voice and it has to be the genuine founders's voice, not the [ __ ] madeup [ __ ] founders voice
+1:18:181 hour, 18 minutes, 18 secondsthey put on for PR. Like like be authentically yourself and this is what Kulie is doing. And as a result like you know when a [ __ ] post is made like oh
+1:18:271 hour, 18 minutes, 27 secondsthis is the [ __ ] account making this post and this is like we're talking to you essentially. Um I I think this this is what like companies need to actually
+1:18:341 hour, 18 minutes, 34 secondslike gain interest among among users. Do you think it has to match the founders voice? Yeah, I I I think either the founder's voice or it has to be distinctive in some way. Like I'm I'm
+1:18:431 hour, 18 minutes, 43 secondsobviously very partial to founders voice, but this is because this is what I know. Like I know that I am the face of like I've gotten this far because I put myself as a face of Cle and and
+1:18:511 hour, 18 minutes, 51 secondsmoving forward I will continue to put myself as the face of Cle. But like if it even if it's not you, like if someone's watching this and like, "Oh,
+1:18:571 hour, 18 minutes, 57 secondsit can't be me." Like like maybe make it like one of your interns. Like maybe make like head of marketing or someone, you know? It just has to be distinctive.
+1:19:021 hour, 19 minutes, 2 secondsLike it's it's so obvious. You see a post, it's like, "Oh, it's more corporate bullshit." Like nobody wants to see that. Interesting. Okay. Is there anything else that you specifically think that the world needs to know?
+1:19:141 hour, 19 minutes, 14 secondsYeah. I mean,
+1:19:161 hour, 19 minutes, 16 secondsI think if you're this is something that that I I I kind of want to like like this message I feel like needs to be out
+1:19:221 hour, 19 minutes, 22 secondsthere, but if you are I say P series B or your startup is like not doing traction like your reputation is the
+1:19:311 hour, 19 minutes, 31 secondsliterally the last thing that you need to worry about. Like there is a point where maybe you need to worry about like your image. Like for example, I don't
+1:19:391 hour, 19 minutes, 39 secondsthink med can go out there doubling down on oh like our our child violate we're going to violate even further. You you you can't double down when when you
+1:19:481 hour, 19 minutes, 48 secondsyou're when you're that big and there's that many people watching you. But until you hit a point of escape velocity like like it does not [ __ ] matter what people think about you or what they know
+1:19:551 hour, 19 minutes, 55 secondsabout you like like any of this [ __ ] The only thing that matters is that you get bigger, you grow somehow. I think there's a lot of people that are hating on us talking about like oh like
+1:20:041 hour, 20 minutes, 4 secondsthis company like like they don't know what they're doing. Like this is so unprofessional. this is so this is so crazy what they're doing like you're never going to survive acting like this
+1:20:111 hour, 20 minutes, 11 secondsbut you have to real like always the only way out is through and you don't become a generational company by making small bets and I think like
+1:20:201 hour, 20 minutes, 20 secondsthe there's nothing that disgusts me more than seeing like some some gold check mark on Twitter some like corporate account and they're they're like posting like some some lame ass
+1:20:291 hour, 20 minutes, 29 secondsboring ass corporate tweet and I look at their profile they have like a 100 followers like bro who exactly are you trying to please with this your investors don't give a [ __ ] nobody gives
+1:20:371 hour, 20 minutes, 37 secondsa [ __ ] about you until people start default giving a [ __ ] you need to make them give a [ __ ] by by by putting your
+1:20:441 hour, 20 minutes, 44 secondsballs on the line. And um um something that I think is pretty crazy that happened to me is like
+1:20:511 hour, 20 minutes, 51 secondsgrowing up, every single startup founder would say like you need to swing big.
+1:20:561 hour, 20 minutes, 56 secondsYou need to take big risks. You need to be risky. Like drop out of college like like like bet your life on the line. And I feel like I've been living I've been
+1:21:041 hour, 21 minutes, 4 secondslistening to the advice that the greats have told me, you know, like take big risks and swing big. But like all of a sudden, I'm looking around. It's been four months of me swinging big and there's like no one next to me. Like like no one else is swinging this big.
+1:21:141 hour, 21 minutes, 14 secondsAnd it's just like I think the advice is true, but almost nobody really embodies it.
+1:21:211 hour, 21 minutes, 21 secondsYou Yeah, I think um like for some reason there are no risk takers nowadays. Peter I mean Peter Tiel has a quote like we need people with courage
+1:21:291 hour, 21 minutes, 29 secondslike more people that are brave and it's not a lot of brave people. Exactly.
+1:21:331 hour, 21 minutes, 33 secondsCourage is in like shorter supply than than than intelligence. I think this is so true. But like even even at the high stages I mean there's startup founders
+1:21:411 hour, 21 minutes, 41 secondsright now who think what I'm doing is too risky, too crazy, too controversial and they don't like me. Like how can you possibly think this and like bet your entire life on on your company? If you
+1:21:491 hour, 21 minutes, 49 secondstruly bet your life on the company like this company has to make it or I die.
+1:21:531 hour, 21 minutes, 53 secondsthis company is an extension of me and like I cannot like the company cannot live or die without me living or dying then like you would do whatever it takes
+1:22:011 hour, 22 minutes, 1 secondand um I just think there's almost no one that does like whatever it takes and doing whatever it takes I think means be willing to get kicked out of college be
+1:22:091 hour, 22 minutes, 9 secondswilling to burn your entire career be willing to make half half the world hate you and like like all this [ __ ] is just doing what it takes with a singular
+1:22:161 hour, 22 minutes, 16 secondsfocus yeah I mean do you think you came up with the idea for interview coder/cl Cle
+1:22:241 hour, 22 minutes, 24 secondsuh or do you think it found you? I think interview I mean there was other companies that did very similar things to what interview cod had done in the
+1:22:321 hour, 22 minutes, 32 secondspast like like we knew the technology existed for and an anktop application that's invisible to screen share. We knew the technology existed for AI to
+1:22:411 hour, 22 minutes, 41 secondssolve questions based on an image. Um we just put the two together and I feel like um honestly it didn't really take a genius
+1:22:481 hour, 22 minutes, 48 secondsto realize that this could be built. It only took uh someone with the guts to actually market it properly. There literally were le code solvers that did very similar to what interview coder
+1:22:571 hour, 22 minutes, 57 secondsdid, which just with a clunkier user experience. Yeah. But then it turned into Cluey, which is actually like such a good transition. Yeah, dude. We It was
+1:23:051 hour, 23 minutes, 5 secondsIt was weird. We like stumbled around different things before we landed on Cluey. But it was the most obvious thing. Like we built interview coder for technical interviews and it got big. You
+1:23:141 hour, 23 minutes, 14 secondsshould just build interview coder for more things and see where that takes you. like is the most obvious thing we could have done. But for some reason, we thought interview coder ended with technical interviews and we spent like
+1:23:221 hour, 23 minutes, 22 secondsmonths building like [ __ ] a dating app. We we built like a some just like so much random [ __ ] after that until we just decided like this obviously
+1:23:291 hour, 23 minutes, 29 secondsworked. This is the idea. Like literally Neil and I went on a a retreat where we went to a cabin in the woods like think about our lives and like think about the
+1:23:371 hour, 23 minutes, 37 secondsfuture and this is where we came up with the idea for Cluey. Um like it took it took all that for us to realize that that that interview coder could be more
+1:23:461 hour, 23 minutes, 46 secondsthan just interview coder and um yeah like it seems natural right now the most obvious thing but for some reason it was just wasn't obvious to us. It's your
+1:23:541 hour, 23 minutes, 54 secondslogical rational mind really gets in the way like the was in front of you the entire time whether you were aware of it or not you were walking it. Yeah. Very
+1:24:011 hour, 24 minutes, 1 secondinteresting. Do you uh I was gonna ask you,
+1:24:051 hour, 24 minutes, 5 secondsyou just raised money like that like the first like you so you had this hype off of inter interview interview coach.
+1:24:101 hour, 24 minutes, 10 secondsYeah. You had all this like this weird phase of like unknown. Yeah. But then like you had the idea for clearly then you just like knew how to raise money.
+1:24:191 hour, 24 minutes, 19 secondsLike how did you We had a lot of help.
+1:24:211 hour, 24 minutes, 21 secondsLike I I did I did this program Zfellows of Oh, I didn't know you fell. Oh,
+1:24:251 hour, 24 minutes, 25 secondsreally? Zach did the program too. But I mean Stephen Yay. Oh yeah. Exactly.
+1:24:301 hour, 24 minutes, 30 secondsExactly. Yeah. So I'm I'm a Z fellow Cory. Yeah. Yeah. Cory Levy is the guy who runs Z Fellows and he's the guy that I came to. When I first started wanting to build a company, I went to Corey and
+1:24:381 hour, 24 minutes, 38 secondswhen I first started want to do a fundraiser, I went to Corey. He kind of gave me the rundown for everything. But when we were raising, we were super hot just cuz this was when interview coder
+1:24:471 hour, 24 minutes, 47 secondswas front page of Twitter. Um so like the the round itself didn't even last 24 hours. Like like we had like literally
+1:24:541 hour, 24 minutes, 54 seconds15minute calls that translate into millions in funding. And um it just closed so quick. I I don't even know if there's any fundraising advice I can give to anyone because it was such a
+1:25:031 hour, 25 minutes, 3 secondsunique situation and like like our pitch changed three times over the course of 18 hours and but but like like still we're just able to to to raise so much
+1:25:111 hour, 25 minutes, 11 secondsjust cuz we drum the hype. I'd say if there were any fundraising advice I could give. It's a lot easier to fundraise when you have something that's
+1:25:181 hour, 25 minutes, 18 secondsworking. Um focus less on fundraising and focus on getting something working because if you are hot and your thing is working like the funding will come to
+1:25:261 hour, 25 minutes, 26 secondsyou. VCs. There's like hundreds of VCs whose entire job it is to just like look around for people whose products are working. So if your [ __ ] is working,
+1:25:341 hour, 25 minutes, 34 secondslike the money will come. You don't need to stress about fundraising. Mhm. It's literally their job. Yeah, bro. It's their job to find you and they will find you. I assure you. Interesting. Always
+1:25:431 hour, 25 minutes, 43 secondsalways my only advice is like take bigger risks. It looks different in different people, but I don't think I've ever met anybody in my life who is
+1:25:521 hour, 25 minutes, 52 secondswilling to take risks to the point where I think like, oh [ __ ] like you are you are ballsy. You've got some [ __ ]
+1:25:581 hour, 25 minutes, 58 secondsballs. Maybe like some me illegal Mexican immigrants like hop the border and like leave their lives. Come take but like like right now it's just like I don't know like like every dude at a top
+1:26:061 hour, 26 minutes, 6 seconds20 college they're just not putting their balls in the line. I'd say put put your balls in the line for something and you will be rewarded for it.
+1:26:141 hour, 26 minutes, 14 secondsSomething else I would say is generally when you're fundraising, like [ __ ] fund raise big, bro. You're you're going out there asking for money.
+1:26:231 hour, 26 minutes, 23 secondsDon't don't [ __ ] out. This is like such niche advice for like for like the maybe like thousand people in the world who are actually doing a fund raise right now. Raise the most that you can um at
+1:26:311 hour, 26 minutes, 31 secondsthe highest valuation that you can. Um probably I I have like a lot of thoughts on on my perspective on relationships has changed probably more than anything.
+1:26:421 hour, 26 minutes, 42 secondsFemale. Yes. Female relationships like like I've since leaving since leaving college like it hit me like holy [ __ ]
+1:26:481 hour, 26 minutes, 48 secondsthis is my life now. I'm going to end up working so much more than I did in college. Like I was ticking around in college and now it's like I have an actual [ __ ] company to run. And um as
+1:26:571 hour, 26 minutes, 57 secondsa result I I become a lot more long-term relationship oriented and um my the things that I'm looking for in women
+1:27:041 hour, 27 minutes, 4 secondshave changed. Like like me as a man, I need a wife, bro. Like it's so obvious like the productivity delta there is so massive and most engineers don't have
+1:27:131 hour, 27 minutes, 13 secondsthis but internally they want it. We've worked for a bunch of engineers and I always try to like ask them like yo what's your love life like? And I'll talk to them about this and they'll
+1:27:211 hour, 27 minutes, 21 secondsalways say like oh I'm not really actively looking for a girlfriend. Then you p them about it and turns out like every single one of them deeply wants a girlfriend. They just don't know how to get one. Um, I think the world is like,
+1:27:301 hour, 27 minutes, 30 secondsbro, there's so few dudes who the lack of risk tolerance is reflected even with women nowadays. Most people are just
+1:27:391 hour, 27 minutes, 39 secondswalking around, they're like complete [ __ ] bro. They cannot talk to girls. And and if you like try to ask them,
+1:27:431 hour, 27 minutes, 43 secondshey, like will would you talk to this girl? Like they would not, bro. They would not hit up any girl. And I think one thing that I've noticed among successful founders is they are not
+1:27:511 hour, 27 minutes, 51 secondsscared to just go up and like talk to girls. Um, I don't name drop a li like like like the the successful guys I know, bro. They're out there doing this
+1:27:591 hour, 27 minutes, 59 seconds[ __ ] Uh, the world needs more of that. It's like not even advice or anything.
+1:28:061 hour, 28 minutes, 6 secondsIt's just like someone really thinks though. I mean, girls want you to walk up to him. That's what I'm saying, bro.
+1:28:111 hour, 28 minutes, 11 secondsThey they want, bro. Everyone in the world wants more interesting things happen. They want you to take more risks. Like like people are starving for this, bro. like like there's so much dopam dopam dopamine inducing [ __ ]
+1:28:221 hour, 28 minutes, 22 secondsbrain rot out there. There's no actual like real substantive things happening like like people want to see interesting things not on stream, bro. They want to see it IRL. Um I think the world just
+1:28:301 hour, 28 minutes, 30 secondsneeds to be a more interesting place and people you you the person watching this need you have an obligation to like make the world more interesting by like
+1:28:381 hour, 28 minutes, 38 secondsputting your balls in the line for something. I guarantee you your life will be so much so much more rewarding for it.
+1:28:431 hour, 28 minutes, 43 secondsThat was inspiring, bro. [ __ ] I hope so. Yeah. Uh I last question I guess I'll go with is we are seeing a huge advancement in AI making developing
+1:28:521 hour, 28 minutes, 52 secondssoftware way easier Chris or Levelable all these different like vibe coding tools or whatever. So, do you see the value? Let's like let's say there's two
+1:29:001 hour, 29 minutesends of the spectrum. We have creators with distribution, developers with hardcore technical skills. Who is where is the power leaning towards right now?
+1:29:091 hour, 29 minutes, 9 secondsAnd if you like I guess the simplest question would be if you had to put $10,000 and place a bet on the most technical engineer or the best creator
+1:29:181 hour, 29 minutes, 18 secondsto have the longest ROI in the next five years, who would you choose and why?
+1:29:221 hour, 29 minutes, 22 secondsYeah, it pretty obviously be the creator. I think like it it becomes easier and easier to build software that works. Maybe not software that is
+1:29:291 hour, 29 minutes, 29 secondsamazing. Like you probably couldn't rebuild all of Open AI just like if you don't know how to code, but I mean like software that works that has the potential to make you billions of
+1:29:371 hour, 29 minutes, 37 secondsdollars like like yes almost anyone can build this. So you think the creators with the non-technical skill set will have more doors open because they are
+1:29:451 hour, 29 minutes, 45 secondsgoing to be able to do something that they Yeah. I mean like like the the actual the market has not yet adjusted
+1:29:521 hour, 29 minutes, 52 secondsto AI. AI has enabled literally trillions of dollars of more delta um of
+1:29:591 hour, 29 minutes, 59 secondsof like trillions of dollars to be captured and nobody has captured them yet. Like Cali, Turboarn,
+1:30:081 hour, 30 minutes, 8 secondsQuitter like like like interview coder these are so niche but these are just problems like small problems that were solved with AI that just got marketed in
+1:30:151 hour, 30 minutes, 15 secondsa good way. And there's literally an infinite number of these that will be solved and the person who's going to build them is just not the best engineer
+1:30:221 hour, 30 minutes, 22 secondsin the world. It but it will be like one of the brightest markers in the world. Mhm.
+1:30:281 hour, 30 minutes, 28 secondsI think um probably like one one one final thing and this is this is like so so random but there's a lot of talk on
+1:30:371 hour, 30 minutes, 37 secondslike software engineers are going to be replaced by AI and there's like this big debate on whether you should even learn to be technical in a world of AI and a
+1:30:441 hour, 30 minutes, 44 secondslot of senior developers say that um you should not use AI to code because it will handicap you and make you a worse developer and I I think I feel pretty
+1:30:531 hour, 30 minutes, 53 secondsstrongly on this but my as an engineer I gained the most knowledge when I built interview coder and I built interview
+1:31:001 hour, 31 minutescoder almost 99% with AI. I think AI allows you to experience such a greater surface area
+1:31:091 hour, 31 minutes, 9 secondsof problems as an engineer that you would have never otherwise experienced that may and maybe you become a little worse at memorizing syntax or knowing
+1:31:171 hour, 31 minutes, 17 secondslike the specific niche nichess like niche niche things in programming but you become exposed to
+1:31:251 hour, 31 minutes, 25 secondsjust such a wider landscape of engineering problems and ultimately when AI hits a bug that it can't solve like if you want to finish the project,
+1:31:341 hour, 31 minutes, 34 secondsyou're going to have to learn the things that it takes to solve the pro solve the problem. And um I just think using AI to learn how to
+1:31:421 hour, 31 minutes, 42 secondscode will make you a much better developer than if you don't. And I think there's a big scop going around with a big lot of big tech people saying don't use AI to learn how to code because it
+1:31:501 hour, 31 minutes, 50 secondswill uh handicap your ability to become a better developer. But I think this is just untrue. It's like saying don't use a calculator to do math like just cuz it's Yeah. Exactly. Like like imagine
+1:31:591 hour, 31 minutes, 59 secondsimagine there was a calculator who could only calculate up to like three digits.
+1:32:031 hour, 32 minutes, 3 secondsMhm. You could only the max the best you could do is 999* 999. Like if you ever need if you ever have a situation where you need to do like 1,000 * 990 like
+1:32:121 hour, 32 minutes, 12 secondsyou're going to learn how to do it. Like if if it needs to be solved, you will learn how to do it. This is this is how humans operate always have operated in the past. And maybe you won't be as good
+1:32:201 hour, 32 minutes, 20 secondsat solving like the two digit multiplications, but like there's a problem that the calculator can't do,
+1:32:251 hour, 32 minutes, 25 secondsthen you as a human, you you will learn it 100%. Anyone any institution, any school, anyone telling you not to use AI
+1:32:331 hour, 32 minutes, 33 secondsfor anything, you need to immediately run. Well, yeah. Yeah. Low key. Yeah.
+1:32:361 hour, 32 minutes, 36 secondsYeah. Like right now, college is is such such it's a gigantic hope. Yeah. Yeah. Complete peak. All right. Well, dude,
+1:32:431 hour, 32 minutes, 43 secondsactual privilege to get to know you and have a conversation with you, bro. Likewise. such a clear thinker, genius,
+1:32:481 hour, 32 minutes, 48 secondscreative marketer. So cool to see someone that's technical and understands marketing. Very rare breed. So, where can people find you? Um, I'm I'm biggest on Twitter or X. Uh, it's iive_roy_lee.
+1:32:591 hour, 32 minutes, 59 secondsCool. And then clearly.com. Clely.com. Yeah, that's it. All right, brother.
+1:33:021 hour, 33 minutes, 2 secondsWell, thank you so much. Yeah, thanks for having me, brother.
+
+Sync to video time

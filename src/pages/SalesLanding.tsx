@@ -1218,6 +1218,8 @@ function SalesLanding() {
             <a href="#offer">What You Get</a>
             <a href="#pricing">Pricing</a>
             <a href="#roi-calculator">ROI Calculator</a>
+            <a href="/blog">Blog</a>
+            <a href="/faq">FAQ</a>
             <a href={calendarUrl}>Contact</a>
           </div>
           <div className="footer-legal">

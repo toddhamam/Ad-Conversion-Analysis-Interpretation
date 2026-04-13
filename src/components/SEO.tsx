@@ -21,7 +21,7 @@ const DEFAULTS = {
   keywords: 'conversion intelligence, AI ad generation, ad creative automation, ConversionIQ, enterprise ad optimization, automated ad testing, CMO ad platform, ROAS optimization, ad creative platform, conversion optimization',
   ogImage: '/og-image.png',
   ogImageAlt: 'Convertra - Conversion Intelligence Platform',
-  siteUrl: 'https://convertra.ai', // Update with actual domain
+  siteUrl: 'https://www.convertraiq.com',
   twitterHandle: '@convertra', // Update with actual handle
 };
 

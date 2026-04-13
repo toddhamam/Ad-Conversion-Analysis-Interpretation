@@ -29,6 +29,7 @@ export default defineConfig(({ mode }) => {
       }),
     ],
     build: {
+      manifest: true,
       sourcemap: 'hidden',
       // Exclude serverless functions from client build
       rollupOptions: {

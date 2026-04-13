@@ -1,5 +1,5 @@
 # Convertra - Conversion Intelligence Platform
-# https://convertra.ai
+# https://www.convertraiq.com
 
 User-agent: *
 Allow: /
@@ -36,10 +36,14 @@ Allow: /
 User-agent: Google-Extended
 Allow: /
 
+# Explicitly allow blog and FAQ for crawlers
+Allow: /blog/
+Allow: /faq
+
 # Disallow admin/private areas
 Disallow: /api/
 Disallow: /admin/
 Disallow: /_*
 
 # Sitemap location
-Sitemap: https://convertra.ai/sitemap.xml
+Sitemap: https://www.convertraiq.com/sitemap.xml

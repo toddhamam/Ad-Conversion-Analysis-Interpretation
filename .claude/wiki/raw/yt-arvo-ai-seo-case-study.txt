@@ -1,0 +1,72 @@
+
+0:00Hey everyone, it's case study day and today we have an AI SAS that went from zero to around 8.5,000 visits a month on their website. Okay.
+0:1212 secondsSo yeah, today I want to share you with you the results that this client had and after that I want to share exactly step
+0:2020 secondsby step what was done and how we helped this client achieving these results using Arvu and using an AI content
+0:2828 secondsstrategy. Regarding the results, we can see that yeah, the customer like it had an insane growth during this year of
+0:3636 seconds2025. And yeah, I'm going to share with you why after uh we can see that the traffic by location, most of the traffic
+0:4444 secondsis coming from the United States and Canada, which are tier one countries,
+0:4848 secondswhich are big markets. Then we can also see that he's already getting a lot of citations by AI engines, okay, by LLMs.
+0:5858 secondsThis is Google AI overview. We have 63 pages ranking and being cited on chat GPT, 128 for Google AI overviews. He's
+1:081 minute, 8 secondsalso getting citations from Perplexity and Gemini. And this is due to the strategy to the content strategy that he
+1:151 minute, 15 secondsused and that I will share with you later on in this video. Finally, we can see that he also has some backlinks,
+1:221 minute, 22 secondsokay? And he has powerful backlinks uh pointing to his website. And regarding traffic, we can see here right now it's at $8.4,000.
+1:321 minute, 32 secondsOkay? You can see here that the value of this traffic is around $13,000.
+1:371 minute, 37 secondsOkay. Um yeah, this means that if the client was paying for ads instead of generating this traffic organically, you
+1:451 minute, 45 secondswould have to pay $12.8,000 $8,000 every month to get this amount of traffic and keywords ranking. Okay, so
+1:541 minute, 54 secondsnow that we're here on the whiteboard, I want to share exactly what was done and what this client did to be able to achieve these insane results from 600 to
+2:032 minutes, 3 seconds8.5 visits a month using AI content. To give you some basic context, the client has an AI SAS related to marketing. He
+2:122 minutes, 12 secondsjoined Arvo in August 2024, so about 1 year and 4 months ago. And when he
+2:202 minutes, 20 secondsoriginally signed up, Isai was having like 600 around 674 visits a month. When he originally subscribed, he was
+2:282 minutes, 28 secondsstruggling with some with some challenges. Okay. uh the first one being in a highly competitive niche and yeah
+2:352 minutes, 35 secondsbeing a SAS you know that the SAS space is getting less and less barriers to enter the market because it's now easier
+2:432 minutes, 43 secondsto build a SAS you have a bunch of no code tools like lovable and bold new so yeah the SAS space is getting more and
+2:522 minutes, 52 secondsmore competitive second the ad costs for SAS business are insanely high okay and this is something I've seen from my
+3:003 minutesexperience you can um CS, you know, of $500 just to acquire one single customer. And he didn't have that budget. And as I showed you before,
+3:113 minutes, 11 secondsum on the AHEFs, he the the if he was paying for ads, he would be spending around $13,000 in ads. And the customer
+3:193 minutes, 19 secondsdidn't have that budget. And the last challenge was that he was already creating content for his site and
+3:273 minutes, 27 secondspublishing blogs on his website. But yeah, his workflow was costing him a lot of time. So we needed to find a way to
+3:353 minutes, 35 secondssave time uh while producing these articles. And you can see when he joined Arbo, he already had around 600 people
+3:423 minutes, 42 secondsvisiting sites every month. So yeah, he was he was doing the right thing, but he couldn't scale because of the time that that he was spending on it. Now
+3:513 minutes, 51 secondsregarding the content strategy used first the client already have content framework so it was more a matter of
+3:583 minutes, 58 secondsapplying it using arvo he used custom templates for this. So yeah as I as I told you the client was already
+4:064 minutes, 6 secondsgenerating content and he was following a specific template okay that I will share with you on the content examples.
+4:134 minutes, 13 secondsSo pretty much the only thing he had to do was create a a custom template. Okay.
+4:194 minutes, 19 secondsAnd in Arvo you have these custom templates where you pretty much define your prompt for the article. So instead of following uh or generating the basic
+4:284 minutes, 28 secondsSEO articles we have at Arvo. You use the custom templates. You pretty much you define some variables. Okay. They
+4:364 minutes, 36 secondsare dynamic. So they can be different in in in different articles. All right. A variable could be something like a
+4:434 minutes, 43 secondslocation, for example, if you're generating content for a local business and you can target like multiple zip codes. It could be a topic, it could be
+4:514 minutes, 51 secondsanything. So yeah, he created his prompt with his variables and he even sets and
+4:594 minutes, 59 secondsstructured an outline. So all the articles follow the same structure like the headings, where to place an image.
+5:065 minutes, 6 secondsSo yeah, the initial strategy focused a lot on adapting his previous framework to the new framework that would allow
+5:145 minutes, 14 secondshim to automate and to scale the creation of this content. The second part was to optimize all the existing
+5:225 minutes, 22 secondscontent in the website. He used the site optimizer for that. Um that that is a feature on Arbo that pretty much takes
+5:295 minutes, 29 secondscare of all your technical SEO and fixes like um existing pages and existing articles with things such as um schema
+5:385 minutes, 38 secondsmarkup internal links you know pretty much putting the site ready to scale.
+5:445 minutes, 44 secondsAnd third he used the Arvos backlink program. All right. Um so yeah uh he not only created content but he also
+5:535 minutes, 53 secondsacquired some some high authority backlinks as we can see here. Uh yeah you can do that in Arvo as well. Here we
+6:016 minutes, 1 secondhave this button where you can purchase the the backlinks. Okay this is with Vasco so you can talk with him and see if it makes sense for your business or
+6:106 minutes, 10 secondsnot. Uh but yeah for these clients it did make sense and it did work. Now on the content examples the here are three
+6:186 minutes, 18 secondsexamples that we got from the client's website. Okay, we cannot share the actual articles because of privacy but I
+6:266 minutes, 26 secondscan give you examples of titles and tell you which type of article was created.
+6:326 minutes, 32 secondsSo yeah, here we have the top AI voice agents revolutionizing healthcare in 2025. You can see that this is a
+6:396 minutes, 39 secondslistical article because it starts with top. Okay, so pretty much listical articles are very powerful right now.
+6:476 minutes, 47 secondsUm, and you can identify them because they're usually articles like the top 10 or the top three or 10 things you didn't
+6:556 minutes, 55 secondsknow or 10 ideas, you know, when you gather more than one thing and compile it into a listical article. The second
+7:047 minutes, 4 secondsone, you have AI versus human receptionist. And this is a comparison article which is also very powerful. Um
+7:127 minutes, 12 secondsso yeah the client did custom templates for all of these um article types the listical the comparison and the FAQ that
+7:217 minutes, 21 secondswe can see here. Do I need a HIPPA compliant answering service? This is a frequently asked question. All right.
+7:287 minutes, 28 secondsThese are amazing to be cited and to get citations from CHPT and from Gemini because people are actively asking for
+7:367 minutes, 36 secondsthat. So yeah, if you have a comprehensive useful article that answers that question, you have a lot of
+7:437 minutes, 43 secondsleverage and advantage to get cited and recommended by these LLM engines. Finally, the quantity and the frequency.
+7:537 minutes, 53 secondsThe client was generating articles in mass. Okay. Is publishing around 10 articles a day, which is the equivalent
+8:018 minutes, 1 secondof 300 a month, making it 3,600 only this year. So, yeah, this strategy
+8:098 minutes, 9 secondsworked. The client found a formula that worked for his articles and pretty much found in Arvo a tool that allows him to
+8:198 minutes, 19 secondsreproduce that formula and scale it in volume. And yeah, these are the results of one year and four months of work together. Uh the site is still growing,
+8:308 minutes, 30 secondsso in one months or two months, it's possible that these results are even higher. And yeah, I just want to share
+8:368 minutes, 36 secondsone more tip with you. Like the the the client was generating these three types of articles, but there's one more that
+8:438 minutes, 43 secondsis very useful. He was not using it in this strategy particularly, but it's the tutorial v the tutorial articles. So,
+8:518 minutes, 51 secondshow to um pretty much teach people how to do something that's also a type of
+8:588 minutes, 58 secondsarticle that converts really well and usually brings very good results. So,
+9:049 minutes, 4 secondsyeah, I hope this case study was helpful. Hopefully, I gave you some ideas. So I see you on the next
+
+Sync to video time

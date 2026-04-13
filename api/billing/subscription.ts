@@ -914,6 +914,190 @@ async function handleAccountBlockCheckout(req: VercelRequest, res: VercelRespons
   return res.status(200).json({ url: session.url, sessionId: session.id });
 }
 
+// ─── Checkout Handler (merged from checkout.ts) ─────────────────────────────
+
+// Price ID mapping (set via environment variables)
+const PRICE_IDS: Record<string, string | undefined> = {
+  starter_monthly: process.env.STRIPE_PRICE_STARTER_MONTHLY,
+  starter_yearly: process.env.STRIPE_PRICE_STARTER_YEARLY,
+  pro_monthly: process.env.STRIPE_PRICE_PRO_MONTHLY,
+  pro_yearly: process.env.STRIPE_PRICE_PRO_YEARLY,
+  agency_monthly: process.env.STRIPE_PRICE_AGENCY_MONTHLY,
+  agency_yearly: process.env.STRIPE_PRICE_AGENCY_YEARLY,
+  agency_pro_monthly: process.env.STRIPE_PRICE_AGENCY_PRO_MONTHLY,
+  agency_pro_yearly: process.env.STRIPE_PRICE_AGENCY_PRO_YEARLY,
+  enterprise_monthly: process.env.STRIPE_PRICE_ENTERPRISE_MONTHLY,
+  enterprise_yearly: process.env.STRIPE_PRICE_ENTERPRISE_YEARLY,
+  velocity_partner_monthly: process.env.STRIPE_PRICE_VELOCITY_PARTNER_MONTHLY,
+  velocity_partner_yearly: process.env.STRIPE_PRICE_VELOCITY_PARTNER_YEARLY,
+};
+
+async function handleCheckout(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  if (!stripe) {
+    return res.status(500).json({ error: 'Stripe is not configured' });
+  }
+
+  const { planTier, billingInterval, usePromoCode, successUrl, cancelUrl, trialDays } = req.body;
+
+  // Validate inputs
+  if (!planTier || !billingInterval) {
+    return res.status(400).json({ error: 'Missing planTier or billingInterval' });
+  }
+
+  if (trialDays !== undefined && (typeof trialDays !== 'number' || trialDays < 1 || trialDays > 30)) {
+    return res.status(400).json({ error: 'Invalid trial period' });
+  }
+
+  if (planTier === 'free') {
+    return res.status(400).json({ error: 'Cannot checkout for free plan' });
+  }
+
+  if (!['starter', 'pro', 'agency', 'agency_pro', 'enterprise', 'velocity_partner'].includes(planTier)) {
+    return res.status(400).json({ error: 'Invalid plan tier' });
+  }
+
+  if (!['monthly', 'yearly'].includes(billingInterval)) {
+    return res.status(400).json({ error: 'Invalid billing interval' });
+  }
+
+  // Authenticate and derive organizationId from JWT
+  const auth = await authenticateRequest(req);
+  const organizationId = auth?.organizationId || req.body.organizationId;
+
+  if (!organizationId) {
+    return res.status(401).json({ error: 'Authentication required. Please sign in and try again.' });
+  }
+
+  // Look up organization to get trial status and Stripe customer ID
+  // Non-fatal: if lookup fails, proceed with checkout (skip trial coupon, skip stored customer)
+  let isOrgTrialing = false;
+  let stripeCustomerId: string | null = null;
+
+  if (supabase) {
+    const { data: org, error: orgError } = await supabase
+      .from('organizations')
+      .select('id, name, stripe_customer_id, subscription_status')
+      .eq('id', organizationId)
+      .single();
+
+    if (orgError || !org) {
+      console.error('[Billing Checkout] Org lookup failed (proceeding anyway):', {
+        organizationId,
+        error: orgError?.message || 'No org returned',
+        code: orgError?.code,
+        fromJWT: !!auth,
+      });
+    } else {
+      isOrgTrialing = ['trialing', 'incomplete'].includes(org.subscription_status);
+      stripeCustomerId = org.stripe_customer_id;
+    }
+  }
+
+  const customerId = stripeCustomerId || req.body.customerId || null;
+
+  const priceKey = `${planTier}_${billingInterval}`;
+  const priceId = PRICE_IDS[priceKey];
+
+  if (!priceId) {
+    return res.status(400).json({
+      error: `Price not configured for ${priceKey}. Please set STRIPE_PRICE_${priceKey.toUpperCase()} environment variable.`,
+    });
+  }
+
+  const APP_URL = process.env.VITE_APP_URL || 'http://localhost:5175';
+
+  const sessionParams: Stripe.Checkout.SessionCreateParams = {
+    mode: 'subscription',
+    payment_method_types: ['card'],
+    line_items: [{ price: priceId, quantity: 1 }],
+    success_url: successUrl || `${APP_URL}/billing?success=true`,
+    cancel_url: cancelUrl || `${APP_URL}/billing?canceled=true`,
+    metadata: {
+      planTier,
+      billingInterval,
+      organizationId,
+    },
+    subscription_data: {
+      metadata: {
+        planTier,
+        billingInterval,
+        organizationId,
+      },
+      ...(trialDays ? { trial_period_days: trialDays } : {}),
+    },
+    payment_method_collection: 'if_required',
+  };
+
+  const earlyBirdCouponId = process.env.STRIPE_EARLY_BIRD_COUPON_ID;
+  if (usePromoCode) {
+    sessionParams.allow_promotion_codes = true;
+  } else if (isOrgTrialing && planTier === 'starter' && earlyBirdCouponId) {
+    sessionParams.discounts = [{ coupon: earlyBirdCouponId }];
+  } else {
+    sessionParams.allow_promotion_codes = true;
+  }
+
+  const enterpriseSetupPriceId = process.env.STRIPE_PRICE_ENTERPRISE_SETUP;
+  if ((planTier === 'enterprise' || planTier === 'velocity_partner') && enterpriseSetupPriceId) {
+    sessionParams.line_items!.push({ price: enterpriseSetupPriceId, quantity: 1 });
+  }
+
+  if (customerId) {
+    sessionParams.customer = customerId;
+  }
+
+  const session = await stripe.checkout.sessions.create(sessionParams);
+  return res.status(200).json({ url: session.url, sessionId: session.id });
+}
+
+// ─── Portal Handler (merged from portal.ts) ─────────────────────────────────
+
+async function handlePortal(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  if (!stripe) {
+    return res.status(500).json({ error: 'Stripe is not configured' });
+  }
+
+  const auth = await authenticateRequest(req);
+  const organizationId = auth?.organizationId || req.body.organizationId;
+
+  let customerId: string | null = null;
+
+  if (supabase && organizationId) {
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('stripe_customer_id')
+      .eq('id', organizationId)
+      .single();
+
+    customerId = org?.stripe_customer_id || null;
+  }
+
+  if (!customerId) {
+    customerId = req.body.customerId || null;
+  }
+
+  if (!customerId) {
+    return res.status(400).json({ error: 'No customer ID found. Please upgrade to a paid plan first.' });
+  }
+
+  const APP_URL = process.env.VITE_APP_URL || 'http://localhost:5175';
+
+  const session = await stripe.billingPortal.sessions.create({
+    customer: customerId,
+    return_url: `${APP_URL}/billing`,
+  });
+
+  return res.status(200).json({ url: session.url });
+}
+
 // ─── Main Handler (catch-all dispatcher) ──────────────────────────────────────
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -921,6 +1105,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     switch (route) {
+      case 'checkout':
+        return await handleCheckout(req, res);
+      case 'portal':
+        return await handlePortal(req, res);
       case 'check-credits':
         return await handleCheckCredits(req, res);
       case 'reserve-credits':
