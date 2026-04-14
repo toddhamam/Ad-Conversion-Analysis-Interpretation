@@ -2,9 +2,9 @@
 title: Checkout Flow
 type: concept
 sources: [raw/claude-md.md]
-related: [[subscription-gating]], [[stripe-pitfalls]], [[jwt-auth-and-tenant-isolation]]
+related: [[subscription-gating]], [[stripe-pitfalls]], [[jwt-auth-and-tenant-isolation]], [[billing-consolidation]]
 created: 2026-04-12
-updated: 2026-04-12
+updated: 2026-04-13
 confidence: high
 ---
 
@@ -12,9 +12,11 @@ confidence: high
 
 JWT-authenticated Stripe Checkout with non-fatal org lookup [source: raw/claude-md.md].
 
+**Note**: `checkout.ts` and `portal.ts` were consolidated into `subscription.ts` — see [[billing-consolidation]]. The Vercel rewrite `/api/billing/checkout` -> `subscription?route=checkout` is transparent to the frontend.
+
 ## Flow
 
-1. Frontend calls `redirectToCheckout()` → `POST /api/billing/checkout` with JWT
+1. Frontend calls `redirectToCheckout()` → `POST /api/billing/checkout` with JWT (rewrites to `subscription?route=checkout`)
 2. Backend authenticates via JWT → derives `organizationId` from user profile
 3. **Non-fatal** org lookup — if Supabase fails, checkout proceeds without trial coupon
 4. Creates Stripe Checkout Session in `subscription` mode, returns `url`
@@ -39,3 +41,4 @@ Added as a **separate one-time line item** in `line_items` (not `subscription_da
 - [[subscription-gating]] — How subscriptions gate feature access
 - [[stripe-pitfalls]] — Common mistakes to avoid
 - [[jwt-auth-and-tenant-isolation]] — How the checkout authenticates
+- [[billing-consolidation]] — Consolidation of checkout + portal into subscription catch-all

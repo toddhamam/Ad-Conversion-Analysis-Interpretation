@@ -2,9 +2,9 @@
 title: Stripe Pitfalls
 type: analysis
 sources: [raw/claude-md.md]
-related: [[checkout-flow]], [[subscription-gating]]
+related: [[checkout-flow]], [[subscription-gating]], [[billing-consolidation]]
 created: 2026-04-12
-updated: 2026-04-12
+updated: 2026-04-13
 confidence: high
 ---
 
@@ -32,3 +32,4 @@ Learned from PRs #157-#159 [source: raw/claude-md.md].
 
 - [[checkout-flow]] — The flow these pitfalls apply to
 - [[subscription-gating]] — Downstream impact of billing errors
+- [[billing-consolidation]] — How checkout + portal were merged into subscription catch-all
