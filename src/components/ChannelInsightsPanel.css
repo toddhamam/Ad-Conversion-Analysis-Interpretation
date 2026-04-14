@@ -289,7 +289,8 @@
 }
 
 .audience-card.resonates {
-  border-left: 3px solid #10b981;
+  background: rgba(16, 185, 129, 0.05);
+  border-color: rgba(16, 185, 129, 0.15);
 }
 
 .audience-card.resonates h4 {
@@ -297,7 +298,8 @@
 }
 
 .audience-card.doesnt-work {
-  border-left: 3px solid #ef4444;
+  background: rgba(239, 68, 68, 0.05);
+  border-color: rgba(239, 68, 68, 0.15);
 }
 
 .audience-card.doesnt-work h4 {
@@ -305,7 +307,8 @@
 }
 
 .audience-card.targeting {
-  border-left: 3px solid var(--accent-violet);
+  background: rgba(168, 85, 247, 0.05);
+  border-color: rgba(168, 85, 247, 0.15);
 }
 
 .audience-card.targeting h4 {
@@ -548,7 +551,8 @@
 }
 
 .visual-card.winning-visuals {
-  border-left: 3px solid #10b981;
+  background: rgba(16, 185, 129, 0.05);
+  border-color: rgba(16, 185, 129, 0.15);
 }
 
 .visual-card.winning-visuals h4 {
@@ -556,7 +560,8 @@
 }
 
 .visual-card.losing-visuals {
-  border-left: 3px solid #ef4444;
+  background: rgba(239, 68, 68, 0.05);
+  border-color: rgba(239, 68, 68, 0.15);
 }
 
 .visual-card.losing-visuals h4 {
@@ -564,7 +569,8 @@
 }
 
 .visual-card.color-psychology {
-  border-left: 3px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.05);
+  border-color: rgba(245, 158, 11, 0.15);
 }
 
 .visual-card.color-psychology h4 {
@@ -572,7 +578,8 @@
 }
 
 .visual-card.imagery-patterns {
-  border-left: 3px solid var(--accent-violet);
+  background: rgba(168, 85, 247, 0.05);
+  border-color: rgba(168, 85, 247, 0.15);
 }
 
 .visual-card.imagery-patterns h4 {
@@ -580,7 +587,8 @@
 }
 
 .visual-card.in-image-messaging {
-  border-left: 3px solid #ec4899;
+  background: rgba(236, 72, 153, 0.05);
+  border-color: rgba(236, 72, 153, 0.15);
 }
 
 .visual-card.in-image-messaging h4 {
@@ -588,7 +596,8 @@
 }
 
 .visual-card.psychological-triggers {
-  border-left: 3px solid var(--accent-violet);
+  background: rgba(168, 85, 247, 0.05);
+  border-color: rgba(168, 85, 247, 0.15);
 }
 
 .visual-card.psychological-triggers h4 {
@@ -804,7 +813,8 @@
 
 /* NEW: Visual Preferences in Audience */
 .audience-card.visual-prefs {
-  border-left: 3px solid var(--accent-violet);
+  background: rgba(168, 85, 247, 0.05);
+  border-color: rgba(168, 85, 247, 0.15);
 }
 
 .audience-card.visual-prefs h4 {
@@ -813,7 +823,8 @@
 
 /* NEW: Creative Direction in Recommendations */
 .recommendation-card.creative-direction {
-  border-top: 3px solid var(--accent-violet);
+  background: rgba(168, 85, 247, 0.04);
+  border-color: rgba(168, 85, 247, 0.12);
 }
 
 .recommendation-card.creative-direction h4 {

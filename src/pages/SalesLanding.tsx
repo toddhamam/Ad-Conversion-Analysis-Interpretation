@@ -58,7 +58,7 @@ function SalesLanding() {
           <div className="nav-links desktop-nav">
             <a href="#mechanism">How It Works</a>
             <a href="#demo">See It In Action</a>
-            <a href="#offer">What You Get</a>
+            <a href="#roi-calculator">ROI Calculator</a>
             <a href="#pricing">Pricing</a>
           </div>
 
@@ -84,7 +84,7 @@ function SalesLanding() {
         <div className={`mobile-nav ${isMobileMenuOpen ? 'open' : ''}`}>
           <a href="#mechanism">How It Works</a>
           <a href="#demo">See It In Action</a>
-          <a href="#offer">What You Get</a>
+          <a href="#roi-calculator">Savings Calculator</a>
           <a href="#pricing">Pricing</a>
           <Link to="/login" className="mobile-login">Log in</Link>
           <a href={calendarUrl} className="mobile-cta">Schedule Demo</a>

@@ -6,8 +6,8 @@
 .early-bird-card {
   margin-bottom: 20px;
   padding: 14px 20px;
-  border-left: 3px solid var(--accent-violet);
   border-radius: 8px;
+  background: rgba(168, 85, 247, 0.04);
 }
 
 .early-bird-card-content {

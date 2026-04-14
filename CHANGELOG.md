@@ -1,5 +1,63 @@
 # Changelog
 
+## 2026-04-14 — Impeccable UI redesign: eliminate vibe-coded aesthetics
+
+### What
+Full UI redesign using the Impeccable design skill system to eliminate AI-generated ("vibe coded") visual tells and establish a distinctive warm premium enterprise aesthetic. Scored 31.5/40 on Nielsen's heuristics with a PASS on AI slop detection.
+
+### Typography
+- Replaced generic system font stack with **Urbanist** (headings, 800 weight) + **Figtree** (body) via Google Fonts
+- Added modular type scale with tight letter-spacing on headings (-0.03em)
+- Applied `font-family: var(--font-display)` and `var(--font-body)` tokens throughout
+
+### Color System
+- Replaced pure slate grays with warm-tinted neutrals (`#f7f7f5`, `#1a1a1a`, `#a1a1aa`)
+- Cleaned shadows — removed all violet/lime glow effects, neutral subtle depth only
+- Added spacing scale tokens (`--space-xs` through `--space-3xl`)
+- Tightened border radius tokens (card: 16px → 12px, md: 12px → 8px, sm: 8px → 6px)
+
+### Anti-Pattern Elimination (38 → 9)
+- **19 side-tab borders removed** — Replaced `border-left: 3px+ solid` with background tints + border-color across ChannelInsightsPanel, Dashboard, Billing, OnboardingChecklist, SalesLanding, Blog
+- **8 gradient text instances removed** — Replaced `background-clip: text` with solid colors across Login, Register, ChoosePlan, SeoIQ, SalesLanding, index.css
+- **1 layout transition fixed** — SeoIQ calendar bar converted from max-height/padding/margin to grid-template-rows
+- **9 remaining** are functional sidebar collapse + progress bar fill transitions (false positives)
+
+### Landing Page
+- Nav restyled as floating pill with clean backdrop blur (no colored glow)
+- Gradient background orbs hidden — subtle radial lime tint (6% opacity) instead
+- Hero headline uses fluid `clamp()` sizing with Urbanist 800
+- CTAs use lime accent with subtle shadow hover (no glow)
+- Nav links: "What You Get" → "ROI Calculator" linking to `#roi-calculator`
+- Self-serve pricing table enlarged (heading 22px → 28px, rows 14px → 15px)
+
+### Login/Register
+- Sign-in button: lime accent instead of dark
+- Form focus rings: violet with subtle ring (not glow)
+- Card shadow reduced to `--shadow-card` token
+
+### Sidebar
+- Removed lime glow shadow, uses `--shadow-md` token
+- Border radius tightened (20px → 14px)
+- Nav items use `var(--font-body)`, tighter padding
+- Active state: lime 12% opacity background
+- Active bullet: solid lime fill (was gradient + glow)
+- Firefox scrollbar support added (`scrollbar-width`, `scrollbar-color`)
+
+### Critique Fixes (P1-P3)
+- **P1**: Nav bullet gradient + glow → solid lime fill
+- **P2**: Focus outlines standardized to violet across all interactive elements
+- **P2**: Hero headline eyebrow tightened at <400px viewport
+- **P3**: Firefox scrollbar support for sidebar
+
+### Design Context
+- Added `.impeccable.md` with brand personality, user profiles, aesthetic direction, and 5 design principles
+- Installed Impeccable CLI (`npm i -g impeccable`) and 17 design skills via `npx skills add pbakaus/impeccable`
+
+### Files Changed (15)
+`index.html`, `src/index.css`, `src/components/CampaignTypeDashboard.css`, `src/components/ChannelInsightsPanel.css`, `src/components/OnboardingChecklist.css`, `src/components/Sidebar.css`, `src/pages/Billing.css`, `src/pages/ChoosePlan.css`, `src/pages/Dashboard.css`, `src/pages/Login.css`, `src/pages/Register.css`, `src/pages/SalesLanding.css`, `src/pages/SalesLanding.tsx`, `src/pages/SeoIQ.css`, `src/pages/blog/Blog.css`
+
+---
+
 ## 2026-04-14 — Fix blog hard refresh, add thumbnails, seed 10 articles, update wiki
 
 ### Fixes
