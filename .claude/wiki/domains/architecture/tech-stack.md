@@ -2,9 +2,9 @@
 title: Tech Stack
 type: entity
 sources: [raw/claude-md.md]
-related: [[project-structure]], [[api-architecture]], [[vercel-deployment]], [[model-configuration]]
+related: [[project-structure]], [[api-architecture]], [[vercel-deployment]], [[model-configuration]], [[content-hub-api]], [[content-hub-frontend]]
 created: 2026-04-12
-updated: 2026-04-12
+updated: 2026-04-13
 confidence: high
 ---
 
@@ -39,8 +39,23 @@ confidence: high
 | Stripe | Checkout + Billing Portal | Subscription management |
 | Sentry | Error monitoring | Frontend + backend error tracking |
 
+## Content Hub Stack
+
+The GEO/SEO content hub adds these libraries:
+
+| Library | Purpose | Used By |
+|---------|---------|---------|
+| `marked` | Server-side markdown→HTML | `api/_lib/markdown.ts` (prerender) |
+| `react-markdown` | Client-side markdown rendering | `BlogPost.tsx` |
+| `remark-gfm` | GitHub Flavored Markdown support | `BlogPost.tsx` |
+| `rehype-slug` | Auto-generates heading IDs for TOC | `BlogPost.tsx` |
+
+**Note**: `isomorphic-dompurify` was evaluated and removed — it depends on jsdom which has native binary deps that crash Vercel serverless. Blog content is admin-authored only, so DOM purification is unnecessary.
+
 ## Related
 
 - [[project-structure]] — How the codebase is organized
 - [[api-architecture]] — Serverless function constraints
 - [[vercel-deployment]] — How it's deployed
+- [[content-hub-api]] — Content hub backend architecture
+- [[content-hub-frontend]] — Blog/FAQ frontend pages

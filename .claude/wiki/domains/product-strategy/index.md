@@ -2,7 +2,7 @@
 title: Product Strategy
 type: domain-index
 created: 2026-04-12
-updated: 2026-04-12
+updated: 2026-04-13
 ---
 
 # Product Strategy
@@ -19,6 +19,7 @@ Product philosophy, design standards, code quality principles, and user experien
 - [[seo-geo-strategy]] — Search optimization and AI citation optimization (GEO > SEO)
 - [[ai-feature-standards]] — IQ reasoning levels, user control, branded loading states
 - [[ad-publisher-standards]] — Publish flow, CTA types, safety-first, targeting presets
+- [[content-hub-frontend]] — Mintlify-inspired blog, FAQ page, content categories for GEO
 
 ## Sources
 

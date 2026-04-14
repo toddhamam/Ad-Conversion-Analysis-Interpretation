@@ -36,3 +36,28 @@ Pages created (5):
 - growth-playbooks: founder-case-studies, distribution-strategies, pricing-tactics, product-market-fit-patterns, key-takeaways-for-convertra
 
 Notes: Synthesized 6 YouTube transcripts from AI SaaS founders who scaled to impressive MRR. Key findings: affiliate marketing is the #1 underutilized channel (Poppy: $150K from one TikTok), mass UGC creator networks drive app installs at scale (Cluely: 1M installs in 2 months), FAQ-style SEO articles get the most LLM citations, cold calling beats all digital channels for professional/enterprise sales, and pricing optimization alone can 3x revenue. All findings mapped to Convertra-specific recommendations.
+
+---
+
+## [2026-04-13] ingest | GEO/SEO Content Hub — Blog, FAQ, Prerender, Billing Consolidation
+
+Sources: (feature build — no raw source document; ingested from codebase changes)
+
+Pages created (3):
+- architecture: content-hub-api
+- product-strategy: content-hub-frontend
+- billing: billing-consolidation
+
+Pages updated (10):
+- architecture: api-architecture (function count 12→11, new inventory, shared helpers table)
+- architecture: vercel-deployment (rewrites for blog/faq/sitemap, build manifest section)
+- architecture: project-structure (blog/ directory, content.ts, public routes updated)
+- architecture: tech-stack (content hub stack: marked, react-markdown, remark-gfm, rehype-slug)
+- product-strategy: seo-geo-strategy (content hub section: categories, prerendering, FAQ pairs, dynamic sitemap)
+- billing: checkout-flow (note about consolidation, updated flow step 1)
+- ai-integration: seo-iq-system (relationship to content hub, distinction between client SEO IQ and Convertra blog)
+- architecture/index.md (added content-hub-api, updated page count)
+- product-strategy/index.md (added content-hub-frontend, updated page count)
+- billing/index.md (added billing-consolidation, updated page count)
+
+Notes: Major feature ingest. The GEO/SEO content hub adds a public blog (`/blog`, `/blog/:slug`) and FAQ page (`/faq`) with Mintlify-inspired UI. Backend uses `api/content.ts` as a catch-all serverless function (11th of 12) handling public JSON endpoints, server-rendered prerender pages with JSON-LD structured data (Article, FAQPage, HowTo, BreadcrumbList), and super-admin CRUD. The billing API was consolidated from 3 functions to 2 (checkout+portal merged into subscription catch-all), freeing the Vercel function slot. Key technical decisions: isomorphic-dompurify removed (crashes Vercel serverless due to jsdom native deps), static sitemap.xml replaced by dynamic sitemap, domain corrected from convertra.ai to convertraiq.com. Database: `blog_posts` table with RLS (public reads published), `faq_pairs` JSONB column for per-post FAQ pairs aggregated on the `/faq` page. Vite build manifest (`build.manifest: true`) enables the prerender function to extract hashed asset tags at cold start.
