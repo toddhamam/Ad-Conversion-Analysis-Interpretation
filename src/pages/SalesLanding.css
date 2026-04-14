@@ -23,7 +23,7 @@
   box-sizing: border-box;
 }
 
-/* Navigation - Pill Style */
+/* Navigation — Floating pill */
 .sales-nav {
   position: fixed;
   top: 16px;
@@ -32,24 +32,24 @@
   z-index: 1000;
   max-width: 1100px;
   width: calc(100% - 48px);
-  background: rgba(255, 255, 255, 0.65);
+  background: rgba(254, 254, 254, 0.88);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-primary);
   border-radius: 100px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
-  transition: all 0.3s ease;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .sales-nav.scrolled {
-  background: rgba(255, 255, 255, 0.75);
-  border-color: var(--border-primary);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  background: rgba(254, 254, 254, 0.96);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
 }
 
 .nav-container {
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 12px 24px;
+  padding: 14px 32px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -86,23 +86,23 @@
 }
 
 .desktop-nav a {
+  font-family: var(--font-body);
   font-size: 14px;
-  font-weight: 700;
-  color: #000000;
-  padding: 8px 18px;
-  border-radius: 100px;
-  transition: all 0.2s ease;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: 6px 14px;
+  border-radius: 6px;
+  transition: color 0.15s ease;
 }
 
 .desktop-nav a:hover {
   color: var(--text-primary);
-  background: var(--bg-secondary);
 }
 
 .desktop-nav a:focus-visible {
-  outline: 2px solid var(--lime-primary);
+  outline: 2px solid var(--accent-violet);
   outline-offset: 2px;
-  border-radius: 100px;
+  border-radius: 6px;
 }
 
 /* Nav Actions (CTA + Mobile Button) */
@@ -114,42 +114,41 @@
 }
 
 .nav-cta {
-  padding: 10px 22px;
+  font-family: var(--font-body);
+  padding: 9px 22px;
   background: var(--lime-primary);
-  color: #1e293b;
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 600;
   border-radius: 100px;
-  transition: all 0.2s ease;
+  transition: background-color 0.15s ease;
   white-space: nowrap;
 }
 
 .nav-cta:hover {
   background: var(--lime-secondary);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px var(--lime-glow);
 }
 
 .nav-cta:focus-visible {
-  outline: 2px solid var(--lime-dark);
+  outline: 2px solid var(--accent-violet);
   outline-offset: 2px;
 }
 
 .nav-login {
-  padding: 9px 18px;
+  font-family: var(--font-body);
+  padding: 8px 16px;
   color: var(--text-secondary);
   font-size: 14px;
   font-weight: 500;
   border-radius: 100px;
-  border: 1px solid var(--lime-primary);
-  transition: all 0.2s ease;
+  border: 1px solid var(--border-primary);
+  transition: color 0.15s ease, border-color 0.15s ease;
   white-space: nowrap;
 }
 
 .nav-login:hover {
   color: var(--text-primary);
-  background: rgba(212, 225, 87, 0.1);
-  border-color: var(--lime-secondary);
+  border-color: var(--text-muted);
 }
 
 /* Mobile Menu Button */
@@ -366,6 +365,7 @@
   padding-bottom: 60px;
   position: relative;
   overflow: hidden;
+  background: radial-gradient(ellipse 80% 60% at 50% 40%, rgba(212, 225, 87, 0.06) 0%, transparent 70%);
 }
 
 .hero-content {
@@ -388,9 +388,11 @@
 }
 
 .hero-headline {
-  font-size: 56px;
-  font-weight: 700;
-  line-height: 1.15;
+  font-family: var(--font-display);
+  font-size: clamp(36px, 5vw, 56px);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
   margin-bottom: 24px;
   color: var(--text-primary);
   display: flex;
@@ -422,11 +424,12 @@
 }
 
 .hero-subhead {
-  font-size: 22px;
+  font-family: var(--font-body);
+  font-size: 18px;
   line-height: 1.6;
   color: var(--text-secondary);
   margin-bottom: 16px;
-  max-width: 700px;
+  max-width: 600px;
   margin-left: auto;
   margin-right: auto;
 }
@@ -449,23 +452,24 @@
   display: inline-block;
   padding: 16px 40px;
   background: var(--lime-primary);
-  color: #1e293b;
-  font-size: 18px;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 17px;
   font-weight: 600;
-  border-radius: 12px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  border-radius: 10px;
+  transition: background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
   cursor: pointer;
   text-decoration: none;
 }
 
 .cta-primary:hover {
-  transform: translateY(-3px);
   background: var(--lime-secondary);
-  box-shadow: 0 8px 25px var(--lime-glow);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(212, 225, 87, 0.25);
 }
 
 .cta-primary:focus-visible {
-  outline: 2px solid var(--lime-dark);
+  outline: 2px solid var(--accent-violet);
   outline-offset: 2px;
 }
 
@@ -488,11 +492,7 @@
 }
 
 .visual-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.4;
-  animation: float 8s ease-in-out infinite;
+  display: none;
 }
 
 .orb-1 {
@@ -552,9 +552,9 @@
   color: var(--text-primary);
   margin: 32px 0;
   padding: 24px;
-  background: var(--bg-card);
-  border-left: 4px solid var(--lime-primary);
-  border-radius: 0 12px 12px 0;
+  background: rgba(212, 225, 87, 0.06);
+  border: 1px solid rgba(212, 225, 87, 0.15);
+  border-radius: 12px;
 }
 
 .problem-callout strong {
@@ -718,10 +718,7 @@
   margin-top: 20px;
   font-size: 14px;
   font-weight: 600;
-  background: linear-gradient(90deg, var(--lime-dark), var(--violet-muted));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 1px;
 }
@@ -1460,10 +1457,8 @@
 
 .roi-result-total {
   font-size: 44px;
-  background: linear-gradient(135deg, var(--lime-dark) 0%, var(--violet-muted) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--text-primary);
+  font-weight: 800;
 }
 
 .roi-result-label {
@@ -1598,17 +1593,18 @@
 }
 
 .self-serve-heading {
-  font-size: 22px;
+  font-family: var(--font-display);
+  font-size: 28px;
   font-weight: 700;
   color: var(--text-primary);
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   text-align: center;
 }
 
 .self-serve-subheading {
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text-muted);
-  margin: 0 0 24px;
+  margin: 0 0 28px;
   text-align: center;
 }
 
@@ -1622,9 +1618,9 @@
   display: grid;
   grid-template-columns: 1.2fr 0.8fr 0.8fr 2fr 1fr;
   align-items: center;
-  padding: 14px 24px;
+  padding: 18px 28px;
   border-bottom: 1px solid var(--border-primary);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .self-serve-row:last-child {
@@ -1638,7 +1634,7 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-muted);
-  padding: 10px 24px;
+  padding: 12px 28px;
 }
 
 .self-serve-plan-name {
@@ -1673,11 +1669,11 @@
 
 .self-serve-try-btn {
   display: inline-block;
-  padding: 6px 16px;
+  padding: 8px 20px;
   background: var(--accent-primary);
   color: var(--text-primary);
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   text-decoration: none;
   transition: background-color 0.2s ease, transform 0.2s ease;
@@ -1821,8 +1817,8 @@
 .pricing-why {
   padding: 24px;
   background: var(--violet-subtle);
-  border-left: 4px solid var(--violet-muted);
-  border-radius: 0 12px 12px 0;
+  border: 1px solid rgba(168, 85, 247, 0.12);
+  border-radius: 12px;
   text-align: left;
   max-width: 1000px;
   margin: 0 auto;
@@ -2584,17 +2580,11 @@
 }
 
 .vsl-poster-highlight {
-  background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #d4e157;
 }
 
 .vsl-poster-highlight-alt {
-  background: linear-gradient(135deg, #d4e157 0%, #a855f7 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #c4b5fd;
 }
 
 .vsl-poster-sub {
@@ -2876,10 +2866,7 @@
 }
 
 .demo-poster-highlight {
-  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-violet) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #d4e157;
 }
 
 .demo-poster-sub {
@@ -3968,6 +3955,11 @@
   .hero-headline {
     font-size: 30px;
     padding: 0 8px;
+    gap: 4px;
+  }
+
+  .headline-eyebrow {
+    font-size: 0.35em;
   }
 
   .headline-main {

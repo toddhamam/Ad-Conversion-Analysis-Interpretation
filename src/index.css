@@ -3,57 +3,68 @@
 }
 
 :root {
-  /* Light Theme - Enterprise */
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8fafc;
-  --bg-card: #ffffff;
-  --bg-card-hover: #f1f5f9;
+  /* ── Typography ────────────────────────────── */
+  --font-display: 'Urbanist', system-ui, sans-serif;
+  --font-body: 'Figtree', system-ui, sans-serif;
 
-  /* Primary Accent - Lime */
+  /* ── Light Theme — Warm Enterprise ─────────── */
+  --bg-primary: #fefefe;
+  --bg-secondary: #f7f7f5;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f3f3f0;
+
+  /* Primary Accent — Lime */
   --accent-primary: #d4e157;
   --accent-secondary: #c0ca33;
   --accent-glow: rgba(212, 225, 87, 0.3);
 
-  /* Secondary Accent - Violet (glows & accents) */
+  /* Secondary Accent — Violet (rare, premium) */
   --accent-violet: #a855f7;
   --accent-violet-bright: #c4b5fd;
   --accent-violet-glow: rgba(168, 85, 247, 0.15);
 
-  /* Text Colors - Dark on Light */
-  --text-primary: #1e293b;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
+  /* Text — Warm slate, not cold gray */
+  --text-primary: #1a1a1a;
+  --text-secondary: #52525b;
+  --text-muted: #a1a1aa;
 
-  /* Border Colors */
-  --border-primary: #e2e8f0;
+  /* Borders — Warm tint */
+  --border-primary: #e4e4e0;
   --border-violet: rgba(168, 85, 247, 0.2);
-  --border-secondary: #f1f5f9;
+  --border-secondary: #efefec;
 
-  /* Gradients - Lime to Violet */
+  /* Gradients (kept for progress bars / rare accents only) */
   --gradient-cyan: linear-gradient(135deg, #d4e157 0%, #c0ca33 100%);
   --gradient-violet: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
   --gradient-holographic: linear-gradient(135deg, #d4e157 0%, #a855f7 50%, #c4b5fd 100%);
   --gradient-dual-glow: linear-gradient(135deg, #d4e157 0%, #a855f7 100%);
 
-  /* Shadows - Clean, subtle depth */
+  /* Shadows — Subtle warmth */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
-  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.04);
-  --shadow-glow: 0 0 20px rgba(168, 85, 247, 0.1);
+  --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.07);
+  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.04), 0 2px 12px rgba(0, 0, 0, 0.03);
+  --shadow-glow: 0 0 20px rgba(168, 85, 247, 0.08);
 
   /* Border tokens */
-  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-subtle: rgba(0, 0, 0, 0.05);
 
-  /* Radius tokens */
-  --radius-card: 16px;
-  --radius-sm: 8px;
-  --radius-md: 12px;
+  /* Radius — Tighter, more intentional */
+  --radius-card: 12px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
 
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  line-height: 1.5;
+  /* Spacing scale */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+
+  font-family: var(--font-body);
+  line-height: 1.55;
   font-weight: 400;
 
   color-scheme: light;
@@ -78,10 +89,17 @@ body {
 /* Decorative background gradient removed for cleaner UI */
 
 h1, h2, h3, h4, h5, h6 {
-  font-weight: 600;
-  line-height: 1.3;
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.2;
   color: var(--text-primary);
+  letter-spacing: -0.02em;
 }
+
+h1 { font-size: 2.5rem; font-weight: 800; letter-spacing: -0.03em; }
+h2 { font-size: 1.75rem; }
+h3 { font-size: 1.25rem; }
+h4 { font-size: 1.1rem; font-weight: 600; }
 
 button {
   font-family: inherit;
@@ -92,7 +110,7 @@ a {
   color: inherit;
 }
 
-/* Card utilities - Light theme */
+/* Card utilities */
 .glass {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
@@ -105,11 +123,11 @@ a {
 }
 
 .glow-violet {
-  box-shadow: var(--shadow-glow);
+  box-shadow: var(--shadow-md);
 }
 
 .glow-dual {
-  box-shadow: var(--shadow-lg), 0 0 30px var(--accent-violet-glow);
+  box-shadow: var(--shadow-lg);
 }
 
 .glow-text {
@@ -121,10 +139,7 @@ a {
 }
 
 .glow-text-dual {
-  background: var(--gradient-dual-glow);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--accent-violet);
 }
 
 /* Prevent horizontal scroll on mobile */
