@@ -38,3 +38,4 @@ __pycache__/
 
 # Feedback plans (generated locally by process-feedback script)
 feedback/plans/*.md
+.env*.local

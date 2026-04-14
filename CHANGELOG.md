@@ -56,6 +56,24 @@ Full UI redesign using the Impeccable design skill system to eliminate AI-genera
 ### Files Changed (15)
 `index.html`, `src/index.css`, `src/components/CampaignTypeDashboard.css`, `src/components/ChannelInsightsPanel.css`, `src/components/OnboardingChecklist.css`, `src/components/Sidebar.css`, `src/pages/Billing.css`, `src/pages/ChoosePlan.css`, `src/pages/Dashboard.css`, `src/pages/Login.css`, `src/pages/Register.css`, `src/pages/SalesLanding.css`, `src/pages/SalesLanding.tsx`, `src/pages/SeoIQ.css`, `src/pages/blog/Blog.css`
 
+---
+
+## 2026-04-14 — Fix blog hard refresh, add thumbnails, seed 10 articles, update wiki
+
+### Fixes
+- **Blog hard refresh showing raw HTML**: Removed Vercel prerender rewrites for `/blog`, `/blog/:slug`, `/faq` that were intercepting all requests and serving server-rendered HTML instead of the SPA. The SPA catch-all now handles all browser requests correctly.
+
+### Content
+- **10 GEO-optimized articles seeded** into `blog_posts` table via Supabase — 5 FAQ, 2 comparison, 1 listicle, 2 guides. Every article has 3-5 FAQ pairs (50 total Q&A pairs) for maximum structured data coverage.
+- **DALL-E 3 thumbnails generated** for all 10 articles (1792x1024), uploaded to Supabase Storage (`blog-images` bucket), and linked via `featured_image` column.
+- **Seed SQL saved** at `supabase/seed-blog-articles.sql` for reproducibility.
+
+### Wiki
+- **3 new wiki pages**: `content-hub-api.md`, `content-hub-frontend.md`, `billing-consolidation.md`
+- **10 existing pages updated** across architecture, product-strategy, billing, and ai-integration domains with content hub context.
+
+---
+
 ## 2026-04-13 — Add GEO/SEO blog, FAQ, and content hub (Mintlify-inspired)
 
 ### What

@@ -2,9 +2,9 @@
 title: Subscription Gating
 type: concept
 sources: [raw/claude-md.md]
-related: [[checkout-flow]], [[stripe-pitfalls]]
+related: [[checkout-flow]], [[stripe-pitfalls]], [[billing-consolidation]]
 created: 2026-04-12
-updated: 2026-04-12
+updated: 2026-04-13
 confidence: high
 ---
 
@@ -43,3 +43,4 @@ All 3 required — if `current_period_end` is null/past, `trialDaysRemaining` = 
 
 - [[checkout-flow]] — How users upgrade from free/trial to paid
 - [[stripe-pitfalls]] — Common billing mistakes
+- [[billing-consolidation]] — How billing was consolidated and credit system added
