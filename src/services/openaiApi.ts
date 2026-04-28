@@ -144,6 +144,16 @@ const FALLBACK_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
 const TEXT_ANALYSIS_MODEL = 'gemini-2.5-flash';
 const USE_GEMINI_FOR_IMAGES = true; // Switch to use Gemini instead of DALL-E
 
+// OpenAI image generation models — gpt-image-2 is the new flagship (Apr 21, 2026)
+// with native reasoning, 2K resolution, and multi-image consistency.
+// gpt-image-1 is the GA fallback if gpt-image-2 is unavailable.
+const GPT_IMAGE_PRIMARY = 'gpt-image-2';
+const GPT_IMAGE_FALLBACK = 'gpt-image-1';
+
+// User-selectable image generation provider
+export type ImageModel = 'gemini' | 'openai';
+export const DEFAULT_IMAGE_MODEL_PROVIDER: ImageModel = 'gemini';
+
 // Video Generation - Using Google Veo 3.1
 // Only 'veo-3.1-generate-preview' is documented in the official Gemini API docs.
 const VEO_MODEL = 'veo-3.1-generate-preview';
@@ -222,6 +232,8 @@ export interface ImageSizeConfig {
   description: string;
   dimensions: string;
   dalleSize: '1024x1024' | '1792x1024' | '1024x1792';
+  // gpt-image-1 / gpt-image-2 supported sizes — different from DALL-E 3
+  gptImageSize: '1024x1024' | '1536x1024' | '1024x1536';
   icon: string;
 }
 
@@ -232,6 +244,7 @@ export const IMAGE_SIZE_OPTIONS: ImageSizeConfig[] = [
     description: 'Feed ads, Instagram posts',
     dimensions: '1080×1080',
     dalleSize: '1024x1024',
+    gptImageSize: '1024x1024',
     icon: '⬜',
   },
   {
@@ -240,6 +253,7 @@ export const IMAGE_SIZE_OPTIONS: ImageSizeConfig[] = [
     description: 'Link ads, Facebook feed',
     dimensions: '1920×1080',
     dalleSize: '1792x1024',
+    gptImageSize: '1536x1024',
     icon: '🖼️',
   },
   {
@@ -248,6 +262,7 @@ export const IMAGE_SIZE_OPTIONS: ImageSizeConfig[] = [
     description: 'Stories, Reels',
     dimensions: '1080×1920',
     dalleSize: '1024x1792',
+    gptImageSize: '1024x1536',
     icon: '📱',
   },
 ];
@@ -3402,15 +3417,21 @@ export async function generateAdImage(config: {
   // Business type + campaign intent for hybrid accounts
   businessType?: import('../types/organization').BusinessType;
   campaignIntent?: import('../types/organization').CampaignIntent;
+  // Image generation provider — 'gemini' (default) or 'openai' (gpt-image-2)
+  imageModel?: ImageModel;
 }): Promise<GeneratedImageResult> {
-  // Check if we should use Gemini or fall back to DALL-E
+  const provider = config.imageModel ?? DEFAULT_IMAGE_MODEL_PROVIDER;
+
+  if (provider === 'openai' && isOpenAIConfigured()) {
+    return generateAdImageWithGptImage(config);
+  }
   if (USE_GEMINI_FOR_IMAGES && isGeminiConfigured()) {
     return generateAdImageWithGemini(config);
-  } else if (isOpenAIConfigured()) {
-    return generateAdImageWithDallE(config);
-  } else {
-    throw new Error('No image generation API configured. Please contact your administrator.');
   }
+  if (isOpenAIConfigured()) {
+    return generateAdImageWithDallE(config);
+  }
+  throw new Error('No image generation API configured. Please contact your administrator.');
 }
 
 /**
@@ -3893,6 +3914,344 @@ Explore fresh visual directions while maintaining professional quality.`,
 
   // All models failed — throw the last error
   throw lastError || new Error('Image generation failed: all models unavailable');
+}
+
+/**
+ * Downscale a base64-encoded image for sending through the Vercel proxy.
+ *
+ * Vercel functions have a 4.5MB request body limit. The Gemini path goes
+ * directly to Google's API (no Vercel function in between), but the OpenAI
+ * path routes through /api/ai/images which IS subject to that limit. With 6
+ * reference images at 1024px each, the JSON payload can exceed 4.5MB and
+ * trigger 413 FUNCTION_PAYLOAD_TOO_LARGE.
+ *
+ * Downscaling to 768px JPEG @ 0.7 quality keeps each image under ~150KB,
+ * leaving plenty of headroom even with 6 references. gpt-image-2 only uses
+ * references for style guidance, so 768px is sufficient.
+ */
+async function downscaleImageForProxy(
+  base64Data: string,
+  mimeType: string,
+  maxDim: number = 768,
+  quality: number = 0.7
+): Promise<{ data: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const scale = Math.min(maxDim / img.width, maxDim / img.height, 1);
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Canvas 2D context unavailable'));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        const data = dataUrl.split(',')[1];
+        if (!data) {
+          reject(new Error('Canvas toDataURL returned empty data'));
+          return;
+        }
+        resolve({ data, mimeType: 'image/jpeg' });
+      } catch (err: unknown) {
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
+    };
+    img.onerror = () => reject(new Error('Failed to load reference image for downscale'));
+    img.src = `data:${mimeType};base64,${base64Data}`;
+  });
+}
+
+/**
+ * Generate an ad image using OpenAI gpt-image-2 (with gpt-image-1 fallback).
+ *
+ * Mirrors generateAdImageWithGemini's prompt structure, but routes through the
+ * OpenAI image API. When reference images are present, the backend uses the
+ * /v1/images/edits endpoint (multipart form-data); otherwise /v1/images/generations.
+ *
+ * Returns a base64 data URL for the generated image.
+ */
+async function generateAdImageWithGptImage(config: {
+  audienceType: AudienceType;
+  analysisData: ChannelAnalysisResult | null;
+  variationIndex: number;
+  totalVariations: number;
+  similarityLevel?: number;
+  imageSize?: ImageSize;
+  productContext?: ProductContext;
+  precomputedRefs?: {
+    referenceImages: Array<{ data: string; mimeType: string }>;
+    refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
+    refConversionContext?: string[];
+  };
+  adLibraryInspirations?: import('../types').AdLibraryInspiration[];
+  headlineText?: string;
+  businessType?: import('../types/organization').BusinessType;
+  campaignIntent?: import('../types/organization').CampaignIntent;
+}): Promise<GeneratedImageResult> {
+  const similarity = config.similarityLevel ?? 30;
+  const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
+  const sizeConfig = IMAGE_SIZE_OPTIONS.find(s => s.id === imageSize) || IMAGE_SIZE_OPTIONS[0];
+  console.log(`🎨 Generating ad image with OpenAI gpt-image ${config.variationIndex + 1}/${config.totalVariations} for ${config.audienceType} audience (${similarity}% variation, ${sizeConfig.dimensions})`);
+
+  const visualAnalysis = config.analysisData?.visualAnalysis;
+  const topAds = config.analysisData?.topAds || [];
+  const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
+
+  let referenceImages: Array<{ data: string; mimeType: string }>;
+  let refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
+  let refConversionContext: string[] = [];
+
+  if (config.precomputedRefs) {
+    referenceImages = config.precomputedRefs.referenceImages;
+    refAnalysis = config.precomputedRefs.refAnalysis;
+    if (config.precomputedRefs.refConversionContext) {
+      refConversionContext = config.precomputedRefs.refConversionContext;
+    }
+    console.log(`📸 Using pre-computed reference data (${referenceImages.length} images)`);
+  } else {
+    const MIN_QUALITY_SCORE = 60;
+    const cachedImages = getTopHighQualityCachedImages(3, MIN_QUALITY_SCORE);
+    referenceImages = cachedImages.map(c => ({ data: c.base64Data, mimeType: c.mimeType }));
+    refConversionContext = buildRefConversionContext(cachedImages);
+
+    if (config.productContext?.productImages?.length) {
+      const productImgs = config.productContext.productImages.slice(0, 3);
+      productImgs.forEach(img => {
+        referenceImages.push({ data: img.base64Data, mimeType: img.mimeType });
+      });
+    }
+
+    refAnalysis = await analyzeReferenceImages(referenceImages);
+  }
+
+  // Build prompt — same structure as the Gemini path so outputs are comparable
+  const promptParts: string[] = [
+    'Generate a professional advertisement image that PRECISELY matches the provided reference style.',
+    '',
+  ];
+
+  const getSimilarityInstructions = () => {
+    if (similarity <= 20) {
+      return `NEAR IDENTICAL replication (${similarity}% variation). Copy the exact visual DNA of the references.
+MANDATORY STYLE REQUIREMENTS:
+• VISUAL STYLE: ${refAnalysis.visualStyle}
+• COLOR PALETTE: ${refAnalysis.colorPalette}
+• COMPOSITION: ${refAnalysis.composition}
+• LIGHTING: ${refAnalysis.lighting}
+• MOOD: ${refAnalysis.mood}
+• PRODUCT PRESENTATION: ${refAnalysis.productPresentation}
+• KEY ELEMENTS: ${refAnalysis.keyElements.join(', ')}`;
+    } else if (similarity <= 40) {
+      return `SUBTLE VARIATIONS (${similarity}% variation). Strong style consistency with minor creative touches.
+FOLLOW: visual style ${refAnalysis.visualStyle}; color palette ${refAnalysis.colorPalette}; lighting ${refAnalysis.lighting}; mood ${refAnalysis.mood}.`;
+    } else if (similarity <= 60) {
+      return `BALANCED MIX (${similarity}% variation). Brand consistency with moderate creative freedom.
+USE: color palette ${refAnalysis.colorPalette}; mood ${refAnalysis.mood}; visual style influence ${refAnalysis.visualStyle}.`;
+    } else if (similarity <= 80) {
+      return `MORE CREATIVE (${similarity}% variation). Reference for quality and mood: ${refAnalysis.mood}. Explore fresh visual directions while maintaining professional advertising quality.`;
+    }
+    return `BOLD & DIFFERENT (${similarity}% variation). Use references only as a quality benchmark. Explore completely new visual directions.`;
+  };
+
+  promptParts.push(`CREATIVE DIRECTION: ${getSimilarityInstructions()}`, '');
+
+  if (referenceImages.length > 0) {
+    const productImgCount = config.productContext?.productImages?.length ? Math.min(config.productContext.productImages.length, 3) : 0;
+    const adRefCount = referenceImages.length - productImgCount;
+    promptParts.push(`I have attached ${referenceImages.length} REFERENCE IMAGES.`);
+    if (adRefCount > 0) promptParts.push(`${adRefCount} are from ads with PROVEN CONVERSIONS — match their visual style, prioritizing the highest-converting reference.`);
+    if (productImgCount > 0) promptParts.push(`${productImgCount} are PRODUCT MOCKUP images — the generated image MUST depict this exact product.`);
+
+    if (refConversionContext.length > 0) {
+      promptParts.push('', 'CONVERSION PERFORMANCE DATA (prioritize highest-converting visual patterns):');
+      refConversionContext.forEach(line => promptParts.push(`  ${line}`));
+    }
+    promptParts.push('', 'Study these images and match the visual style of the highest-converting references.', '');
+  }
+
+  if (config.productContext) {
+    promptParts.push(
+      'PRODUCT CONTEXT:',
+      `- Product: ${config.productContext.name}`,
+      `- Author/Brand: ${config.productContext.author}`,
+      `- Description: ${config.productContext.description}`,
+      '',
+      'The generated image MUST accurately represent this product.',
+      ''
+    );
+  }
+
+  promptParts.push(
+    `TARGET AUDIENCE: ${config.audienceType.toUpperCase()} (${audienceAngle.awarenessLevel})`,
+    `- Focus: ${audienceAngle.focus}`,
+    `- Tone: ${audienceAngle.tone}`,
+    `- Visual implication: ${config.audienceType === 'prospecting'
+      ? 'Image should evoke curiosity and problem recognition'
+      : config.audienceType === 'retargeting'
+      ? 'Image should reinforce product credibility and mechanism'
+      : 'Image should feel exclusive and premium'}`,
+    ''
+  );
+
+  if (config.campaignIntent) {
+    const intentConfig = getCampaignIntentConfig(config.campaignIntent);
+    promptParts.push(
+      `CAMPAIGN INTENT: ${intentConfig.label} — ${intentConfig.description}`,
+      ''
+    );
+  }
+
+  if (visualAnalysis) {
+    promptParts.push('VISUAL ANALYSIS FROM HIGH-CONVERTING ADS:');
+    if (visualAnalysis.winningVisualElements?.length) promptParts.push(`- Winning elements: ${visualAnalysis.winningVisualElements.slice(0, 5).join(', ')}`);
+    if (visualAnalysis.colorPsychology) promptParts.push(`- Color strategy: ${visualAnalysis.colorPsychology}`);
+    if (visualAnalysis.imageryPatterns) promptParts.push(`- Imagery patterns: ${visualAnalysis.imageryPatterns}`);
+    if (visualAnalysis.psychologicalTriggers?.length) promptParts.push(`- Triggers: ${visualAnalysis.psychologicalTriggers.slice(0, 3).join(', ')}`);
+    if (visualAnalysis.losingVisualElements?.length) promptParts.push(`- AVOID: ${visualAnalysis.losingVisualElements.slice(0, 3).join(', ')}`);
+    promptParts.push('');
+  }
+
+  if (topAds.length > 0) {
+    promptParts.push('TOP PERFORMING AD IMAGE DESCRIPTIONS:');
+    topAds.slice(0, 3).forEach((ad, i) => {
+      if (ad.imageAnalysis) promptParts.push(`${i + 1}. ${ad.imageAnalysis}`);
+    });
+    promptParts.push('');
+  }
+
+  if (config.adLibraryInspirations?.length) {
+    promptParts.push('COMPETITOR/INDUSTRY INSPIRATION:');
+    config.adLibraryInspirations.slice(0, 3).forEach((insp, i) => {
+      const bodyPreview = insp.adCreativeBodies[0]?.substring(0, 200) || 'N/A';
+      promptParts.push(`  ${i + 1}. ${insp.pageName} (${insp.durationDays} days): ${bodyPreview}`);
+    });
+    promptParts.push('');
+  }
+
+  if (config.headlineText) {
+    promptParts.push(
+      'CREATIVE REQUIREMENTS:',
+      '- Professional advertising photography quality',
+      '- Strong visual hierarchy with clear focal point',
+      '- Photorealistic style unless references show otherwise',
+      '',
+      `This is variation ${config.variationIndex + 1} of ${config.totalVariations} — make it distinct while maintaining brand consistency.`,
+      '',
+      'HEADLINE TEXT IN IMAGE — CRITICAL:',
+      `Render this EXACT headline into the image: "${config.headlineText}"`,
+      '- Render the EXACT text — do NOT paraphrase, abbreviate, or change any words',
+      '- Use large, bold, legible typography with high contrast',
+      '- Position in upper third or center where it commands attention',
+      `- Typography style: ${refAnalysis.textOverlays || 'bold, clean sans-serif with strong contrast'}`,
+      '- Do NOT add any OTHER text, words, taglines, URLs, or numbers'
+    );
+  } else {
+    promptParts.push(
+      'CREATIVE REQUIREMENTS:',
+      '- Professional advertising photography quality',
+      '- Strong visual hierarchy with clear focal point',
+      '- Clean composition with space for text overlays',
+      '- Photorealistic style unless references show otherwise',
+      '',
+      `This is variation ${config.variationIndex + 1} of ${config.totalVariations} — create a unique variation while maintaining brand consistency.`,
+      '',
+      'IMPORTANT: Do NOT include any text, words, letters, or numbers in the image.'
+    );
+  }
+
+  promptParts.push('', IMAGE_SAFETY_DIRECTIVE);
+  const prompt = promptParts.join('\n');
+  console.log('📝 GPT-Image prompt:', prompt.substring(0, 300) + '...');
+
+  // Downscale reference images BEFORE sending through the Vercel proxy.
+  // The proxy has a 4.5MB body limit; full-size 1024px references can blow past it.
+  // Downscaling to 768px @ JPEG 0.7 keeps total payload < 1MB even with 6 refs.
+  let proxyReferenceImages: Array<{ data: string; mimeType: string }> = [];
+  if (referenceImages.length > 0) {
+    try {
+      proxyReferenceImages = await Promise.all(
+        referenceImages.map(ref => downscaleImageForProxy(ref.data, ref.mimeType))
+      );
+      const totalKB = Math.round(proxyReferenceImages.reduce((sum, ref) => sum + ref.data.length * 0.75, 0) / 1024);
+      console.log(`📦 Downscaled ${proxyReferenceImages.length} reference images (~${totalKB}KB total) for proxy`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`⚠️ Reference image downscale failed (${msg}); proceeding without references`);
+      proxyReferenceImages = [];
+    }
+  }
+
+  // Try gpt-image-2 first, fall back to gpt-image-1 if the model isn't available on this account
+  const modelsToTry = [GPT_IMAGE_PRIMARY, GPT_IMAGE_FALLBACK];
+  let lastError: Error | null = null;
+
+  for (const model of modelsToTry) {
+    console.log(`🎯 Trying OpenAI image model: ${model}`);
+    try {
+      const requestBody: Record<string, unknown> = {
+        model,
+        prompt,
+        size: sizeConfig.gptImageSize,
+        quality: 'high',
+        n: 1,
+      };
+      // Only attach reference images when present — backend uses /edits when present, /generations otherwise
+      if (proxyReferenceImages.length > 0) {
+        requestBody.referenceImages = proxyReferenceImages;
+      }
+
+      const response = await openaiProxy('images', requestBody);
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error(`❌ OpenAI image API error (${model}):`, response.status, errText.substring(0, 500));
+        // Model-not-available errors should fall through to fallback model
+        const isModelError = response.status === 404 || /model.*not.*found|does not (have|exist)|invalid.*model/i.test(errText);
+        if (isModelError && model !== modelsToTry[modelsToTry.length - 1]) {
+          lastError = new Error(`${model} not available — trying fallback`);
+          console.warn(`⚠️ ${model} not available on this account, trying fallback...`);
+          continue;
+        }
+        throw new Error(`Image generation error (${response.status}): ${errText.substring(0, 200)}`);
+      }
+
+      const data = await response.json();
+      const result = data.data?.[0];
+      if (!result) {
+        throw new Error('OpenAI image API returned no results');
+      }
+
+      // gpt-image-1 / gpt-image-2 return b64_json by default; older models may return url
+      let imageUrl: string;
+      if (result.b64_json) {
+        imageUrl = `data:image/png;base64,${result.b64_json}`;
+      } else if (result.url) {
+        imageUrl = result.url;
+      } else {
+        throw new Error('OpenAI image API response missing b64_json and url');
+      }
+
+      console.log(`✅ Image generated successfully with ${model}`);
+      return {
+        imageUrl,
+        revisedPrompt: result.revised_prompt || prompt,
+      };
+    } catch (err: unknown) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const isFinalModel = model === modelsToTry[modelsToTry.length - 1];
+      if (!isFinalModel) {
+        console.warn(`⚠️ ${model} failed, trying fallback model...`, lastError.message);
+      }
+    }
+  }
+
+  throw lastError || new Error('OpenAI image generation failed: all models unavailable');
 }
 
 /**
@@ -4618,9 +4977,11 @@ export async function regenerateAllImages(config: {
   onProgress?: (message: string) => void;
   businessType?: import('../types/organization').BusinessType;
   campaignIntent?: import('../types/organization').CampaignIntent;
+  imageModel?: ImageModel;
 }): Promise<{ images: GeneratedImageResult[]; indexedResults: (GeneratedImageResult | null)[]; imageError?: string }> {
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
-  console.log(`🖼️ Regenerating ${config.variationCount} image(s) for ${config.audienceType} audience`);
+  const imageModel = config.imageModel ?? DEFAULT_IMAGE_MODEL_PROVIDER;
+  console.log(`🖼️ Regenerating ${config.variationCount} image(s) for ${config.audienceType} audience using ${imageModel}`);
 
   // Pre-compute reference images and analysis ONCE before parallel generation
   let precomputedRefs: {
@@ -4629,7 +4990,12 @@ export async function regenerateAllImages(config: {
     refConversionContext?: string[];
   } | undefined;
 
-  if (USE_GEMINI_FOR_IMAGES && isGeminiConfigured()) {
+  // Pre-compute reference data when refAnalysis is needed.
+  // - Gemini path always uses refAnalysis (Gemini-2.5-flash text analysis of references)
+  // - OpenAI path also uses the same refAnalysis to build the prompt
+  const needsPrecompute = (imageModel === 'openai' && isOpenAIConfigured())
+    || (imageModel === 'gemini' && USE_GEMINI_FOR_IMAGES && isGeminiConfigured());
+  if (needsPrecompute) {
     const MIN_QUALITY_SCORE = 60;
     let cachedImages;
 
@@ -4713,6 +5079,7 @@ export async function regenerateAllImages(config: {
         headlineText,
         businessType: config.businessType,
         campaignIntent: config.campaignIntent,
+        imageModel,
       });
     });
     const batchResults = await Promise.allSettled(batchPromises);
@@ -4797,6 +5164,8 @@ export async function generateAdPackage(config: {
   // Business type + campaign intent for hybrid accounts
   businessType?: import('../types/organization').BusinessType;
   campaignIntent?: import('../types/organization').CampaignIntent;
+  // Image generation provider — 'gemini' (default) or 'openai' (gpt-image-2)
+  imageModel?: ImageModel;
 }): Promise<GeneratedAdPackage> {
   const conceptName = config.conceptType ? CONCEPT_ANGLES[config.conceptType].name : 'general';
   const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
@@ -4845,6 +5214,7 @@ export async function generateAdPackage(config: {
       onProgress: config.onProgress,
       businessType: config.businessType,
       campaignIntent: config.campaignIntent,
+      imageModel: config.imageModel,
     });
     images = imageResult.images;
     imageError = imageResult.imageError;
