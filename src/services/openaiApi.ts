@@ -3746,6 +3746,26 @@ Explore fresh visual directions while maintaining professional quality.`,
     );
   }
 
+  // Product mockup preservation override — must come AFTER the creative direction
+  // so it takes precedence at high-similarity settings ("Bold & Different" tells the
+  // model to "explore new visual directions", which it would otherwise apply to the
+  // product cover too).
+  if (config.productContext?.productImages?.length) {
+    promptParts.push(
+      '',
+      'PRODUCT MOCKUP PRESERVATION (NON-NEGOTIABLE — OVERRIDES CREATIVE DIRECTION):',
+      'The product mockup reference image(s) attached are IDENTITY-LOCKED. You must reproduce the product itself — its cover art, packaging, title text, author name, colors, layout, typography, and all visual design elements — EXACTLY as shown in the mockup. Do NOT redesign, restyle, abstract, reimagine, or "improve" the product. Do NOT change its colors, fonts, or layout. Treat it like placing a real physical product into a new scene.',
+      '',
+      'Creative variation (regardless of the % setting above, even at 100% / Bold & Different) applies ONLY to:',
+      '  • The scene, environment, and background around the product',
+      '  • Lighting, mood, atmosphere, and overall color grading',
+      '  • Composition, camera angle, and framing',
+      '  • Surrounding objects, models, hands, props, or context',
+      '',
+      'The product itself never changes. You are placing the existing product into different scenes — not redesigning it.'
+    );
+  }
+
   promptParts.push('', IMAGE_SAFETY_DIRECTIVE);
   const prompt = promptParts.join('\n');
   console.log('📝 Gemini prompt:', prompt.substring(0, 300) + '...');
@@ -4064,15 +4084,21 @@ USE: color palette ${refAnalysis.colorPalette}; mood ${refAnalysis.mood}; visual
   if (referenceImages.length > 0) {
     const productImgCount = config.productContext?.productImages?.length ? Math.min(config.productContext.productImages.length, 3) : 0;
     const adRefCount = referenceImages.length - productImgCount;
-    promptParts.push(`I have attached ${referenceImages.length} REFERENCE IMAGES.`);
-    if (adRefCount > 0) promptParts.push(`${adRefCount} are from ads with PROVEN CONVERSIONS — match their visual style, prioritizing the highest-converting reference.`);
-    if (productImgCount > 0) promptParts.push(`${productImgCount} are PRODUCT MOCKUP images — the generated image MUST depict this exact product.`);
+    promptParts.push(`I have attached ${referenceImages.length} REFERENCE IMAGES in this exact order:`);
+    if (adRefCount > 0) {
+      promptParts.push(`  • Images 1–${adRefCount}: STYLE references from ads with PROVEN CONVERSIONS. Their visual style (composition, color, lighting, mood) is what to emulate — subject to the creative direction setting above.`);
+    }
+    if (productImgCount > 0) {
+      const start = adRefCount + 1;
+      const end = adRefCount + productImgCount;
+      promptParts.push(`  • Images ${start}–${end}: PRODUCT MOCKUPS. These show the exact product (cover art, packaging, title, author name, colors, layout). Their content is identity-locked and must be reproduced EXACTLY — not subject to the creative direction setting.`);
+    }
 
     if (refConversionContext.length > 0) {
       promptParts.push('', 'CONVERSION PERFORMANCE DATA (prioritize highest-converting visual patterns):');
       refConversionContext.forEach(line => promptParts.push(`  ${line}`));
     }
-    promptParts.push('', 'Study these images and match the visual style of the highest-converting references.', '');
+    promptParts.push('', 'Study the style references for visual approach. Reproduce the product mockups verbatim.', '');
   }
 
   if (config.productContext) {
@@ -4162,6 +4188,26 @@ USE: color palette ${refAnalysis.colorPalette}; mood ${refAnalysis.mood}; visual
       `This is variation ${config.variationIndex + 1} of ${config.totalVariations} — create a unique variation while maintaining brand consistency.`,
       '',
       'IMPORTANT: Do NOT include any text, words, letters, or numbers in the image.'
+    );
+  }
+
+  // Product mockup preservation override — must come AFTER the creative direction
+  // so it takes precedence at high-similarity settings ("Bold & Different" tells the
+  // model to "explore new visual directions", which it would otherwise apply to the
+  // product cover too).
+  if (config.productContext?.productImages?.length) {
+    promptParts.push(
+      '',
+      'PRODUCT MOCKUP PRESERVATION (NON-NEGOTIABLE — OVERRIDES CREATIVE DIRECTION):',
+      'The product mockup reference image(s) attached above are IDENTITY-LOCKED. You must reproduce the product itself — its cover art, packaging, title text, author name, colors, layout, typography, and all visual design elements — EXACTLY as shown in the mockup. Do NOT redesign, restyle, abstract, reimagine, or "improve" the product. Do NOT change its colors, fonts, or layout. Treat it like placing a real physical product into a new scene.',
+      '',
+      'Creative variation (regardless of the % setting above, even at 100% / Bold & Different) applies ONLY to:',
+      '  • The scene, environment, and background around the product',
+      '  • Lighting, mood, atmosphere, and overall color grading',
+      '  • Composition, camera angle, and framing',
+      '  • Surrounding objects, models, hands, props, or context',
+      '',
+      'The product itself never changes. You are placing the existing product into different scenes — not redesigning it.'
     );
   }
 
