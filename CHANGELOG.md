@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-04-28 — Add OpenAI gpt-image-2 as alternative image model with toggle
+
+### What
+Added OpenAI's new `gpt-image-2` model (released Apr 21, 2026 — "ChatGPT Images 2.0") as a user-selectable alternative to Gemini 3 Pro for ad creative generation. Toggle in Step 3 of AdGenerator lets users compare the two models side-by-side. Selection persists in localStorage.
+
+### Backend (`api/meta.ts`)
+- `handleAIImages()` now supports both `/v1/images/generations` (text-only, JSON) and `/v1/images/edits` (multipart form-data) — auto-routes based on whether `referenceImages` is in the body
+- Reference images delivered as `image[]` files via `FormData` to OpenAI when present (gpt-image-1 / gpt-image-2 accept multiple files)
+- API key stays server-side (existing pattern preserved)
+
+### Frontend (`src/services/openaiApi.ts`)
+- New `generateAdImageWithGptImage()` function — mirrors Gemini's prompt structure but routes through `/api/ai/images`
+- Tries `gpt-image-2` first, falls back to `gpt-image-1` on 404 / `model_not_found` errors so existing OpenAI accounts still work
+- Reference images downscaled client-side to 768px @ JPEG 0.7 quality before proxy submission to stay under Vercel's 4.5MB function payload limit (Gemini path bypasses this since it goes directly to Google's API)
+- New `ImageModel` type (`'gemini' | 'openai'`) and `DEFAULT_IMAGE_MODEL_PROVIDER` constant exported for the UI
+- `IMAGE_SIZE_OPTIONS` extended with `gptImageSize` (`1024x1024` / `1536x1024` / `1024x1536`) — matches OpenAI's supported sizes (different from DALL-E 3)
+- `imageModel` threaded through `generateAdImage`, `regenerateAllImages`, and `generateAdPackage` so single-image regen, regenerate-all, and full package generation all respect the choice
+- Reference analysis (`analyzeReferenceImages`) precompute now runs for both providers (was Gemini-only)
+
+### UI (`src/pages/AdGenerator.tsx`)
+- New "Image Generation Model" section in Step 3 (Generate Creatives) with two cards: Gemini 3 Pro (default) and GPT Image 2
+- Visible only for image ads (not text or video)
+- Selection persists in localStorage as `ci_image_model`
+- Wired into all three call sites: initial generation, single-image regeneration, regenerate-all-images
+
+### Why
+User requested ability to test OpenAI's new flagship image model alongside Gemini to compare creative quality. Toggle approach keeps both paths alive for A/B comparison instead of swapping the default.
+
+### Files Changed (3)
+`api/meta.ts`, `src/pages/AdGenerator.tsx`, `src/services/openaiApi.ts`
+
+---
+
 ## 2026-04-14 — Impeccable UI redesign: eliminate vibe-coded aesthetics
 
 ### What

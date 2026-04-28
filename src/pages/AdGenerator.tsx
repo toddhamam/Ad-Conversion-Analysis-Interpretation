@@ -32,6 +32,8 @@ import {
   type VideoDuration,
   type VideoModel,
   type TextAdCopyResult,
+  type ImageModel,
+  DEFAULT_IMAGE_MODEL_PROVIDER,
 } from '../services/openaiApi';
 import { TEXT_AD_STYLES, getDefaultStyleId, generateTextAdImage, getStyleById, registerCustomBrandStyle, CUSTOM_BRAND_ID } from '../services/textAdCanvas';
 import type { TextAdStyle } from '../services/textAdCanvas';
@@ -176,6 +178,18 @@ const AdGenerator = () => {
   const [analysisImportMeta, setAnalysisImportMeta] = useState<ImportMetadata | null>(null);
   const [imageSize, setImageSize] = useState<ImageSize>(DEFAULT_IMAGE_SIZE);
   const [copyLength, setCopyLength] = useState<CopyLength>(DEFAULT_COPY_LENGTH);
+  const [imageModel, setImageModel] = useState<ImageModel>(() => {
+    try {
+      const saved = localStorage.getItem('ci_image_model');
+      if (saved === 'gemini' || saved === 'openai') return saved;
+    } catch { /* ignore */ }
+    return DEFAULT_IMAGE_MODEL_PROVIDER;
+  });
+
+  const handleImageModelChange = (model: ImageModel) => {
+    setImageModel(model);
+    try { localStorage.setItem('ci_image_model', model); } catch { /* ignore */ }
+  };
 
   // Video configuration
   const [videoAspectRatio, setVideoAspectRatio] = useState<VideoAspectRatio>(DEFAULT_VIDEO_CONFIG.aspectRatio);
@@ -1151,6 +1165,7 @@ const AdGenerator = () => {
         onProgress: setGenerationProgress,
         businessType,
         campaignIntent: effectiveIntent,
+        imageModel,
       });
 
       // Confirm credit consumption on success
@@ -1415,6 +1430,7 @@ const AdGenerator = () => {
         headlineText,
         businessType,
         campaignIntent: adToUpdate.campaignIntent || effectiveIntent,
+        imageModel,
       });
 
       // Update the ad with the new image
@@ -1435,7 +1451,7 @@ const AdGenerator = () => {
       console.error('❌ Failed to regenerate image:', err);
       throw new Error(err instanceof Error ? err.message : 'Failed to regenerate image');
     }
-  }, [generatedAds, analysisData, similarityValue, imageSize, selectedProduct]);
+  }, [generatedAds, analysisData, similarityValue, imageSize, selectedProduct, imageModel]);
 
   // Regenerate ALL images for an ad package (keeps copy intact)
   const handleRegenerateAllImages = useCallback(async (adId: string) => {
@@ -1458,6 +1474,7 @@ const AdGenerator = () => {
         imageSize,
         productContext: selectedProduct || undefined,
         imageHeadlines: adToUpdate.imageHeadlines,
+        imageModel,
       });
 
       // Use indexedResults for per-slot merging: keep existing image where new generation failed
@@ -1501,7 +1518,7 @@ const AdGenerator = () => {
       console.error('❌ Failed to regenerate all images:', err);
       throw new Error(errorMessage);
     }
-  }, [generatedAds, analysisData, similarityValue, imageSize, selectedProduct, variationCount]);
+  }, [generatedAds, analysisData, similarityValue, imageSize, selectedProduct, variationCount, imageModel]);
 
   // Regenerate a single video within an ad package
   const handleRegenerateVideo = useCallback(async (adId: string, videoIndex: number) => {
@@ -2771,6 +2788,36 @@ const AdGenerator = () => {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Image Model Selection - shown for image ads only (not text or video) */}
+          {adType === 'image' && (
+            <div className="config-section">
+              <label className="config-label">Image Generation Model</label>
+              <p className="config-hint">Choose which AI model generates the creatives. Try both to compare quality.</p>
+              <div className="image-size-options">
+                <button
+                  type="button"
+                  className={`image-size-btn ${imageModel === 'gemini' ? 'active' : ''}`}
+                  onClick={() => handleImageModelChange('gemini')}
+                >
+                  <span className="image-size-icon">🧠</span>
+                  <span className="image-size-name">Gemini 3 Pro</span>
+                  <span className="image-size-dimensions">Default</span>
+                  <span className="image-size-desc">Google's flagship — strong with reference images</span>
+                </button>
+                <button
+                  type="button"
+                  className={`image-size-btn ${imageModel === 'openai' ? 'active' : ''}`}
+                  onClick={() => handleImageModelChange('openai')}
+                >
+                  <span className="image-size-icon">✨</span>
+                  <span className="image-size-name">GPT Image 2</span>
+                  <span className="image-size-dimensions">New</span>
+                  <span className="image-size-desc">OpenAI's flagship — native reasoning, 99% text accuracy</span>
+                </button>
               </div>
             </div>
           )}

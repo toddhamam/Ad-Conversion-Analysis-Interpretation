@@ -1479,6 +1479,16 @@ async function handleAIChat(req: VercelRequest, res: VercelResponse) {
 
 // ─── Route: ai-images ───────────────────────────────────────────────────────
 // Proxy for OpenAI image generation. API key stays server-side.
+//
+// Supports two modes:
+// 1. Text-to-image via /v1/images/generations (DALL-E 3, gpt-image-1, gpt-image-2)
+// 2. Image-to-image via /v1/images/edits when `referenceImages` is provided
+//    (gpt-image-1 / gpt-image-2 only — DALL-E 3 does not support edits)
+
+interface ReferenceImageInput {
+  data: string; // base64-encoded image data (no data URL prefix)
+  mimeType: string;
+}
 
 async function handleAIImages(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -1499,13 +1509,47 @@ async function handleAIImages(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Request body with prompt is required' });
   }
 
+  const { referenceImages, ...openaiBody } = body as {
+    referenceImages?: ReferenceImageInput[];
+    [key: string]: unknown;
+  };
+
+  // Edits endpoint: required when reference images are provided
+  if (Array.isArray(referenceImages) && referenceImages.length > 0) {
+    const formData = new FormData();
+    for (const [key, value] of Object.entries(openaiBody)) {
+      if (value === undefined || value === null) continue;
+      formData.append(key, String(value));
+    }
+    referenceImages.forEach((ref, i) => {
+      const buffer = Buffer.from(ref.data, 'base64');
+      const ext = ref.mimeType.split('/')[1] || 'png';
+      const blob = new Blob([buffer], { type: ref.mimeType });
+      // gpt-image-1 / gpt-image-2 accept multiple files via image[] field
+      formData.append('image[]', blob, `ref-${i}.${ext}`);
+    });
+
+    const editResponse = await fetch('https://api.openai.com/v1/images/edits', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}` },
+      body: formData,
+    });
+
+    const editData = await editResponse.json();
+    if (!editResponse.ok) {
+      return res.status(editResponse.status).json(editData);
+    }
+    return res.status(200).json(editData);
+  }
+
+  // Default: text-to-image via /v1/images/generations
   const response = await fetch('https://api.openai.com/v1/images/generations', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${OPENAI_API_KEY}`,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(openaiBody),
   });
 
   const data = await response.json();
