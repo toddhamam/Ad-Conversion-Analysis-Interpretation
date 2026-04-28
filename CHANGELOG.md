@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-04-28 — Lock product mockups against creative-direction redesign
+
+### What
+Fixes a bug where high-similarity creative settings ("More Creative" / "Bold & Different") would cause the image model to redesign the product cover itself — re-imagining title text, recoloring, restyling — instead of just varying the scene around the product.
+
+### Root cause
+The prompt's similarity instructions ("explore completely new visual directions") were applied uniformly to all reference images. Product mockups got the same creative-license treatment as style references, even though their content (cover art, title, author name) should be identity-locked. The existing "PRODUCT CONTEXT — must accurately represent this product" wording was too soft to override the bold/creative instructions.
+
+### Fix
+Two changes in `src/services/openaiApi.ts`:
+
+1. **Image-position labelling (OpenAI path only)** — gpt-image-2's `/v1/images/edits` receives multiple `image[]` files with no semantic distinction; the prompt now explicitly maps positions to roles:
+   - "Images 1–N: STYLE references — subject to creative direction"
+   - "Images N+1–M: PRODUCT MOCKUPS — identity-locked, must be reproduced EXACTLY"
+
+2. **PRODUCT MOCKUP PRESERVATION override block (both Gemini and OpenAI paths)** — placed AFTER all creative-direction instructions so it dominates at any similarity level. Only renders when `productContext.productImages.length > 0`. Specifies that creative variation applies ONLY to scene, environment, lighting, composition, and surrounding props — never to the product itself.
+
+### Why both paths
+Same prompt logic flaw existed in the Gemini path. Fixing both keeps comparison fair when toggling between models.
+
+### Files Changed (1)
+`src/services/openaiApi.ts`
+
+---
+
 ## 2026-04-28 — Add OpenAI gpt-image-2 as alternative image model with toggle
 
 ### What
