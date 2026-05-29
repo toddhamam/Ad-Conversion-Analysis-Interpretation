@@ -70,6 +70,43 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
         </div>
       </section>
 
+      {/* Winning Axes (BlitzScale grid attribution) */}
+      {analysis.axisInsights && analysis.axisInsights.taggedAdCount > 0 && (
+        <section className="insights-section winning-axes-section">
+          <div className="section-header">
+            <h3><Layers size={18} strokeWidth={1.5} style={{ marginRight: 8, verticalAlign: 'text-bottom' }} />Winning Axes</h3>
+            <span className="analyzed-at">{analysis.axisInsights.taggedAdCount} tagged ad{analysis.axisInsights.taggedAdCount === 1 ? '' : 's'}</span>
+          </div>
+          <p className="axes-hint">Performance by creative axis across grid-tagged ads. Use the winners (★) as anchors for your next batch.</p>
+          <div className="winning-axes-grid">
+            {[
+              { title: 'By Angle', stats: analysis.axisInsights.byAngle, winner: analysis.axisInsights.winningAngle },
+              { title: 'By Hook', stats: analysis.axisInsights.byHook, winner: analysis.axisInsights.winningHook },
+              { title: 'By Format', stats: analysis.axisInsights.byFormat, winner: analysis.axisInsights.winningFormat },
+            ].filter(group => group.stats.length > 0).map(group => (
+              <div className="axis-group" key={group.title}>
+                <h4>{group.title}</h4>
+                <ul className="axis-stat-list">
+                  {group.stats.map(s => (
+                    <li key={s.key} className={`axis-stat-row ${s.key === group.winner ? 'winner' : ''}`}>
+                      <span className="axis-stat-label">{s.key === group.winner ? '★ ' : ''}{s.label}</span>
+                      <span className="axis-stat-metrics">
+                        {formatPercent(s.cvr)} CVR · {formatCurrency(s.spend)} · {s.adCount} ad{s.adCount === 1 ? '' : 's'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          {analysis.axisInsights.untaggedAdCount > 0 && (
+            <p className="axes-untagged-note">
+              {analysis.axisInsights.untaggedAdCount} ad{analysis.axisInsights.untaggedAdCount === 1 ? '' : 's'} not yet attributable (published before grid tagging).
+            </p>
+          )}
+        </section>
+      )}
+
       {/* Creative Fatigue Score (Embedding-Based) */}
       {analysis.creativeFatigue && (
         <section className="insights-section fatigue-section">

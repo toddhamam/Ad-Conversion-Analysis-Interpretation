@@ -1,5 +1,45 @@
 # Changelog
 
+## 2026-05-29 — BlitzScale grid-format ad system (Angle × Hook matrix + axis attribution)
+
+### What
+A structured creative-testing system based on the BlitzScale "48-Creative Grid": generate a matrix of genuinely diverse ads across **Angle × Hook** (× Format), anchored to one **core promise**, then prune/reroll, publish in one pass, and read winners **by axis** to compound the next batch. Fully additive — the existing single-concept generation flow is unchanged.
+
+### New creative axes
+- Two new concept angles: **Pain Point** and **Contrarian POV**.
+- **Hooks are now a first-class, labeled axis** (`HookType`: question / stat / contrarian / callout + extras). Each generated headline is tagged and shows a hook chip on the copy-selection screen; threaded through both initial generation and single-item reroll.
+- Optional **Core Promise** input that anchors a whole batch.
+- New `src/lib/axisTags.ts` — single source of truth for the `{angle, hook, format}` tag contract: `buildAdName`/`parseAxisTag`, the `HOOKS` table, `GRID_ANGLE_VALUES` (with a compile-time completeness guard), named defaults, and validators.
+
+### Grid generation (new mode)
+- A **Grid (Angle × Hook)** toggle in CreativeIQ: pick a Core Promise + angles + hooks + format with a live cell counter (default 16, hard cap 24).
+- `generateGridCopy()` — one GPT-5.4 call produces the entire copy matrix (one headline/body/CTA per cell, each labeled and validated; malformed cells dropped).
+- New `grid-review` step (`GridReviewPanel`) — **prune** cells + **per-cell reroll** before spending image credits.
+- `generateGridPackages()` — pooled image generation through the existing 2-wide loop with a single shared reference precompute; results mapped by `indexedResults` so a failed slot never shifts onto the wrong cell. Each cell becomes a fully axis-tagged ad package.
+
+### Publish — axis tags + split ad sets
+- Axis tags `[CI|a:…|h:…|f:…]` encoded into the Meta **ad name** via `buildAdName`; also fixes a pre-existing bug where `conceptType` was dropped at publish.
+- **"Ad Set Structure"** toggle (single vs one-per-angle), persisted in publish presets. `publishAds` validates ad-set groups **before any media upload** and **divides ABO budget across ad sets** (blocks below Meta's $1/day per-ad-set minimum); CBO unaffected.
+
+### Axis-level attribution (ConversionIQ™)
+- `aggregateByAxis()` (new `src/services/axisAnalytics.ts`) computes per-angle / per-hook / per-format CTR/CVR/spend from axis-tagged ad names — hybrid-aware (lead vs purchase, with a small-sample floor), computed in code (not via GPT).
+- A **"Winning Axes"** panel on the Insights page; winners pre-seed the next grid (compounding loop).
+
+### Format enrichment
+- `static_screenshot` vs `static_graphic` directive threaded into the Gemini image prompt (authentic screenshots over polished graphics for proof-driven ads).
+
+### Code structure
+- Extracted shared `buildAnalysisContextString` / `buildInspirationContextString` used by both single-copy and grid-copy generation (no drift).
+- Consolidated the hook taxonomy into one `HOOKS` table; split axis analytics and the grid-review UI into focused modules.
+
+### Files Changed (13)
+- New: `src/lib/axisTags.ts`, `src/services/axisAnalytics.ts`, `src/components/GridReviewPanel.tsx`
+- `src/services/openaiApi.ts`, `src/services/metaApi.ts`
+- `src/pages/AdGenerator.tsx` (+ `.css`), `src/pages/AdPublisher.tsx`, `src/pages/Insights.tsx`
+- `src/components/CopySelectionPanel.tsx` (+ `.css`), `src/components/ChannelInsightsPanel.tsx` (+ `.css`)
+
+---
+
 ## 2026-04-28 — Lock product mockups against creative-direction redesign
 
 ### What
