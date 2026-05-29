@@ -38,6 +38,22 @@
   color: #f59e0b;
 }
 
+/* Hook type chip on headline options */
+.hook-chip {
+  display: inline-block;
+  align-self: flex-start;
+  margin-bottom: 6px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--accent-violet);
+  background: var(--accent-violet-glow);
+  border: 1px solid var(--border-violet);
+  border-radius: 100px;
+}
+
 /* Copy Options List */
 .copy-options-list {
   display: flex;

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { isValidAngle, type AxisTag } from '../lib/axisTags';
 import {
   publishAds,
   fetchCampaignsForPublish,
@@ -178,6 +179,7 @@ interface AdMetadata {
   cta: string;
   audienceType: string;
   conceptType: string;
+  axisTag?: AxisTag;          // creative-axis tag carried to the Meta ad name
   generatedAt: string;
 }
 
@@ -266,6 +268,20 @@ function extractMetadata(): AdMetadata[] {
         generatedAt: pkg.generatedAt || new Date().toISOString(),
       };
 
+      // Build the creative-axis tag PER AD. Grid packages carry a full axisTag; single-mode
+      // packages synthesize angle from a concrete conceptType + the per-headline hook (so the
+      // hook that actually ran is attributable). 'auto'/missing/corrupt angle → untagged.
+      const baseAngle = pkg.axisTag?.angle ?? (isValidAngle(pkg.conceptType) ? pkg.conceptType : undefined);
+      const headlineHooks = Array.isArray(pkg.headlineHooks) ? pkg.headlineHooks : [];
+      const buildAxisTag = (headlineIdx: number): AxisTag | undefined => {
+        if (!baseAngle) return undefined;
+        const hook = pkg.axisTag?.hook ?? (headlineHooks[headlineIdx] || undefined);
+        const tag: AxisTag = { angle: baseAngle };
+        if (hook) tag.hook = hook;
+        if (pkg.axisTag?.format) tag.format = pkg.axisTag.format;
+        return tag;
+      };
+
       // Image ads
       const images = pkg.images || [];
       if (Array.isArray(images) && images.length > 0) {
@@ -275,6 +291,7 @@ function extractMetadata(): AdMetadata[] {
             id: `${pkg.id || pkgIndex}_img_${imgIndex}`,
             imageIndex: imgIndex,
             mediaType: 'image' as const,
+            axisTag: buildAxisTag(imgIndex % headlines.length),
             headline: headlines[imgIndex % headlines.length] || 'Ad Creative',
             bodyText: bodyTexts[imgIndex % bodyTexts.length] || '',
             cta: ctas[imgIndex % ctas.length] || 'Learn More',
@@ -292,6 +309,7 @@ function extractMetadata(): AdMetadata[] {
             imageIndex: -1,
             mediaType: 'video' as const,
             videoIndex: vidIdx,
+            axisTag: buildAxisTag(vidIdx % headlines.length),
             veoFileRef: videos[vidIdx]?.veoFileRef,
             headline: headlines[vidIdx % headlines.length] || 'Ad Creative',
             bodyText: bodyTexts[vidIdx % bodyTexts.length] || '',
@@ -315,6 +333,7 @@ interface AdPublishData {
   headline: string;
   bodyText: string;
   cta: string;
+  axisTag?: AxisTag;
 }
 
 async function loadMediaDataForPublish(metadata: AdMetadata[]): Promise<AdPublishData[]> {
@@ -338,6 +357,7 @@ async function loadMediaDataForPublish(metadata: AdMetadata[]): Promise<AdPublis
             headline: meta.headline,
             bodyText: meta.bodyText,
             cta: meta.cta,
+            axisTag: meta.axisTag,
           };
         }
 
@@ -353,6 +373,7 @@ async function loadMediaDataForPublish(metadata: AdMetadata[]): Promise<AdPublis
           headline: meta.headline,
           bodyText: meta.bodyText,
           cta: meta.cta,
+          axisTag: meta.axisTag,
         };
       }).filter(Boolean) as AdPublishData[];
 
@@ -737,6 +758,9 @@ const AdPublisher = () => {
     );
   }, []);
 
+  // BlitzScale grid: split ads into one ad set per angle, or keep them in one ad set
+  const [adSetSplit, setAdSetSplit] = useState<'single' | 'by_angle'>('single');
+
   // Preset handlers
   const savePreset = useCallback(() => {
     if (!presetName.trim()) return;
@@ -769,6 +793,7 @@ const AdPublisher = () => {
         landingPageUrl,
         ctaButtonType,
         urlParameters: urlParameters || undefined,
+        adSetSplit,
       },
     };
 
@@ -781,7 +806,7 @@ const AdPublisher = () => {
   }, [presetName, campaignObjective, budgetMode, dailyBudget, conversionEvent, pixelId,
       targetCountries, ageMin, ageMax, genders, detailedTargeting, customAudiences,
       excludedAudiences, placementAutomatic, publisherPlatforms, facebookPositions,
-      instagramPositions, landingPageUrl, ctaButtonType, urlParameters, presets]);
+      instagramPositions, landingPageUrl, ctaButtonType, urlParameters, adSetSplit, presets]);
 
   const loadPreset = useCallback((presetId: string) => {
     const preset = presets.find(p => p.id === presetId);
@@ -790,6 +815,7 @@ const AdPublisher = () => {
     const c = preset.config;
     setCampaignObjective(c.campaignObjective);
     setBudgetMode(c.budgetMode);
+    setAdSetSplit(c.adSetSplit || 'single');
     setDailyBudget(c.dailyBudget);
     if (c.conversionEvent) setConversionEvent(c.conversionEvent);
     if (c.pixelId) setPixelId(c.pixelId);
@@ -944,6 +970,7 @@ const AdPublisher = () => {
           headline: ad.headline,
           bodyText: `${ad.bodyText}\n\n${landingPageUrl}`,
           callToAction: ctaButtonType,
+          axisTag: ad.axisTag,
         })),
         settings: {
           campaignName: publishMode === 'new_campaign' ? campaignName : undefined,
@@ -961,6 +988,24 @@ const AdPublisher = () => {
         existingCampaignId: publishMode !== 'new_campaign' ? selectedCampaignId : undefined,
         existingAdSetId: publishMode === 'existing_adset' ? selectedAdSetId : undefined,
       };
+
+      // BlitzScale grid: split ads into one ad set per angle (from the axis tag) when the preset asks.
+      if (adSetSplit === 'by_angle' && publishMode !== 'existing_adset' && config.ads.length > 1) {
+        const groupMap = new Map<string, number[]>();
+        config.ads.forEach((ad, idx) => {
+          const key = ad.axisTag?.angle || 'mixed';
+          const arr = groupMap.get(key);
+          if (arr) arr.push(idx); else groupMap.set(key, [idx]);
+        });
+        // Only split if there's more than one angle — otherwise a single ad set is correct.
+        if (groupMap.size > 1) {
+          const baseName = (publishMode === 'new_campaign' ? campaignName : adsetName) || 'CI';
+          config.adSetGroups = Array.from(groupMap.entries()).map(([angle, adIndices]) => ({
+            name: `${baseName} - ${angle}`,
+            adIndices,
+          }));
+        }
+      }
 
       const result = await publishAds(config);
       setPublishResult(result);
@@ -1354,6 +1399,32 @@ const AdPublisher = () => {
                         {budgetMode === 'CBO'
                           ? 'Meta distributes budget across ad sets automatically'
                           : 'Each ad set manages its own budget independently'}
+                      </span>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Ad Set Structure</label>
+                      <div className="toggle-group">
+                        <button
+                          type="button"
+                          className={`toggle-option ${adSetSplit === 'single' ? 'active' : ''}`}
+                          onClick={() => setAdSetSplit('single')}
+                        >
+                          Single Ad Set
+                        </button>
+                        <button
+                          type="button"
+                          className={`toggle-option ${adSetSplit === 'by_angle' ? 'active' : ''}`}
+                          onClick={() => setAdSetSplit('by_angle')}
+                        >
+                          One Per Angle
+                        </button>
+                      </div>
+                      <span className="form-sublabel">
+                        {adSetSplit === 'by_angle'
+                          ? budgetMode === 'ABO'
+                            ? 'Grid ads split into one ad set per angle; ABO budget is divided across them.'
+                            : 'Grid ads split into one ad set per angle (campaign budget shared by Meta).'
+                          : 'All ads go into one ad set.'}
                       </span>
                     </div>
                     <div className="form-group">

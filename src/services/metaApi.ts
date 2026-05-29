@@ -4,6 +4,7 @@
 // Falls back to VITE_ env vars in dev mode when Supabase is not configured.
 
 import { getAuthToken } from '../lib/authToken';
+import { buildAdName, type AxisTag } from '../lib/axisTags';
 import {
   guardedFetch,
   updateRateLimitState,
@@ -656,6 +657,7 @@ export interface AdCreative {
   clicks: number;
   campaignName: string;
   adsetName: string;
+  adName?: string;        // Meta ad name — carries the creative-axis tag when published via the grid
   roas?: number;
   detectedConversionType?: DetectedConversionType;
   purchaseConversions: number;
@@ -1022,6 +1024,7 @@ export async function fetchAdCreatives(dateOptions?: DateRangeOptions, options?:
         clicks,
         campaignName: ad.campaign_name,
         adsetName: ad.adset_name,
+        adName: ad.ad_name,
         detectedConversionType,
         purchaseConversions: purchases,
         leadConversions: leads,
@@ -1381,6 +1384,7 @@ export interface PublishPreset {
     landingPageUrl: string;
     ctaButtonType?: CallToActionType;
     urlParameters?: string;
+    adSetSplit?: 'single' | 'by_angle'; // BlitzScale grid: one ad set per angle vs one shared
   };
 }
 
@@ -1440,6 +1444,7 @@ export interface PublishConfig {
     headline: string;
     bodyText: string;
     callToAction: CallToActionType;
+    axisTag?: AxisTag;              // creative-axis tag → encoded into the Meta ad name
   }>;
   settings: {
     campaignName?: string;
@@ -1457,6 +1462,9 @@ export interface PublishConfig {
   };
   existingCampaignId?: string;
   existingAdSetId?: string;
+  // BlitzScale grid: split ads across multiple ad sets (e.g. one per angle). Each ad
+  // index must appear in exactly one group. Ignored when mode is 'existing_adset'.
+  adSetGroups?: Array<{ name: string; adIndices: number[] }>;
 }
 
 export interface PublishResult {
@@ -2163,6 +2171,33 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
   const diagnostics: string[] = [];
 
   try {
+    // Step 0a: Validate ad-set grouping BEFORE any media upload, so a bad grouping or an
+    // under-minimum ABO split fails fast without wasting uploads.
+    if (config.adSetGroups && config.adSetGroups.length > 0) {
+      if (config.mode === 'existing_adset') {
+        throw new Error('Cannot split into multiple ad sets when publishing into an existing ad set.');
+      }
+      const seenIdx = new Set<number>();
+      for (const group of config.adSetGroups) {
+        if (!group.adIndices || group.adIndices.length === 0) {
+          throw new Error(`Ad-set group "${group.name}" has no ads assigned.`);
+        }
+        for (const idx of group.adIndices) {
+          if (idx < 0 || idx >= config.ads.length) {
+            throw new Error(`Ad-set group "${group.name}" references an out-of-range ad index (${idx}).`);
+          }
+          if (seenIdx.has(idx)) throw new Error(`Ad ${idx} is assigned to more than one ad set.`);
+          seenIdx.add(idx);
+        }
+      }
+      if (seenIdx.size !== config.ads.length) {
+        throw new Error(`Ad-set groups cover ${seenIdx.size} of ${config.ads.length} ads — every ad must be in exactly one group.`);
+      }
+      if (budgetMode === 'ABO' && Math.floor((config.settings.dailyBudget || 50) / config.adSetGroups.length) < 1) {
+        throw new Error(`Splitting $${config.settings.dailyBudget || 50}/day across ${config.adSetGroups.length} ad sets is below Meta's $1/day per-ad-set minimum. Raise the budget, switch to CBO, or use fewer groups.`);
+      }
+    }
+
     // Step 0: Validate Page access
     const pageValidation = await validatePageAccess(config.settings.pageId);
     if (!pageValidation.valid) {
@@ -2247,10 +2282,13 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
       result.campaignId = campaignId;
     }
 
-    // Step 3: Create or select ad set
-    let adsetId: string;
+    // Step 3: Create or select ad set(s). Supports splitting ads across multiple ad sets
+    // (config.adSetGroups) — e.g. one ad set per angle. Default = a single ad set.
+    const adIndexToAdsetId: string[] = new Array(config.ads.length);
     if (config.mode === 'existing_adset') {
-      adsetId = config.existingAdSetId!;
+      const existingId = config.existingAdSetId!;
+      adIndexToAdsetId.fill(existingId);
+      result.adsetId = existingId;
     } else {
       const targeting = config.settings.targeting || defaultTargeting;
       const placements = config.settings.placements || defaultPlacements;
@@ -2266,17 +2304,32 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
         };
       }
 
-      adsetId = await createAdSet({
-        name: config.settings.adsetName || 'CI Generated Ad Set',
-        campaignId,
-        dailyBudget: budgetMode === 'ABO' ? (config.settings.dailyBudget || 50) : undefined,
-        optimization,
-        targeting,
-        placements,
-        promotedObject,
-      });
+      const groups = (config.adSetGroups && config.adSetGroups.length > 0)
+        ? config.adSetGroups
+        : [{ name: config.settings.adsetName || 'CI Generated Ad Set', adIndices: config.ads.map((_, idx) => idx) }];
+
+      // ABO budget lives on each ad set — divide the daily budget across groups so the
+      // total ≈ the user's intent (CBO shares one campaign budget automatically).
+      const perAdsetBudget = budgetMode === 'ABO'
+        ? Math.max(1, Math.floor((config.settings.dailyBudget || 50) / groups.length))
+        : undefined;
+
+      for (const group of groups) {
+        const newAdsetId = await createAdSet({
+          name: (group.name || 'CI Generated Ad Set').substring(0, 120),
+          campaignId,
+          dailyBudget: perAdsetBudget,
+          optimization,
+          targeting,
+          placements,
+          promotedObject,
+        });
+        for (const idx of group.adIndices) {
+          if (idx >= 0 && idx < adIndexToAdsetId.length) adIndexToAdsetId[idx] = newAdsetId;
+        }
+        if (!result.adsetId) result.adsetId = newAdsetId; // first ad set → deep link target
+      }
     }
-    result.adsetId = adsetId;
 
     // Step 4: Create ads with inline creatives (per-ad media type dispatch)
     const pageId = config.settings.pageId || getPageId();
@@ -2285,6 +2338,7 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
     for (let i = 0; i < config.ads.length; i++) {
       const ad = config.ads[i];
       const media = adMediaIds[i];
+      const adsetForAd = adIndexToAdsetId[i] || result.adsetId!;
 
       let adId: string;
       let creativeId: string;
@@ -2292,8 +2346,8 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
       if (media.type === 'video' && media.videoId) {
         // Video ad — use video_data spec
         const result2 = await createAdWithVideoCreative({
-          name: `CI Video Ad ${i + 1} - ${ad.headline.substring(0, 30)}`,
-          adsetId,
+          name: buildAdName(ad.axisTag, i, ad.headline, 'video'),
+          adsetId: adsetForAd,
           pageId,
           videoId: media.videoId,
           headline: ad.headline,
@@ -2308,8 +2362,8 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
       } else {
         // Image ad — use link_data spec
         const result2 = await createAdWithCreative({
-          name: `CI Ad ${i + 1} - ${ad.headline.substring(0, 30)}`,
-          adsetId,
+          name: buildAdName(ad.axisTag, i, ad.headline, 'image'),
+          adsetId: adsetForAd,
           pageId,
           imageHash: media.imageHash || '',
           headline: ad.headline,

@@ -10,6 +10,8 @@ import {
   generateAdImage,
   regenerateAllImages,
   generateAdVideoWithVeo,
+  generateGridCopy,
+  generateGridPackages,
   CONCEPT_ANGLES,
   IMAGE_SIZE_OPTIONS,
   DEFAULT_IMAGE_SIZE,
@@ -24,6 +26,7 @@ import {
   type ConceptType,
   type ChannelAnalysisResult,
   type GeneratedAdPackage,
+  type GridCell,
   type CopyOption,
   type ImageSize,
   type CopyLength,
@@ -41,12 +44,14 @@ import { getCacheStats as getImageCacheStats, getDetailedCacheStats, uploadBrand
 import { fetchAdCreatives, saveReferenceImageMetadata, type DatePreset } from '../services/metaApi';
 import GeneratedAdCard from '../components/GeneratedAdCard';
 import CopySelectionPanel from '../components/CopySelectionPanel';
+import GridReviewPanel from '../components/GridReviewPanel';
 import AdLibraryBrowser from '../components/AdLibraryBrowser';
 import InspirationSelector from '../components/InspirationSelector';
 import SEO from '../components/SEO';
 import { setPublishData } from '../services/publishStore';
 import type { AdLibraryInspiration } from '../types';
 import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
+import { DEFAULT_GRID_ANGLES, DEFAULT_GRID_HOOKS, HOOK_LABELS, FORMAT_LABELS, isValidAngle, isValidHook, type GridAngle, type HookType, type FormatType } from '../lib/axisTags';
 import { useAdAccount } from '../contexts/AdAccountContext';
 import { getCachedAnalysis, getImportMetadata, type ImportMetadata } from '../lib/channelAnalysisCache';
 import ImportImagesModal, { getAvailableImageImports, importImages, getSyncCreatives } from '../components/ImportImagesModal';
@@ -116,6 +121,18 @@ const CONCEPT_OPTIONS = Object.entries(CONCEPT_ANGLES).map(([id, config]) => ({
   ...config,
 }));
 
+// Grid mode option lists (BlitzScale Angle × Hook matrix)
+const GRID_ANGLE_OPTIONS = CONCEPT_OPTIONS
+  .filter(o => o.id !== 'auto')
+  .map(o => ({ ...o, id: o.id as GridAngle }));
+const GRID_HOOK_OPTIONS = (Object.keys(HOOK_LABELS) as HookType[]).map(id => ({ id, name: HOOK_LABELS[id] }));
+const GRID_FORMAT_OPTIONS = (Object.keys(FORMAT_LABELS) as FormatType[]).map(id => ({
+  id,
+  name: FORMAT_LABELS[id],
+  description: id === 'static_screenshot' ? 'Authentic screenshot — often out-converts designed graphics' : 'Designed graphic',
+}));
+const GRID_CELL_CAP = 24;
+
 // getCachedAnalysis is now imported from ../lib/channelAnalysisCache
 
 function formatDate(isoString: string): string {
@@ -129,7 +146,7 @@ function formatDate(isoString: string): string {
   });
 }
 
-type WorkflowStep = 'config' | 'copy-selection' | 'final-config';
+type WorkflowStep = 'config' | 'copy-selection' | 'final-config' | 'grid-review';
 type CopySource = 'generate' | 'import' | 'manual' | 'swipe';
 
 const IMPORT_DATE_OPTIONS: { id: DatePreset; label: string }[] = [
@@ -174,6 +191,16 @@ const AdGenerator = () => {
   const [audienceType, setAudienceType] = useState<AudienceType>('prospecting');
   const [conceptType, setConceptType] = useState<ConceptType>('auto');
   const [variationCount, setVariationCount] = useState(2);
+  const [corePromise, setCorePromise] = useState(''); // the single idea a batch lives inside (BlitzScale grid)
+  // BlitzScale grid mode
+  const [generationMode, setGenerationMode] = useState<'single' | 'grid'>('single');
+  const [gridAngles, setGridAngles] = useState<GridAngle[]>(() => [...DEFAULT_GRID_ANGLES]);
+  const [gridHooks, setGridHooks] = useState<HookType[]>(() => [...DEFAULT_GRID_HOOKS]);
+  const [gridFormat, setGridFormat] = useState<FormatType>('static_graphic');
+  const [gridCells, setGridCells] = useState<GridCell[] | null>(null);
+  const [keptCellIds, setKeptCellIds] = useState<Set<string>>(new Set());
+  const [isGeneratingGrid, setIsGeneratingGrid] = useState(false);
+  const [regeneratingCellId, setRegeneratingCellId] = useState<string | null>(null);
   const [analysisData, setAnalysisData] = useState<ChannelAnalysisResult | null>(null);
   const [analysisImportMeta, setAnalysisImportMeta] = useState<ImportMetadata | null>(null);
   const [imageSize, setImageSize] = useState<ImageSize>(DEFAULT_IMAGE_SIZE);
@@ -889,6 +916,7 @@ const AdGenerator = () => {
         adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
         businessType,
         campaignIntent: effectiveIntent,
+        corePromise: corePromise.trim() || undefined,
       });
 
       // Replace the old item with the new one
@@ -922,7 +950,7 @@ const AdGenerator = () => {
   }, [
     copyOptions, regeneratingCopyId, selectedHeadlines, selectedBodyTexts, selectedCTAs,
     savedInspirations, activeInspirationIds, audienceType, conceptType, analysisData,
-    copyLength, copyVariationValue, selectedProduct,
+    copyLength, copyVariationValue, selectedProduct, corePromise,
   ]);
 
   // Stable callback wrappers for CopySelectionPanel memo
@@ -940,6 +968,163 @@ const AdGenerator = () => {
     (id: string) => handleRegenerateCopy('callToAction', id),
     [handleRegenerateCopy]
   );
+
+  // ─── BlitzScale grid handlers ──────────────────────────────────────────
+  const gridCellCount = Math.min(gridAngles.length * gridHooks.length, GRID_CELL_CAP);
+  const gridOverCap = gridAngles.length * gridHooks.length > GRID_CELL_CAP;
+
+  const toggleGridAngle = useCallback((id: GridAngle) => {
+    setGridAngles(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]);
+  }, []);
+  const toggleGridHook = useCallback((id: HookType) => {
+    setGridHooks(prev => prev.includes(id) ? prev.filter(h => h !== id) : [...prev, id]);
+  }, []);
+
+  // Enter grid mode, pre-selecting any prior winning angle/hook (compounding loop).
+  const enterGridMode = useCallback(() => {
+    setGenerationMode('grid');
+    const ai = analysisData?.axisInsights;
+    if (!ai) return;
+    if (isValidAngle(ai.winningAngle)) {
+      setGridAngles(prev => prev.includes(ai.winningAngle as GridAngle) ? prev : [ai.winningAngle as GridAngle, ...prev]);
+    }
+    if (isValidHook(ai.winningHook)) {
+      setGridHooks(prev => prev.includes(ai.winningHook as HookType) ? prev : [ai.winningHook as HookType, ...prev]);
+    }
+  }, [analysisData]);
+  const handleToggleKeepCell = useCallback((id: string) => {
+    setKeptCellIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleGenerateGrid = async () => {
+    if (!isOpenAIConfigured()) { setError('OpenAI API is not configured. Please contact your administrator.'); return; }
+    if (!corePromise.trim()) { setError('Grid mode needs a Core Promise — the one idea every creative anchors to.'); return; }
+    if (gridAngles.length === 0 || gridHooks.length === 0) { setError('Select at least one angle and one hook.'); return; }
+    if (gridAngles.length * gridHooks.length > GRID_CELL_CAP) {
+      setError(`That's ${gridAngles.length * gridHooks.length} creatives — reduce angles or hooks to stay at or under ${GRID_CELL_CAP}.`);
+      return;
+    }
+    setIsGeneratingGrid(true);
+    setError(null);
+    setGenerationProgress('ConversionIQ™ generating the copy matrix...');
+    try {
+      const activeInspirations = savedInspirations.filter(i => activeInspirationIds.includes(i.id));
+      const cells = await generateGridCopy({
+        corePromise: corePromise.trim(),
+        angles: gridAngles,
+        hooks: gridHooks,
+        format: gridFormat,
+        audienceType,
+        analysisData,
+        copyLength,
+        productContext: selectedProduct || undefined,
+        adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
+        businessType,
+        campaignIntent: effectiveIntent,
+      });
+      if (cells.length === 0) { setError('The grid came back empty — please try again.'); return; }
+      setGridCells(cells);
+      setKeptCellIds(new Set(cells.map(c => c.id)));
+      setCurrentStep('grid-review');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to generate the grid. Please try again.');
+    } finally {
+      setIsGeneratingGrid(false);
+      setGenerationProgress('');
+    }
+  };
+
+  const handleRerollGridCell = async (cellId: string) => {
+    if (!gridCells) return;
+    const cell = gridCells.find(c => c.id === cellId);
+    if (!cell) return;
+    setRegeneratingCellId(cellId);
+    setError(null);
+    try {
+      const activeInspirations = savedInspirations.filter(i => activeInspirationIds.includes(i.id));
+      const fresh = await generateGridCopy({
+        corePromise: corePromise.trim(),
+        angles: [cell.angle],
+        hooks: [cell.hook],
+        format: gridFormat,
+        audienceType,
+        analysisData,
+        copyLength,
+        productContext: selectedProduct || undefined,
+        adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
+        businessType,
+        campaignIntent: effectiveIntent,
+      });
+      if (fresh.length > 0) {
+        const replacement: GridCell = { ...fresh[0], id: cell.id };
+        setGridCells(prev => prev ? prev.map(c => c.id === cellId ? replacement : c) : prev);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to reroll this cell.');
+    } finally {
+      setRegeneratingCellId(null);
+    }
+  };
+
+  const handleGenerateGridImages = async () => {
+    if (!gridCells) return;
+    const keptCells = gridCells.filter(c => keptCellIds.has(c.id));
+    if (keptCells.length === 0) { setError('Keep at least one creative to generate.'); return; }
+    setIsGeneratingCreatives(true);
+    setError(null);
+    setGenerationProgress('ConversionIQ™ preparing the batch...');
+
+    let transactionId: string | undefined;
+    try {
+      const reservation = await reserveCredits('image_ad', keptCells.length);
+      transactionId = reservation.transactionId;
+    } catch (err: unknown) {
+      setIsGeneratingCreatives(false);
+      setGenerationProgress('');
+      if (err instanceof InsufficientCreditsError) {
+        setCreditModalData({ remaining: err.creditsRemaining, required: err.creditsRequired });
+        setShowCreditModal(true);
+        return;
+      }
+      setError(err instanceof Error ? err.message : 'Failed to reserve credits.');
+      return;
+    }
+
+    try {
+      const activeInspirations = savedInspirations.filter(i => activeInspirationIds.includes(i.id));
+      const packages = await generateGridPackages({
+        cells: keptCells,
+        audienceType,
+        analysisData,
+        similarityLevel: similarityValue,
+        imageSize,
+        productContext: selectedProduct || undefined,
+        adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
+        businessType,
+        campaignIntent: effectiveIntent,
+        imageModel,
+        format: gridFormat,
+        corePromise: corePromise.trim(),
+        onProgress: setGenerationProgress,
+      });
+      if (transactionId) confirmCredits(transactionId);
+      setGeneratedAds(prev => [...packages, ...prev]);
+      // Hand the batch to the publisher (in-memory store) and navigate — matches the single flow.
+      setPublishData([...packages], effectiveIntent);
+      setGenerationProgress('');
+      navigate('/publish');
+    } catch (err: unknown) {
+      if (transactionId) refundCredits(transactionId);
+      setGenerationProgress('');
+      setError(err instanceof Error ? err.message : 'Failed to generate grid images. Please try again.');
+    } finally {
+      setIsGeneratingCreatives(false);
+    }
+  };
 
   // Generate copy options
   const handleGenerateCopyOptions = async () => {
@@ -965,6 +1150,7 @@ const AdGenerator = () => {
         adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
         businessType,
         campaignIntent: effectiveIntent,
+        corePromise: corePromise.trim() || undefined,
       });
 
       setCopyOptions(result);
@@ -999,6 +1185,9 @@ const AdGenerator = () => {
         const selectedHeadlineTexts = copyOptions?.headlines
           .filter(h => selectedHeadlines.includes(h.id))
           .map(h => h.text) || [];
+        const selectedHeadlineHooks = copyOptions?.headlines
+          .filter(h => selectedHeadlines.includes(h.id))
+          .map(h => h.hook ?? null) || [];
         const selectedBodyTextTexts = copyOptions?.bodyTexts
           .filter(b => selectedBodyTexts.includes(b.id))
           .map(b => b.text) || [];
@@ -1032,6 +1221,7 @@ const AdGenerator = () => {
           audienceType,
           conceptType,
           images,
+          headlineHooks: selectedHeadlineHooks,
           copy: {
             headlines: selectedHeadlineTexts,
             bodyTexts: selectedBodyTextTexts,
@@ -1107,6 +1297,9 @@ const AdGenerator = () => {
     const selectedHeadlineTexts = copyOptions?.headlines
       .filter(h => selectedHeadlines.includes(h.id))
       .map(h => h.text) || [];
+    const selectedHeadlineHooks = copyOptions?.headlines
+      .filter(h => selectedHeadlines.includes(h.id))
+      .map(h => h.hook ?? null) || [];
     const selectedBodyTextTexts = copyOptions?.bodyTexts
       .filter(b => selectedBodyTexts.includes(b.id))
       .map(b => b.text) || [];
@@ -1173,6 +1366,7 @@ const AdGenerator = () => {
         confirmCredits(transactionId);
       }
 
+      result.headlineHooks = selectedHeadlineHooks;
       setGeneratedAds(prev => [result, ...prev]);
       setGenerationProgress('');
       // Stay on final-config so user can regenerate with same copy selections
@@ -1923,6 +2117,22 @@ const AdGenerator = () => {
             )}
           </div>
 
+          {/* Core Promise (optional) — anchors the whole batch (AI generation only) */}
+          {copySource === 'generate' && (
+            <div className="config-section">
+              <label className="config-label">Core Promise</label>
+              <p className="config-hint">Optional — the one idea this whole batch lives inside. Every headline, body, and CTA will anchor to it.</p>
+              <input
+                type="text"
+                className="manual-entry-input"
+                value={corePromise}
+                onChange={(e) => setCorePromise(e.target.value)}
+                placeholder="e.g. Scale past the closer bottleneck without hiring more people"
+                maxLength={200}
+              />
+            </div>
+          )}
+
           {/* Ad Library Inspiration (optional) */}
           <div className="config-section">
             <label className="config-label">
@@ -1982,8 +2192,34 @@ const AdGenerator = () => {
             </div>
           </div>
 
-          {/* Concept Selection — AI generation only */}
+          {/* Generation Mode — single concept vs grid matrix (AI generation only) */}
           {copySource === 'generate' && (
+            <div className="config-section">
+              <label className="config-label">Generation Mode</label>
+              <p className="config-hint">One concept you curate, or a BlitzScale grid that tests many angles × hooks in one batch</p>
+              <div className="copy-source-options">
+                <button
+                  type="button"
+                  className={`copy-source-btn ${generationMode === 'single' ? 'active' : ''}`}
+                  onClick={() => setGenerationMode('single')}
+                >
+                  <span className="copy-source-name">Single Concept</span>
+                  <span className="copy-source-desc">One angle, pick from copy options</span>
+                </button>
+                <button
+                  type="button"
+                  className={`copy-source-btn ${generationMode === 'grid' ? 'active' : ''}`}
+                  onClick={enterGridMode}
+                >
+                  <span className="copy-source-name">Grid (Angle × Hook)</span>
+                  <span className="copy-source-desc">Test a full matrix in one batch</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Concept Selection — single mode only */}
+          {copySource === 'generate' && generationMode === 'single' && (
             <div className="config-section">
               <label className="config-label">Core Concept</label>
               <p className="config-hint">Select the psychological angle for your creative</p>
@@ -2003,6 +2239,72 @@ const AdGenerator = () => {
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Grid Config — grid mode only */}
+          {copySource === 'generate' && generationMode === 'grid' && (
+            <>
+              <div className="config-section">
+                <label className="config-label">Angles</label>
+                <p className="config-hint">The strategic frame — each becomes a row. {gridAngles.length} selected.</p>
+                <div className="concept-options">
+                  {GRID_ANGLE_OPTIONS.map(option => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={`concept-btn ${gridAngles.includes(option.id) ? 'active' : ''}`}
+                      onClick={() => toggleGridAngle(option.id)}
+                    >
+                      <div className="concept-header">
+                        <span className="concept-icon">{option.icon}</span>
+                        <span className="concept-name">{option.name}</span>
+                      </div>
+                      <span className="concept-desc">{option.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="config-section">
+                <label className="config-label">Hooks</label>
+                <p className="config-hint">The first 3 seconds — each becomes a column. {gridHooks.length} selected.</p>
+                <div className="grid-hook-options">
+                  {GRID_HOOK_OPTIONS.map(option => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={`grid-hook-btn ${gridHooks.includes(option.id) ? 'active' : ''}`}
+                      onClick={() => toggleGridHook(option.id)}
+                    >
+                      {option.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="config-section">
+                <label className="config-label">Format</label>
+                <p className="config-hint">Image style applied across the whole batch</p>
+                <div className="copy-length-options">
+                  {GRID_FORMAT_OPTIONS.map(option => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={`copy-length-btn ${gridFormat === option.id ? 'active' : ''}`}
+                      onClick={() => setGridFormat(option.id)}
+                    >
+                      <span className="copy-length-name">{option.name}</span>
+                      <span className="copy-length-desc">{option.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className={`grid-cell-counter ${gridOverCap ? 'over-cap' : ''}`}>
+                {gridAngles.length} angles × {gridHooks.length} hooks = <strong>{gridAngles.length * gridHooks.length}</strong> creatives
+                {gridOverCap && <span className="grid-cap-warning"> — reduce to {GRID_CELL_CAP} or fewer to generate</span>}
+              </div>
+            </>
           )}
 
           {/* Copy Length Selection — AI generation only */}
@@ -2267,8 +2569,8 @@ const AdGenerator = () => {
             </div>
           )}
 
-          {/* Generate Copy Options Button — AI generation only */}
-          {copySource === 'generate' && (
+          {/* Generate Copy Options Button — single mode */}
+          {copySource === 'generate' && generationMode === 'single' && (
             <button
               className="generate-btn step-btn"
               onClick={handleGenerateCopyOptions}
@@ -2287,7 +2589,43 @@ const AdGenerator = () => {
               )}
             </button>
           )}
+
+          {/* Generate Grid Button — grid mode */}
+          {copySource === 'generate' && generationMode === 'grid' && (
+            <button
+              className="generate-btn step-btn"
+              onClick={handleGenerateGrid}
+              disabled={isGeneratingGrid || gridOverCap || !corePromise.trim() || gridAngles.length === 0 || gridHooks.length === 0}
+            >
+              {isGeneratingGrid ? (
+                <>
+                  <span className="spinner"></span>
+                  {generationProgress}
+                </>
+              ) : (
+                <>
+                  <span className="generate-icon">▦</span>
+                  Generate Grid ({gridCellCount} creative{gridCellCount === 1 ? '' : 's'})
+                </>
+              )}
+            </button>
+          )}
         </section>
+      )}
+
+      {/* Grid Review — prune + reroll the Angle × Hook matrix */}
+      {currentStep === 'grid-review' && gridCells && (
+        <GridReviewPanel
+          cells={gridCells}
+          keptCellIds={keptCellIds}
+          regeneratingCellId={regeneratingCellId}
+          isGenerating={isGeneratingCreatives}
+          generationProgress={generationProgress}
+          onToggleKeep={handleToggleKeepCell}
+          onReroll={handleRerollGridCell}
+          onBack={() => setCurrentStep('config')}
+          onGenerate={handleGenerateGridImages}
+        />
       )}
 
       {/* Step 2: Copy Selection */}

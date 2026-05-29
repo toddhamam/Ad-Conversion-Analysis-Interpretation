@@ -1,6 +1,7 @@
 import { memo, useState, useCallback } from 'react';
 import { RefreshCw, Loader } from 'lucide-react';
 import type { CopyOption } from '../services/openaiApi';
+import { HOOK_LABELS } from '../lib/axisTags';
 import './CopySelectionPanel.css';
 
 interface CopySelectionPanelProps {
@@ -191,6 +192,7 @@ export default memo(function CopySelectionPanel({
                     {isSelected ? '✓' : ''}
                   </div>
                   <div className="option-content">
+                    {option.hook && <span className="hook-chip">{HOOK_LABELS[option.hook]}</span>}
                     <div className="option-text">{option.text}</div>
                     <div className="option-rationale">{option.rationale}</div>
                   </div>

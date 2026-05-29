@@ -8,6 +8,7 @@ import { getEmbedding, setEmbedding } from './embeddingStore';
 import { getAuthToken } from '../lib/authToken';
 import { getBusinessTypeConfig, getCampaignIntentConfig } from '../lib/businessTypeConfig';
 import { META_AD_POLICY_PROMPT, IMAGE_SAFETY_DIRECTIVE, POLICY_SANITIZE_PATTERNS } from './adPolicyGuard';
+import { isValidHook, isValidAngle, DEFAULT_GRID_ANGLES, DEFAULT_GRID_HOOKS, HOOKS, HOOK_PROMPT_MENU, type HookType, type AxisTag, type GridAngle, type FormatType } from '../lib/axisTags';
 
 // ─── OpenAI API Calls ───────────────────────────────────────────────────────
 // All OpenAI calls route through the backend proxy (/api/ai/*) so the API key
@@ -497,7 +498,38 @@ export interface AdCreativeData {
   ctr: number;
   roas?: number;
   detectedConversionType?: 'purchase' | 'lead' | 'both' | 'none';
+  purchaseConversions?: number;
+  leadConversions?: number;
+  adName?: string;        // Meta ad name (carries the axis tag, if present)
+  axisTag?: AxisTag;      // parsed creative-axis tag from the ad name
 }
+
+// Per-axis performance rollup (BlitzScale "read winners by axis")
+export interface AxisStat {
+  key: string;
+  label: string;
+  adCount: number;
+  spend: number;
+  conversions: number;
+  clicks: number;
+  impressions: number;
+  ctr: number;   // %
+  cvr: number;   // %
+  cpa: number;
+}
+export interface AxisInsights {
+  byAngle: AxisStat[];
+  byHook: AxisStat[];
+  byFormat: AxisStat[];
+  winningAngle?: string;
+  winningHook?: string;
+  winningFormat?: string;
+  taggedAdCount: number;
+  untaggedAdCount: number;
+}
+
+// aggregateByAxis() (computes AxisInsights from axis-tagged ads) lives in ./axisAnalytics.ts —
+// it's pure analytics with no AI, so it stays out of this module.
 
 export interface AdAnalysisResult {
   adId: string;
@@ -561,7 +593,9 @@ export type ConceptType =
   | 'product_benefits'
   | 'transformation'
   | 'urgency_scarcity'
-  | 'authority';
+  | 'authority'
+  | 'pain'
+  | 'contrarian_pov';
 
 // Concept configuration for psychological messaging angles
 export const CONCEPT_ANGLES: Record<ConceptType, {
@@ -635,6 +669,22 @@ export const CONCEPT_ANGLES: Record<ConceptType, {
     visualDirection: 'Expert imagery, credentials, certifications, professional settings',
     messagingStyle: 'Expert endorsements, credentials, research-backed claims',
     promptHints: ['backed by science', 'expert-approved', 'certified', 'proven method', 'research shows']
+  },
+  pain: {
+    name: 'Pain Point',
+    icon: '◍',
+    description: 'Name a specific frustration the prospect is living with so they feel understood',
+    visualDirection: 'The problem made visceral — the frustrating moment, the stuck state, the cost of doing nothing',
+    messagingStyle: 'Name the specific frustration precisely; make them nod before any pitch. Specific over vague.',
+    promptHints: ['stuck at', 'every time you', 'the real reason', 'you keep', 'that frustrating moment']
+  },
+  contrarian_pov: {
+    name: 'Contrarian POV',
+    icon: '⟂',
+    description: 'Lead with a non-obvious belief that reframes the problem and pre-sells the offer',
+    visualDirection: 'Bold statement-driven visuals, myth-vs-reality contrasts, a confident challenge to conventional wisdom',
+    messagingStyle: 'Teach a contrarian worldview; disagree with what the industry preaches. The frame pre-sells the offer.',
+    promptHints: ['most people think', 'what\'s really happening', 'the truth nobody', 'stop doing', 'it\'s not what you think']
   }
 };
 
@@ -679,6 +729,16 @@ const CONCEPT_AUDIENCE_MODIFIERS: Record<ConceptType, Record<AudienceType, strin
     prospecting: 'Establish authority of the APPROACH/METHOD, not the brand. "Research from [institution] shows that X approach..." or "The method used by top performers." The reader does not know the brand, so brand authority means nothing yet.',
     retargeting: 'Establish authority of the BRAND AND CREATOR. Reference the creator\'s credentials, expertise, or track record. Now that they know the product, brand-specific authority helps them trust the investment. Use the actual product name and author.',
     retention: 'Reinforce authority as a TRUSTED PARTNER. "You already trust us with X. We applied the same methodology to create what comes next." The authority is relational -- they have direct experience with the brand.',
+  },
+  pain: {
+    prospecting: 'Name the PROBLEM precisely -- the specific frustration they live with right now. Make them feel understood before any solution. The reader does not know the product yet.',
+    retargeting: 'Name the frustration that REMAINS because they have not acted -- connect the unsolved pain to the specific solution they already saw. Use the actual product name.',
+    retention: 'Name the NEXT-LEVEL frustration -- the ceiling they hit even after solving the first problem. The pain the upgrade resolves. Use the actual product name.',
+  },
+  contrarian_pov: {
+    prospecting: 'Challenge a belief the prospect or the industry holds, with NO product mention -- the reframe itself earns the click. "Most people think X. Here is what is really going on."',
+    retargeting: 'Use the contrarian frame to dismantle the #1 objection keeping them from acting -- reframe the hesitation as the old way of thinking. Use the actual product name.',
+    retention: 'Reframe what "good enough" means for an existing customer -- the contrarian take is that staying put is the real risk. Position the upgrade as the obvious next move. Use the actual product name.',
   },
 };
 
@@ -742,6 +802,9 @@ export interface GeneratedAdPackage {
   variationCount?: number; // Original requested variation count (for retry)
   textAdConfig?: TextAdConfig; // Config used for text ad generation (for regeneration)
   campaignIntent?: import('../types/organization').CampaignIntent; // Hybrid: purchase or lead intent
+  headlineHooks?: (HookType | null)[]; // hook label per copy.headlines entry (for per-ad axis tagging)
+  axisTag?: AxisTag;      // Creative-axis tag {angle,hook,format} — grid mode or synthesized from conceptType
+  corePromise?: string;   // The single idea this batch lives inside (BlitzScale grid)
 }
 
 // Copy Options for multi-step generation
@@ -749,6 +812,7 @@ export interface CopyOption {
   id: string;
   text: string;
   rationale: string;
+  hook?: HookType; // labeled scroll-stopper type (headlines only)
 }
 
 export interface CopyOptionsResult {
@@ -756,6 +820,21 @@ export interface CopyOptionsResult {
   bodyTexts: CopyOption[];
   callToActions: CopyOption[];
 }
+
+// ─── BlitzScale Grid (Angle × Hook matrix) ──────────────────────────────────
+
+// One cell of the grid = a complete creative for a specific (angle, hook) combination.
+export interface GridCell {
+  id: string;
+  angle: GridAngle;
+  hook: HookType;
+  headline: string;
+  body: string;
+  cta: string;
+  rationale: string;
+}
+
+// (Hook descriptions live in HOOKS in axisTags.ts — single source of truth.)
 
 /**
  * Make a request to OpenAI API (text-only)
@@ -1257,6 +1336,9 @@ export interface ChannelAnalysisResult {
     targetingRecommendations: string[];
     visualPreferences: string[]; // NEW
   };
+
+  // Axis-level attribution (BlitzScale grid) — computed in code, attached after analysis
+  axisInsights?: AxisInsights;
 
   // Strategic Recommendations
   recommendations: {
@@ -2361,6 +2443,127 @@ The body should feel like a note from a trusted advisor, not a sales pitch.`,
 };
 
 /**
+ * Build the channel-analysis context string. Shared by single-copy generation
+ * (generateCopyOptions) and grid-copy generation (generateGridCopy) so the
+ * analysis formatting never drifts between the two paths.
+ */
+function buildAnalysisContextString(analysis: ChannelAnalysisResult | null): string {
+  if (!analysis) return '';
+  let analysisContext = '';
+  analysisContext += `\n=== CHANNEL PERFORMANCE SUMMARY ===
+${analysis.executiveSummary}
+
+Overall Health Score: ${analysis.overallHealthScore}/10
+Total Ads Analyzed: ${analysis.performanceBreakdown.totalAdsAnalyzed}
+High Performers: ${analysis.performanceBreakdown.highPerformers} ads
+Avg Conversion Rate: ${(analysis.performanceBreakdown.avgConversionRate * 100).toFixed(2)}%
+`;
+  if (analysis.topAds && analysis.topAds.length > 0) {
+    analysisContext += `\n=== YOUR TOP PERFORMING ADS (COPY THESE PATTERNS) ===\n`;
+    analysis.topAds.forEach((ad, i) => {
+      analysisContext += `
+TOP AD #${i + 1} (${(ad.conversionRate * 100).toFixed(2)}% conversion rate):
+- Headline: "${ad.headline}"${ad.bodyText ? `
+- Full Body Copy: "${ad.bodyText}"` : ''}
+- Why it converts: ${ad.whyItWorks}
+- Psychological drivers: ${ad.psychologicalDrivers?.join(', ') || 'N/A'}
+`;
+    });
+    analysisContext += `
+IMPORTANT: Study the FULL BODY COPY of these winners. Notice their structure, pacing, opening hooks, how they build tension, and how they close. Your generated body copy should follow the same structural patterns and voice.
+`;
+  }
+  if (analysis.brandVoice) {
+    const bv = analysis.brandVoice;
+    analysisContext += `\n=== BRAND VOICE PROFILE (MATCH THIS VOICE) ===
+This is the voice that is ALREADY CONVERTING for this ad account. Your copy MUST sound like it came from the same copywriter.
+- Tonality: ${bv.tonality}
+- Sentence style: ${bv.sentenceStyle}
+- Point of view: ${bv.pointOfView}
+- Vocabulary level: ${bv.vocabularyLevel}
+- Rhythm & cadence: ${bv.rhythmAndCadence}
+${bv.distinctiveTraits?.length ? `- Distinctive traits:\n${bv.distinctiveTraits.map(t => `  * ${t}`).join('\n')}` : ''}
+
+CRITICAL: Do NOT override this voice with generic "ad copywriter" tone. The voice profile above is extracted from REAL winning ads. Match its specific characteristics, not a generic approximation of it.
+`;
+  }
+  if (analysis.winningPatterns) {
+    analysisContext += `\n=== WINNING COPY PATTERNS (USE THESE) ===
+- Headlines that convert: ${analysis.winningPatterns.headlines?.join(' | ') || 'N/A'}
+- Effective copy elements: ${analysis.winningPatterns.copyElements?.join(' | ') || 'N/A'}
+- Emotional triggers that work: ${analysis.winningPatterns.emotionalTriggers?.join(', ') || 'N/A'}
+- CTAs that drive action: ${analysis.winningPatterns.callToActions?.join(', ') || 'N/A'}
+`;
+  }
+  if (analysis.visualAnalysis?.psychologicalTriggers?.length) {
+    analysisContext += `\n=== PSYCHOLOGICAL TRIGGERS THAT WORK ===
+${analysis.visualAnalysis.psychologicalTriggers.map(t => `- ${t}`).join('\n')}
+`;
+  }
+  if (analysis.audienceInsights) {
+    analysisContext += `\n=== AUDIENCE INSIGHTS ===
+What resonates with this audience:
+${analysis.audienceInsights.whatResonates?.map(r => `- ${r}`).join('\n') || '- N/A'}
+
+What to AVOID (doesn't work):
+${analysis.audienceInsights.whatDoesntWork?.map(r => `- ${r}`).join('\n') || '- N/A'}
+`;
+  }
+  if (analysis.losingPatterns) {
+    analysisContext += `\n=== AVOID THESE PATTERNS (LOW PERFORMERS) ===
+- Headlines that fail: ${analysis.losingPatterns.headlines?.join(' | ') || 'N/A'}
+- Copy issues: ${analysis.losingPatterns.issues?.join(', ') || 'N/A'}
+- Problematic elements: ${analysis.losingPatterns.copyElements?.join(', ') || 'N/A'}
+`;
+  }
+  if (analysis.recommendations) {
+    analysisContext += `\n=== STRATEGIC RECOMMENDATIONS ===
+Immediate actions: ${analysis.recommendations.immediate?.join('; ') || 'N/A'}
+Creative direction: ${analysis.recommendations.creativeDirection?.join('; ') || 'N/A'}
+`;
+  }
+  return analysisContext;
+}
+
+/**
+ * Build the Ad Library inspiration context string. Shared by single-copy and
+ * grid-copy generation.
+ */
+function buildInspirationContextString(inspirations?: import('../types').AdLibraryInspiration[]): string {
+  if (!inspirations || inspirations.length === 0) return '';
+  let inspirationContext = `\n=== COMPETITOR/INDUSTRY INSPIRATION (Ad Library) ===
+The user has curated these successful ads from the Meta Ad Library as creative inspiration.
+Long-running ads indicate sustained profitability. Study their copy patterns, angles, and hooks.
+Create ORIGINAL copy inspired by these approaches — DO NOT copy text verbatim.\n`;
+  inspirations.forEach((insp, i) => {
+    const durationLabel = insp.isActive
+      ? `Running for ${insp.durationDays} days (still active)`
+      : `Ran for ${insp.durationDays} days`;
+    inspirationContext += `
+INSPIRATION #${i + 1} — ${insp.pageName} (${durationLabel}):`;
+    if (insp.adCreativeLinkTitles.length > 0) {
+      inspirationContext += `\n- Headlines: ${insp.adCreativeLinkTitles.join(' | ')}`;
+    }
+    if (insp.adCreativeBodies.length > 0) {
+      const bodyPreview = insp.adCreativeBodies[0].substring(0, 400);
+      inspirationContext += `\n- Body Copy: ${bodyPreview}${insp.adCreativeBodies[0].length > 400 ? '...' : ''}`;
+    }
+    if (insp.adCreativeLinkDescriptions.length > 0) {
+      inspirationContext += `\n- Link Description: ${insp.adCreativeLinkDescriptions[0]}`;
+    }
+    inspirationContext += '\n';
+  });
+  inspirationContext += `
+IMPORTANT: These are EXTERNAL inspiration sources. Your job is to:
+1. Identify what makes these ads compelling (hooks, emotional angles, structure)
+2. Apply those strategies to the user's product/brand
+3. Combine with the user's own performance data (if available) for the best results
+4. NEVER use competitor brand names or product names — always reference the user's product
+`;
+  return inspirationContext;
+}
+
+/**
  * Generate multiple copy options for user selection (Step 1 of multi-step workflow)
  * Returns headlines, body texts, and CTAs with rationales for each
  *
@@ -2378,6 +2581,7 @@ export async function generateCopyOptions(config: {
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
   businessType?: import('../types/organization').BusinessType;
   campaignIntent?: import('../types/organization').CampaignIntent;
+  corePromise?: string; // the single idea the whole batch lives inside (BlitzScale grid)
 }): Promise<CopyOptionsResult> {
   if (!isOpenAIConfigured()) {
     throw new Error('AI API not configured. Please contact support.');
@@ -2404,136 +2608,11 @@ export async function generateCopyOptions(config: {
   const analysis = config.analysisData;
   const hasAnalysis = !!analysis;
 
-  // Build comprehensive analysis context
-  let analysisContext = '';
+  // Build comprehensive analysis context (shared with grid-copy generation)
+  const analysisContext = buildAnalysisContextString(analysis);
 
-  if (hasAnalysis) {
-    // Executive Summary - key strategic insights
-    analysisContext += `\n=== CHANNEL PERFORMANCE SUMMARY ===
-${analysis.executiveSummary}
-
-Overall Health Score: ${analysis.overallHealthScore}/10
-Total Ads Analyzed: ${analysis.performanceBreakdown.totalAdsAnalyzed}
-High Performers: ${analysis.performanceBreakdown.highPerformers} ads
-Avg Conversion Rate: ${(analysis.performanceBreakdown.avgConversionRate * 100).toFixed(2)}%
-`;
-
-    // TOP PERFORMING ADS - This is CRITICAL for learning what works
-    if (analysis.topAds && analysis.topAds.length > 0) {
-      analysisContext += `\n=== YOUR TOP PERFORMING ADS (COPY THESE PATTERNS) ===\n`;
-      analysis.topAds.forEach((ad, i) => {
-        analysisContext += `
-TOP AD #${i + 1} (${(ad.conversionRate * 100).toFixed(2)}% conversion rate):
-- Headline: "${ad.headline}"${ad.bodyText ? `
-- Full Body Copy: "${ad.bodyText}"` : ''}
-- Why it converts: ${ad.whyItWorks}
-- Psychological drivers: ${ad.psychologicalDrivers?.join(', ') || 'N/A'}
-`;
-      });
-      analysisContext += `
-IMPORTANT: Study the FULL BODY COPY of these winners. Notice their structure, pacing, opening hooks, how they build tension, and how they close. Your generated body copy should follow the same structural patterns and voice.
-`;
-    }
-
-    // BRAND VOICE PROFILE - How the winning ads sound (tone, cadence, style)
-    if (analysis.brandVoice) {
-      const bv = analysis.brandVoice;
-      analysisContext += `\n=== BRAND VOICE PROFILE (MATCH THIS VOICE) ===
-This is the voice that is ALREADY CONVERTING for this ad account. Your copy MUST sound like it came from the same copywriter.
-- Tonality: ${bv.tonality}
-- Sentence style: ${bv.sentenceStyle}
-- Point of view: ${bv.pointOfView}
-- Vocabulary level: ${bv.vocabularyLevel}
-- Rhythm & cadence: ${bv.rhythmAndCadence}
-${bv.distinctiveTraits?.length ? `- Distinctive traits:\n${bv.distinctiveTraits.map(t => `  * ${t}`).join('\n')}` : ''}
-
-CRITICAL: Do NOT override this voice with generic "ad copywriter" tone. The voice profile above is extracted from REAL winning ads. Match its specific characteristics, not a generic approximation of it.
-`;
-    }
-
-    // WINNING PATTERNS - Proven elements
-    if (analysis.winningPatterns) {
-      analysisContext += `\n=== WINNING COPY PATTERNS (USE THESE) ===
-- Headlines that convert: ${analysis.winningPatterns.headlines?.join(' | ') || 'N/A'}
-- Effective copy elements: ${analysis.winningPatterns.copyElements?.join(' | ') || 'N/A'}
-- Emotional triggers that work: ${analysis.winningPatterns.emotionalTriggers?.join(', ') || 'N/A'}
-- CTAs that drive action: ${analysis.winningPatterns.callToActions?.join(', ') || 'N/A'}
-`;
-    }
-
-    // PSYCHOLOGICAL TRIGGERS - What resonates psychologically
-    if (analysis.visualAnalysis?.psychologicalTriggers?.length) {
-      analysisContext += `\n=== PSYCHOLOGICAL TRIGGERS THAT WORK ===
-${analysis.visualAnalysis.psychologicalTriggers.map(t => `- ${t}`).join('\n')}
-`;
-    }
-
-    // AUDIENCE INSIGHTS - Deep understanding of the target
-    if (analysis.audienceInsights) {
-      analysisContext += `\n=== AUDIENCE INSIGHTS ===
-What resonates with this audience:
-${analysis.audienceInsights.whatResonates?.map(r => `- ${r}`).join('\n') || '- N/A'}
-
-What to AVOID (doesn't work):
-${analysis.audienceInsights.whatDoesntWork?.map(r => `- ${r}`).join('\n') || '- N/A'}
-`;
-    }
-
-    // LOSING PATTERNS - What NOT to do
-    if (analysis.losingPatterns) {
-      analysisContext += `\n=== AVOID THESE PATTERNS (LOW PERFORMERS) ===
-- Headlines that fail: ${analysis.losingPatterns.headlines?.join(' | ') || 'N/A'}
-- Copy issues: ${analysis.losingPatterns.issues?.join(', ') || 'N/A'}
-- Problematic elements: ${analysis.losingPatterns.copyElements?.join(', ') || 'N/A'}
-`;
-    }
-
-    // STRATEGIC RECOMMENDATIONS
-    if (analysis.recommendations) {
-      analysisContext += `\n=== STRATEGIC RECOMMENDATIONS ===
-Immediate actions: ${analysis.recommendations.immediate?.join('; ') || 'N/A'}
-Creative direction: ${analysis.recommendations.creativeDirection?.join('; ') || 'N/A'}
-`;
-    }
-  }
-
-  // Build Ad Library inspiration context (competitor/cross-industry references)
-  let inspirationContext = '';
-  if (config.adLibraryInspirations && config.adLibraryInspirations.length > 0) {
-    console.log(`💡 Ad Library inspirations: ${config.adLibraryInspirations.length} active`);
-    inspirationContext += `\n=== COMPETITOR/INDUSTRY INSPIRATION (Ad Library) ===
-The user has curated these successful ads from the Meta Ad Library as creative inspiration.
-Long-running ads indicate sustained profitability. Study their copy patterns, angles, and hooks.
-Create ORIGINAL copy inspired by these approaches — DO NOT copy text verbatim.\n`;
-
-    config.adLibraryInspirations.forEach((insp, i) => {
-      const durationLabel = insp.isActive
-        ? `Running for ${insp.durationDays} days (still active)`
-        : `Ran for ${insp.durationDays} days`;
-
-      inspirationContext += `
-INSPIRATION #${i + 1} — ${insp.pageName} (${durationLabel}):`;
-      if (insp.adCreativeLinkTitles.length > 0) {
-        inspirationContext += `\n- Headlines: ${insp.adCreativeLinkTitles.join(' | ')}`;
-      }
-      if (insp.adCreativeBodies.length > 0) {
-        const bodyPreview = insp.adCreativeBodies[0].substring(0, 400);
-        inspirationContext += `\n- Body Copy: ${bodyPreview}${insp.adCreativeBodies[0].length > 400 ? '...' : ''}`;
-      }
-      if (insp.adCreativeLinkDescriptions.length > 0) {
-        inspirationContext += `\n- Link Description: ${insp.adCreativeLinkDescriptions[0]}`;
-      }
-      inspirationContext += '\n';
-    });
-
-    inspirationContext += `
-IMPORTANT: These are EXTERNAL inspiration sources. Your job is to:
-1. Identify what makes these ads compelling (hooks, emotional angles, structure)
-2. Apply those strategies to the user's product/brand
-3. Combine with the user's own performance data (if available) for the best results
-4. NEVER use competitor brand names or product names — always reference the user's product
-`;
-  }
+  // Build Ad Library inspiration context (shared with grid-copy generation)
+  const inspirationContext = buildInspirationContextString(config.adLibraryInspirations);
 
   // Build copy variation instructions based on slider level
   const getCopyVariationInstructions = (variation: number, hasAnalysisData: boolean): string => {
@@ -2741,8 +2820,12 @@ VOICE: Write ad copy in the author's voice (first person). The author is speakin
 
   const conceptModifier = CONCEPT_AUDIENCE_MODIFIERS[config.conceptType]?.[config.audienceType] || '';
 
+  const corePromiseSection = config.corePromise?.trim()
+    ? `\n=== CORE PROMISE (anchor every option to THIS one idea) ===\n"${config.corePromise.trim()}"\nEvery headline, body, and CTA must live inside this single promise. Do not drift to other benefits or offers.\n`
+    : '';
+
   const userPrompt = `Generate copy OPTIONS for a ${config.audienceType.toUpperCase()} audience${isAutoMode ? ' using analysis-driven insights' : ` using the ${conceptAngle.name} concept`}.
-${productSection}
+${productSection}${corePromiseSection}
 === AUDIENCE STAGE: ${config.audienceType.toUpperCase()} ===
 
 AWARENESS LEVEL: ${audienceAngle.awarenessLevel}
@@ -2797,7 +2880,7 @@ ${hasAnalysis ? (copyVariation <= 40
 1. Generate 6 HEADLINE options (max 40 characters each)
    - Each should ${hasAnalysis ? (copyVariation <= 40 ? 'follow patterns from the top ads above' : copyVariation <= 60 ? 'blend winning patterns with new approaches' : 'explore fresh angles informed by audience insights') : 'be distinct and compelling'}
    - ${hasAnalysis ? (copyVariation <= 40 ? 'Reference specific winning elements from the analysis' : copyVariation <= 60 ? 'Mix proven elements with creative experiments' : 'Prioritize novel hooks and unexpected angles') : 'Use varied emotional angles'}
-   - Each headline MUST use a DIFFERENT hook approach. Vary across: question hooks, bold claims, specific numbers/stats, metaphors, identity statements, before/after contrasts, pattern interrupts, and direct benefit statements. Do NOT generate 6 headlines that all use the same structure.
+   - Each headline MUST use a DIFFERENT hook approach, and you MUST label each headline with its hook type using the EXACT value (one of): ${HOOK_PROMPT_MENU}. Spread the 6 headlines across DIFFERENT hook types — do NOT repeat the same hook or use the same structure twice.
 
 2. Generate 5 BODY COPY options (${copyLength === 'long' ? 'LONG-FORM' : 'SHORT-FORM'}, max ${copyLengthConfig.maxChars} characters each)
    - Each should ${hasAnalysis ? (copyVariation <= 40 ? 'incorporate winning copy elements from the analysis' : copyVariation <= 60 ? 'blend winning elements with new narrative approaches' : 'explore fresh messaging approaches informed by audience data') : 'use different approaches'}
@@ -2816,8 +2899,8 @@ For EACH option, include a rationale that ${hasAnalysis ? (copyVariation <= 60 ?
 Return JSON only:
 {
   "headlines": [
-    {"id": "h1", "text": "headline text", "rationale": "why this works based on analysis"},
-    {"id": "h2", "text": "headline text", "rationale": "why this works based on analysis"}
+    {"id": "h1", "text": "headline text", "hook": "question", "rationale": "why this works based on analysis"},
+    {"id": "h2", "text": "headline text", "hook": "stat", "rationale": "why this works based on analysis"}
   ],
   "bodyTexts": [
     {"id": "b1", "text": "body text", "rationale": "why this works based on analysis"},
@@ -2876,9 +2959,12 @@ Return JSON only:
       }
     }
 
-    // Post-processing: sanitize all generated copy text
+    // Post-processing: sanitize all generated copy text + validate hook labels
     if (parsed.headlines) {
-      for (const h of parsed.headlines) { if (h.text) h.text = sanitizeCopyText(h.text); }
+      for (const h of parsed.headlines) {
+        if (h.text) h.text = sanitizeCopyText(h.text);
+        h.hook = isValidHook(h.hook) ? h.hook : undefined;
+      }
     }
     if (parsed.bodyTexts) {
       for (const b of parsed.bodyTexts) { if (b.text) b.text = sanitizeCopyText(b.text); }
@@ -2904,6 +2990,210 @@ Return JSON only:
 }
 
 /**
+ * Generate a full Angle × Hook copy matrix in ONE GPT call (BlitzScale grid).
+ * Returns one {headline, body, cta} cell per (angle, hook) combination, each labeled.
+ * Reuses the SAME analysis/inspiration context builders as generateCopyOptions so the
+ * two paths never drift. Malformed cells are dropped (graceful partial grid).
+ */
+export async function generateGridCopy(config: {
+  corePromise: string;
+  angles: GridAngle[];
+  hooks: HookType[];
+  format?: FormatType;
+  audienceType: AudienceType;
+  analysisData: ChannelAnalysisResult | null;
+  copyLength?: CopyLength;
+  productContext?: ProductContext;
+  adLibraryInspirations?: import('../types').AdLibraryInspiration[];
+  businessType?: import('../types/organization').BusinessType;
+  campaignIntent?: import('../types/organization').CampaignIntent;
+  reasoningEffort?: ReasoningEffort;
+}): Promise<GridCell[]> {
+  if (!isOpenAIConfigured()) {
+    throw new Error('AI API not configured. Please contact support.');
+  }
+
+  const angles = config.angles.length ? config.angles : [...DEFAULT_GRID_ANGLES];
+  const hooks = config.hooks.length ? config.hooks : [...DEFAULT_GRID_HOOKS];
+  const copyLength = config.copyLength ?? DEFAULT_COPY_LENGTH;
+  const copyLengthConfig = COPY_LENGTH_OPTIONS.find(opt => opt.id === copyLength) ?? COPY_LENGTH_OPTIONS[0];
+  const btConfig = getBusinessTypeConfig(config.businessType || 'ecommerce');
+  const intentConfig = config.campaignIntent ? getCampaignIntentConfig(config.campaignIntent) : null;
+  const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
+  const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
+
+  const analysisContext = buildAnalysisContextString(config.analysisData);
+  const inspirationContext = buildInspirationContextString(config.adLibraryInspirations);
+
+  let productSection = '';
+  if (config.productContext) {
+    const p = config.productContext;
+    productSection = `\nPRODUCT: "${p.name}" by ${p.author}. ${p.description}${p.landingPageUrl ? ` Landing page: ${p.landingPageUrl}` : ''}
+All copy MUST reference "${p.name}" by ${p.author} — no other product or brand names. Write in the author's first-person voice.\n`;
+  }
+
+  const angleMenu = angles
+    .map(a => `- ${a}: ${CONCEPT_ANGLES[a].name} — ${CONCEPT_ANGLES[a].description}.${CONCEPT_AUDIENCE_MODIFIERS[a]?.[config.audienceType] ? ` ${CONCEPT_AUDIENCE_MODIFIERS[a][config.audienceType]}` : ''}`)
+    .join('\n');
+  const hookMenu = hooks.map(h => `- ${h}: ${HOOKS[h].promptHint}`).join('\n');
+  const combos = angles.flatMap(a => hooks.map(h => `- angle:${a} + hook:${h}`)).join('\n');
+
+  const effectiveConversionLanguage = intentConfig?.aiConversionLanguage || btConfig.aiConversionLanguage;
+
+  const systemPrompt = `You are an elite direct-response copywriter generating a STRUCTURED TEST MATRIX of Meta ad copy.
+Produce ONE distinct ad (headline + body + CTA) for every Angle × Hook combination requested.
+${config.analysisData ? 'Use the REAL PERFORMANCE DATA provided to ground every cell in proven patterns.' : ''}
+
+CORE PROMISE — every cell must live inside this ONE promise; do not drift to other offers:
+"${config.corePromise}"
+
+COPY QUALITY RULES (NON-NEGOTIABLE):
+1. ${BANNED_PHRASES_PROMPT}
+2. SPECIFICITY: every headline and body must contain at least one concrete element (a number, timeframe, named outcome, or mechanism).
+3. FORMATTING: NEVER use em dashes. Max 1 exclamation mark per body. Zero in headlines.
+4. DIVERSITY: each cell must be genuinely different. The ANGLE controls the emotional frame; the HOOK controls the opening line. Never reuse the same opening line across cells.
+5. ${META_AD_POLICY_PROMPT}
+
+BUSINESS CONTEXT:
+${effectiveConversionLanguage}`;
+
+  const userPrompt = `Generate the copy matrix for a ${config.audienceType.toUpperCase()} audience.
+${productSection}
+AUDIENCE STAGE: ${audienceAngle.awarenessLevel} — ${audienceAngle.awarenessDescription}
+BODY COPY STRUCTURE (${copyLength === 'long' ? 'LONG-FORM' : 'SHORT-FORM'}, max ${copyLengthConfig.maxChars} chars): ${copyLength === 'long' ? audienceAngle.bodyStructure : audienceAngle.bodyStructureShort}
+
+ANGLES (the strategic frame):
+${angleMenu}
+
+HOOKS (the first 3 seconds):
+${hookMenu}
+${analysisContext}${inspirationContext}
+=== YOUR TASK ===
+Produce EXACTLY one cell for each of these ${angles.length} × ${hooks.length} = ${angles.length * hooks.length} combinations:
+${combos}
+
+For each cell: write a headline (max 40 characters) whose opening uses the specified HOOK, a body (max ${copyLengthConfig.maxChars} characters) operating from the specified ANGLE, and a CTA. Tag each cell with its exact angle and hook values.
+
+Return JSON only:
+{"cells":[{"angle":"${angles[0]}","hook":"${hooks[0]}","headline":"...","body":"...","cta":"...","rationale":"why this angle+hook works"}]}`;
+
+  const response = await callOpenAI(
+    [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+    { maxTokens: 16384, reasoningEffort, responseFormat: { type: 'json_object' } },
+  );
+
+  let parsed: { cells?: Array<Record<string, unknown>> };
+  try {
+    let cleaned = response.trim();
+    if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
+    if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
+    if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
+    try {
+      parsed = JSON.parse(cleaned.trim());
+    } catch {
+      const repaired = attemptJsonRepair(cleaned);
+      if (!repaired) throw new Error('repair failed');
+      parsed = JSON.parse(repaired);
+    }
+  } catch (err) {
+    console.error('❌ Failed to parse grid copy matrix:', err);
+    throw new Error('Failed to generate the grid copy matrix. Please try again.');
+  }
+
+  const rawCells = Array.isArray(parsed.cells) ? parsed.cells : [];
+  const cells: GridCell[] = [];
+  rawCells.forEach((c, i) => {
+    const angle = c.angle as string | undefined;
+    const hook = c.hook as string | undefined;
+    const headline = typeof c.headline === 'string' ? sanitizeCopyText(c.headline) : '';
+    const body = typeof c.body === 'string' ? sanitizeCopyText(c.body) : '';
+    const cta = typeof c.cta === 'string' ? sanitizeCopyText(c.cta) : '';
+    // Drop malformed cells (graceful partial grid) — angle + hook + headline + body are required.
+    if (!isValidAngle(angle) || !isValidHook(hook) || !headline || !body) return;
+    cells.push({
+      id: `cell_${i}_${angle}_${hook}`,
+      angle,
+      hook,
+      headline,
+      body,
+      cta: cta || 'Learn More',
+      rationale: typeof c.rationale === 'string' ? c.rationale : '',
+    });
+  });
+
+  console.log(`✅ Grid copy matrix: ${cells.length}/${angles.length * hooks.length} cells generated`);
+  return cells;
+}
+
+/**
+ * Generate one image-ad GeneratedAdPackage per grid cell (the pruned set). Reuses the
+ * shared 2-wide image loop + single reference precompute via regenerateAllImages, then
+ * maps results back to cells by index (indexedResults) so a failed slot never shifts an
+ * image onto the wrong axis tag. Each package is fully axis-tagged for attribution.
+ */
+export async function generateGridPackages(config: {
+  cells: GridCell[];
+  audienceType: AudienceType;
+  analysisData: ChannelAnalysisResult | null;
+  similarityLevel?: number;
+  imageSize?: ImageSize;
+  productContext?: ProductContext;
+  adLibraryInspirations?: import('../types').AdLibraryInspiration[];
+  businessType?: import('../types/organization').BusinessType;
+  campaignIntent?: import('../types/organization').CampaignIntent;
+  imageModel?: ImageModel;
+  format?: FormatType;
+  corePromise?: string;
+  onProgress?: (message: string) => void;
+}): Promise<GeneratedAdPackage[]> {
+  const { cells } = config;
+  if (cells.length === 0) return [];
+
+  const imageResult = await regenerateAllImages({
+    audienceType: config.audienceType,
+    analysisData: config.analysisData,
+    variationCount: cells.length,
+    similarityLevel: config.similarityLevel,
+    imageSize: config.imageSize,
+    productContext: config.productContext,
+    adLibraryInspirations: config.adLibraryInspirations,
+    businessType: config.businessType,
+    campaignIntent: config.campaignIntent,
+    imageModel: config.imageModel,
+    formatHint: config.format,
+    onProgress: config.onProgress,
+  });
+
+  const indexed = imageResult.indexedResults;
+  const generatedAt = new Date().toISOString();
+
+  return cells.map((cell, i) => {
+    const img = indexed[i] ?? null;
+    const pkg: GeneratedAdPackage = {
+      id: `grid_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`,
+      generatedAt,
+      adType: 'image',
+      audienceType: config.audienceType,
+      conceptType: cell.angle,
+      images: img ? [img] : [],
+      headlineHooks: [cell.hook],
+      axisTag: { angle: cell.angle, hook: cell.hook, ...(config.format ? { format: config.format } : {}) },
+      corePromise: config.corePromise,
+      copy: {
+        headlines: [cell.headline],
+        bodyTexts: [cell.body],
+        callToActions: [cell.cta],
+        rationale: cell.rationale,
+      },
+      whyItWorks: cell.rationale || `${CONCEPT_ANGLES[cell.angle].name} angle with a ${cell.hook} hook.`,
+      imageError: img ? undefined : imageResult.imageError,
+      campaignIntent: config.campaignIntent,
+    };
+    return pkg;
+  });
+}
+
+/**
  * Regenerate a single copy item (headline, body text, or CTA) without regenerating the entire batch.
  * Uses the same prompt context as generateCopyOptions() but requests exactly one replacement,
  * listing existing items to avoid duplicates.
@@ -2925,6 +3215,7 @@ export async function regenerateSingleCopy(config: {
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
   businessType?: import('../types/organization').BusinessType;
   campaignIntent?: import('../types/organization').CampaignIntent;
+  corePromise?: string; // anchor the replacement to the same batch promise
 }): Promise<CopyOption> {
   if (!isOpenAIConfigured()) {
     throw new Error('AI API not configured. Please contact support.');
@@ -2949,7 +3240,9 @@ export async function regenerateSingleCopy(config: {
   const analysis = config.analysisData;
   const hasAnalysis = !!analysis;
 
-  // Build analysis context (same logic as generateCopyOptions)
+  // Build a CONDENSED analysis context — deliberately lighter than buildAnalysisContextString.
+  // Single-item regen runs at reasoning 'low' with a small token budget, so it intentionally
+  // omits the fuller sections (psychological triggers, audience insights, recommendations).
   let analysisContext = '';
   if (hasAnalysis) {
     analysisContext += `\n=== CHANNEL PERFORMANCE SUMMARY ===
@@ -3071,6 +3364,10 @@ All copy MUST reference "${p.name}" by ${p.author} — no other product or brand
 VOICE: Write ad copy in the author's voice (first person). The author is speaking directly to the prospect, make the reader feel like the person who wrote the ad is talking only to them — never refer to the author in third person.\n`;
   }
 
+  const corePromiseLine = config.corePromise?.trim()
+    ? `\nCORE PROMISE (anchor to THIS one idea — do not drift to another promise): "${config.corePromise.trim()}"\n`
+    : '';
+
   // Build existing items list for dedup
   const existingList = config.existingItems
     .map((item, i) => `${i + 1}. "${item.text}"`)
@@ -3120,7 +3417,7 @@ The user clicked "regenerate" because they DON'T LIKE the above. You MUST write 
       : `\nCreative direction hint: ${creativeDirection}\n`;
 
     const userPrompt = `Generate exactly 1 NEW ${typeLabel.toUpperCase()} for a ${config.audienceType.toUpperCase()} audience${isAutoMode ? ' using analysis-driven insights' : ` using the ${conceptAngle.name} concept`}.
-${productSection}
+${productSection}${corePromiseLine}
 AUDIENCE STAGE: ${config.audienceType.toUpperCase()} (${audienceAngle.awarenessLevel})
 ${audienceAngle.awarenessDescription}
 
@@ -3136,9 +3433,9 @@ ${existingList}
 Generate exactly 1 BRAND NEW ${typeLabel} that uses a DIFFERENT angle, hook, or emotional trigger than anything listed above.
 ${typeConstraints}
 CRITICAL: The text you generate MUST be completely new — not a rephrasing of any existing ${typeLabel}.
-
+${config.copyType === 'headline' ? 'Also label the scroll-stopper with a "hook" field using EXACTLY one of: question, stat, contrarian, callout, bold_claim, pattern_interrupt, identity, before_after.\n' : ''}
 Return JSON only:
-{"id": "x1", "text": "your new ${typeLabel} text here", "rationale": "why this works"}`;
+{"id": "x1", "text": "your new ${typeLabel} text here", ${config.copyType === 'headline' ? '"hook": "stat", ' : ''}"rationale": "why this works"}`;
 
     const response = await callOpenAI([
       { role: 'system', content: systemPrompt },
@@ -3168,6 +3465,8 @@ Return JSON only:
       if (parsed.text) {
         parsed.text = sanitizeCopyText(parsed.text);
       }
+      // Validate hook label (headlines only; strip any stray hook on body/CTA)
+      parsed.hook = (config.copyType === 'headline' && isValidHook(parsed.hook)) ? parsed.hook : undefined;
 
       // Override ID with a unique one to avoid collisions
       const prefix = config.copyType === 'headline' ? 'h' : config.copyType === 'bodyText' ? 'b' : 'c';
@@ -3419,6 +3718,8 @@ export async function generateAdImage(config: {
   campaignIntent?: import('../types/organization').CampaignIntent;
   // Image generation provider — 'gemini' (default) or 'openai' (gpt-image-2)
   imageModel?: ImageModel;
+  // Format axis hint (BlitzScale grid): 'static_screenshot' | 'static_graphic'
+  formatHint?: FormatType;
 }): Promise<GeneratedImageResult> {
   const provider = config.imageModel ?? DEFAULT_IMAGE_MODEL_PROVIDER;
 
@@ -3459,6 +3760,7 @@ async function generateAdImageWithGemini(config: {
   // Business type + campaign intent for hybrid accounts
   businessType?: import('../types/organization').BusinessType;
   campaignIntent?: import('../types/organization').CampaignIntent;
+  formatHint?: FormatType;
 }): Promise<GeneratedImageResult> {
   const similarity = config.similarityLevel ?? 30; // Default to 30% variation
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
@@ -3763,6 +4065,19 @@ Explore fresh visual directions while maintaining professional quality.`,
       '  • Surrounding objects, models, hands, props, or context',
       '',
       'The product itself never changes. You are placing the existing product into different scenes — not redesigning it.'
+    );
+  }
+
+  // Format axis directive (BlitzScale grid). Static-only in v1.
+  if (config.formatHint === 'static_screenshot') {
+    promptParts.push(
+      '',
+      'FORMAT — AUTHENTIC SCREENSHOT: Render this as a realistic phone/app screenshot (a real text message, DM, Stripe/revenue dashboard, results screen, or social post), NOT a polished marketing graphic. It should look genuinely captured and native to the platform. Authentic screenshots consistently out-convert designed graphics for proof-driven ads.'
+    );
+  } else if (config.formatHint === 'static_graphic') {
+    promptParts.push(
+      '',
+      'FORMAT — POLISHED GRAPHIC: Render this as a clean, intentional, professionally designed marketing graphic.'
     );
   }
 
@@ -5024,6 +5339,7 @@ export async function regenerateAllImages(config: {
   businessType?: import('../types/organization').BusinessType;
   campaignIntent?: import('../types/organization').CampaignIntent;
   imageModel?: ImageModel;
+  formatHint?: FormatType;
 }): Promise<{ images: GeneratedImageResult[]; indexedResults: (GeneratedImageResult | null)[]; imageError?: string }> {
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
   const imageModel = config.imageModel ?? DEFAULT_IMAGE_MODEL_PROVIDER;
@@ -5126,6 +5442,7 @@ export async function regenerateAllImages(config: {
         businessType: config.businessType,
         campaignIntent: config.campaignIntent,
         imageModel,
+        formatHint: config.formatHint,
       });
     });
     const batchResults = await Promise.allSettled(batchPromises);

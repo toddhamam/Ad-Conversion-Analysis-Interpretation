@@ -6,6 +6,8 @@ import {
   type AdCreativeData,
   type ChannelAnalysisResult,
 } from '../services/openaiApi';
+import { aggregateByAxis } from '../services/axisAnalytics';
+import { parseAxisTag } from '../lib/axisTags';
 import ChannelInsightsPanel from '../components/ChannelInsightsPanel';
 import SEO from '../components/SEO';
 import {
@@ -68,6 +70,11 @@ function convertToAdCreativeData(creative: AdCreative): AdCreativeData {
     impressions: creative.impressions || 0,
     ctr: creative.clickThroughRate || 0,
     roas: creative.roas,
+    detectedConversionType: creative.detectedConversionType,
+    purchaseConversions: creative.purchaseConversions,
+    leadConversions: creative.leadConversions,
+    adName: creative.adName,
+    axisTag: parseAxisTag(creative.adName),
   };
 }
 
@@ -175,6 +182,11 @@ const Insights = () => {
 
       // Confirm credit consumption on success
       if (transactionId) confirmCredits(transactionId);
+
+      // Axis-level attribution (BlitzScale) — computed in code (not via GPT). Hybrid-aware
+      // primary field from business type so lead-CVR is never compared to purchase-CVR.
+      const axisPrimaryField = businessType === 'leadgen' ? 'leads' : 'purchases';
+      result.axisInsights = aggregateByAxis(ads, axisPrimaryField);
 
       // Cache the result and clear any import provenance (native replaces imported)
       setCachedAnalysis(selectedChannel, result, businessType);
