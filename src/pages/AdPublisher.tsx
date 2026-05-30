@@ -8,6 +8,7 @@ import {
   searchTargetingSuggestions,
   fetchCustomAudiences,
   fetchAdPixels,
+  defaultConversionEventForObjective,
   type PublishConfig,
   type PublishResult,
   type CampaignForPublish,
@@ -1371,7 +1372,13 @@ const AdPublisher = () => {
                       <label className="form-label">Campaign Objective</label>
                       <select
                         value={campaignObjective}
-                        onChange={e => setCampaignObjective(e.target.value as CampaignObjective)}
+                        onChange={e => {
+                          const obj = e.target.value as CampaignObjective;
+                          setCampaignObjective(obj);
+                          // Keep the conversion event consistent with the objective (LEAD for Leads,
+                          // PURCHASE for Sales) so a stale event can never reach publish.
+                          setConversionEvent(defaultConversionEventForObjective(obj));
+                        }}
                         className="form-select"
                       >
                         {OBJECTIVE_OPTIONS.map(o => (
