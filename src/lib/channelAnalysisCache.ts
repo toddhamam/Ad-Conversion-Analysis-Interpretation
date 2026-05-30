@@ -15,6 +15,7 @@ export interface ImportMetadata {
   adAccountName: string;
   importedAt: string;
   sourceBusinessType: string;
+  source?: 'account' | 'manual'; // 'account' = imported from another account; 'manual' = cold-start seed
 }
 
 export interface AvailableImport {
@@ -132,6 +133,35 @@ export function getAvailableImports(
 }
 
 /**
+ * Write an analysis into the current account's cache with per-channel import provenance, preserving
+ * other channels. Shared by importAnalysis (cross-account) and setManualAnalysis (cold-start seed) —
+ * the only thing that differs between them is the provenance they pass. Returns true on a verified write.
+ */
+function writeAnalysisWithProvenance(
+  channel: Channel,
+  analysis: ChannelAnalysisResult,
+  businessType: string,
+  provenance: ImportMetadata,
+): boolean {
+  try {
+    // Read current account's cache (preserve other channels)
+    const currentRaw = getScopedItem(CACHE_KEY);
+    const currentParsed = currentRaw ? JSON.parse(currentRaw) : {};
+
+    currentParsed[channel] = analysis;
+    currentParsed._businessType = businessType;
+    currentParsed[`_importedFrom_${channel}`] = provenance;
+
+    // setScopedItem handles quota retry internally; verify the write landed
+    const serialized = JSON.stringify(currentParsed);
+    setScopedItem(CACHE_KEY, serialized);
+    return getScopedItem(CACHE_KEY) === serialized;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Import a channel analysis from another account into the current account's cache.
  * Writes the target's businessType so the analysis isn't invalidated.
  * Returns true on success, false if source data not found or write fails.
@@ -156,28 +186,171 @@ export function importAnalysis(
     const sourceBusinessType = sourceParsed._businessType || 'ecommerce';
     const sourceAccount = accounts.find(a => a.ad_account_id === sourceAccountId);
 
-    // Read current account's cache (preserve other channels)
-    const currentRaw = getScopedItem(CACHE_KEY);
-    const currentParsed = currentRaw ? JSON.parse(currentRaw) : {};
-
-    // Write the analysis + target business type + per-channel provenance
-    currentParsed[channel] = analysis;
-    currentParsed._businessType = targetBusinessType;
-    currentParsed[`_importedFrom_${channel}`] = {
+    return writeAnalysisWithProvenance(channel, analysis, targetBusinessType, {
       adAccountId: sourceAccountId,
       adAccountName: sourceAccount?.ad_account_name || sourceAccountId,
       importedAt: new Date().toISOString(),
       sourceBusinessType,
-    } satisfies ImportMetadata;
-
-    // Attempt write — setScopedItem handles quota retry internally
-    const serialized = JSON.stringify(currentParsed);
-    setScopedItem(CACHE_KEY, serialized);
-
-    // Verify the write succeeded
-    const verify = getScopedItem(CACHE_KEY);
-    return verify === serialized;
+      source: 'account',
+    });
   } catch {
     return false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Manual analysis (cold-start seed)
+// ---------------------------------------------------------------------------
+
+function asString(v: unknown, fallback = ''): string {
+  return typeof v === 'string' ? v : fallback;
+}
+
+function asNumber(v: unknown, fallback = 0): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+function asStringArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+}
+
+function asRecord(v: unknown): Record<string, unknown> {
+  return v !== null && typeof v === 'object' && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : {};
+}
+
+/**
+ * Coerce a loosely-shaped object into a fully-valid ChannelAnalysisResult. The input may come from
+ * `distillManualAnalysis` (our own distill of a brand brief) OR from a ConversionIQ analysis the user
+ * generated in another repo using MANUAL_ANALYSIS_PROMPT_TEMPLATE and pasted in — so shapes vary.
+ *
+ * Every required field is defaulted so downstream readers (buildAnalysisContextString,
+ * ChannelInsightsPanel) can never hit `undefined`. Measured-only fields (axisInsights, creativeFatigue,
+ * visualClusters, bottomAds, headlineImageAnalysis) are left empty — a manual seed has no live ad data.
+ * This function never throws on missing/oddly-typed input.
+ */
+export function normalizeManualAnalysis(raw: unknown): ChannelAnalysisResult {
+  const r = asRecord(raw);
+  const perf = asRecord(r.performanceBreakdown);
+  const visual = asRecord(r.visualAnalysis);
+  const winning = asRecord(r.winningPatterns);
+  const losing = asRecord(r.losingPatterns);
+  const audience = asRecord(r.audienceInsights);
+  const recs = asRecord(r.recommendations);
+  const voice = asRecord(r.brandVoice);
+
+  const result: ChannelAnalysisResult = {
+    channelName: asString(r.channelName, 'Meta'),
+    analyzedAt: asString(r.analyzedAt, new Date().toISOString()),
+
+    executiveSummary: asString(r.executiveSummary),
+    overallHealthScore: asNumber(r.overallHealthScore, 5),
+
+    performanceBreakdown: {
+      totalAdsAnalyzed: asNumber(perf.totalAdsAnalyzed),
+      highPerformers: asNumber(perf.highPerformers),
+      midPerformers: asNumber(perf.midPerformers),
+      lowPerformers: asNumber(perf.lowPerformers),
+      avgConversionRate: asNumber(perf.avgConversionRate),
+      avgCostPerConversion: asNumber(perf.avgCostPerConversion),
+      totalSpend: asNumber(perf.totalSpend),
+      totalConversions: asNumber(perf.totalConversions),
+    },
+
+    visualAnalysis: {
+      winningVisualElements: asStringArray(visual.winningVisualElements),
+      losingVisualElements: asStringArray(visual.losingVisualElements),
+      colorPsychology: asString(visual.colorPsychology),
+      imageryPatterns: asString(visual.imageryPatterns),
+      inImageMessaging: asString(visual.inImageMessaging),
+      psychologicalTriggers: asStringArray(visual.psychologicalTriggers),
+    },
+
+    headlineImageAnalysis: [],
+
+    winningPatterns: {
+      headlines: asStringArray(winning.headlines),
+      copyElements: asStringArray(winning.copyElements),
+      emotionalTriggers: asStringArray(winning.emotionalTriggers),
+      callToActions: asStringArray(winning.callToActions),
+      visualElements: asStringArray(winning.visualElements),
+    },
+
+    losingPatterns: {
+      headlines: asStringArray(losing.headlines),
+      copyElements: asStringArray(losing.copyElements),
+      issues: asStringArray(losing.issues),
+      visualIssues: asStringArray(losing.visualIssues),
+    },
+
+    audienceInsights: {
+      whatResonates: asStringArray(audience.whatResonates),
+      whatDoesntWork: asStringArray(audience.whatDoesntWork),
+      targetingRecommendations: asStringArray(audience.targetingRecommendations),
+      visualPreferences: asStringArray(audience.visualPreferences),
+    },
+
+    recommendations: {
+      immediate: asStringArray(recs.immediate),
+      shortTerm: asStringArray(recs.shortTerm),
+      strategic: asStringArray(recs.strategic),
+      creativeDirection: asStringArray(recs.creativeDirection),
+    },
+
+    topAds: Array.isArray(r.topAds)
+      ? r.topAds.slice(0, 10).map((adRaw, i) => {
+          const ad = asRecord(adRaw);
+          return {
+            id: asString(ad.id, `seed_${i + 1}`),
+            headline: asString(ad.headline),
+            bodyText: asString(ad.bodyText),
+            conversionRate: asNumber(ad.conversionRate),
+            whyItWorks: asString(ad.whyItWorks),
+            imageAnalysis: asString(ad.imageAnalysis),
+            psychologicalDrivers: asStringArray(ad.psychologicalDrivers),
+          };
+        })
+      : [],
+
+    bottomAds: [],
+  };
+
+  // brandVoice is optional — only attach when the seed provided something usable
+  const distinctiveTraits = asStringArray(voice.distinctiveTraits);
+  if (
+    voice.tonality || voice.sentenceStyle || voice.pointOfView ||
+    voice.vocabularyLevel || voice.rhythmAndCadence || distinctiveTraits.length
+  ) {
+    result.brandVoice = {
+      tonality: asString(voice.tonality),
+      sentenceStyle: asString(voice.sentenceStyle),
+      pointOfView: asString(voice.pointOfView),
+      vocabularyLevel: asString(voice.vocabularyLevel),
+      rhythmAndCadence: asString(voice.rhythmAndCadence),
+      distinctiveTraits,
+    };
+  }
+
+  return result;
+}
+
+/**
+ * Persist a manually-supplied (cold-start) analysis to the current account's cache, tagged with
+ * `source: 'manual'` provenance so the UI shows a seed banner and native analysis cleanly replaces it
+ * later (see clearImportMetadata on a native run). Mirrors importAnalysis' write+verify pattern.
+ * Returns true on a verified write, false otherwise.
+ */
+export function setManualAnalysis(
+  channel: Channel,
+  analysis: ChannelAnalysisResult,
+  businessType: string,
+): boolean {
+  return writeAnalysisWithProvenance(channel, analysis, businessType, {
+    adAccountId: '',
+    adAccountName: 'Manual seed',
+    importedAt: new Date().toISOString(),
+    sourceBusinessType: businessType,
+    source: 'manual',
+  });
 }

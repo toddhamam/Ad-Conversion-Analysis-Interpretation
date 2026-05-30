@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-05-30 — Manual ConversionIQ analysis import (cold-start seed)
+
+### What
+A third way to give a brand-new ad account a ConversionIQ profile **before it has any live ad data**: import a manual analysis. Paste/upload a finished ConversionIQ analysis (JSON), or paste a brand brief and let ConversionIQ distill one. The seed informs copy **and** grid generation (via the existing brand-voice → generation pipeline) until native analysis on real ads replaces it. Fully additive — native analysis and cross-account import are unchanged.
+
+### Added
+- **"Seed Manual Analysis"** entry on the Insights page — always available (including fresh accounts with no other account to import from) plus an empty-state link.
+- `ManualAnalysisModal` (`src/components/ManualAnalysisModal.tsx`) — two input modes (**paste finished JSON** | **distill from a brand brief**), file upload (`.md`/`.txt`/`.json` via `FileReader`), and a **"Copy ConversionIQ prompt"** button with a collapsible prompt view, so you can run the prompt in another repo and paste the JSON output back.
+- `MANUAL_ANALYSIS_PROMPT_TEMPLATE` + `distillManualAnalysis()` in `openaiApi.ts` — the cold-start ConversionIQ prompt (with a `{{BRAND_CONTEXT}}` slot) and an in-app distiller for a freeform brief.
+- `normalizeManualAnalysis()` — defensively coerces pasted/distilled input into a complete `ChannelAnalysisResult` (defaults every required field, never throws), so downstream copy/grid generation and the Insights panel can't hit missing fields.
+- `setManualAnalysis()` — caches the seed with `source: 'manual'` provenance; the Insights banner reads **"Seeded from a manual analysis,"** and a native analysis run cleanly replaces it.
+
+### Changed / internal
+- Extracted a shared `writeAnalysisWithProvenance()` in `channelAnalysisCache.ts` — `importAnalysis` and `setManualAnalysis` now share one cache write+verify path; only the provenance differs.
+- Extracted `refreshFromCache()` in `Insights.tsx` — a single reload path used by the channel effect and both import handlers.
+- Fixed a pre-existing `catch (err: any)` in the Insights analysis handler (now `unknown` + narrowed).
+
 ## 2026-05-29 — BlitzScale grid-format ad system (Angle × Hook matrix + axis attribution)
 
 ### What
