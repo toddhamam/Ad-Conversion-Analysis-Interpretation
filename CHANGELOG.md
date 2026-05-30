@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-05-30 — Grid mode: Core Promise marked required + disabled-button reason
+
+### Fixed
+- In CreativeIQ **grid mode**, the **Core Promise** field is required, but it was labelled *"Optional"* — so the **Generate Grid** button sat disabled with no explanation (easy to lose a couple of minutes to). Now:
+  - The Core Promise label shows **"Required"** (with a matching hint) in grid mode; it stays **"(optional)"** in single mode, where it genuinely is.
+  - A line beneath a disabled Generate Grid button names the first unmet requirement — *"Add a Core Promise to continue"*, *"Select at least one angle/hook"*, or *"Reduce to {cap} or fewer creatives to generate"* — instead of the button silently doing nothing.
+
 ## 2026-05-30 — Manual ConversionIQ analysis import (cold-start seed)
 
 ### What
