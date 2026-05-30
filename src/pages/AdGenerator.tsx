@@ -972,6 +972,14 @@ const AdGenerator = () => {
   // ─── BlitzScale grid handlers ──────────────────────────────────────────
   const gridCellCount = Math.min(gridAngles.length * gridHooks.length, GRID_CELL_CAP);
   const gridOverCap = gridAngles.length * gridHooks.length > GRID_CELL_CAP;
+  // First unmet requirement for the grid — surfaced under the disabled Generate button so it
+  // never sits dead with no explanation (Core Promise is required in grid mode, easy to miss).
+  const gridBlockReason =
+    gridAngles.length === 0 ? 'Select at least one angle'
+    : gridHooks.length === 0 ? 'Select at least one hook'
+    : !corePromise.trim() ? 'Add a Core Promise to continue'
+    : gridOverCap ? `Reduce to ${GRID_CELL_CAP} or fewer creatives to generate`
+    : null;
 
   const toggleGridAngle = useCallback((id: GridAngle) => {
     setGridAngles(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]);
@@ -2117,11 +2125,20 @@ const AdGenerator = () => {
             )}
           </div>
 
-          {/* Core Promise (optional) — anchors the whole batch (AI generation only) */}
+          {/* Core Promise — optional in single mode, REQUIRED in grid mode (anchors the whole batch) */}
           {copySource === 'generate' && (
             <div className="config-section">
-              <label className="config-label">Core Promise</label>
-              <p className="config-hint">Optional — the one idea this whole batch lives inside. Every headline, body, and CTA will anchor to it.</p>
+              <label className="config-label">
+                Core Promise{' '}
+                {generationMode === 'grid'
+                  ? <span className="config-required">Required</span>
+                  : <span className="manual-entry-optional">(optional)</span>}
+              </label>
+              <p className="config-hint">
+                {generationMode === 'grid'
+                  ? 'Required — the one idea every creative in the grid anchors to. Hold it constant and let the angles and hooks vary around it.'
+                  : 'Optional — the one idea this whole batch lives inside. Every headline, body, and CTA will anchor to it.'}
+              </p>
               <input
                 type="text"
                 className="manual-entry-input"
@@ -2592,23 +2609,28 @@ const AdGenerator = () => {
 
           {/* Generate Grid Button — grid mode */}
           {copySource === 'generate' && generationMode === 'grid' && (
-            <button
-              className="generate-btn step-btn"
-              onClick={handleGenerateGrid}
-              disabled={isGeneratingGrid || gridOverCap || !corePromise.trim() || gridAngles.length === 0 || gridHooks.length === 0}
-            >
-              {isGeneratingGrid ? (
-                <>
-                  <span className="spinner"></span>
-                  {generationProgress}
-                </>
-              ) : (
-                <>
-                  <span className="generate-icon">▦</span>
-                  Generate Grid ({gridCellCount} creative{gridCellCount === 1 ? '' : 's'})
-                </>
+            <>
+              <button
+                className="generate-btn step-btn"
+                onClick={handleGenerateGrid}
+                disabled={isGeneratingGrid || gridOverCap || !corePromise.trim() || gridAngles.length === 0 || gridHooks.length === 0}
+              >
+                {isGeneratingGrid ? (
+                  <>
+                    <span className="spinner"></span>
+                    {generationProgress}
+                  </>
+                ) : (
+                  <>
+                    <span className="generate-icon">▦</span>
+                    Generate Grid ({gridCellCount} creative{gridCellCount === 1 ? '' : 's'})
+                  </>
+                )}
+              </button>
+              {!isGeneratingGrid && gridBlockReason && (
+                <p className="grid-block-reason">{gridBlockReason}</p>
               )}
-            </button>
+            </>
           )}
         </section>
       )}
