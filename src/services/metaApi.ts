@@ -1329,6 +1329,15 @@ export type ConversionEvent = 'PURCHASE' | 'ADD_TO_CART' | 'LEAD' | 'COMPLETE_RE
 export type GenderTarget = 0 | 1 | 2;
 export type BudgetMode = 'ABO' | 'CBO';
 
+/**
+ * The conversion event an objective optimizes for by default: lead-class objectives → LEAD,
+ * everything else → PURCHASE. Single source of truth so the publisher UI and the ad-set builder
+ * can't drift into an objective/event mismatch (which Meta rejects as "Invalid parameter").
+ */
+export function defaultConversionEventForObjective(objective: CampaignObjective): ConversionEvent {
+  return objective === 'OUTCOME_LEADS' ? 'LEAD' : 'PURCHASE';
+}
+
 export interface DetailedTargetingItem {
   id: string;
   name: string;
@@ -1792,8 +1801,10 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
   let optimizationGoal = request.optimization;
   if (request.promotedObject) {
     optimizationGoal = 'OFFSITE_CONVERSIONS';
-  } else if (optimizationGoal === 'OFFSITE_CONVERSIONS' && !request.promotedObject) {
-    optimizationGoal = 'LINK_CLICKS';
+  } else if (optimizationGoal === 'OFFSITE_CONVERSIONS') {
+    // A conversion optimization with no pixel/event would silently fall back to delivering for clicks.
+    // Refuse loudly instead — conversion ad sets must carry a promoted_object.
+    throw new Error('Conversion optimization requires a pixel and conversion event (promoted_object).');
   }
 
   const targeting: Record<string, any> = {
@@ -2251,11 +2262,17 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
       console.warn('Account check failed:', acctErr instanceof Error ? acctErr.message : acctErr);
     }
 
-    // Determine effective objective
-    let effectiveObjective = config.settings.campaignObjective || 'OUTCOME_SALES';
-    if (effectiveObjective === 'OUTCOME_SALES' && !config.settings.pixelId) {
-      console.warn('No pixel configured — switching objective from OUTCOME_SALES to OUTCOME_TRAFFIC');
-      effectiveObjective = 'OUTCOME_TRAFFIC';
+    // Determine effective objective. Sales and Leads are CONVERSION objectives — they optimize for a
+    // pixel conversion event and require a pixel. We never silently downgrade a conversion objective to
+    // traffic/link-clicks (that delivers the wrong audience — the bug that shipped link-click ad sets).
+    // If the pixel is missing we fail clearly BEFORE creating a campaign, so nothing is left orphaned.
+    const effectiveObjective = config.settings.campaignObjective || 'OUTCOME_SALES';
+    const isConversionObjective = effectiveObjective === 'OUTCOME_SALES' || effectiveObjective === 'OUTCOME_LEADS';
+    if (isConversionObjective && !config.settings.pixelId) {
+      throw new Error(
+        `${effectiveObjective === 'OUTCOME_LEADS' ? 'Leads' : 'Sales'} campaigns optimize for conversions and require a Meta Pixel. ` +
+        'Add a pixel for this account in Integrations, then republish.'
+      );
     }
 
     // Step 2: Create or select campaign
@@ -2293,14 +2310,18 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
       const targeting = config.settings.targeting || defaultTargeting;
       const placements = config.settings.placements || defaultPlacements;
 
+      // Conversion objectives (Sales, Leads) ALWAYS optimize for their pixel conversion event, never
+      // link clicks. The configured event is kept objective-consistent at the source (the publisher
+      // resets it when the objective changes), so here we trust it and only fall back to the
+      // objective's default when it's unset.
       let optimization: 'LINK_CLICKS' | 'OFFSITE_CONVERSIONS' | 'LANDING_PAGE_VIEWS' | 'CONVERSIONS' = 'LINK_CLICKS';
       let promotedObject: { pixelId: string; customEventType: string } | undefined;
 
-      if (effectiveObjective === 'OUTCOME_SALES' && config.settings.pixelId) {
+      if (isConversionObjective) {
         optimization = 'OFFSITE_CONVERSIONS';
         promotedObject = {
-          pixelId: config.settings.pixelId,
-          customEventType: config.settings.conversionEvent || 'PURCHASE',
+          pixelId: config.settings.pixelId!, // presence validated before campaign creation
+          customEventType: config.settings.conversionEvent || defaultConversionEventForObjective(effectiveObjective),
         };
       }
 

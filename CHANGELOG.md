@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-05-30 — Publish: conversion objectives always optimize for conversions (never link clicks)
+
+### Fixed
+- **Leads (and Sales) campaigns now optimize for their pixel conversion event** — `OFFSITE_CONVERSIONS` + `LEAD` for Leads, `PURCHASE` for Sales — instead of silently defaulting to **link clicks**. Previously only Sales got a conversion goal; every other objective (including Leads) fell back to `LINK_CLICKS`, so Leads ad sets shipped optimizing for clicks.
+- **Removed all silent downgrade-to-clicks paths.** A conversion objective with no pixel now **errors before the campaign is created** (no orphaned empty campaign left in Ads Manager), and `createAdSet` refuses a conversion optimization that lacks a pixel/event instead of quietly switching to `LINK_CLICKS`.
+- **Fixed the objective/event mismatch at its source.** Changing the Campaign Objective in the publisher now resets the conversion event to the objective's default via a shared `defaultConversionEventForObjective()` helper (single source of truth), so a stale event — e.g. a leftover `PURCHASE` after switching to Leads — can't reach Meta and trigger "Invalid parameter".
+
 ## 2026-05-30 — Manual ConversionIQ analysis import (cold-start seed)
 
 ### What
