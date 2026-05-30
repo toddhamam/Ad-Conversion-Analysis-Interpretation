@@ -20,6 +20,7 @@ import {
   BarChart3,
   Construction,
   Download,
+  ClipboardPaste,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAdAccount } from '../contexts/AdAccountContext';
@@ -27,12 +28,14 @@ import { getBusinessTypeConfig } from '../lib/businessTypeConfig';
 import { reserveCredits, confirmCredits, refundCredits, InsufficientCreditsError } from '../services/stripeApi';
 import CreditExhaustionModal from '../components/CreditExhaustionModal';
 import ImportAnalysisModal from '../components/ImportAnalysisModal';
+import ManualAnalysisModal from '../components/ManualAnalysisModal';
 import {
   getCachedAnalysis,
   setCachedAnalysis,
   getImportMetadata,
   getAvailableImports,
   importAnalysis,
+  setManualAnalysis,
   clearImportMetadata,
   type Channel,
   type ImportMetadata,
@@ -88,26 +91,34 @@ const Insights = () => {
   const [adsCount, setAdsCount] = useState(0);
   const [importMeta, setImportMeta] = useState<ImportMetadata | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showManualModal, setShowManualModal] = useState(false);
+
+  // Reload analysis + provenance from cache for the current channel
+  const refreshFromCache = useCallback(() => {
+    setAnalysis(getCachedAnalysis(selectedChannel, businessType));
+    setImportMeta(getImportMetadata(selectedChannel));
+  }, [selectedChannel, businessType]);
 
   // Load cached analysis + import metadata when channel changes
   useEffect(() => {
-    const cached = getCachedAnalysis(selectedChannel, businessType);
-    setAnalysis(cached);
-    setImportMeta(getImportMetadata(selectedChannel));
+    refreshFromCache();
     setError(null);
-  }, [selectedChannel, businessType]);
+  }, [refreshFromCache]);
 
   const canImport = isMultiAccount && accounts.length > 1;
 
   const handleImport = useCallback((sourceAccountId: string): boolean => {
     const success = importAnalysis(selectedChannel, sourceAccountId, accounts, businessType);
-    if (success) {
-      const cached = getCachedAnalysis(selectedChannel, businessType);
-      setAnalysis(cached);
-      setImportMeta(getImportMetadata(selectedChannel));
-    }
+    if (success) refreshFromCache();
     return success;
-  }, [selectedChannel, accounts, businessType]);
+  }, [selectedChannel, accounts, businessType, refreshFromCache]);
+
+  // Cold-start: seed a manual analysis (pasted JSON or distilled brief) for this account
+  const handleManualImport = useCallback((manual: ChannelAnalysisResult): boolean => {
+    const success = setManualAnalysis(selectedChannel, manual, businessType);
+    if (success) refreshFromCache();
+    return success;
+  }, [selectedChannel, businessType, refreshFromCache]);
 
   // Credit exhaustion modal state
   const [showCreditModal, setShowCreditModal] = useState(false);
@@ -194,11 +205,11 @@ const Insights = () => {
 
       setAnalysis(result);
       setImportMeta(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Refund credits on failure
       if (transactionId) refundCredits(transactionId);
       console.error('Analysis failed:', err);
-      setError(err.message || 'Analysis failed. Please try again.');
+      setError(err instanceof Error ? err.message : 'Analysis failed. Please try again.');
     } finally {
       setLoading(false);
       setLoadingMessage('');
@@ -268,6 +279,17 @@ const Insights = () => {
           </button>
         )}
 
+        {!loading && (
+          <button
+            className="import-analysis-btn"
+            onClick={() => setShowManualModal(true)}
+            disabled={!selectedChannelConfig?.available}
+          >
+            <span className="btn-icon"><ClipboardPaste size={18} strokeWidth={1.5} /></span>
+            Seed Manual Analysis
+          </button>
+        )}
+
         {analysis && (
           <span className="last-analyzed">
             Last analyzed: {new Date(analysis.analyzedAt).toLocaleString()}
@@ -278,11 +300,21 @@ const Insights = () => {
       {/* Import Provenance Banner */}
       {!loading && analysis && importMeta && (
         <div className="import-provenance-banner">
-          <span className="provenance-icon"><Download size={16} strokeWidth={1.5} /></span>
+          <span className="provenance-icon">
+            {importMeta.source === 'manual'
+              ? <ClipboardPaste size={16} strokeWidth={1.5} />
+              : <Download size={16} strokeWidth={1.5} />}
+          </span>
           <span className="provenance-text">
-            Imported from <strong>{importMeta.adAccountName}</strong> on {new Date(importMeta.importedAt).toLocaleDateString()}
-            {importMeta.sourceBusinessType !== businessType && (
-              <span className="provenance-type-note"> (originally {importMeta.sourceBusinessType})</span>
+            {importMeta.source === 'manual' ? (
+              <>Seeded from a <strong>manual analysis</strong> on {new Date(importMeta.importedAt).toLocaleDateString()}</>
+            ) : (
+              <>
+                Imported from <strong>{importMeta.adAccountName}</strong> on {new Date(importMeta.importedAt).toLocaleDateString()}
+                {importMeta.sourceBusinessType !== businessType && (
+                  <span className="provenance-type-note"> (originally {importMeta.sourceBusinessType})</span>
+                )}
+              </>
             )}
           </span>
           <span className="provenance-hint">Run your own analysis to replace</span>
@@ -322,6 +354,12 @@ const Insights = () => {
               Or import analysis from another ad account
             </button>
           )}
+          <button
+            className="import-empty-link"
+            onClick={() => setShowManualModal(true)}
+          >
+            Or seed a manual analysis to start
+          </button>
         </div>
       )}
 
@@ -355,6 +393,14 @@ const Insights = () => {
           currentBusinessType={businessType}
           onImport={handleImport}
           onClose={() => setShowImportModal(false)}
+        />
+      )}
+
+      {/* Manual Analysis (cold-start seed) Modal */}
+      {showManualModal && (
+        <ManualAnalysisModal
+          onImport={handleManualImport}
+          onClose={() => setShowManualModal(false)}
         />
       )}
     </div>

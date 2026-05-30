@@ -2564,6 +2564,113 @@ IMPORTANT: These are EXTERNAL inspiration sources. Your job is to:
 }
 
 /**
+ * Cold-start analysis template. A user (or `distillManualAnalysis` below) feeds a brand /
+ * positioning brief in place of {{BRAND_CONTEXT}} and any LLM returns a ConversionIQ profile
+ * that seeds copy generation before an account has live ad data.
+ *
+ * IMPORTANT: the JSON shape below mirrors the GENERATION-RELEVANT subset of
+ * `ChannelAnalysisResult` (the fields `buildAnalysisContextString` reads). Keep them in sync —
+ * a TS interface can't be introspected at runtime, so this is maintained by hand.
+ */
+export const MANUAL_ANALYSIS_PROMPT_TEMPLATE = `You are an elite direct-response strategist building a ConversionIQ creative-intelligence profile for a brand that has NO live ad data yet. Using ONLY the brand/positioning context below, synthesize a well-reasoned profile a copywriter can immediately draw on. These are informed hypotheses, not measured results — make them specific, realistic, and grounded in the brand context. Do NOT use em dashes.
+
+=== BRAND / POSITIONING CONTEXT ===
+{{BRAND_CONTEXT}}
+
+Return JSON ONLY, matching this exact shape (omit nothing; use [] for lists you can't fill):
+{
+  "executiveSummary": "<2-3 sentences: who this brand is, who it sells to, and the core creative angle that should win>",
+  "overallHealthScore": 5,
+  "brandVoice": {
+    "tonality": "<e.g. 'Warm, grounded, quietly authoritative'>",
+    "sentenceStyle": "<e.g. 'Short plain sentences with the occasional one-line punch'>",
+    "pointOfView": "<e.g. 'Second person (you/your)'>",
+    "vocabularyLevel": "<e.g. 'Conversational, 8th-grade, no jargon'>",
+    "rhythmAndCadence": "<e.g. 'Calm opener, builds, lands on a clear invitation'>",
+    "distinctiveTraits": ["<trait 1>", "<trait 2>", "<trait 3>"]
+  },
+  "winningPatterns": {
+    "headlines": ["<headline pattern that should resonate>", "<another>"],
+    "copyElements": ["<copy element 1>", "<element 2>"],
+    "emotionalTriggers": ["<trigger 1>", "<trigger 2>"],
+    "callToActions": ["<CTA pattern 1>", "<CTA pattern 2>"],
+    "visualElements": ["<visual pattern 1>", "<pattern 2>"]
+  },
+  "audienceInsights": {
+    "whatResonates": ["<what this audience responds to 1>", "<2>"],
+    "whatDoesntWork": ["<what to avoid 1>", "<2>"],
+    "targetingRecommendations": [],
+    "visualPreferences": ["<visual preference 1>"]
+  },
+  "losingPatterns": {
+    "headlines": ["<headline pattern to avoid>"],
+    "copyElements": [],
+    "issues": ["<common mistake to avoid for this audience>"],
+    "visualIssues": []
+  },
+  "visualAnalysis": {
+    "winningVisualElements": [],
+    "losingVisualElements": [],
+    "colorPsychology": "",
+    "imageryPatterns": "",
+    "inImageMessaging": "",
+    "psychologicalTriggers": ["<deep driver 1, e.g. 'fear resolution'>", "<driver 2>"]
+  },
+  "recommendations": {
+    "immediate": ["<first creative move>"],
+    "shortTerm": [],
+    "strategic": [],
+    "creativeDirection": ["<creative direction 1>", "<2>"]
+  },
+  "topAds": [
+    {
+      "id": "exemplar_1",
+      "headline": "<an exemplar headline in the brand voice>",
+      "bodyText": "<a short exemplar body in the brand voice>",
+      "conversionRate": 0,
+      "whyItWorks": "<why this would resonate with the audience>",
+      "imageAnalysis": "",
+      "psychologicalDrivers": ["<driver 1>", "<driver 2>"]
+    }
+  ]
+}`;
+
+/**
+ * Cold-start: synthesize a ConversionIQ analysis from a freeform brand/positioning brief
+ * (no live ad data). Returns the RAW parsed object — the caller normalizes it via
+ * `normalizeManualAnalysis` (channelAnalysisCache) into a full ChannelAnalysisResult.
+ */
+export async function distillManualAnalysis(
+  brief: string,
+  opts?: { reasoningEffort?: ReasoningEffort },
+): Promise<unknown> {
+  if (!isOpenAIConfigured()) {
+    throw new Error('AI API not configured. Please contact support.');
+  }
+  const clean = (brief || '').trim();
+  if (!clean) throw new Error('Provide a brand/positioning brief to distill.');
+  const reasoningEffort = opts?.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
+  const userPrompt = MANUAL_ANALYSIS_PROMPT_TEMPLATE.replace('{{BRAND_CONTEXT}}', clean);
+
+  const response = await callOpenAI(
+    [{ role: 'user', content: userPrompt }],
+    { maxTokens: 16384, reasoningEffort, responseFormat: { type: 'json_object' } },
+  );
+
+  let cleaned = response.trim();
+  if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
+  if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
+  if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
+  try {
+    return JSON.parse(cleaned.trim());
+  } catch {
+    const repaired = attemptJsonRepair(cleaned);
+    if (repaired) return JSON.parse(repaired);
+    throw new Error('The distilled analysis was not valid JSON. Please try again.');
+  }
+}
+
+/**
  * Generate multiple copy options for user selection (Step 1 of multi-step workflow)
  * Returns headlines, body texts, and CTAs with rationales for each
  *
