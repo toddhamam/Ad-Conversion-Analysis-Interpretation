@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-05-30 — Rename grid mode to "Blitz Testing" (UI labels)
+
+### Changed
+- Renamed the CreativeIQ generation mode from **"Grid"** to **"Blitz Testing"** across all user-facing labels (the catchy primary name; "grid" survives as a secondary descriptor). Toggle: *Grid (Angle × Hook)* → **Blitz Testing (Angle × Hook)**; *Generate Grid (N)* → **Generate Blitz Test (N)**; review step *Review Grid* → **Review Blitz Test**; plus the mode hint and the core-promise / image error messages.
+- Insights "Winning Axes" copy de-gridded to stay accurate (single-concept ads are axis-tagged too): "grid-tagged ads" → "your tagged ads", "before grid tagging" → "before axis tagging".
+- **Labels only** — all internal identifiers (`generationMode: 'grid'`, `GridReviewPanel`, `.grid-*` CSS classes) are intentionally unchanged.
+
 ## 2026-05-30 — Grid mode: Core Promise marked required + disabled-button reason
 
 ### Fixed

@@ -32,7 +32,7 @@ function GridReviewPanel({
 
   return (
     <section className="config-panel grid-review-panel">
-      <h3 className="config-title">Review Grid — {keptCount}/{cells.length} kept</h3>
+      <h3 className="config-title">Review Blitz Test — {keptCount}/{cells.length} kept</h3>
       <p className="config-hint">
         Each card is one Angle × Hook creative anchored to your core promise. Deselect the ones that don't fit,
         reroll any you want fresh, then generate images for the ones you keep.
