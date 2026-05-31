@@ -1010,7 +1010,7 @@ const AdGenerator = () => {
 
   const handleGenerateGrid = async () => {
     if (!isOpenAIConfigured()) { setError('OpenAI API is not configured. Please contact your administrator.'); return; }
-    if (!corePromise.trim()) { setError('Grid mode needs a Core Promise — the one idea every creative anchors to.'); return; }
+    if (!corePromise.trim()) { setError('Blitz Testing needs a Core Promise — the one idea every creative anchors to.'); return; }
     if (gridAngles.length === 0 || gridHooks.length === 0) { setError('Select at least one angle and one hook.'); return; }
     if (gridAngles.length * gridHooks.length > GRID_CELL_CAP) {
       setError(`That's ${gridAngles.length * gridHooks.length} creatives — reduce angles or hooks to stay at or under ${GRID_CELL_CAP}.`);
@@ -1128,7 +1128,7 @@ const AdGenerator = () => {
     } catch (err: unknown) {
       if (transactionId) refundCredits(transactionId);
       setGenerationProgress('');
-      setError(err instanceof Error ? err.message : 'Failed to generate grid images. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to generate images for the Blitz Test. Please try again.');
     } finally {
       setIsGeneratingCreatives(false);
     }
@@ -2213,7 +2213,7 @@ const AdGenerator = () => {
           {copySource === 'generate' && (
             <div className="config-section">
               <label className="config-label">Generation Mode</label>
-              <p className="config-hint">One concept you curate, or a BlitzScale grid that tests many angles × hooks in one batch</p>
+              <p className="config-hint">One concept you curate, or Blitz Testing: a grid that tests many angles × hooks in one batch</p>
               <div className="copy-source-options">
                 <button
                   type="button"
@@ -2228,8 +2228,8 @@ const AdGenerator = () => {
                   className={`copy-source-btn ${generationMode === 'grid' ? 'active' : ''}`}
                   onClick={enterGridMode}
                 >
-                  <span className="copy-source-name">Grid (Angle × Hook)</span>
-                  <span className="copy-source-desc">Test a full matrix in one batch</span>
+                  <span className="copy-source-name">Blitz Testing (Angle × Hook)</span>
+                  <span className="copy-source-desc">Test a full grid in one batch</span>
                 </button>
               </div>
             </div>
@@ -2623,7 +2623,7 @@ const AdGenerator = () => {
                 ) : (
                   <>
                     <span className="generate-icon">▦</span>
-                    Generate Grid ({gridCellCount} creative{gridCellCount === 1 ? '' : 's'})
+                    Generate Blitz Test ({gridCellCount} creative{gridCellCount === 1 ? '' : 's'})
                   </>
                 )}
               </button>

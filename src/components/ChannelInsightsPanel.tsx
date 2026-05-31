@@ -77,7 +77,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
             <h3><Layers size={18} strokeWidth={1.5} style={{ marginRight: 8, verticalAlign: 'text-bottom' }} />Winning Axes</h3>
             <span className="analyzed-at">{analysis.axisInsights.taggedAdCount} tagged ad{analysis.axisInsights.taggedAdCount === 1 ? '' : 's'}</span>
           </div>
-          <p className="axes-hint">Performance by creative axis across grid-tagged ads. Use the winners (★) as anchors for your next batch.</p>
+          <p className="axes-hint">Performance by creative axis across your tagged ads. Use the winners (★) as anchors for your next batch.</p>
           <div className="winning-axes-grid">
             {[
               { title: 'By Angle', stats: analysis.axisInsights.byAngle, winner: analysis.axisInsights.winningAngle },
@@ -101,7 +101,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
           </div>
           {analysis.axisInsights.untaggedAdCount > 0 && (
             <p className="axes-untagged-note">
-              {analysis.axisInsights.untaggedAdCount} ad{analysis.axisInsights.untaggedAdCount === 1 ? '' : 's'} not yet attributable (published before grid tagging).
+              {analysis.axisInsights.untaggedAdCount} ad{analysis.axisInsights.untaggedAdCount === 1 ? '' : 's'} not yet attributable (published before axis tagging).
             </p>
           )}
         </section>
