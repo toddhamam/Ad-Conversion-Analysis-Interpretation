@@ -540,6 +540,97 @@
   color: var(--text-secondary);
 }
 
+/* Core Promise library — persistent, selectable list (mirrors product selector) */
+.core-promise-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.core-promise-chip {
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-card);
+  border: 2px solid var(--border-primary);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.core-promise-chip:hover {
+  border-color: var(--border-violet);
+}
+
+.core-promise-chip.active {
+  background: rgba(212, 225, 87, 0.12);
+  border-color: var(--accent-primary);
+}
+
+.core-promise-select {
+  flex: 1;
+  text-align: left;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--text-primary);
+  font-family: inherit;
+}
+
+.core-promise-chip.active .core-promise-select {
+  font-weight: 600;
+}
+
+.core-promise-delete {
+  flex-shrink: 0;
+  width: 42px;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--border-secondary);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--text-muted);
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.core-promise-delete:hover {
+  color: #ef4444;
+  background: var(--bg-card-hover);
+}
+
+.core-promise-add {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.core-promise-save-btn {
+  flex-shrink: 0;
+  padding: 0 22px;
+  background: var(--gradient-violet);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.core-promise-save-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.core-promise-save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Variation Options */
 .variation-options {
   display: flex;

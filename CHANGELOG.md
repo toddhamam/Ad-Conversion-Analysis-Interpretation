@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-05-31 — Persistent Core Promise library (save once, pick, reuse across batches)
+
+### What
+The CreativeIQ **Core Promise** used to be a single throwaway text box — you had to retype the promise every time you generated a new batch of ads. It's now a **persistent, selectable library**, working just like **Product** selection: save promises once, pick the one you want, and your choice **sticks across batches and page reloads until you change it**. Scoped per ad account, stored in `localStorage`. Fully backward-compatible — an empty library still lets you type-and-go.
+
+### Added
+- **Core Promise library UI** in CreativeIQ → Step 1 (Config): saved promises render as a selectable list (click to choose, click again to deselect), each with a **delete** (`×`). An input + **Save** button (or **Enter**) adds the current draft to the library and auto-selects it. Saving the same text twice just re-selects the existing entry (case-insensitive de-dupe). Library capped at 12.
+- **Persistent selection** — the chosen promise survives batch generation and reloads. Two scoped `localStorage` keys: `convertra_core_promises` (the library) and `convertra_selected_core_promise` (the active choice). On load the prior selection is restored if it still exists; a single saved promise auto-selects.
+- **Step 2 summary** now shows the locked-in **Promise** (truncated to 48 chars, full text on hover) alongside Product / Audience / Concept, so you can confirm what's anchoring the batch as you move through the flow.
+
+### Changed
+- `corePromise` is now a **derived value** (selected saved promise's text, or the unsaved draft when nothing is selected) instead of standalone state — so all downstream generation and validation (single mode + Blitz Testing grid) is unchanged. Authoring a new draft deselects the active saved promise; picking a saved one clears the draft. Exactly one is active at a time.
+- Blitz Testing (grid) mode still **requires** a Core Promise; its disabled-button hint now reads **"Pick or add a Core Promise to continue"** once you have saved promises (was always "Add…").
+
 ## 2026-05-31 — AI model upgrades: GPT-5.5 + Gemini 3.5 Flash creative analysis
 
 ### Changed

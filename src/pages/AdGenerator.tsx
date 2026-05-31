@@ -68,6 +68,17 @@ const INSPIRATIONS_STORAGE_KEY = 'ci_ad_library_inspirations';
 const REF_FETCH_MARKER_KEY = 'ci_ref_fetch_marker';
 const MAX_SAVED_INSPIRATIONS = 20;
 const MAX_ACTIVE_INSPIRATIONS = 5;
+// Core Promise library — persistent across batches, scoped per ad account (mirrors Products)
+const CORE_PROMISES_STORAGE_KEY = 'convertra_core_promises';
+const SELECTED_CORE_PROMISE_KEY = 'convertra_selected_core_promise';
+const MAX_CORE_PROMISES = 12;
+
+// A saved Core Promise — the single idea a batch of creatives lives inside.
+interface SavedCorePromise {
+  id: string;
+  text: string;
+  createdAt: string;
+}
 
 // Pagination settings - reduced to prevent Chrome crashes with large base64 images
 const ADS_PER_PAGE = 3;
@@ -191,7 +202,14 @@ const AdGenerator = () => {
   const [audienceType, setAudienceType] = useState<AudienceType>('prospecting');
   const [conceptType, setConceptType] = useState<ConceptType>('auto');
   const [variationCount, setVariationCount] = useState(2);
-  const [corePromise, setCorePromise] = useState(''); // the single idea a batch lives inside (BlitzScale grid)
+  // Core Promise — a persistent library of saved promises + the chosen one.
+  // The selection sticks across batches (and reloads) until manually changed,
+  // mirroring how Product selection works. `promiseDraft` holds an unsaved,
+  // in-progress promise. The active `corePromise` (derived below) is the
+  // selected saved promise's text, or the draft when nothing is selected.
+  const [savedPromises, setSavedPromises] = useState<SavedCorePromise[]>([]);
+  const [selectedPromiseId, setSelectedPromiseId] = useState<string | null>(null);
+  const [promiseDraft, setPromiseDraft] = useState('');
   // BlitzScale grid mode
   const [generationMode, setGenerationMode] = useState<'single' | 'grid'>('single');
   const [gridAngles, setGridAngles] = useState<GridAngle[]>(() => [...DEFAULT_GRID_ANGLES]);
@@ -293,6 +311,15 @@ const AdGenerator = () => {
     () => products.find(p => p.id === selectedProductId) || null,
     [products, selectedProductId]
   );
+
+  // The chosen Core Promise (a saved one if selected, otherwise the live draft).
+  // This is the single string every downstream generation/validation reads, so
+  // the rest of the component is unchanged by the move to a persistent library.
+  const selectedPromise = useMemo(
+    () => savedPromises.find(p => p.id === selectedPromiseId) || null,
+    [savedPromises, selectedPromiseId]
+  );
+  const corePromise = selectedPromise ? selectedPromise.text : promiseDraft;
 
   // Multi-step workflow state
   const [currentStep, setCurrentStep] = useState<WorkflowStep>('config');
@@ -507,6 +534,28 @@ const AdGenerator = () => {
     }
   }, []);
 
+  // Load the saved Core Promise library + the chosen one from scoped localStorage.
+  // Re-runs on ad-account switch so each account sees its own promises (like Products).
+  useEffect(() => {
+    try {
+      const stored = getScopedItem(CORE_PROMISES_STORAGE_KEY);
+      const parsed: SavedCorePromise[] = stored ? JSON.parse(stored) : [];
+      const list = parsed.slice(0, MAX_CORE_PROMISES);
+      setSavedPromises(list);
+      const savedSelection = getScopedItem(SELECTED_CORE_PROMISE_KEY);
+      // Restore the prior selection if it still exists; auto-select when only one saved.
+      setSelectedPromiseId(
+        savedSelection && list.some(p => p.id === savedSelection)
+          ? savedSelection
+          : (list.length === 1 ? list[0].id : null)
+      );
+    } catch {
+      setSavedPromises([]);
+      setSelectedPromiseId(null);
+    }
+    setPromiseDraft('');
+  }, [currentAccount?.ad_account_id]);
+
   // Ad Library inspiration handlers
   const handleSaveInspiration = useCallback((inspiration: AdLibraryInspiration) => {
     setSavedInspirations(prev => {
@@ -533,6 +582,62 @@ const AdGenerator = () => {
       return [...prev, id];
     });
   }, []);
+
+  // ─── Core Promise library handlers ─────────────────────────────────────
+  // Save the current draft to the library and select it. De-dupes by text so
+  // saving the same promise twice just re-selects the existing entry.
+  const handleSaveCorePromise = useCallback(() => {
+    const text = promiseDraft.trim();
+    if (!text) return;
+    const existing = savedPromises.find(p => p.text.toLowerCase() === text.toLowerCase());
+    if (existing) {
+      setSelectedPromiseId(existing.id);
+      setScopedItem(SELECTED_CORE_PROMISE_KEY, existing.id);
+      setPromiseDraft('');
+      return;
+    }
+    const entry: SavedCorePromise = {
+      id: `cp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+      text,
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [entry, ...savedPromises].slice(0, MAX_CORE_PROMISES);
+    setSavedPromises(updated);
+    setScopedItem(CORE_PROMISES_STORAGE_KEY, JSON.stringify(updated));
+    setSelectedPromiseId(entry.id);
+    setScopedItem(SELECTED_CORE_PROMISE_KEY, entry.id);
+    setPromiseDraft('');
+  }, [promiseDraft, savedPromises]);
+
+  // Choose a saved promise (toggles off if it's already the active one). The
+  // selection persists until changed, so a batch generation never clears it.
+  const handleSelectCorePromise = useCallback((id: string) => {
+    const next = selectedPromiseId === id ? null : id;
+    setSelectedPromiseId(next);
+    if (next) setScopedItem(SELECTED_CORE_PROMISE_KEY, next);
+    else removeScopedItem(SELECTED_CORE_PROMISE_KEY);
+    setPromiseDraft('');
+  }, [selectedPromiseId]);
+
+  const handleDeleteCorePromise = useCallback((id: string) => {
+    const updated = savedPromises.filter(p => p.id !== id);
+    setSavedPromises(updated);
+    setScopedItem(CORE_PROMISES_STORAGE_KEY, JSON.stringify(updated));
+    if (selectedPromiseId === id) {
+      setSelectedPromiseId(null);
+      removeScopedItem(SELECTED_CORE_PROMISE_KEY);
+    }
+  }, [savedPromises, selectedPromiseId]);
+
+  // Typing a new promise deselects the active saved one — you're authoring a new
+  // draft, which becomes the live Core Promise until you save or pick one.
+  const handleCorePromiseDraftChange = useCallback((value: string) => {
+    setPromiseDraft(value);
+    if (selectedPromiseId) {
+      setSelectedPromiseId(null);
+      removeScopedItem(SELECTED_CORE_PROMISE_KEY);
+    }
+  }, [selectedPromiseId]);
 
   // Reload cached analysis when businessType changes (e.g. authoritative fetch resolves)
   useEffect(() => {
@@ -977,7 +1082,7 @@ const AdGenerator = () => {
   const gridBlockReason =
     gridAngles.length === 0 ? 'Select at least one angle'
     : gridHooks.length === 0 ? 'Select at least one hook'
-    : !corePromise.trim() ? 'Add a Core Promise to continue'
+    : !corePromise.trim() ? (savedPromises.length > 0 ? 'Pick or add a Core Promise to continue' : 'Add a Core Promise to continue')
     : gridOverCap ? `Reduce to ${GRID_CELL_CAP} or fewer creatives to generate`
     : null;
 
@@ -2125,7 +2230,8 @@ const AdGenerator = () => {
             )}
           </div>
 
-          {/* Core Promise — optional in single mode, REQUIRED in grid mode (anchors the whole batch) */}
+          {/* Core Promise — a persistent library you pick from (sticks across batches,
+              like Product). Optional in single mode, REQUIRED in grid mode (anchors the whole batch). */}
           {copySource === 'generate' && (
             <div className="config-section">
               <label className="config-label">
@@ -2136,17 +2242,63 @@ const AdGenerator = () => {
               </label>
               <p className="config-hint">
                 {generationMode === 'grid'
-                  ? 'Required — the one idea every creative in the grid anchors to. Hold it constant and let the angles and hooks vary around it.'
-                  : 'Optional — the one idea this whole batch lives inside. Every headline, body, and CTA will anchor to it.'}
+                  ? 'Required — the one idea every creative in the grid anchors to. Save promises here and pick one; your choice sticks across batches until you change it.'
+                  : 'Optional — the one idea this batch lives inside. Save promises here and pick one; your choice sticks across batches until you change it.'}
               </p>
-              <input
-                type="text"
-                className="manual-entry-input"
-                value={corePromise}
-                onChange={(e) => setCorePromise(e.target.value)}
-                placeholder="e.g. Scale past the closer bottleneck without hiring more people"
-                maxLength={200}
-              />
+
+              {savedPromises.length > 0 && (
+                <div className="core-promise-options">
+                  {savedPromises.map(promise => (
+                    <div
+                      key={promise.id}
+                      className={`core-promise-chip ${selectedPromiseId === promise.id ? 'active' : ''}`}
+                    >
+                      <button
+                        type="button"
+                        className="core-promise-select"
+                        onClick={() => handleSelectCorePromise(promise.id)}
+                        title={promise.text}
+                      >
+                        {promise.text}
+                      </button>
+                      <button
+                        type="button"
+                        className="core-promise-delete"
+                        onClick={() => handleDeleteCorePromise(promise.id)}
+                        aria-label="Delete this Core Promise"
+                        title="Delete"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="core-promise-add">
+                <input
+                  type="text"
+                  className="manual-entry-input"
+                  value={promiseDraft}
+                  onChange={(e) => handleCorePromiseDraftChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); handleSaveCorePromise(); }
+                  }}
+                  placeholder={savedPromises.length > 0
+                    ? 'Add another Core Promise…'
+                    : 'e.g. Scale past the closer bottleneck without hiring more people'}
+                  maxLength={200}
+                />
+                <button
+                  type="button"
+                  className="core-promise-save-btn"
+                  onClick={handleSaveCorePromise}
+                  disabled={!promiseDraft.trim()}
+                  title="Save this Core Promise to your library"
+                >
+                  Save
+                </button>
+              </div>
             </div>
           )}
 
@@ -2673,6 +2825,17 @@ const AdGenerator = () => {
               <span className="summary-label">Audience:</span> {AUDIENCE_OPTIONS.find(a => a.id === audienceType)?.name}
             </span>
             <span className="summary-divider">|</span>
+            {copySource === 'generate' && corePromise.trim() && (
+              <>
+                <span className="summary-item">
+                  <span className="summary-label">Promise:</span>{' '}
+                  <span title={corePromise.trim()}>
+                    {corePromise.trim().length > 48 ? `${corePromise.trim().slice(0, 48)}…` : corePromise.trim()}
+                  </span>
+                </span>
+                <span className="summary-divider">|</span>
+              </>
+            )}
             {copySource === 'generate' ? (
               <>
                 <span className="summary-item">
