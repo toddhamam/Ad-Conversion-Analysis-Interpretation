@@ -123,12 +123,13 @@ const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models'
 // =============================================================================
 // MODEL CONFIGURATION - Always use the latest available models
 // =============================================================================
-// GPT-5.4 is OpenAI's flagship model - reasoning is controlled via the reasoning.effort parameter
-// 33% fewer factual errors, 47% more token-efficient, 1M context window, 128K max output
-const DEFAULT_CHAT_MODEL = 'gpt-5.4'; // Latest GPT-5.4 with reasoning capabilities
-const DEFAULT_VISION_MODEL = 'gpt-5.4'; // GPT-5.4 has multimodal vision support
+// GPT-5.5 is OpenAI's flagship model (released 2026-04-23) - reasoning is controlled via the
+// reasoning.effort parameter (none/low/medium/high/xhigh). 1.05M context window, 128K max output.
+// Drop-in API-compatible with GPT-5.4: same request shape, no breaking changes.
+const DEFAULT_CHAT_MODEL = 'gpt-5.5'; // Latest GPT-5.5 with reasoning capabilities
+const DEFAULT_VISION_MODEL = 'gpt-5.5'; // GPT-5.5 has multimodal vision support
 
-// Reasoning configuration for GPT-5.4
+// Reasoning configuration for GPT-5.5
 // All OpenAI calls now route through the backend proxy (api/meta.ts) which has
 // a 300-second Vercel function timeout. 'medium' keeps most calls well within
 // that window; 'high'/'xhigh' may approach the limit on complex prompts.
@@ -141,8 +142,11 @@ const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'medium';
 // Fallback: gemini-3.1-flash-image-preview (faster, more reliable during high demand)
 const DEFAULT_IMAGE_MODEL = 'gemini-3-pro-image-preview';
 const FALLBACK_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
-// Text-only model for reference analysis (image models are unreliable for text-only tasks)
-const TEXT_ANALYSIS_MODEL = 'gemini-2.5-flash';
+// Multimodal model for reference-image analysis — reads creative style from reference images and
+// returns a text analysis (image-GENERATION models are unreliable for text output, so we use a
+// general model here). Gemini 3.5 Flash (GA, Google I/O 2026): natively multimodal, a major quality
+// jump over 2.5 Flash for reading creative, and the flash tier keeps the per-generation step fast.
+const TEXT_ANALYSIS_MODEL = 'gemini-3.5-flash';
 const USE_GEMINI_FOR_IMAGES = true; // Switch to use Gemini instead of DALL-E
 
 // OpenAI image generation models — gpt-image-2 is the new flagship (Apr 21, 2026)

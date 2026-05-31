@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-05-31 — AI model upgrades: GPT-5.5 + Gemini 3.5 Flash creative analysis
+
+### Changed
+- Upgraded the OpenAI text/vision model from **GPT-5.4 → GPT-5.5** (`gpt-5.5`, OpenAI's flagship as of 2026-04-23) for all copy generation, creative analysis, and vision. Drop-in API-compatible — same `reasoning.effort` parameter, no request-shape changes.
+- Upgraded the reference-image **creative analysis** model from **Gemini 2.5 Flash → Gemini 3.5 Flash** (`gemini-3.5-flash`, GA at Google I/O 2026) — a natively-multimodal quality jump for reading creative style, kept on the fast flash tier so per-generation analysis stays within its timeout.
+- Reviewed the image-**generation** models and confirmed they're already current (Gemini 3 Pro Image / Nano Banana Pro + Gemini 3.1 Flash Image / Nano Banana 2; OpenAI `gpt-image-2`) — no change needed.
+
 ## 2026-05-30 — Rename grid mode to "Blitz Testing" (UI labels)
 
 ### Changed
