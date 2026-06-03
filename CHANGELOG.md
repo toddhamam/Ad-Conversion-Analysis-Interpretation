@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-06-03 — Persist CreativeIQ ad batches across publish + refresh (IndexedDB)
+
+### What
+A generated ad batch — **every image** plus the config that produced it — now **persists in CreativeIQ until you generate a new batch or click Clear All**. Previously, publishing to Meta **wiped the batch** (you'd return to an empty "No Generated Ads Found" screen), and localStorage's ~5MB cap forced the old code to strip images off all but the 5 most-recent ads. So you can now publish a Blitz grid, come back, **review every creative, regenerate the weak ones (on-brand), and re-publish** — even after a hard browser refresh. Storage moved from localStorage to **IndexedDB** (`src/services/batchStore.ts`), whose quota is a share of free disk (hundreds of MB–GBs), so a full 24-creative grid (~25MB) fits with room to spare.
+
+### Added
+- **`src/services/batchStore.ts`** — IndexedDB-backed batch store (mirrors the existing `embeddingStore.ts` pattern; no new dependency). One record per ad account holding the full packages + a `BatchSessionContext` snapshot (selected product, similarity, image size, model, copy options + selections) + a `publishedAt` marker. Single-slot `put()` keyed by account, so a new batch overwrites the old one. Requests `navigator.storage.persist()` so the batch is exempt from eviction.
+- **Generation-context restore** — on load, the session snapshot rehydrates every workflow stage so per-image **regeneration re-runs on-brand** (same product / size / variation that made the originals), even days after publishing or after switching products.
+- **"Published to Meta · {time}" badge** + **"Re-publish to Meta"** button on the Generated Creatives header; a persist hint ("Saved here until you generate a new batch") before publish.
+- **Clickable stepper** — the Step 1 / 2 / 3 chips now jump to any stage that has data, so a persisted batch can be reviewed (and regenerated) at every stage. Keyboard-accessible (Enter/Space).
+
+### Changed
+- **Publishing no longer wipes the batch.** `AdPublisher` now calls `markBatchPublished()` (sets `publishedAt`) instead of `removeScopedItem(...)`. The batch stays put; re-publishing creates **new PAUSED draft ads** in Ads Manager (it does not edit the ads already pushed). The generator shows the Published badge on return.
+- **Removed the localStorage band-aids** the 5MB cap required: per-ad image stripping (`MAX_ADS_WITH_IMAGES`), the `MAX_DATA_SIZE_MB` size guards, and the `QuotaExceededError` retry-by-clearing-cache path — IndexedDB has room for the full set of images. The in-memory `publishStore` remains the synchronous Generator→Publisher handoff; IndexedDB is the backup that survives a hard refresh.
+- **One-time migration** — an existing `conversion_intelligence_generated_ads` localStorage batch is adopted into IndexedDB on first load, then the localStorage key is removed.
+
+### Note
+- Within a session everything stays in memory and is fully reviewable. Across a **hard refresh**, the whole batch (up to `MAX_STORED_ADS = 30` packages) restores from IndexedDB with images intact. Batches are scoped per ad account; switching accounts shows that account's batch.
+
 ## 2026-06-03 — Publish: manual ad placements (e.g. Feed-only) now actually apply
 
 ### Fixed

@@ -141,6 +141,8 @@ public/
 | `src/services/openaiApi.ts` | AI analysis (GPT-5.2) + creative generation (Gemini/Veo). Model IDs defined as constants at top of file |
 | `src/services/metaDevPolicyGuard.ts` | Meta Developer Policy Guard — rate limiting, request queuing, response caching, error classification for all Meta API calls |
 | `src/services/imageCache.ts` | Client-side image caching with quality scoring |
+| `src/services/batchStore.ts` | IndexedDB store for the current CreativeIQ ad batch (packages + generation-context snapshot). Persists full images across publish + hard refresh, single slot per ad account |
+| `src/services/publishStore.ts` | In-memory (module-level) Generator→Publisher handoff for generated ads — synchronous, no size limit |
 | `src/pages/MetaAds.tsx` | Main dashboard - campaign metrics, creative analysis |
 | `src/pages/AdGenerator.tsx` | AI-powered ad creative generation workflow |
 | `src/pages/Insights.tsx` | Channel-level AI analysis with health scores |
@@ -1030,20 +1032,29 @@ const analysis = await analyzeAdCreative(adId, {
 });
 ```
 
-### localStorage Storage Management
+### Generated Ad Batch Persistence (IndexedDB — `batchStore.ts`)
 
-Browser localStorage is limited to ~5MB per origin. Two caches compete for this space:
+The current CreativeIQ ad batch (generated packages **plus** the generation context that
+produced them) persists in **IndexedDB** via `src/services/batchStore.ts`, not localStorage.
+localStorage's ~5MB cap (shared across every key) couldn't hold a full Blitz grid (up to 24
+base64 creatives, ~20-30MB), which forced the old code to strip images off all but the 5
+most-recent ads and wipe the batch on publish. IndexedDB's quota is a share of free disk
+(hundreds of MB to GBs), so the **entire batch — every image — survives publish-to-Meta and
+hard refreshes**, until the user generates a new batch or clicks **Clear All**.
 
-| Cache | Key | Contents | Limit |
-|-------|-----|----------|-------|
-| Generated ads | `conversion_intelligence_generated_ads` | Ad packages with base64 images | Max 10 packages, images on latest 5 |
-| Image reference cache | `conversion_intelligence_image_cache` | Base64 reference images from Meta ads | Max 20 images |
+| Store | Key / Location | Contents | Limit |
+|-------|----------------|----------|-------|
+| Batch store (`batchStore.ts`) | IndexedDB `convertra_batches`, one record per ad account | Packages (full images) + `BatchSessionContext` (product, similarity, size, model, copy options + selections) + `publishedAt` | `MAX_STORED_ADS = 30` packages; no image stripping |
+| Image reference cache | localStorage `conversion_intelligence_image_cache` | Base64 reference images from Meta ads | Max 20 images |
 
-**Storage safety patterns:**
-- **Flush before navigate**: When navigating from AdGenerator to AdPublisher, synchronously write to localStorage before `navigate()` — `requestIdleCallback` writes get cancelled on component unmount
-- **Auto-clear on publish**: After successful Meta publish, clear generated ads from localStorage
-- **Retry on QuotaExceededError**: Clear image reference cache first, then retry the save — generated ads take priority over reference images
-- **Warning auto-clear**: Storage warnings should clear themselves when data drops below the 3MB threshold — never leave sticky warnings
+**Key patterns:**
+- **Single slot per account**: `saveBatch()` does a `put()` keyed by ad account, so a new batch overwrites the old one ("persist until I generate a new batch, then it's gone").
+- **In-memory handoff unchanged**: `publishStore` (module-level, no size limit) is still the PRIMARY, synchronous Generator→Publisher handoff. The IndexedDB write is the backup that survives a hard refresh — fire-and-forget, since navigation never waits on it.
+- **Context snapshot drives on-brand regeneration**: `BatchSessionContext` is restored on load so per-image regeneration re-runs with the product/size/variation that made the originals — even days after publishing, or after switching products.
+- **Stages rehydrate**: restoring the session (copy options + selections + config) means the clickable stepper can revisit any stage of a persisted batch.
+- **No QuotaExceededError handling**: the localStorage band-aids (image stripping, size guards, `MAX_ADS_WITH_IMAGES`, retry-by-clearing-cache) were removed — IndexedDB has room.
+- **Legacy migration**: on first load, an existing `conversion_intelligence_generated_ads` localStorage batch is adopted into IndexedDB, then the localStorage key is removed.
+- **`navigator.storage.persist()`** is requested once so the batch is exempt from eviction under disk pressure.
 
 **Critical pitfall**: Never use `requestIdleCallback` for writes that must complete before navigation. The cleanup function will cancel the pending callback when the component unmounts, causing data loss.
 
@@ -1515,11 +1526,12 @@ The Ad Publisher (Step 3: Configure) provides these ad-level settings that are a
 - Format: `{bodyText}\n\n{landingPageUrl}` — no UTM params in visible ad copy
 - UTM tracking is handled separately via `url_tags` on the creative
 
-#### Post-Publish Auto-Cleanup
-- After a successful publish to Meta (`publishResult.success`), generated ads are automatically cleared from localStorage
-- This prevents the "Storage full" warning from accumulating across sessions
-- Ads are **only** cleared after confirmed success — if publish fails, ads are preserved for retry
-- The image reference cache (`conversion_intelligence_image_cache`) is also cleared on `QuotaExceededError` and when "Clear All Ads" is clicked
+#### Post-Publish Persistence (NOT cleanup)
+- After a successful publish to Meta (`publishResult.success`), the batch is **kept** — `AdPublisher` calls `markBatchPublished()` (sets `publishedAt`) instead of wiping it. The batch stays in CreativeIQ so the user can return to review every creative, regenerate weak ones (on-brand, via the restored context), and re-publish.
+- The generator shows a **"Published to Meta · {time}"** badge and a **"Re-publish to Meta"** button; the badge resets to null when a genuinely new batch is generated.
+- The batch is only removed by **Clear All** (`clearBatch()`) or overwritten when a new batch is generated (single-slot `put()`).
+- Re-publishing creates **new PAUSED draft ads** in Ads Manager — it does not edit the ads already pushed.
+- The image reference cache (`conversion_intelligence_image_cache`, localStorage) is still cleared when "Clear All" is clicked.
 
 #### Post-Publish "Open Ads Manager" Link
 - After successful publish, the "Open Ads Manager" button links to the correct ad account using `VITE_META_AD_ACCOUNT_ID` (strips `act_` prefix)
@@ -1562,6 +1574,7 @@ The Ad Publisher (Step 3: Configure) provides these ad-level settings that are a
 - Don't bake UTM parameters into `link_data.link` or body copy — use Meta's `url_tags` field on the ad creative instead
 - Don't use `requestIdleCallback` for localStorage writes that must complete before navigation — the cleanup function cancels pending callbacks on unmount, causing data loss. Use synchronous writes before `navigate()`
 - Don't leave localStorage storage warnings sticky — always clear them when the data size drops below threshold or after successful save
+- Don't persist generated ad batches in localStorage — they live in IndexedDB via `batchStore.ts` (full images, no stripping). Don't re-introduce the old image-stripping / `QuotaExceededError` band-aids, and don't wipe the batch on publish — `AdPublisher` calls `markBatchPublished()` so the user can review/regenerate/re-publish. The in-memory `publishStore` remains the synchronous Generator→Publisher handoff
 - Don't use `transition: all` in CSS — causes browser crashes when base64 images render. Always list specific properties (e.g., `transition: background-color 0.2s ease, border-color 0.2s ease`). This has caused production crashes multiple times (#181, #182)
 - Don't hold large base64 data in memory after use — explicitly null out reference image arrays (`precomputedRefs`, `requestParts`) after they've been serialized. Gemini reference images can be 25-50MB and cause out-of-memory crashes if not freed for GC
 - Don't `JSON.stringify` full API responses in error logs — Gemini responses with base64 image data can be enormous. Log concise summaries (candidate count, part types, truncated text) instead

@@ -855,6 +855,33 @@
   margin: 0;
 }
 
+.generated-section-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Badge shown when the current batch has been published to Meta. It stays visible
+   (the batch is no longer wiped on publish) so creatives can be reviewed/regenerated. */
+.batch-published-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #059669;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.batch-persist-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .section-actions {
   display: flex;
   gap: 12px;
@@ -1039,6 +1066,21 @@
 
 .ad-generator-page .step.completed {
   opacity: 0.6;
+}
+
+/* Clickable stepper chips — revisit any stage of the persisted batch */
+.ad-generator-page .step.step-clickable {
+  cursor: pointer;
+}
+
+.ad-generator-page .step.step-clickable:hover {
+  background: var(--bg-card-hover);
+  opacity: 1;
+}
+
+.ad-generator-page .step.step-clickable:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 2px;
 }
 
 .ad-generator-page .step-number {
