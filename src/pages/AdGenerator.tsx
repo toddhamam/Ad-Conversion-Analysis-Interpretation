@@ -50,7 +50,8 @@ import InspirationSelector from '../components/InspirationSelector';
 import SEO from '../components/SEO';
 import { setPublishData } from '../services/publishStore';
 import type { AdLibraryInspiration } from '../types';
-import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
+import { getScopedItem, setScopedItem, removeScopedItem, getScopedAccountId } from '../lib/scopedStorage';
+import { getBatch, saveBatch, clearBatch, type BatchSessionContext } from '../services/batchStore';
 import { DEFAULT_GRID_ANGLES, DEFAULT_GRID_HOOKS, HOOK_LABELS, FORMAT_LABELS, isValidAngle, isValidHook, type GridAngle, type HookType, type FormatType } from '../lib/axisTags';
 import { useAdAccount } from '../contexts/AdAccountContext';
 import { getCachedAnalysis, getImportMetadata, type ImportMetadata } from '../lib/channelAnalysisCache';
@@ -80,11 +81,12 @@ interface SavedCorePromise {
   createdAt: string;
 }
 
-// Pagination settings - reduced to prevent Chrome crashes with large base64 images
+// Pagination settings - render a few cards at a time to avoid paint storms with large base64 images
 const ADS_PER_PAGE = 3;
-const MAX_STORED_ADS = 10; // Keep total ads low to prevent memory issues
-const MAX_ADS_WITH_IMAGES = 5; // Only keep images for the most recent N ads
-const MAX_DATA_SIZE_MB = 3; // Maximum localStorage data size before warning
+// Batch cap — fits a full Blitz grid (GRID_CELL_CAP = 24) plus a few iterations. The
+// batch lives in IndexedDB (batchStore), which holds the full set of images, so there's
+// no per-ad image stripping or size guard anymore (those were localStorage band-aids).
+const MAX_STORED_ADS = 30;
 
 // Debug logging for crash investigation
 const DEBUG_MODE = false;
@@ -345,6 +347,9 @@ const AdGenerator = () => {
   const [error, setError] = useState<string | null>(null);
   const [isLoadingAds, setIsLoadingAds] = useState(true);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
+  // When the current batch was published to Meta (ms). Set on return from the
+  // publisher; drives the "Published" badge. Reset to null on a new generation.
+  const [batchPublishedAt, setBatchPublishedAt] = useState<number | null>(null);
 
   // Pagination state
   const [visibleAdsCount, setVisibleAdsCount] = useState(ADS_PER_PAGE);
@@ -380,6 +385,40 @@ const AdGenerator = () => {
   // Ad Library inspiration
   const [savedInspirations, setSavedInspirations] = useState<AdLibraryInspiration[]>([]);
   const [activeInspirationIds, setActiveInspirationIds] = useState<string[]>([]);
+
+  // Live snapshot of the generation context, persisted alongside the batch so that
+  // (a) every workflow stage rehydrates after a refresh and (b) per-image
+  // regeneration re-runs with the same product/size/variation that made the originals.
+  // Kept in a ref (updated by the effect below) so the debounced save effect can read
+  // current values without re-running on every keystroke.
+  const sessionRef = useRef<BatchSessionContext>({});
+  useEffect(() => {
+    sessionRef.current = {
+      audienceType,
+      conceptType,
+      campaignIntent: effectiveIntent,
+      copySource,
+      adType,
+      selectedProductId,
+      similarityValue,
+      copyVariationValue,
+      imageSize,
+      imageModel,
+      variationCount,
+      copyOptions,
+      selectedHeadlines,
+      selectedBodyTexts,
+      selectedCTAs,
+      generationMode,
+      gridFormat,
+      corePromise,
+    };
+  }, [
+    audienceType, conceptType, effectiveIntent, copySource, adType, selectedProductId,
+    similarityValue, copyVariationValue, imageSize, imageModel, variationCount,
+    copyOptions, selectedHeadlines, selectedBodyTexts, selectedCTAs,
+    generationMode, gridFormat, corePromise,
+  ]);
 
   // Handle brand image upload
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -646,81 +685,103 @@ const AdGenerator = () => {
     setAnalysisImportMeta(getImportMetadata('meta'));
   }, [businessType]);
 
-  // Load image cache and stored ads on mount
+  // Reference image cache stats (mount-only). Account-switch refreshes are handled by
+  // the auto-fetch effect below; keeping this separate keeps the batch loader focused.
   useEffect(() => {
-    debugLog('Mount effect starting');
-
-    // Check image cache status and update detailed stats
     const imageStats = getImageCacheStats();
     setImageCacheCount(imageStats.count);
-    debugLog(`Image cache: ${imageStats.count} reference images available`);
-
     const detailedStats = getDetailedCacheStats();
     setRefTopConversions(detailedStats.topConversions);
     setRefTopCVR(detailedStats.topConversionRate);
+  }, []);
 
-    // Load previously generated ads from localStorage using deferred callback
-    // Short delay prevents blocking the initial render
-    const loadTimerId = scheduleDeferredWork(() => {
-      debugLog('Starting ads load (deferred)');
+  // Load the persisted batch (from IndexedDB) on mount and whenever the ad account
+  // changes. The batch — packages + the generation context that produced them — lives
+  // in IndexedDB (see batchStore), which has room for the full set of images. Restoring
+  // the session context rehydrates every workflow stage and lets per-image regeneration
+  // re-run on-brand.
+  useEffect(() => {
+    debugLog('Batch load effect starting');
+
+    let cancelled = false;
+    // Scope to the same account id the scoped-localStorage helpers use, so the
+    // legacy migration and the IndexedDB record stay aligned.
+    const accountId = getScopedAccountId();
+    setIsLoadingAds(true);
+
+    (async () => {
       try {
-        const storedAds = getScopedItem(GENERATED_ADS_STORAGE_KEY);
-        if (!storedAds) {
-          debugLog('No stored ads found');
-          setIsLoadingAds(false);
-          return;
-        }
+        let batch = await getBatch(accountId);
 
-        // Check storage size BEFORE parsing to prevent memory issues
-        const sizeInMB = storedAds.length / (1024 * 1024);
-        debugLog(`localStorage size: ${sizeInMB.toFixed(2)}MB`);
-
-        // If data is too large, warn and consider clearing
-        if (sizeInMB > MAX_DATA_SIZE_MB) {
-          console.warn(`[AdGenerator] Large localStorage data detected: ${sizeInMB.toFixed(2)}MB`);
-          setStorageWarning(`Storage is ${sizeInMB.toFixed(1)}MB. Consider clearing old ads to improve performance.`);
-
-          // For very large data (> 5MB), skip loading to prevent crash
-          if (sizeInMB > 5) {
-            console.error('[AdGenerator] Data too large, skipping load to prevent crash');
-            setStorageWarning('Storage too large. Please clear old ads to continue.');
-            setIsLoadingAds(false);
-            return;
+        // One-time migration: if nothing in IndexedDB yet but the old localStorage
+        // key holds a batch, adopt it, then remove the localStorage copy.
+        if (!batch) {
+          const legacy = getScopedItem(GENERATED_ADS_STORAGE_KEY);
+          if (legacy) {
+            try {
+              const parsed = JSON.parse(legacy);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                const packages = parsed.slice(0, MAX_STORED_ADS) as GeneratedAdPackage[];
+                batch = {
+                  accountId: accountId || '__unscoped__',
+                  packages,
+                  session: {},
+                  publishedAt: null,
+                };
+                await saveBatch(accountId, { packages, session: {} });
+              }
+            } catch {
+              /* corrupt legacy data — ignore */
+            }
+            removeScopedItem(GENERATED_ADS_STORAGE_KEY);
           }
         }
 
-        // Parse in a try-catch to handle corrupted data
-        let parsed: GeneratedAdPackage[];
-        try {
-          parsed = JSON.parse(storedAds);
-        } catch (parseErr) {
-          console.error('[AdGenerator] JSON parse error:', parseErr);
-          setStorageWarning('Stored ads data is corrupted. Consider clearing.');
-          setIsLoadingAds(false);
+        if (cancelled) return;
+
+        if (!batch || !Array.isArray(batch.packages) || batch.packages.length === 0) {
+          setGeneratedAds([]);
+          setBatchPublishedAt(null);
           return;
         }
 
-        if (!Array.isArray(parsed)) {
-          debugLog('Parsed data is not an array');
-          setIsLoadingAds(false);
-          return;
+        setGeneratedAds(batch.packages.slice(0, MAX_STORED_ADS));
+        setBatchPublishedAt(batch.publishedAt ?? null);
+        setStorageWarning(null);
+
+        // Rehydrate the generation context so stages and regeneration are restored.
+        // BatchSessionContext carries the real union types, so no casts are needed.
+        const s = batch.session || {};
+        if (s.audienceType) setAudienceType(s.audienceType);
+        if (s.conceptType) setConceptType(s.conceptType);
+        if (s.copySource) setCopySource(s.copySource);
+        if (s.adType) setAdType(s.adType);
+        if (s.selectedProductId !== undefined) setSelectedProductId(s.selectedProductId);
+        if (typeof s.similarityValue === 'number') setSimilarityValue(s.similarityValue);
+        if (typeof s.copyVariationValue === 'number') setCopyVariationValue(s.copyVariationValue);
+        if (s.imageSize) setImageSize(s.imageSize);
+        if (s.imageModel) setImageModel(s.imageModel);
+        if (typeof s.variationCount === 'number') setVariationCount(s.variationCount);
+        if (s.copyOptions !== undefined) setCopyOptions(s.copyOptions);
+        if (Array.isArray(s.selectedHeadlines)) setSelectedHeadlines(s.selectedHeadlines);
+        if (Array.isArray(s.selectedBodyTexts)) setSelectedBodyTexts(s.selectedBodyTexts);
+        if (Array.isArray(s.selectedCTAs)) setSelectedCTAs(s.selectedCTAs);
+        if (s.generationMode) setGenerationMode(s.generationMode);
+        if (s.gridFormat) setGridFormat(s.gridFormat);
+        if (s.campaignIntent) {
+          userChangedIntentRef.current = true;
+          setCampaignIntent(s.campaignIntent);
         }
-
-        // Strictly limit the number of ads to prevent memory issues
-        const limited = parsed.slice(0, MAX_STORED_ADS);
-        debugLog(`Loaded ${limited.length} ads (limited from ${parsed.length})`);
-
-        setGeneratedAds(limited);
       } catch (e) {
-        console.error('[AdGenerator] Failed to load stored ads:', e);
-        setStorageWarning('Failed to load saved ads. Storage may be corrupted.');
+        console.error('[AdGenerator] Failed to load batch:', e);
+        if (!cancelled) setGeneratedAds([]);
       } finally {
-        setIsLoadingAds(false);
+        if (!cancelled) setIsLoadingAds(false);
       }
-    }, 100);
+    })();
 
-    return () => clearTimeout(loadTimerId);
-  }, []);
+    return () => { cancelled = true; };
+  }, [currentAccount?.ad_account_id]);
 
   // Auto-fetch converting ad images when account resolves or changes
   const lastFetchedAccountRef = useRef<string | null>(null);
@@ -814,136 +875,53 @@ const AdGenerator = () => {
     runAutoFetch(accountId);
   }, [currentAccount?.ad_account_id, runAutoFetch]);
 
-  // Save generated ads to localStorage whenever they change
-  // Uses short setTimeout to avoid blocking the main thread during renders
-  // Strip image data from older ads to keep storage manageable
+  // Persist the batch (packages + the generation-context snapshot) to IndexedDB
+  // whenever the ads change. IndexedDB has room for the full set of images, so there's
+  // no image stripping, no size guard, and no QuotaExceededError handling — the entire
+  // batch is kept intact and survives publish + hard refresh until a new batch replaces
+  // it. Debounced via setTimeout to coalesce rapid changes.
   useEffect(() => {
     if (generatedAds.length === 0 || isLoadingAds) return;
 
+    const accountId = getScopedAccountId();
     const saveTimerId = scheduleDeferredWork(() => {
-      try {
-        // Strictly limit to MAX_STORED_ADS before saving
-        const limited = generatedAds.slice(0, MAX_STORED_ADS);
-
-        // Strip base64 image data from older ads to prevent localStorage bloat
-        // Keep images only for the most recent N ads
-        const toSave = limited.map((ad, index) => {
-          if (index >= MAX_ADS_WITH_IMAGES && ad.images) {
-            return {
-              ...ad,
-              images: ad.images.map(img => ({
-                ...img,
-                imageUrl: '', // Strip large base64 data from old ads
-              })),
-            };
-          }
-          return ad;
-        });
-
-        const json = JSON.stringify(toSave);
-        const sizeInMB = json.length / (1024 * 1024);
-        debugLog(`Saving ${toSave.length} ads (${sizeInMB.toFixed(2)}MB)`);
-
-        // Refuse to save if too large (prevent future crash)
-        if (sizeInMB > 5) {
-          console.error('[AdGenerator] Refusing to save - data too large');
-          setStorageWarning('Too many ads with images. Please delete some to continue.');
-          return;
-        }
-
-        setScopedItem(GENERATED_ADS_STORAGE_KEY, json);
-
-        // Warn if approaching problematic size, clear only if previously warned
-        if (sizeInMB > MAX_DATA_SIZE_MB) {
-          setStorageWarning(`Storage is ${sizeInMB.toFixed(1)}MB. Delete old ads to prevent issues.`);
-        } else {
-          // Only clear warning if one was previously set (avoids unnecessary re-render)
-          setStorageWarning(prev => prev !== null ? null : prev);
-        }
-        debugLog(`Saved ${toSave.length} ads to storage`);
-      } catch (e: unknown) {
-        console.error('[AdGenerator] Failed to save ads:', e);
-        if (e instanceof Error && e.name === 'QuotaExceededError') {
-          // Clear the image reference cache to free space and retry
-          clearImageCache();
-          try {
-            const limited = generatedAds.slice(0, MAX_STORED_ADS);
-            const fallback = limited.map((ad, index) => {
-              if (index >= MAX_ADS_WITH_IMAGES && ad.images) {
-                return { ...ad, images: ad.images.map(img => ({ ...img, imageUrl: '' })) };
-              }
-              return ad;
-            });
-            setScopedItem(GENERATED_ADS_STORAGE_KEY, JSON.stringify(fallback));
-            setStorageWarning(null);
-            debugLog('Saved ads after clearing image cache');
-          } catch {
-            setStorageWarning('Storage full! Please delete some ads to continue saving.');
-          }
-        }
-      }
+      const packages = generatedAds.slice(0, MAX_STORED_ADS);
+      debugLog(`Persisting ${packages.length} ads to IndexedDB`);
+      saveBatch(accountId, {
+        packages,
+        session: sessionRef.current,
+        publishedAt: batchPublishedAt,
+      }).catch(e => console.warn('[AdGenerator] Failed to persist batch:', e));
     }, 200);
 
     return () => clearTimeout(saveTimerId);
-  }, [generatedAds, isLoadingAds]);
+  }, [generatedAds, isLoadingAds, batchPublishedAt]);
 
-  // Synchronous flush of ads to localStorage + in-memory store (used before navigation)
-  // The in-memory store (publishStore) is the PRIMARY handoff mechanism — no size limits.
-  // localStorage is a BACKUP for page refreshes.
+  // Hand the batch to the publisher and persist it before navigating. The in-memory
+  // publishStore is the PRIMARY, synchronous handoff (no size limit), so navigation
+  // never waits on storage. The IndexedDB write is the backup that survives a hard
+  // refresh on the publisher — fire-and-forget, since it lands in a few ms.
   const flushAdsToStorage = useCallback(() => {
     if (generatedAds.length === 0) return;
 
-    // PRIMARY: Set in-memory store (always works, no size limits)
+    // PRIMARY: in-memory store (always works, no size limits)
     setPublishData(generatedAds, effectiveIntent);
 
-    // BACKUP: Also write to localStorage for persistence across page refreshes
-    try {
-      const limited = generatedAds.slice(0, MAX_STORED_ADS);
-      const toSave = limited.map((ad, index) => {
-        if (index >= MAX_ADS_WITH_IMAGES && ad.images) {
-          return {
-            ...ad,
-            images: ad.images.map(img => ({ ...img, imageUrl: '' })),
-          };
-        }
-        return ad;
-      });
-      const json = JSON.stringify(toSave);
-      const sizeInMB = json.length / (1024 * 1024);
-      if (sizeInMB <= 5) {
-        try {
-          setScopedItem(GENERATED_ADS_STORAGE_KEY, json);
-        } catch {
-          // If quota exceeded, clear image cache and retry
-          clearImageCache();
-          setScopedItem(GENERATED_ADS_STORAGE_KEY, json);
-        }
-      } else {
-        // Data too large for localStorage — strip ALL images and save metadata-only
-        // so the publisher can at least see the ad list on page refresh
-        console.warn(`[AdGenerator] Data too large for localStorage (${sizeInMB.toFixed(1)}MB), saving metadata only`);
-        const metadataOnly = limited.map(ad => ({
-          ...ad,
-          images: ad.images?.map(img => ({ ...img, imageUrl: '' })),
-        }));
-        try {
-          setScopedItem(GENERATED_ADS_STORAGE_KEY, JSON.stringify(metadataOnly));
-        } catch {
-          clearImageCache();
-          try { setScopedItem(GENERATED_ADS_STORAGE_KEY, JSON.stringify(metadataOnly)); } catch { /* exhausted */ }
-        }
-      }
-    } catch (e: unknown) {
-      console.error('[AdGenerator] Failed to flush ads to localStorage:', e);
-      // In-memory store was already set above, so navigation will still work
-    }
-  }, [generatedAds]);
+    // BACKUP: IndexedDB, full images intact (no stripping, no quota dance)
+    saveBatch(getScopedAccountId(), {
+      packages: generatedAds.slice(0, MAX_STORED_ADS),
+      session: sessionRef.current,
+      publishedAt: batchPublishedAt,
+    }).catch(e => console.warn('[AdGenerator] Failed to persist batch on flush:', e));
+  }, [generatedAds, effectiveIntent, batchPublishedAt]);
 
-  // Clear all generated ads
+  // Clear all generated ads — deletes the persisted batch for this account. Copy
+  // selections stay in memory (copyOptions untouched) so the user can regenerate.
   const handleClearAllAds = useCallback(() => {
     if (window.confirm('Are you sure you want to delete all generated creatives? Your copy selections will be preserved so you can regenerate.')) {
       setGeneratedAds([]);
-      removeScopedItem(GENERATED_ADS_STORAGE_KEY);
+      setBatchPublishedAt(null);
+      clearBatch(getScopedAccountId()).catch(() => { /* non-critical */ });
       clearImageCache(); // Also clear reference image cache to free storage space
       setStorageWarning(null);
       setVisibleAdsCount(ADS_PER_PAGE);
@@ -1225,6 +1203,7 @@ const AdGenerator = () => {
         onProgress: setGenerationProgress,
       });
       if (transactionId) confirmCredits(transactionId);
+      setBatchPublishedAt(null); // new batch — not yet published
       setGeneratedAds(prev => [...packages, ...prev]);
       // Hand the batch to the publisher (in-memory store) and navigate — matches the single flow.
       setPublishData([...packages], effectiveIntent);
@@ -1345,6 +1324,7 @@ const AdGenerator = () => {
           campaignIntent: effectiveIntent,
         };
 
+        setBatchPublishedAt(null); // new batch — not yet published
         setGeneratedAds(prev => [result, ...prev]);
         setLibraryImages([]); // Clear after use
       } catch (err: unknown) {
@@ -1480,6 +1460,7 @@ const AdGenerator = () => {
       }
 
       result.headlineHooks = selectedHeadlineHooks;
+      setBatchPublishedAt(null); // new batch — not yet published
       setGeneratedAds(prev => [result, ...prev]);
       setGenerationProgress('');
       // Stay on final-config so user can regenerate with same copy selections
@@ -1501,6 +1482,24 @@ const AdGenerator = () => {
   const handleBackToConfig = () => {
     setCurrentStep('config');
   };
+
+  // Jump to any workflow stage from the clickable stepper. Stages 2 and 3 are only
+  // reachable once copy options exist, so a persisted batch can be reviewed at every
+  // stage (and regenerated) without re-running from scratch.
+  const goToStep = useCallback((step: WorkflowStep) => {
+    if (step === 'config') { setCurrentStep('config'); return; }
+    if (!copyOptions) return; // no copy yet — stages 2/3 unavailable
+    if (step === 'copy-selection' || step === 'final-config') setCurrentStep(step);
+  }, [copyOptions]);
+
+  // Keyboard activation (Enter/Space) for the clickable stepper chips. goToStep already
+  // guards reachability, so this stays uniform across all three chips.
+  const onStepKeyDown = useCallback(
+    (step: WorkflowStep) => (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goToStep(step); }
+    },
+    [goToStep]
+  );
 
   const handleProceedToFinalConfig = () => {
     setCurrentStep('final-config');
@@ -2086,19 +2085,38 @@ const AdGenerator = () => {
         </div>
       )}
 
-      {/* Step Indicator */}
+      {/* Step Indicator — chips are clickable to revisit any stage that has data,
+          so a persisted batch can be reviewed/regenerated at every stage. */}
       <div className="step-indicator">
-        <div className={`step ${currentStep === 'config' ? 'active' : 'completed'}`}>
+        <div
+          className={`step ${currentStep === 'config' ? 'active' : 'completed'} step-clickable`}
+          role="button"
+          tabIndex={0}
+          onClick={() => goToStep('config')}
+          onKeyDown={onStepKeyDown('config')}
+        >
           <span className="step-number">1</span>
           <span className="step-label">{copySource === 'generate' ? 'Audience & Concept' : 'Audience & Copy'}</span>
         </div>
         <div className="step-connector"></div>
-        <div className={`step ${currentStep === 'copy-selection' ? 'active' : currentStep === 'final-config' ? 'completed' : ''}`}>
+        <div
+          className={`step ${currentStep === 'copy-selection' ? 'active' : currentStep === 'final-config' ? 'completed' : ''} ${copyOptions ? 'step-clickable' : ''}`}
+          role={copyOptions ? 'button' : undefined}
+          tabIndex={copyOptions ? 0 : undefined}
+          onClick={() => goToStep('copy-selection')}
+          onKeyDown={onStepKeyDown('copy-selection')}
+        >
           <span className="step-number">2</span>
           <span className="step-label">{copySource === 'manual' ? 'Copy Entered' : 'Select Copy'}</span>
         </div>
         <div className="step-connector"></div>
-        <div className={`step ${currentStep === 'final-config' ? 'active' : ''}`}>
+        <div
+          className={`step ${currentStep === 'final-config' ? 'active' : ''} ${copyOptions ? 'step-clickable' : ''}`}
+          role={copyOptions ? 'button' : undefined}
+          tabIndex={copyOptions ? 0 : undefined}
+          onClick={() => goToStep('final-config')}
+          onKeyDown={onStepKeyDown('final-config')}
+        >
           <span className="step-number">3</span>
           <span className="step-label">Generate Creatives</span>
         </div>
@@ -3601,7 +3619,21 @@ const AdGenerator = () => {
       ) : generatedAds.length > 0 && (
         <section className="generated-section">
           <div className="generated-section-header">
-            <h3 className="section-title">Generated Creatives ({generatedAds.length})</h3>
+            <div className="generated-section-heading">
+              <h3 className="section-title">Generated Creatives ({generatedAds.length})</h3>
+              {batchPublishedAt ? (
+                <span
+                  className="batch-published-badge"
+                  title="This batch was published to Meta in PAUSED mode. It stays here so you can review or regenerate any creative and re-publish."
+                >
+                  ✓ Published to Meta · {formatDate(new Date(batchPublishedAt).toISOString())}
+                </span>
+              ) : (
+                <span className="batch-persist-hint">
+                  Saved here until you generate a new batch — publishing won't clear it.
+                </span>
+              )}
+            </div>
             <div className="section-actions">
               <button
                 className="clear-ads-btn"
@@ -3614,7 +3646,7 @@ const AdGenerator = () => {
                 onClick={() => { flushAdsToStorage(); navigate('/publish'); }}
               >
                 <span className="publish-icon">🚀</span>
-                Publish to Meta
+                {batchPublishedAt ? 'Re-publish to Meta' : 'Publish to Meta'}
               </button>
             </div>
           </div>

@@ -29,7 +29,9 @@ import {
   type PublishPreset,
 } from '../services/metaApi';
 import { getPublishData, getPublishIntent, clearPublishIntent } from '../services/publishStore';
-import { getScopedItem, setScopedItem, removeScopedItem } from '../lib/scopedStorage';
+import { getScopedItem, setScopedItem, getScopedAccountId } from '../lib/scopedStorage';
+import { getBatch, markBatchPublished } from '../services/batchStore';
+import type { GeneratedAdPackage } from '../services/openaiApi';
 import { useAdAccount } from '../contexts/AdAccountContext';
 import { getBusinessTypeConfig, getCampaignIntentConfig } from '../lib/businessTypeConfig';
 import type { CampaignIntent } from '../types/organization';
@@ -44,8 +46,8 @@ const debugLog = (...args: any[]) => {
 // TEMPORARY: Set to true to skip localStorage loading for debugging
 const SKIP_LOCALSTORAGE = false;
 
-// Storage key for generated ads (shared with AdGenerator)
-const GENERATED_ADS_STORAGE_KEY = 'conversion_intelligence_generated_ads';
+// Generated ads now load from the in-memory publish store + IndexedDB batch store
+// (see batchStore) rather than localStorage, so no GENERATED_ADS_STORAGE_KEY here.
 const PRESETS_STORAGE_KEY = 'ci_publish_presets';
 const PIXEL_ID_STORAGE_KEY = 'ci_publish_pixel_id';
 
@@ -211,44 +213,33 @@ function formatAudienceSize(size?: number): string {
 let _cachedPackages: any[] | null = null;
 
 /**
- * Load packages from the in-memory publish store (primary) or localStorage (fallback).
- * The publish store is set by AdGenerator right before navigation — it has no size
- * limits and avoids the silent 5MB localStorage failure that causes "No ads found."
+ * Resolve the batch to publish: the in-memory publish store first (the synchronous
+ * handoff set by AdGenerator before navigation, no size limit), then the IndexedDB
+ * batch store (survives a hard refresh on this page, full images intact). The old
+ * localStorage fallback was synchronous but capped at ~5MB.
  */
-function loadPackages(): any[] {
-  // PRIMARY: Check in-memory publish store (set by AdGenerator before navigate)
+async function resolvePackages(): Promise<GeneratedAdPackage[]> {
   const memoryData = getPublishData();
   if (memoryData && memoryData.length > 0) {
     console.log(`[AdPublisher] Loaded ${memoryData.length} packages from in-memory publish store`);
     return memoryData;
   }
-
-  // FALLBACK: Read from localStorage (handles page refresh)
   try {
-    const stored = getScopedItem(GENERATED_ADS_STORAGE_KEY);
-    if (!stored) {
-      console.log('[AdPublisher] No data in localStorage');
-      return [];
+    const batch = await getBatch(getScopedAccountId());
+    if (batch?.packages?.length) {
+      console.log(`[AdPublisher] Loaded ${batch.packages.length} packages from IndexedDB`);
+      return batch.packages;
     }
-
-    const sizeInMB = (stored.length / (1024 * 1024)).toFixed(2);
-    console.log(`[AdPublisher] Loading from localStorage (${sizeInMB}MB)`);
-
-    const packages = JSON.parse(stored);
-    if (!Array.isArray(packages)) return [];
-    return packages;
+    console.log('[AdPublisher] No persisted batch found');
   } catch (err) {
-    console.error('[AdPublisher] Failed to load from localStorage:', err);
-    return [];
+    console.error('[AdPublisher] Failed to load batch from IndexedDB:', err);
   }
+  return [];
 }
 
-// Extract metadata from packages
-function extractMetadata(): AdMetadata[] {
+// Extract metadata from packages (resolved + cached by the caller)
+function extractMetadata(packages: GeneratedAdPackage[]): AdMetadata[] {
   try {
-    const packages = loadPackages();
-    _cachedPackages = packages;
-
     if (packages.length === 0) return [];
 
     const items: AdMetadata[] = [];
@@ -340,7 +331,7 @@ interface AdPublishData {
 async function loadMediaDataForPublish(metadata: AdMetadata[]): Promise<AdPublishData[]> {
   return new Promise((resolve) => {
     try {
-      const packages = _cachedPackages ?? loadPackages();
+      const packages = _cachedPackages ?? [];
 
       if (!Array.isArray(packages) || packages.length === 0) {
         resolve([]);
@@ -568,31 +559,38 @@ const AdPublisher = () => {
       setAdMetadata([]);
       setIsLoading(false);
     } else {
-      try {
-        const metadata = extractMetadata();
-        setAdMetadata(metadata.slice(0, MAX_TOTAL_ADS));
+      // Async: in-memory store resolves instantly; the IndexedDB fallback (hard refresh)
+      // is awaited before we render the ad list.
+      (async () => {
+        try {
+          const packages = await resolvePackages();
+          _cachedPackages = packages; // shared with loadMediaDataForPublish
+          const metadata = extractMetadata(packages);
+          setAdMetadata(metadata.slice(0, MAX_TOTAL_ADS));
 
-        // Mixed-intent validation: warn if packages have different audience types
-        // that suggest conflicting campaign intents (e.g. mixing purchase + lead ads)
-        if (intent && _cachedPackages && _cachedPackages.length > 1) {
-          const intents = new Set<string>();
-          for (const pkg of _cachedPackages) {
-            if (pkg?.campaignIntent) {
-              intents.add(pkg.campaignIntent);
+          // Mixed-intent validation: warn if packages have different audience types
+          // that suggest conflicting campaign intents (e.g. mixing purchase + lead ads)
+          if (intent && _cachedPackages && _cachedPackages.length > 1) {
+            const intents = new Set<string>();
+            for (const pkg of _cachedPackages) {
+              if (pkg?.campaignIntent) {
+                intents.add(pkg.campaignIntent);
+              }
+            }
+            if (intents.size > 1) {
+              setMixedIntentWarning(
+                `These ad packages were generated with mixed campaign intents (${Array.from(intents).join(', ')}). Publishing them in a single campaign may cause suboptimal delivery. Consider publishing each intent separately.`
+              );
             }
           }
-          if (intents.size > 1) {
-            setMixedIntentWarning(
-              `These ad packages were generated with mixed campaign intents (${Array.from(intents).join(', ')}). Publishing them in a single campaign may cause suboptimal delivery. Consider publishing each intent separately.`
-            );
-          }
+        } catch (err) {
+          console.error('[AdPublisher] Load error:', err);
+        } finally {
+          setIsLoading(false);
         }
-      } catch (err) {
-        console.error('[AdPublisher] Load error:', err);
-      }
-      setIsLoading(false);
+      })();
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // Debounced targeting search
   useEffect(() => {
@@ -1011,8 +1009,10 @@ const AdPublisher = () => {
       const result = await publishAds(config);
       setPublishResult(result);
       if (result?.success) {
-        // Clear generated ads from localStorage after successful publish to Meta
-        removeScopedItem(GENERATED_ADS_STORAGE_KEY);
+        // Keep the batch in CreativeIQ (don't wipe it) so the user can return to review
+        // or regenerate any creative and re-publish. Mark it published so the generator
+        // shows a "Published" badge instead of an empty state.
+        markBatchPublished(getScopedAccountId());
       } else {
         setError(result?.error || 'Failed to publish');
       }
