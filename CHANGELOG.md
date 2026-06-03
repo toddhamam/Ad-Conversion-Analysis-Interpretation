@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06-03 — Publish: manual ad placements (e.g. Feed-only) now actually apply
+
+### Fixed
+- Choosing **Manual Placements** in the Ad Publisher (e.g. Facebook → Feed only) had no effect — published ad sets came back on Meta's **Advantage+ (automatic) placements**: all 21 positions across every platform. Root cause: in `createAdSet` (`src/services/metaApi.ts`) the placement fields (`publisher_platforms`, `facebook_positions`, `instagram_positions`) were attached to the **top level** of the ad set creation body, where Meta's Marketing API does not accept them. Meta silently drops unknown top-level fields and, finding no placement restrictions in the `targeting` spec, falls back to automatic placements. The fields now live **inside the `targeting` spec**, where Meta reads them — so manual placements take effect.
+- Position arrays are only sent for platforms that are actually selected (e.g. `instagram_positions` is omitted unless Instagram is a chosen platform), which Meta would otherwise reject.
+
+### Note
+- Only affects **new** publishes. Ad sets created before this fix still carry all 21 placements and must be edited in Ads Manager or re-published. The `existing_adset` publish mode is unaffected — it reuses the existing ad set's placements and never sends placement fields.
+
 ## 2026-05-31 — Persistent Core Promise library (save once, pick, reuse across batches)
 
 ### What

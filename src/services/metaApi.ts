@@ -1834,6 +1834,23 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
     targeting.excluded_custom_audiences = request.targeting.excludedCustomAudiences.map(a => ({ id: a.id }));
   }
 
+  // Placements live INSIDE the targeting spec — they are not valid top-level ad set fields.
+  // If they're omitted, Meta defaults to Advantage+ (automatic) placements, which selects every
+  // position across all platforms. Position arrays are only sent for platforms actually included,
+  // otherwise Meta rejects e.g. instagram_positions when Instagram isn't a chosen platform.
+  if (!request.placements.automatic) {
+    const platforms = request.placements.publisherPlatforms;
+    if (platforms?.length) {
+      targeting.publisher_platforms = platforms;
+      if (platforms.includes('facebook') && request.placements.facebookPositions?.length) {
+        targeting.facebook_positions = request.placements.facebookPositions;
+      }
+      if (platforms.includes('instagram') && request.placements.instagramPositions?.length) {
+        targeting.instagram_positions = request.placements.instagramPositions;
+      }
+    }
+  }
+
   // Ad sets use form-encoded body
   const body: Record<string, unknown> = {
     name: request.name,
@@ -1854,12 +1871,6 @@ export async function createAdSet(request: CreateAdSetRequest): Promise<string> 
       pixel_id: request.promotedObject.pixelId,
       custom_event_type: request.promotedObject.customEventType,
     };
-  }
-
-  if (!request.placements.automatic) {
-    if (request.placements.publisherPlatforms?.length) body.publisher_platforms = request.placements.publisherPlatforms;
-    if (request.placements.facebookPositions?.length) body.facebook_positions = request.placements.facebookPositions;
-    if (request.placements.instagramPositions?.length) body.instagram_positions = request.placements.instagramPositions;
   }
 
   const data = await metaFetch(`${adAccountId}/adsets`, {
