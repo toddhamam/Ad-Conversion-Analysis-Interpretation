@@ -8,7 +8,7 @@ import { getEmbedding, setEmbedding } from './embeddingStore';
 import { getAuthToken } from '../lib/authToken';
 import { getBusinessTypeConfig, getCampaignIntentConfig } from '../lib/businessTypeConfig';
 import { META_AD_POLICY_PROMPT, IMAGE_SAFETY_DIRECTIVE, POLICY_SANITIZE_PATTERNS } from './adPolicyGuard';
-import { isValidHook, isValidAngle, DEFAULT_GRID_ANGLES, DEFAULT_GRID_HOOKS, HOOKS, HOOK_PROMPT_MENU, type HookType, type AxisTag, type GridAngle, type FormatType } from '../lib/axisTags';
+import { isValidHook, isValidAngle, DEFAULT_GRID_ANGLES, DEFAULT_GRID_HOOKS, HOOKS, HOOK_PROMPT_MENU, HOOK_LABELS, type HookType, type AxisTag, type GridAngle, type FormatType } from '../lib/axisTags';
 
 // ─── OpenAI API Calls ───────────────────────────────────────────────────────
 // All OpenAI calls route through the backend proxy (/api/ai/*) so the API key
@@ -3237,34 +3237,101 @@ Return JSON only:
 }
 
 /**
- * Pair a reviewed image pool across the kept Angle × Hook copy cells (round-robin) and
- * build one fully axis-tagged GeneratedAdPackage per cell. Pure/synchronous — images are
- * generated and reviewed SEPARATELY (the Blitz image-review step) so the copy stays the
- * test variable while the image is held constant, or varied across a small controlled pool.
- *
- * Decoupling image count from cell count is the whole point of Blitz: generating one image
- * per cell (16 cells = 16 renders = several minutes) both buries the copy signal under image
- * noise and is slow. With a pool of N images, cell `i` receives `images[i % N]`, so N=1 means
- * every copy variant shares a single image (a clean A/B copy test) and N=cells.length restores
- * a unique image per cell. A failed/empty pool yields packages with no image + `imageError`.
+ * How a rendered image pool maps across the Angle × Hook grid — the lever that lets you hold the
+ * image constant along a chosen axis so the COPY is what's under test (and the slow part, image
+ * generation, shrinks from one-render-per-cell to a handful):
+ *   single   → 1 image shared by every ad. Purest copy/angle/hook test, and the scaling play:
+ *              reuse one proven image across every angle & hook to find the best combination.
+ *   per_angle→ one image per distinct angle, shared across that angle's hooks. Mirrors the
+ *              publisher's "one ad set per angle" split — isolates hooks within an angle.
+ *   per_hook → one image per distinct hook, shared across that hook's angles.
+ *   per_ad   → a unique image per cell (maximum variety; the old one-render-per-cell behaviour).
+ */
+export type BlitzImageStrategy = 'single' | 'per_angle' | 'per_hook' | 'per_ad';
+
+/**
+ * Resolve a strategy against the kept cells into a concrete plan: how many images to render
+ * (`slotCount`), which rendered image each cell uses (`slotForCell[i]`), and a human label per
+ * slot (`slotLabels[j]`, e.g. the angle or hook it represents) for the review UI. Pure.
+ */
+export function planBlitzImageSlots(
+  cells: GridCell[],
+  strategy: BlitzImageStrategy,
+): { slotCount: number; slotForCell: number[]; slotLabels: string[] } {
+  if (cells.length === 0) return { slotCount: 0, slotForCell: [], slotLabels: [] };
+
+  if (strategy === 'single') {
+    return { slotCount: 1, slotForCell: cells.map(() => 0), slotLabels: ['Shared across every ad'] };
+  }
+  if (strategy === 'per_ad') {
+    return {
+      slotCount: cells.length,
+      slotForCell: cells.map((_, i) => i),
+      slotLabels: cells.map(c => `${CONCEPT_ANGLES[c.angle].name} · ${HOOK_LABELS[c.hook]}`),
+    };
+  }
+
+  // per_angle / per_hook — one slot per distinct axis value, in first-seen order.
+  const keyFor = (c: GridCell): string => (strategy === 'per_angle' ? c.angle : c.hook);
+  const labelFor = (c: GridCell): string =>
+    strategy === 'per_angle' ? CONCEPT_ANGLES[c.angle].name : HOOK_LABELS[c.hook];
+
+  const slotOf = new Map<string, number>();
+  const slotLabels: string[] = [];
+  const slotForCell = cells.map(c => {
+    const k = keyFor(c);
+    let slot = slotOf.get(k);
+    if (slot === undefined) {
+      slot = slotOf.size;
+      slotOf.set(k, slot);
+      slotLabels.push(labelFor(c));
+    }
+    return slot;
+  });
+  return { slotCount: slotLabels.length, slotForCell, slotLabels };
+}
+
+/**
+ * Render count each strategy needs, given a grid's axis sizes — the count rule in one place, used
+ * by the strategy selector's preview (config + review). `planBlitzImageSlots` produces the same
+ * counts structurally when it builds the actual per-cell mapping.
+ */
+export function blitzStrategyImageCounts(
+  sizes: { angles: number; hooks: number; cells: number },
+): Record<BlitzImageStrategy, number> {
+  return {
+    single: 1,
+    per_angle: Math.max(1, sizes.angles),
+    per_hook: Math.max(1, sizes.hooks),
+    per_ad: Math.max(1, sizes.cells),
+  };
+}
+
+/**
+ * Build one fully axis-tagged GeneratedAdPackage per kept Angle × Hook cell, assigning each cell
+ * the pooled image its strategy plan points at (`images[slotForCell[i]]`). Pure/synchronous —
+ * images are generated and reviewed SEPARATELY (the Blitz image-review step) so the copy stays the
+ * test variable. The pool is SLOT-ALIGNED (one entry per rendered slot, `null` where a slot's
+ * render failed), so a failed slot maps cleanly to packages with no image + `imageError`.
  */
 export function buildGridPackages(config: {
   cells: GridCell[];
-  images: GeneratedImageResult[];
+  images: (GeneratedImageResult | null)[];   // slot-aligned pool; null = that slot's render failed
+  slotForCell: number[];   // images[slotForCell[i]] — the isolation strategy's image for cell i
   audienceType: AudienceType;
   campaignIntent?: import('../types/organization').CampaignIntent;
   format?: FormatType;
   corePromise?: string;
   imageError?: string;
 }): GeneratedAdPackage[] {
-  const { cells, images } = config;
+  const { cells, images, slotForCell } = config;
   if (cells.length === 0) return [];
 
   const generatedAt = new Date().toISOString();
   const stamp = Date.now();
 
   return cells.map((cell, i) => {
-    const img = images.length > 0 ? images[i % images.length] : null;
+    const img = images[slotForCell[i] ?? 0] ?? null;
     const pkg: GeneratedAdPackage = {
       id: `grid_${stamp}_${i}_${Math.random().toString(36).slice(2, 6)}`,
       generatedAt,
