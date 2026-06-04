@@ -11,6 +11,9 @@ interface GridReviewPanelProps {
   regeneratingCellId: string | null;
   isGenerating: boolean;
   generationProgress: string;
+  imageCount: number;          // distinct images to render (decoupled from the copy-cell count)
+  maxImages: number;           // cap = min(16, kept cells)
+  onImageCountChange: (n: number) => void;
   onToggleKeep: (id: string) => void;
   onReroll: (id: string) => void;
   onBack: () => void;
@@ -23,12 +26,18 @@ function GridReviewPanel({
   regeneratingCellId,
   isGenerating,
   generationProgress,
+  imageCount,
+  maxImages,
+  onImageCountChange,
   onToggleKeep,
   onReroll,
   onBack,
   onGenerate,
 }: GridReviewPanelProps) {
   const keptCount = keptCellIds.size;
+  const imageCountLabel = imageCount === 1
+    ? `1 image shared across all ${keptCount} variant${keptCount === 1 ? '' : 's'} — isolates copy as the test variable`
+    : `${imageCount} images spread across ${keptCount} variant${keptCount === 1 ? '' : 's'}`;
 
   return (
     <section className="config-panel grid-review-panel">
@@ -78,6 +87,33 @@ function GridReviewPanel({
           );
         })}
       </div>
+      <div className="blitz-count-row">
+        <div className="blitz-count-label">
+          <span className="blitz-count-title">How many images?</span>
+          <span className="blitz-count-hint">{imageCountLabel}</span>
+        </div>
+        <div className="blitz-count-stepper">
+          <button
+            type="button"
+            className="blitz-count-btn"
+            onClick={() => onImageCountChange(Math.max(1, imageCount - 1))}
+            disabled={isGenerating || imageCount <= 1}
+            aria-label="Fewer images"
+          >
+            −
+          </button>
+          <span className="blitz-count-value">{imageCount}</span>
+          <button
+            type="button"
+            className="blitz-count-btn"
+            onClick={() => onImageCountChange(Math.min(maxImages, imageCount + 1))}
+            disabled={isGenerating || imageCount >= maxImages}
+            aria-label="More images"
+          >
+            +
+          </button>
+        </div>
+      </div>
       <div className="grid-review-actions">
         <button
           type="button"
@@ -101,7 +137,7 @@ function GridReviewPanel({
           ) : (
             <>
               <span className="generate-icon">✨</span>
-              Generate {keptCount} Image{keptCount === 1 ? '' : 's'} → Publisher
+              Generate {imageCount} Image{imageCount === 1 ? '' : 's'} → Review
             </>
           )}
         </button>

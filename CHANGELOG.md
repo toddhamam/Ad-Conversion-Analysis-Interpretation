@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-06-04 — Blitz Testing: choose how many images to generate + review/regenerate before publish
+
+### What
+Blitz Testing generated **one image per copy cell** — a full grid (up to 24 angle×hook cells) meant 24 image renders at 2-at-a-time, several minutes of waiting, and it jumped **straight to the Publisher** with no chance to review the images. It also hurt the methodology: a different image on every cell means a winning ad's lift is confounded — was it the angle/hook/copy, or the image? Blitz now lets you **choose how many images to render (1 → min(16, kept cells))**, **review the pool and regenerate any image one-by-one** (exactly like the single-ad workflow), and only **then** publish. The image count is decoupled from the copy-cell count: the small image pool is paired across the kept copy variants (round-robin), so **1 image = one creative shared across every copy variant = a clean A/B test where the angle/hook/copy is the only variable**. The angle/hook copy generation is unchanged — it was already where we wanted it.
+
+### Added
+- **Image-count stepper in Grid Review** (`GridReviewPanel`) — pick 1 → `min(BLITZ_IMAGE_CAP=16, kept cells)`, defaulting to **1** (fastest, purest copy isolation), with an inline hint explaining the trade-off. The generate button now reads "Generate N Images → Review".
+- **`src/components/BlitzImageReviewPanel.tsx`** — a new image-review step that mirrors the existing `GridReviewPanel` presentational pattern: shows the distinct image pool, each image regenerable individually, then a "Publish N Ads → Publisher" hand-off. Surfaces partial-failure warnings.
+- New `grid-images` workflow step + `buildGridPackages()` pure helper in `openaiApi.ts`.
+
+### Changed
+- **`generateGridPackages` (async, one-image-per-cell) → `buildGridPackages` (pure).** Image *generation* (`regenerateAllImages`) is now split from package *assembly*, so the review step can sit between them. `buildGridPackages` pairs the reviewed pool across cells round-robin (`images[i % N]`) and keeps each package fully axis-tagged for attribution — so "read winners by axis" is unchanged.
+- **Credits are charged for images actually rendered, not per cell** — a 12-cell Blitz with 1 image now costs **1 credit, not 12**. Per-image reroll in the review step is **free** (mirrors the single-ad per-image regenerate).
+
+### Note
+- Publishing still creates **PAUSED** draft ads and reuses the existing per-cell package + per-package axis-tag model, so axis attribution is untouched. The pool never exceeds the kept-cell count (extra images would go unused). Build + lint are green; the new panels add zero lint issues and `openaiApi.ts` got slightly smaller (the async wrapper was deleted, not rearranged).
+
 ## 2026-06-03 — Persist CreativeIQ ad batches across publish + refresh (IndexedDB)
 
 ### What

@@ -11,7 +11,7 @@ import {
   regenerateAllImages,
   generateAdVideoWithVeo,
   generateGridCopy,
-  generateGridPackages,
+  buildGridPackages,
   CONCEPT_ANGLES,
   IMAGE_SIZE_OPTIONS,
   DEFAULT_IMAGE_SIZE,
@@ -26,6 +26,7 @@ import {
   type ConceptType,
   type ChannelAnalysisResult,
   type GeneratedAdPackage,
+  type GeneratedImageResult,
   type GridCell,
   type CopyOption,
   type ImageSize,
@@ -45,6 +46,7 @@ import { fetchAdCreatives, saveReferenceImageMetadata, type DatePreset } from '.
 import GeneratedAdCard from '../components/GeneratedAdCard';
 import CopySelectionPanel from '../components/CopySelectionPanel';
 import GridReviewPanel from '../components/GridReviewPanel';
+import BlitzImageReviewPanel from '../components/BlitzImageReviewPanel';
 import AdLibraryBrowser from '../components/AdLibraryBrowser';
 import InspirationSelector from '../components/InspirationSelector';
 import SEO from '../components/SEO';
@@ -145,6 +147,10 @@ const GRID_FORMAT_OPTIONS = (Object.keys(FORMAT_LABELS) as FormatType[]).map(id 
   description: id === 'static_screenshot' ? 'Authentic screenshot — often out-converts designed graphics' : 'Designed graphic',
 }));
 const GRID_CELL_CAP = 24;
+// Blitz renders a small, shared image pool (decoupled from the copy-cell count) so the copy stays
+// the test variable. Capped here, and never exceeds the kept-cell count (more images than copy
+// variants would go unused).
+const BLITZ_IMAGE_CAP = 16;
 
 // getCachedAnalysis is now imported from ../lib/channelAnalysisCache
 
@@ -159,7 +165,7 @@ function formatDate(isoString: string): string {
   });
 }
 
-type WorkflowStep = 'config' | 'copy-selection' | 'final-config' | 'grid-review';
+type WorkflowStep = 'config' | 'copy-selection' | 'final-config' | 'grid-review' | 'grid-images';
 type CopySource = 'generate' | 'import' | 'manual' | 'swipe';
 
 const IMPORT_DATE_OPTIONS: { id: DatePreset; label: string }[] = [
@@ -221,6 +227,14 @@ const AdGenerator = () => {
   const [keptCellIds, setKeptCellIds] = useState<Set<string>>(new Set());
   const [isGeneratingGrid, setIsGeneratingGrid] = useState(false);
   const [regeneratingCellId, setRegeneratingCellId] = useState<string | null>(null);
+  // Blitz image pool — how many distinct images to render (decoupled from the copy-cell count),
+  // the reviewed pool itself, a per-image reroll indicator, and any partial-failure warning.
+  // Default 1: a single image shared across every copy variant — fastest, and isolates copy as
+  // the test variable. The pool is paired across the kept cells (round-robin) only at publish.
+  const [blitzImageCount, setBlitzImageCount] = useState(1);
+  const [blitzImages, setBlitzImages] = useState<GeneratedImageResult[]>([]);
+  const [blitzImageError, setBlitzImageError] = useState<string | undefined>(undefined);
+  const [regeneratingBlitzIndex, setRegeneratingBlitzIndex] = useState<number | null>(null);
   const [analysisData, setAnalysisData] = useState<ChannelAnalysisResult | null>(null);
   const [analysisImportMeta, setAnalysisImportMeta] = useState<ImportMetadata | null>(null);
   const [imageSize, setImageSize] = useState<ImageSize>(DEFAULT_IMAGE_SIZE);
@@ -1120,6 +1134,8 @@ const AdGenerator = () => {
       if (cells.length === 0) { setError('The grid came back empty — please try again.'); return; }
       setGridCells(cells);
       setKeptCellIds(new Set(cells.map(c => c.id)));
+      setBlitzImages([]); // fresh copy matrix — drop any prior image pool
+      setBlitzImageError(undefined);
       setCurrentStep('grid-review');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to generate the grid. Please try again.');
@@ -1161,17 +1177,28 @@ const AdGenerator = () => {
     }
   };
 
-  const handleGenerateGridImages = async () => {
+  // Effective image-pool size: never more distinct images than copy variants, never below 1.
+  // Single source of truth — the generate handler and the stepper UI both read these.
+  const keptCellCount = keptCellIds.size;
+  const maxBlitzImages = Math.min(BLITZ_IMAGE_CAP, Math.max(1, keptCellCount));
+  const effectiveBlitzImageCount = Math.min(Math.max(1, blitzImageCount), maxBlitzImages);
+
+  // Step 1 of the Blitz image flow: render the small image pool (decoupled from the copy-cell
+  // count) and land on the review step. Credits are charged for the images actually rendered —
+  // far fewer than one-per-cell — so a 12-cell Blitz with 1 image costs 1 credit, not 12.
+  const handleGenerateBlitzImages = async () => {
     if (!gridCells) return;
     const keptCells = gridCells.filter(c => keptCellIds.has(c.id));
     if (keptCells.length === 0) { setError('Keep at least one creative to generate.'); return; }
+    const imageCount = effectiveBlitzImageCount;
+
     setIsGeneratingCreatives(true);
     setError(null);
     setGenerationProgress('ConversionIQ™ preparing the batch...');
 
     let transactionId: string | undefined;
     try {
-      const reservation = await reserveCredits('image_ad', keptCells.length);
+      const reservation = await reserveCredits('image_ad', imageCount);
       transactionId = reservation.transactionId;
     } catch (err: unknown) {
       setIsGeneratingCreatives(false);
@@ -1187,10 +1214,10 @@ const AdGenerator = () => {
 
     try {
       const activeInspirations = savedInspirations.filter(i => activeInspirationIds.includes(i.id));
-      const packages = await generateGridPackages({
-        cells: keptCells,
+      const result = await regenerateAllImages({
         audienceType,
         analysisData,
+        variationCount: imageCount,
         similarityLevel: similarityValue,
         imageSize,
         productContext: selectedProduct || undefined,
@@ -1198,17 +1225,20 @@ const AdGenerator = () => {
         businessType,
         campaignIntent: effectiveIntent,
         imageModel,
-        format: gridFormat,
-        corePromise: corePromise.trim(),
+        formatHint: gridFormat,
         onProgress: setGenerationProgress,
       });
+      if (result.images.length === 0) {
+        if (transactionId) refundCredits(transactionId);
+        setGenerationProgress('');
+        setError(result.imageError || 'Image generation failed. Please try again.');
+        return;
+      }
       if (transactionId) confirmCredits(transactionId);
-      setBatchPublishedAt(null); // new batch — not yet published
-      setGeneratedAds(prev => [...packages, ...prev]);
-      // Hand the batch to the publisher (in-memory store) and navigate — matches the single flow.
-      setPublishData([...packages], effectiveIntent);
+      setBlitzImages(result.images);
+      setBlitzImageError(result.imageError);
       setGenerationProgress('');
-      navigate('/publish');
+      setCurrentStep('grid-images');
     } catch (err: unknown) {
       if (transactionId) refundCredits(transactionId);
       setGenerationProgress('');
@@ -1216,6 +1246,59 @@ const AdGenerator = () => {
     } finally {
       setIsGeneratingCreatives(false);
     }
+  };
+
+  // Reroll a single image in the reviewed pool (free, mirrors the single-ad per-image regen).
+  const handleRegenerateBlitzImage = async (index: number) => {
+    if (regeneratingBlitzIndex !== null) return;
+    setRegeneratingBlitzIndex(index);
+    setError(null);
+    try {
+      const activeInspirations = savedInspirations.filter(i => activeInspirationIds.includes(i.id));
+      const newImage = await generateAdImage({
+        audienceType,
+        analysisData,
+        variationIndex: index,
+        totalVariations: blitzImages.length,
+        similarityLevel: similarityValue,
+        imageSize,
+        productContext: selectedProduct || undefined,
+        adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
+        businessType,
+        campaignIntent: effectiveIntent,
+        imageModel,
+        formatHint: gridFormat,
+      });
+      setBlitzImages(prev => prev.map((img, i) => (i === index ? newImage : img)));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to regenerate this image.');
+    } finally {
+      setRegeneratingBlitzIndex(null);
+    }
+  };
+
+  // Step 2: pair the reviewed pool across the kept copy cells (round-robin) into one package per
+  // cell, then hand off to the publisher — matching the single flow's publish handoff.
+  const handlePublishBlitz = () => {
+    if (!gridCells) return;
+    const keptCells = gridCells.filter(c => keptCellIds.has(c.id));
+    if (keptCells.length === 0) { setError('Keep at least one creative to publish.'); return; }
+    if (blitzImages.length === 0) { setError('Generate at least one image first.'); return; }
+
+    const packages = buildGridPackages({
+      cells: keptCells,
+      images: blitzImages,
+      audienceType,
+      campaignIntent: effectiveIntent,
+      format: gridFormat,
+      corePromise: corePromise.trim(),
+      imageError: blitzImageError,
+    });
+    setBatchPublishedAt(null); // new batch — not yet published
+    setGeneratedAds(prev => [...packages, ...prev]);
+    // Hand the batch to the publisher (in-memory store) and navigate — matches the single flow.
+    setPublishData([...packages], effectiveIntent);
+    navigate('/publish');
   };
 
   // Generate copy options
@@ -2805,7 +2888,7 @@ const AdGenerator = () => {
         </section>
       )}
 
-      {/* Grid Review — prune + reroll the Angle × Hook matrix */}
+      {/* Grid Review — prune + reroll the Angle × Hook matrix, then choose how many images */}
       {currentStep === 'grid-review' && gridCells && (
         <GridReviewPanel
           cells={gridCells}
@@ -2813,10 +2896,26 @@ const AdGenerator = () => {
           regeneratingCellId={regeneratingCellId}
           isGenerating={isGeneratingCreatives}
           generationProgress={generationProgress}
+          imageCount={effectiveBlitzImageCount}
+          maxImages={maxBlitzImages}
+          onImageCountChange={setBlitzImageCount}
           onToggleKeep={handleToggleKeepCell}
           onReroll={handleRerollGridCell}
           onBack={() => setCurrentStep('config')}
-          onGenerate={handleGenerateGridImages}
+          onGenerate={handleGenerateBlitzImages}
+        />
+      )}
+
+      {/* Blitz Image Review — review + reroll the image pool before pairing it across the copy */}
+      {currentStep === 'grid-images' && (
+        <BlitzImageReviewPanel
+          images={blitzImages}
+          adCount={keptCellCount}
+          regeneratingIndex={regeneratingBlitzIndex}
+          imageError={blitzImageError}
+          onRegenerate={handleRegenerateBlitzImage}
+          onBack={() => setCurrentStep('grid-review')}
+          onPublish={handlePublishBlitz}
         />
       )}
 
