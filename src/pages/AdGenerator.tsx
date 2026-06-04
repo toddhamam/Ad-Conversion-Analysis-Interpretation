@@ -47,6 +47,7 @@ import GeneratedAdCard from '../components/GeneratedAdCard';
 import CopySelectionPanel from '../components/CopySelectionPanel';
 import GridReviewPanel from '../components/GridReviewPanel';
 import BlitzImageReviewPanel from '../components/BlitzImageReviewPanel';
+import BlitzImageCountStepper from '../components/BlitzImageCountStepper';
 import AdLibraryBrowser from '../components/AdLibraryBrowser';
 import InspirationSelector from '../components/InspirationSelector';
 import SEO from '../components/SEO';
@@ -1177,10 +1178,12 @@ const AdGenerator = () => {
     }
   };
 
-  // Effective image-pool size: never more distinct images than copy variants, never below 1.
-  // Single source of truth — the generate handler and the stepper UI both read these.
+  // Effective image-pool size: capped at the current copy-cell count — the planned grid on the
+  // config step (before any copy exists), the kept set once we're reviewing. Never below 1.
+  // Single source of truth for both steppers (config + review) and the generate handler.
   const keptCellCount = keptCellIds.size;
-  const maxBlitzImages = Math.min(BLITZ_IMAGE_CAP, Math.max(1, keptCellCount));
+  const blitzCellBasis = currentStep === 'config' ? gridCellCount : keptCellCount;
+  const maxBlitzImages = Math.min(BLITZ_IMAGE_CAP, Math.max(1, blitzCellBasis));
   const effectiveBlitzImageCount = Math.min(Math.max(1, blitzImageCount), maxBlitzImages);
 
   // Step 1 of the Blitz image flow: render the small image pool (decoupled from the copy-cell
@@ -2574,6 +2577,17 @@ const AdGenerator = () => {
                 {gridAngles.length} angles × {gridHooks.length} hooks = <strong>{gridAngles.length * gridHooks.length}</strong> creatives
                 {gridOverCap && <span className="grid-cap-warning"> — reduce to {GRID_CELL_CAP} or fewer to generate</span>}
               </div>
+
+              <BlitzImageCountStepper
+                value={effectiveBlitzImageCount}
+                max={maxBlitzImages}
+                hint={
+                  effectiveBlitzImageCount === 1
+                    ? `1 image, shared across all ${gridCellCount} creatives — keeps angle/hook/copy the only variable`
+                    : `${effectiveBlitzImageCount} images, spread across your ${gridCellCount} creatives`
+                }
+                onChange={setBlitzImageCount}
+              />
             </>
           )}
 

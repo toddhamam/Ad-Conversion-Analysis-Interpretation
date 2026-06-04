@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { CONCEPT_ANGLES, type GridCell } from '../services/openaiApi';
 import { HOOK_LABELS } from '../lib/axisTags';
+import BlitzImageCountStepper from './BlitzImageCountStepper';
 
 // Grid-review step: prune + per-cell reroll the Angle × Hook copy matrix before
 // spending image credits. Presentational — all state/handlers live in AdGenerator.
@@ -87,33 +88,13 @@ function GridReviewPanel({
           );
         })}
       </div>
-      <div className="blitz-count-row">
-        <div className="blitz-count-label">
-          <span className="blitz-count-title">How many images?</span>
-          <span className="blitz-count-hint">{imageCountLabel}</span>
-        </div>
-        <div className="blitz-count-stepper">
-          <button
-            type="button"
-            className="blitz-count-btn"
-            onClick={() => onImageCountChange(Math.max(1, imageCount - 1))}
-            disabled={isGenerating || imageCount <= 1}
-            aria-label="Fewer images"
-          >
-            −
-          </button>
-          <span className="blitz-count-value">{imageCount}</span>
-          <button
-            type="button"
-            className="blitz-count-btn"
-            onClick={() => onImageCountChange(Math.min(maxImages, imageCount + 1))}
-            disabled={isGenerating || imageCount >= maxImages}
-            aria-label="More images"
-          >
-            +
-          </button>
-        </div>
-      </div>
+      <BlitzImageCountStepper
+        value={imageCount}
+        max={maxImages}
+        hint={imageCountLabel}
+        disabled={isGenerating}
+        onChange={onImageCountChange}
+      />
       <div className="grid-review-actions">
         <button
           type="button"
