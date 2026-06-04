@@ -1,7 +1,7 @@
 import { memo } from 'react';
-import { CONCEPT_ANGLES, type GridCell } from '../services/openaiApi';
+import { CONCEPT_ANGLES, type GridCell, type BlitzImageStrategy } from '../services/openaiApi';
 import { HOOK_LABELS } from '../lib/axisTags';
-import BlitzImageCountStepper from './BlitzImageCountStepper';
+import BlitzImageStrategySelector from './BlitzImageStrategySelector';
 
 // Grid-review step: prune + per-cell reroll the Angle × Hook copy matrix before
 // spending image credits. Presentational — all state/handlers live in AdGenerator.
@@ -12,9 +12,9 @@ interface GridReviewPanelProps {
   regeneratingCellId: string | null;
   isGenerating: boolean;
   generationProgress: string;
-  imageCount: number;          // distinct images to render (decoupled from the copy-cell count)
-  maxImages: number;           // cap = min(16, kept cells)
-  onImageCountChange: (n: number) => void;
+  imageStrategy: BlitzImageStrategy;                    // how the image pool maps across the grid
+  strategyCounts: Record<BlitzImageStrategy, number>;  // live render count per strategy
+  onStrategyChange: (s: BlitzImageStrategy) => void;
   onToggleKeep: (id: string) => void;
   onReroll: (id: string) => void;
   onBack: () => void;
@@ -27,18 +27,16 @@ function GridReviewPanel({
   regeneratingCellId,
   isGenerating,
   generationProgress,
-  imageCount,
-  maxImages,
-  onImageCountChange,
+  imageStrategy,
+  strategyCounts,
+  onStrategyChange,
   onToggleKeep,
   onReroll,
   onBack,
   onGenerate,
 }: GridReviewPanelProps) {
   const keptCount = keptCellIds.size;
-  const imageCountLabel = imageCount === 1
-    ? `1 image shared across all ${keptCount} variant${keptCount === 1 ? '' : 's'} — isolates copy as the test variable`
-    : `${imageCount} images spread across ${keptCount} variant${keptCount === 1 ? '' : 's'}`;
+  const renderCount = strategyCounts[imageStrategy];
 
   return (
     <section className="config-panel grid-review-panel">
@@ -88,12 +86,11 @@ function GridReviewPanel({
           );
         })}
       </div>
-      <BlitzImageCountStepper
-        value={imageCount}
-        max={maxImages}
-        hint={imageCountLabel}
+      <BlitzImageStrategySelector
+        value={imageStrategy}
+        counts={strategyCounts}
         disabled={isGenerating}
-        onChange={onImageCountChange}
+        onChange={onStrategyChange}
       />
       <div className="grid-review-actions">
         <button
@@ -118,7 +115,7 @@ function GridReviewPanel({
           ) : (
             <>
               <span className="generate-icon">✨</span>
-              Generate {imageCount} Image{imageCount === 1 ? '' : 's'} → Review
+              Generate {renderCount} Image{renderCount === 1 ? '' : 's'} → Review
             </>
           )}
         </button>

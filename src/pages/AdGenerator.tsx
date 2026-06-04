@@ -12,6 +12,7 @@ import {
   generateAdVideoWithVeo,
   generateGridCopy,
   buildGridPackages,
+  planBlitzImageSlots,
   CONCEPT_ANGLES,
   IMAGE_SIZE_OPTIONS,
   DEFAULT_IMAGE_SIZE,
@@ -27,6 +28,7 @@ import {
   type ChannelAnalysisResult,
   type GeneratedAdPackage,
   type GeneratedImageResult,
+  type BlitzImageStrategy,
   type GridCell,
   type CopyOption,
   type ImageSize,
@@ -47,7 +49,7 @@ import GeneratedAdCard from '../components/GeneratedAdCard';
 import CopySelectionPanel from '../components/CopySelectionPanel';
 import GridReviewPanel from '../components/GridReviewPanel';
 import BlitzImageReviewPanel from '../components/BlitzImageReviewPanel';
-import BlitzImageCountStepper from '../components/BlitzImageCountStepper';
+import BlitzImageStrategySelector from '../components/BlitzImageStrategySelector';
 import AdLibraryBrowser from '../components/AdLibraryBrowser';
 import InspirationSelector from '../components/InspirationSelector';
 import SEO from '../components/SEO';
@@ -148,10 +150,6 @@ const GRID_FORMAT_OPTIONS = (Object.keys(FORMAT_LABELS) as FormatType[]).map(id 
   description: id === 'static_screenshot' ? 'Authentic screenshot — often out-converts designed graphics' : 'Designed graphic',
 }));
 const GRID_CELL_CAP = 24;
-// Blitz renders a small, shared image pool (decoupled from the copy-cell count) so the copy stays
-// the test variable. Capped here, and never exceeds the kept-cell count (more images than copy
-// variants would go unused).
-const BLITZ_IMAGE_CAP = 16;
 
 // getCachedAnalysis is now imported from ../lib/channelAnalysisCache
 
@@ -228,12 +226,14 @@ const AdGenerator = () => {
   const [keptCellIds, setKeptCellIds] = useState<Set<string>>(new Set());
   const [isGeneratingGrid, setIsGeneratingGrid] = useState(false);
   const [regeneratingCellId, setRegeneratingCellId] = useState<string | null>(null);
-  // Blitz image pool — how many distinct images to render (decoupled from the copy-cell count),
-  // the reviewed pool itself, a per-image reroll indicator, and any partial-failure warning.
-  // Default 1: a single image shared across every copy variant — fastest, and isolates copy as
-  // the test variable. The pool is paired across the kept cells (round-robin) only at publish.
-  const [blitzImageCount, setBlitzImageCount] = useState(1);
+  // Blitz image pool — the strategy that maps a small image pool across the Angle × Hook grid
+  // (how images are isolated for testing), the reviewed pool itself, the plan that produced it
+  // (per-cell image slot + slot labels, kept so review + publish stay consistent), a per-image
+  // reroll indicator, and any partial-failure warning. Default 'single': one image shared across
+  // every ad — fastest, and isolates angle/hook/copy as the variable under test.
+  const [blitzImageStrategy, setBlitzImageStrategy] = useState<BlitzImageStrategy>('single');
   const [blitzImages, setBlitzImages] = useState<GeneratedImageResult[]>([]);
+  const [blitzPlan, setBlitzPlan] = useState<{ slotForCell: number[]; slotLabels: string[] } | null>(null);
   const [blitzImageError, setBlitzImageError] = useState<string | undefined>(undefined);
   const [regeneratingBlitzIndex, setRegeneratingBlitzIndex] = useState<number | null>(null);
   const [analysisData, setAnalysisData] = useState<ChannelAnalysisResult | null>(null);
@@ -1136,6 +1136,7 @@ const AdGenerator = () => {
       setGridCells(cells);
       setKeptCellIds(new Set(cells.map(c => c.id)));
       setBlitzImages([]); // fresh copy matrix — drop any prior image pool
+      setBlitzPlan(null);
       setBlitzImageError(undefined);
       setCurrentStep('grid-review');
     } catch (err: unknown) {
@@ -1178,13 +1179,24 @@ const AdGenerator = () => {
     }
   };
 
-  // Effective image-pool size: capped at the current copy-cell count — the planned grid on the
-  // config step (before any copy exists), the kept set once we're reviewing. Never below 1.
-  // Single source of truth for both steppers (config + review) and the generate handler.
+  // Live render-count per image strategy, for the selector's preview. Before copy exists (config
+  // step) it's derived from the planned axes; afterward from the distinct angles/hooks kept. The
+  // generate handler computes the authoritative plan from the real kept cells via planBlitzImageSlots.
   const keptCellCount = keptCellIds.size;
-  const blitzCellBasis = currentStep === 'config' ? gridCellCount : keptCellCount;
-  const maxBlitzImages = Math.min(BLITZ_IMAGE_CAP, Math.max(1, blitzCellBasis));
-  const effectiveBlitzImageCount = Math.min(Math.max(1, blitzImageCount), maxBlitzImages);
+  const blitzStrategyCounts = useMemo<Record<BlitzImageStrategy, number>>(() => {
+    if (currentStep === 'config') {
+      const a = Math.max(1, gridAngles.length);
+      const h = Math.max(1, gridHooks.length);
+      return { single: 1, per_angle: a, per_hook: h, per_ad: Math.min(a * h, GRID_CELL_CAP) };
+    }
+    const kept = gridCells ? gridCells.filter(c => keptCellIds.has(c.id)) : [];
+    return {
+      single: 1,
+      per_angle: Math.max(1, new Set(kept.map(c => c.angle)).size),
+      per_hook: Math.max(1, new Set(kept.map(c => c.hook)).size),
+      per_ad: Math.max(1, kept.length),
+    };
+  }, [currentStep, gridAngles.length, gridHooks.length, gridCells, keptCellIds]);
 
   // Step 1 of the Blitz image flow: render the small image pool (decoupled from the copy-cell
   // count) and land on the review step. Credits are charged for the images actually rendered —
@@ -1193,7 +1205,9 @@ const AdGenerator = () => {
     if (!gridCells) return;
     const keptCells = gridCells.filter(c => keptCellIds.has(c.id));
     if (keptCells.length === 0) { setError('Keep at least one creative to generate.'); return; }
-    const imageCount = effectiveBlitzImageCount;
+    // Resolve the strategy against the real kept cells: how many images, and which cell uses which.
+    const plan = planBlitzImageSlots(keptCells, blitzImageStrategy);
+    const imageCount = plan.slotCount;
 
     setIsGeneratingCreatives(true);
     setError(null);
@@ -1239,6 +1253,7 @@ const AdGenerator = () => {
       }
       if (transactionId) confirmCredits(transactionId);
       setBlitzImages(result.images);
+      setBlitzPlan({ slotForCell: plan.slotForCell, slotLabels: plan.slotLabels });
       setBlitzImageError(result.imageError);
       setGenerationProgress('');
       setCurrentStep('grid-images');
@@ -1288,9 +1303,13 @@ const AdGenerator = () => {
     if (keptCells.length === 0) { setError('Keep at least one creative to publish.'); return; }
     if (blitzImages.length === 0) { setError('Generate at least one image first.'); return; }
 
+    // Reuse the plan that produced the pool; recompute as a fallback (kept cells are unchanged
+    // between generation and publish, so both yield the same per-cell image assignment).
+    const slotForCell = blitzPlan?.slotForCell ?? planBlitzImageSlots(keptCells, blitzImageStrategy).slotForCell;
     const packages = buildGridPackages({
       cells: keptCells,
       images: blitzImages,
+      slotForCell,
       audienceType,
       campaignIntent: effectiveIntent,
       format: gridFormat,
@@ -2578,15 +2597,10 @@ const AdGenerator = () => {
                 {gridOverCap && <span className="grid-cap-warning"> — reduce to {GRID_CELL_CAP} or fewer to generate</span>}
               </div>
 
-              <BlitzImageCountStepper
-                value={effectiveBlitzImageCount}
-                max={maxBlitzImages}
-                hint={
-                  effectiveBlitzImageCount === 1
-                    ? `1 image, shared across all ${gridCellCount} creatives — keeps angle/hook/copy the only variable`
-                    : `${effectiveBlitzImageCount} images, spread across your ${gridCellCount} creatives`
-                }
-                onChange={setBlitzImageCount}
+              <BlitzImageStrategySelector
+                value={blitzImageStrategy}
+                counts={blitzStrategyCounts}
+                onChange={setBlitzImageStrategy}
               />
             </>
           )}
@@ -2910,9 +2924,9 @@ const AdGenerator = () => {
           regeneratingCellId={regeneratingCellId}
           isGenerating={isGeneratingCreatives}
           generationProgress={generationProgress}
-          imageCount={effectiveBlitzImageCount}
-          maxImages={maxBlitzImages}
-          onImageCountChange={setBlitzImageCount}
+          imageStrategy={blitzImageStrategy}
+          strategyCounts={blitzStrategyCounts}
+          onStrategyChange={setBlitzImageStrategy}
           onToggleKeep={handleToggleKeepCell}
           onReroll={handleRerollGridCell}
           onBack={() => setCurrentStep('config')}
@@ -2924,6 +2938,7 @@ const AdGenerator = () => {
       {currentStep === 'grid-images' && (
         <BlitzImageReviewPanel
           images={blitzImages}
+          slotLabels={blitzPlan?.slotLabels ?? []}
           adCount={keptCellCount}
           regeneratingIndex={regeneratingBlitzIndex}
           imageError={blitzImageError}

@@ -9,6 +9,7 @@ import type { GeneratedImageResult } from '../services/openaiApi';
 // AdGenerator.css (global stylesheet).
 interface BlitzImageReviewPanelProps {
   images: GeneratedImageResult[];
+  slotLabels: string[];       // what each pool image represents (e.g. an angle/hook), per strategy
   adCount: number;            // how many ads this becomes (one per kept copy cell)
   regeneratingIndex: number | null;
   imageError?: string;
@@ -19,6 +20,7 @@ interface BlitzImageReviewPanelProps {
 
 function BlitzImageReviewPanel({
   images,
+  slotLabels,
   adCount,
   regeneratingIndex,
   imageError,
@@ -59,8 +61,8 @@ function BlitzImageReviewPanel({
                     <span>Rerolling...</span>
                   </div>
                 )}
-                <img src={image.imageUrl} alt={`Blitz image ${index + 1}`} loading="lazy" />
-                <span className="blitz-img-index">Image {index + 1}</span>
+                <img src={image.imageUrl} alt={slotLabels[index] || `Blitz image ${index + 1}`} loading="lazy" />
+                <span className="blitz-img-index">{slotLabels[index] || `Image ${index + 1}`}</span>
               </div>
               <button
                 type="button"
