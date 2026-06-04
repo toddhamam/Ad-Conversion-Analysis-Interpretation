@@ -3237,51 +3237,36 @@ Return JSON only:
 }
 
 /**
- * Generate one image-ad GeneratedAdPackage per grid cell (the pruned set). Reuses the
- * shared 2-wide image loop + single reference precompute via regenerateAllImages, then
- * maps results back to cells by index (indexedResults) so a failed slot never shifts an
- * image onto the wrong axis tag. Each package is fully axis-tagged for attribution.
+ * Pair a reviewed image pool across the kept Angle × Hook copy cells (round-robin) and
+ * build one fully axis-tagged GeneratedAdPackage per cell. Pure/synchronous — images are
+ * generated and reviewed SEPARATELY (the Blitz image-review step) so the copy stays the
+ * test variable while the image is held constant, or varied across a small controlled pool.
+ *
+ * Decoupling image count from cell count is the whole point of Blitz: generating one image
+ * per cell (16 cells = 16 renders = several minutes) both buries the copy signal under image
+ * noise and is slow. With a pool of N images, cell `i` receives `images[i % N]`, so N=1 means
+ * every copy variant shares a single image (a clean A/B copy test) and N=cells.length restores
+ * a unique image per cell. A failed/empty pool yields packages with no image + `imageError`.
  */
-export async function generateGridPackages(config: {
+export function buildGridPackages(config: {
   cells: GridCell[];
+  images: GeneratedImageResult[];
   audienceType: AudienceType;
-  analysisData: ChannelAnalysisResult | null;
-  similarityLevel?: number;
-  imageSize?: ImageSize;
-  productContext?: ProductContext;
-  adLibraryInspirations?: import('../types').AdLibraryInspiration[];
-  businessType?: import('../types/organization').BusinessType;
   campaignIntent?: import('../types/organization').CampaignIntent;
-  imageModel?: ImageModel;
   format?: FormatType;
   corePromise?: string;
-  onProgress?: (message: string) => void;
-}): Promise<GeneratedAdPackage[]> {
-  const { cells } = config;
+  imageError?: string;
+}): GeneratedAdPackage[] {
+  const { cells, images } = config;
   if (cells.length === 0) return [];
 
-  const imageResult = await regenerateAllImages({
-    audienceType: config.audienceType,
-    analysisData: config.analysisData,
-    variationCount: cells.length,
-    similarityLevel: config.similarityLevel,
-    imageSize: config.imageSize,
-    productContext: config.productContext,
-    adLibraryInspirations: config.adLibraryInspirations,
-    businessType: config.businessType,
-    campaignIntent: config.campaignIntent,
-    imageModel: config.imageModel,
-    formatHint: config.format,
-    onProgress: config.onProgress,
-  });
-
-  const indexed = imageResult.indexedResults;
   const generatedAt = new Date().toISOString();
+  const stamp = Date.now();
 
   return cells.map((cell, i) => {
-    const img = indexed[i] ?? null;
+    const img = images.length > 0 ? images[i % images.length] : null;
     const pkg: GeneratedAdPackage = {
-      id: `grid_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`,
+      id: `grid_${stamp}_${i}_${Math.random().toString(36).slice(2, 6)}`,
       generatedAt,
       adType: 'image',
       audienceType: config.audienceType,
@@ -3297,7 +3282,7 @@ export async function generateGridPackages(config: {
         rationale: cell.rationale,
       },
       whyItWorks: cell.rationale || `${CONCEPT_ANGLES[cell.angle].name} angle with a ${cell.hook} hook.`,
-      imageError: img ? undefined : imageResult.imageError,
+      imageError: img ? undefined : config.imageError,
       campaignIntent: config.campaignIntent,
     };
     return pkg;
