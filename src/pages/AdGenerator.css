@@ -2180,6 +2180,19 @@
   width: 100%;
   height: auto;
 }
+.blitz-img-failed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 180px;
+  padding: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: #92400e;
+  background: #fffbeb;
+}
 .blitz-img-index {
   position: absolute;
   top: 8px;

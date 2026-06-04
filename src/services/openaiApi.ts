@@ -3292,14 +3292,31 @@ export function planBlitzImageSlots(
 }
 
 /**
+ * Render count each strategy needs, given a grid's axis sizes — the count rule in one place, used
+ * by the strategy selector's preview (config + review). `planBlitzImageSlots` produces the same
+ * counts structurally when it builds the actual per-cell mapping.
+ */
+export function blitzStrategyImageCounts(
+  sizes: { angles: number; hooks: number; cells: number },
+): Record<BlitzImageStrategy, number> {
+  return {
+    single: 1,
+    per_angle: Math.max(1, sizes.angles),
+    per_hook: Math.max(1, sizes.hooks),
+    per_ad: Math.max(1, sizes.cells),
+  };
+}
+
+/**
  * Build one fully axis-tagged GeneratedAdPackage per kept Angle × Hook cell, assigning each cell
  * the pooled image its strategy plan points at (`images[slotForCell[i]]`). Pure/synchronous —
  * images are generated and reviewed SEPARATELY (the Blitz image-review step) so the copy stays the
- * test variable. A failed/empty pool yields packages with no image + `imageError`.
+ * test variable. The pool is SLOT-ALIGNED (one entry per rendered slot, `null` where a slot's
+ * render failed), so a failed slot maps cleanly to packages with no image + `imageError`.
  */
 export function buildGridPackages(config: {
   cells: GridCell[];
-  images: GeneratedImageResult[];
+  images: (GeneratedImageResult | null)[];   // slot-aligned pool; null = that slot's render failed
   slotForCell: number[];   // images[slotForCell[i]] — the isolation strategy's image for cell i
   audienceType: AudienceType;
   campaignIntent?: import('../types/organization').CampaignIntent;
@@ -3314,9 +3331,7 @@ export function buildGridPackages(config: {
   const stamp = Date.now();
 
   return cells.map((cell, i) => {
-    // `% images.length` is defensive: a correct plan never overruns the pool, but if a partial
-    // render shrank it, wrap rather than read undefined.
-    const img = images.length > 0 ? images[(slotForCell[i] ?? 0) % images.length] : null;
+    const img = images[slotForCell[i] ?? 0] ?? null;
     const pkg: GeneratedAdPackage = {
       id: `grid_${stamp}_${i}_${Math.random().toString(36).slice(2, 6)}`,
       generatedAt,

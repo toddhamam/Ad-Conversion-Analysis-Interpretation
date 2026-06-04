@@ -20,6 +20,12 @@ You then **review the rendered pool and regenerate any image one-by-one** (like 
 - **`generateGridPackages` (async, one-image-per-cell) → `buildGridPackages` (pure).** Image *generation* (`regenerateAllImages`) is split from package *assembly* so the review step sits between them; each package stays fully axis-tagged, so "read winners by axis" attribution is unchanged.
 - **Credits are charged for images actually rendered, not per cell** — One image across a 12-cell Blitz costs **1 credit, not 12**. Per-image reroll in the review step is **free** (mirrors the single-ad per-image regenerate).
 
+### Fixed
+- **Partial render failures no longer misassign images.** The rendered pool is now **slot-aligned** (one entry per image slot, `null` where a render failed) instead of compacted, so if one image in a multi-image strategy fails, the survivors stay mapped to the correct angle/hook (previously they shifted onto the wrong axis and were mislabelled). Failed slots show a "regenerate" placeholder and block publish until fixed.
+
+### Internal
+- The per-cell image plan is **derived** from `(keptCells, strategy)` via `planBlitzImageSlots`, not stored in state (removed a state field + its reset/set/fallback). `keptCells` is a single memoized source (was filtered in three places), and the strategy→count rule lives once in `blitzStrategyImageCounts`.
+
 ### Note
 - Publishing still creates **PAUSED** draft ads and reuses the existing per-cell package + per-package axis-tag model. The image strategy pairs naturally with the publisher's `adSetSplit: by_angle` (one ad set per angle): **One per angle** gives each ad set its own held-constant image. Build + lint green; new components add zero lint issues.
 
