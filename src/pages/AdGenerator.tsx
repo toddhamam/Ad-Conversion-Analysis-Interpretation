@@ -51,6 +51,7 @@ import CopySelectionPanel from '../components/CopySelectionPanel';
 import GridReviewPanel from '../components/GridReviewPanel';
 import BlitzImageReviewPanel from '../components/BlitzImageReviewPanel';
 import BlitzImageStrategySelector from '../components/BlitzImageStrategySelector';
+import ImageModelSelector from '../components/ImageModelSelector';
 import AdLibraryBrowser from '../components/AdLibraryBrowser';
 import InspirationSelector from '../components/InspirationSelector';
 import SEO from '../components/SEO';
@@ -2613,6 +2614,7 @@ const AdGenerator = () => {
                 counts={blitzStrategyCounts}
                 onChange={setBlitzImageStrategy}
               />
+              <ImageModelSelector value={imageModel} onChange={handleImageModelChange} />
             </>
           )}
 
@@ -2938,6 +2940,8 @@ const AdGenerator = () => {
           imageStrategy={blitzImageStrategy}
           strategyCounts={blitzStrategyCounts}
           onStrategyChange={setBlitzImageStrategy}
+          imageModel={imageModel}
+          onImageModelChange={handleImageModelChange}
           onToggleKeep={handleToggleKeepCell}
           onReroll={handleRerollGridCell}
           onBack={() => setCurrentStep('config')}
@@ -3474,32 +3478,7 @@ const AdGenerator = () => {
 
           {/* Image Model Selection - shown for image ads only (not text or video) */}
           {adType === 'image' && (
-            <div className="config-section">
-              <label className="config-label">Image Generation Model</label>
-              <p className="config-hint">Choose which AI model generates the creatives. Try both to compare quality.</p>
-              <div className="image-size-options">
-                <button
-                  type="button"
-                  className={`image-size-btn ${imageModel === 'gemini' ? 'active' : ''}`}
-                  onClick={() => handleImageModelChange('gemini')}
-                >
-                  <span className="image-size-icon">🧠</span>
-                  <span className="image-size-name">Gemini 3 Pro</span>
-                  <span className="image-size-dimensions">Default</span>
-                  <span className="image-size-desc">Google's flagship — strong with reference images</span>
-                </button>
-                <button
-                  type="button"
-                  className={`image-size-btn ${imageModel === 'openai' ? 'active' : ''}`}
-                  onClick={() => handleImageModelChange('openai')}
-                >
-                  <span className="image-size-icon">✨</span>
-                  <span className="image-size-name">GPT Image 2</span>
-                  <span className="image-size-dimensions">New</span>
-                  <span className="image-size-desc">OpenAI's flagship — native reasoning, 99% text accuracy</span>
-                </button>
-              </div>
-            </div>
+            <ImageModelSelector value={imageModel} onChange={handleImageModelChange} />
           )}
 
           {/* Image Size Selection - shown for image and text ads */}
