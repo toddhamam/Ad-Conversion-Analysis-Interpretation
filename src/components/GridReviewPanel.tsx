@@ -1,7 +1,8 @@
 import { memo } from 'react';
-import { CONCEPT_ANGLES, type GridCell, type BlitzImageStrategy } from '../services/openaiApi';
+import { CONCEPT_ANGLES, type GridCell, type BlitzImageStrategy, type ImageModel } from '../services/openaiApi';
 import { HOOK_LABELS } from '../lib/axisTags';
 import BlitzImageStrategySelector from './BlitzImageStrategySelector';
+import ImageModelSelector from './ImageModelSelector';
 
 // Grid-review step: prune + per-cell reroll the Angle × Hook copy matrix before
 // spending image credits. Presentational — all state/handlers live in AdGenerator.
@@ -15,6 +16,8 @@ interface GridReviewPanelProps {
   imageStrategy: BlitzImageStrategy;                    // how the image pool maps across the grid
   strategyCounts: Record<BlitzImageStrategy, number>;  // live render count per strategy
   onStrategyChange: (s: BlitzImageStrategy) => void;
+  imageModel: ImageModel;                               // which engine renders the images
+  onImageModelChange: (m: ImageModel) => void;
   onToggleKeep: (id: string) => void;
   onReroll: (id: string) => void;
   onBack: () => void;
@@ -30,6 +33,8 @@ function GridReviewPanel({
   imageStrategy,
   strategyCounts,
   onStrategyChange,
+  imageModel,
+  onImageModelChange,
   onToggleKeep,
   onReroll,
   onBack,
@@ -86,6 +91,11 @@ function GridReviewPanel({
           );
         })}
       </div>
+      <ImageModelSelector
+        value={imageModel}
+        disabled={isGenerating}
+        onChange={onImageModelChange}
+      />
       <BlitzImageStrategySelector
         value={imageStrategy}
         counts={strategyCounts}

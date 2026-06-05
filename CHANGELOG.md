@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-06-05 — CreativeIQ images: model picker in Blitz + automatic Gemini↔OpenAI fallback
+
+### What
+Two image-generation changes for CreativeIQ™, plus a cleanup the second one made possible.
+
+**1. Image-model picker now appears in Blitz Testing.** The Gemini 3 Pro (Nano Banana Pro) vs OpenAI GPT Image 2 toggle previously lived **only** on the single-ad Step 3, so the Blitz Testing flow had no way to choose an engine — it silently reused whatever was last selected. The picker now also renders on the **Blitz config step** (beside the image-strategy selector) and on **Grid Review** (right above the "Generate N Images → Review" button), all bound to the same per-account selection.
+
+**2. Automatic cross-provider fallback.** If the selected engine fails for an infra/account reason — billing hard limit, quota, timeout, 5xx, out-of-memory, or an empty/garbled response — image generation now **falls over to the other provider automatically** (Gemini ↔ OpenAI) instead of surfacing an error. This was prompted by an OpenAI `billing_hard_limit_reached` 400 that hard-failed an entire batch even though Gemini was configured and working. Safety/policy blocks are the one exception: they re-throw immediately, since the other engine would refuse the same prompt. Fallback is **per-image**, so a batch can legitimately come back mixed-engine when one variation trips a transient failure.
+
+**3. DALL·E 3 removed.** With the two-engine fallback in place, the legacy DALL·E path was fully unreachable — it shares OpenAI's account/billing with GPT Image, so it could never rescue an OpenAI failure anyway. Deleting it turned the whole feature into a net code reduction.
+
+### Added
+- **`src/components/ImageModelSelector.tsx`** — shared, presentational Gemini 3 Pro / GPT Image 2 picker (mirrors `BlitzImageStrategySelector`). Used in **three** places — single-ad Step 3, Blitz config step, and Grid Review — all bound to the same `imageModel` state (persisted as `ci_image_model`).
+
+### Changed
+- **`generateAdImage` (`openaiApi.ts`) is now a cross-provider dispatcher.** A declarative `runners` table + ordered attempt list tries the selected engine, then the other, catching infra/account failures and falling over; `SafetyBlockError` fails fast. Each provider still owns its own intra-provider model ladder (`gemini-3-pro` → `3.1-flash`; `gpt-image-2` → `gpt-image-1`).
+- **`GridReviewPanel`** takes `imageModel` + `onImageModelChange` and renders the picker above the image-strategy cards.
+- **`AdGenerator`** threads the picker into the Blitz config step and Grid Review, and the single-ad Step 3 now reuses the shared component instead of ~27 lines of inline markup.
+
+### Removed
+- **`generateAdImageWithDallE` (~108 lines), the `DALLE_MODEL` constant, the `dalleSize` size-config field (+3 entries), and the now-dead `USE_GEMINI_FOR_IMAGES` flag** — all vestigial once cross-provider fallback landed. Zero DALL·E references remain in `src/`.
+
+### Internal
+- The Blitz generators already passed `imageModel` through to generation; only the picker UI was missing, so wiring it in was purely additive. Because the three engine functions are private to the dispatcher, the fallback lives in exactly one place yet covers every flow (single-ad generate/reroll, Blitz batch/reroll).
+- Net diff: **+51 / −155** across the three changed files (plus the 47-line new component) — the feature ships as a net deletion of ~100 lines. Build green (`tsc -b`); no new lint issues (2 pre-existing errors in `openaiApi.ts` untouched).
+
 ## 2026-06-05 — CreativeIQ copy: per-account Brand Voice profile + stop forcing a number into every ad
 
 ### What

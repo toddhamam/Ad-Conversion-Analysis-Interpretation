@@ -147,7 +147,6 @@ const FALLBACK_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
 // general model here). Gemini 3.5 Flash (GA, Google I/O 2026): natively multimodal, a major quality
 // jump over 2.5 Flash for reading creative, and the flash tier keeps the per-generation step fast.
 const TEXT_ANALYSIS_MODEL = 'gemini-3.5-flash';
-const USE_GEMINI_FOR_IMAGES = true; // Switch to use Gemini instead of DALL-E
 
 // OpenAI image generation models — gpt-image-2 is the new flagship (Apr 21, 2026)
 // with native reasoning, 2K resolution, and multi-image consistency.
@@ -163,7 +162,6 @@ export const DEFAULT_IMAGE_MODEL_PROVIDER: ImageModel = 'gemini';
 // Only 'veo-3.1-generate-preview' is documented in the official Gemini API docs.
 const VEO_MODEL = 'veo-3.1-generate-preview';
 const USE_VEO_FOR_VIDEO = true; // Use Veo instead of storyboard-only
-const DALLE_MODEL = 'dall-e-3'; // DALL-E fallback for image generation
 
 // Non-retryable error for safety/policy blocks — should not fall through to fallback models
 class SafetyBlockError extends Error {
@@ -236,8 +234,7 @@ export interface ImageSizeConfig {
   name: string;
   description: string;
   dimensions: string;
-  dalleSize: '1024x1024' | '1792x1024' | '1024x1792';
-  // gpt-image-1 / gpt-image-2 supported sizes — different from DALL-E 3
+  // gpt-image-1 / gpt-image-2 supported sizes
   gptImageSize: '1024x1024' | '1536x1024' | '1024x1536';
   icon: string;
 }
@@ -248,7 +245,6 @@ export const IMAGE_SIZE_OPTIONS: ImageSizeConfig[] = [
     name: 'Square',
     description: 'Feed ads, Instagram posts',
     dimensions: '1080×1080',
-    dalleSize: '1024x1024',
     gptImageSize: '1024x1024',
     icon: '⬜',
   },
@@ -257,7 +253,6 @@ export const IMAGE_SIZE_OPTIONS: ImageSizeConfig[] = [
     name: 'Landscape',
     description: 'Link ads, Facebook feed',
     dimensions: '1920×1080',
-    dalleSize: '1792x1024',
     gptImageSize: '1536x1024',
     icon: '🖼️',
   },
@@ -266,7 +261,6 @@ export const IMAGE_SIZE_OPTIONS: ImageSizeConfig[] = [
     name: 'Portrait/Story',
     description: 'Stories, Reels',
     dimensions: '1080×1920',
-    dalleSize: '1024x1792',
     gptImageSize: '1024x1536',
     icon: '📱',
   },
@@ -524,7 +518,7 @@ if (import.meta.env.DEV) {
   console.log('🤖 Using models:', {
     chat: DEFAULT_CHAT_MODEL,
     vision: DEFAULT_VISION_MODEL,
-    image: USE_GEMINI_FOR_IMAGES ? `Gemini ${DEFAULT_IMAGE_MODEL}` : 'DALL-E 3',
+    image: `Gemini ${DEFAULT_IMAGE_MODEL}`,
     video: USE_VEO_FOR_VIDEO ? `Veo ${VEO_MODEL}` : 'Storyboard only'
   });
   console.log('🎨 Gemini API Key:', GEMINI_API_KEY ? 'configured' : 'NOT CONFIGURED');
@@ -4027,8 +4021,8 @@ Be EXTREMELY specific - your descriptions will be used to generate new images th
 }
 
 /**
- * Generate an ad image using Google Gemini Nano Banana Pro
- * Falls back to DALL-E 3 if Gemini is not configured
+ * Generate an ad image using the selected provider (Gemini Nano Banana Pro or OpenAI GPT Image 2),
+ * with automatic cross-provider fallback on failure. See the fallback policy in the body.
  */
 export async function generateAdImage(config: {
   audienceType: AudienceType;
@@ -4058,16 +4052,38 @@ export async function generateAdImage(config: {
 }): Promise<GeneratedImageResult> {
   const provider = config.imageModel ?? DEFAULT_IMAGE_MODEL_PROVIDER;
 
-  if (provider === 'openai' && isOpenAIConfigured()) {
-    return generateAdImageWithGptImage(config);
+  // Cross-provider fallback: try the selected engine, then automatically fall over to the other on
+  // any infra/account failure — billing hard limit, quota, timeout, 5xx, out-of-memory, or an
+  // empty/garbled response. Safety/policy blocks are the one exception: re-thrown immediately, since
+  // the same prompt would be refused by the other engine too. Fallback is per-image, so a single
+  // batch can legitimately come back mixed-engine when one variation trips a transient failure.
+  const runners: Record<ImageModel, { available: boolean; run: () => Promise<GeneratedImageResult> }> = {
+    gemini: { available: isGeminiConfigured(), run: () => generateAdImageWithGemini(config) },
+    openai: { available: isOpenAIConfigured(), run: () => generateAdImageWithGptImage(config) },
+  };
+  const order: ImageModel[] = provider === 'openai' ? ['openai', 'gemini'] : ['gemini', 'openai'];
+  const attempts = order.filter(name => runners[name].available);
+
+  if (attempts.length === 0) {
+    throw new Error('No image generation API configured. Please contact your administrator.');
   }
-  if (USE_GEMINI_FOR_IMAGES && isGeminiConfigured()) {
-    return generateAdImageWithGemini(config);
+
+  let lastError: Error | null = null;
+  for (let i = 0; i < attempts.length; i++) {
+    const name = attempts[i];
+    try {
+      if (i > 0) console.log(`🔁 Falling back to ${name} for image generation...`);
+      return await runners[name].run();
+    } catch (err: unknown) {
+      // Content/policy block — the other engine will refuse the same prompt. Fail fast.
+      if (err instanceof SafetyBlockError) throw err;
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const next = attempts[i + 1];
+      console.warn(`⚠️ ${name} image generation failed${next ? ` — falling back to ${next}` : ''}: ${lastError.message.substring(0, 150)}`);
+    }
   }
-  if (isOpenAIConfigured()) {
-    return generateAdImageWithDallE(config);
-  }
-  throw new Error('No image generation API configured. Please contact your administrator.');
+
+  throw lastError ?? new Error('Image generation failed: no engine produced an image.');
 }
 
 /**
@@ -4951,115 +4967,6 @@ USE: color palette ${refAnalysis.colorPalette}; mood ${refAnalysis.mood}; visual
 }
 
 /**
- * Generate an ad image using DALL-E 3 (fallback)
- */
-async function generateAdImageWithDallE(config: {
-  audienceType: AudienceType;
-  analysisData: ChannelAnalysisResult | null;
-  variationIndex: number;
-  totalVariations: number;
-  imageSize?: ImageSize; // Aspect ratio for generated images
-  productContext?: ProductContext;
-  // Headline to render directly into the generated image
-  headlineText?: string;
-}): Promise<GeneratedImageResult> {
-  const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
-  const sizeConfig = IMAGE_SIZE_OPTIONS.find(s => s.id === imageSize) || IMAGE_SIZE_OPTIONS[0];
-  console.log(`🎨 Generating ad image with DALL-E 3 ${config.variationIndex + 1}/${config.totalVariations} for ${config.audienceType} audience (${sizeConfig.dimensions})`);
-
-  const visualAnalysis = config.analysisData?.visualAnalysis;
-  const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
-
-  // Build the DALL-E prompt from analysis insights
-  const promptParts = [
-    'Create a high-converting social media advertisement image.',
-    '',
-  ];
-
-  // Product context for accurate product depiction
-  if (config.productContext) {
-    promptParts.push(
-      'PRODUCT:',
-      `- Product: ${config.productContext.name}`,
-      `- Author/Brand: ${config.productContext.author}`,
-      `- Description: ${config.productContext.description}`,
-      '',
-      'The image MUST accurately represent this product.',
-      ''
-    );
-  }
-
-  promptParts.push(
-    `Target Audience: ${config.audienceType.toUpperCase()} (${audienceAngle.awarenessLevel}) - ${audienceAngle.focus}`,
-    `Tone: ${audienceAngle.tone}`,
-    `Visual approach: ${config.audienceType === 'prospecting'
-      ? 'Evoke the problem/desire -- curiosity-driven imagery'
-      : config.audienceType === 'retargeting'
-      ? 'Feature the product and mechanism -- credibility-driven imagery'
-      : 'Premium, exclusive feel -- loyalty-driven imagery'}`,
-    '',
-  );
-
-  if (visualAnalysis) {
-    promptParts.push('VISUAL STYLE GUIDANCE (from winning ads):');
-    if (visualAnalysis.winningVisualElements?.length) {
-      promptParts.push(`- Winning elements: ${visualAnalysis.winningVisualElements.slice(0, 3).join(', ')}`);
-    }
-    if (visualAnalysis.colorPsychology) {
-      promptParts.push(`- Color psychology: ${visualAnalysis.colorPsychology}`);
-    }
-    if (visualAnalysis.imageryPatterns) {
-      promptParts.push(`- Imagery style: ${visualAnalysis.imageryPatterns}`);
-    }
-    if (visualAnalysis.psychologicalTriggers?.length) {
-      promptParts.push(`- Psychological triggers: ${visualAnalysis.psychologicalTriggers.slice(0, 2).join(', ')}`);
-    }
-    promptParts.push('');
-  }
-
-  promptParts.push(
-    'REQUIREMENTS:',
-    '- Professional, polished advertising quality',
-    '- Clear focal point that draws attention',
-    '- Leave appropriate space for text overlays',
-    '- Evoke emotion relevant to the target audience',
-    '- Modern, aspirational aesthetic',
-    '',
-    `This is variation ${config.variationIndex + 1} of ${config.totalVariations} - make it distinct while maintaining brand consistency.`,
-    '',
-    config.headlineText
-      ? `Render this EXACT headline into the image as a prominent typographic element: "${config.headlineText}". Use large, bold, legible typography with high contrast. Integrate it into the composition naturally. Do NOT add any other text beyond this exact headline. Create a visually striking ${sizeConfig.dimensions} ad image.`
-      : `Create a visually striking ${sizeConfig.dimensions} ad image. Do NOT include any text in the image.`
-  );
-
-  promptParts.push('', IMAGE_SAFETY_DIRECTIVE);
-  const prompt = promptParts.join('\n');
-
-  const response = await openaiProxy('images', {
-    model: DALLE_MODEL,
-    prompt,
-    n: 1,
-    size: sizeConfig.dalleSize,
-    quality: 'hd',
-    response_format: 'url',
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('❌ DALL-E API Error:', errorText);
-    throw new Error(`Image generation error: ${response.status} ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  console.log('✅ DALL-E image generated successfully');
-
-  return {
-    imageUrl: data.data[0].url,
-    revisedPrompt: data.data[0].revised_prompt,
-  };
-}
-
-/**
  * Generate ad copy tailored to a specific audience type
  */
 export async function generateAudienceAdCopy(config: {
@@ -5691,7 +5598,7 @@ export async function regenerateAllImages(config: {
   // - Gemini path always uses refAnalysis (Gemini-2.5-flash text analysis of references)
   // - OpenAI path also uses the same refAnalysis to build the prompt
   const needsPrecompute = (imageModel === 'openai' && isOpenAIConfigured())
-    || (imageModel === 'gemini' && USE_GEMINI_FOR_IMAGES && isGeminiConfigured());
+    || (imageModel === 'gemini' && isGeminiConfigured());
   if (needsPrecompute) {
     const MIN_QUALITY_SCORE = 60;
     let cachedImages;
