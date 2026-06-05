@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-06-05 — CreativeIQ copy: per-account Brand Voice profile + stop forcing a number into every ad
+
+### What
+Two copy-quality changes for CreativeIQ™.
+
+**1. Brand Voice & Guidelines (new).** Each ad account now has a user-authored Brand Voice profile that is the **authoritative** voice for every headline and body CreativeIQ™ writes — and it **overrides** the voice ConversionIQ™ infers from past ads. Previously the only "brand voice" was auto-extracted during channel analysis: it existed only if an analysis had run, was abstract (adjectives), uneditable, and absent on cold-start. Now you dial it in directly — voice summary, tone do's/don'ts, point of view, reading level, signature phrases, the avatar/ICP, the big idea, plus guardrails (spelling locale, banned words, required disclaimers, emoji policy) — on a new **/brand** page, scoped per account.
+
+**2. Numbers no longer forced into every ad.** A SPECIFICITY rule in every copy prompt listed "a number" as the first way to be concrete and required a concrete element in *every* headline. Because headlines are ~40 chars, the model satisfied it the cheapest way — jamming a bare digit into every cell ("1 loop", "3 steps") and tacking numbers onto the ends of headlines ("…trigger 1"). Specificity is now decoupled from literal numbers: most copy carries no number, small counts are spelled as words, and digits are reserved for genuine stats, prices, percentages, and timeframes.
+
+### Added
+- **`src/pages/BrandVoice.tsx` + `BrandVoice.css`** — per-account Brand Voice & Guidelines editor (route **/brand**, new sidebar entry). Voice/style + avatar/big-idea + guardrail fields, an **Active** toggle, a **Lock**, and **"Fill from analysis"** that prefills the voice fields from the latest ConversionIQ™ analysis.
+- **`src/lib/brandVoiceProfile.ts`** — scoped-localStorage CRUD for the per-account `BrandVoiceProfile` (one object per account; mirrors the Products storage idiom).
+- **`BrandVoiceProfile` type + `buildBrandVoiceContextString()` + `brandProfileDefinesVoice()`** (`src/services/openaiApi.ts`) — the profile renders to an AUTHORITATIVE system-prompt block (only populated fields emitted), injected into every copy path.
+- **`SPECIFICITY_PROMPT` constant** (`src/services/openaiApi.ts`) — one source of truth for the specificity + numerals guidance.
+
+### Changed
+- **Brand Voice override.** When the profile defines a voice, `buildAnalysisContextString(..., { demoteObservedVoice: true })` relabels the auto-extracted voice block from "BRAND VOICE PROFILE (MATCH THIS VOICE)" to "OBSERVED VOICE FROM PAST WINNERS (reference only) — defer to the Brand Voice & Guidelines on any conflict", so the authored profile wins rather than contradicting the inferred one. A guardrails-only profile (e.g. just banned words) leaves the observed voice intact.
+- **All copy entry points** — `generateGridCopy` (Blitz grid + per-cell reroll), `generateCopyOptions`, and `regenerateSingleCopy` now accept a `brandProfile` and inject it via the shared builder. `AdGenerator` loads the active account's profile (reloading on account switch) and threads it through every generation call.
+
+### Fixed
+- **CreativeIQ copy overusing numbers** in the 16-ad Blitz grid (and elsewhere) — numerals are no longer forced into every angle/hook, no longer rendered as bare digits for small counts, and no longer tacked onto the end of headlines. See "What" above.
+
+### Internal
+- The specificity rule was de-duplicated from **four** copy prompts into the single `SPECIFICITY_PROMPT` constant (matches the existing `BANNED_PHRASES_PROMPT` / `META_AD_POLICY_PROMPT` pattern).
+- The demoted vs. normal observed-voice blocks render the shared voice fields **once** (parameterized header/intro/outro) instead of copy-pasting the bullet list.
+
+### Note
+- v1 stores the profile in per-account browser localStorage and enforces guardrails via the prompt. Planned follow-ups: deterministic guardrail enforcement (locale spelling dictionary, banned-word auto-regenerate, disclaimer append), Swipe-Library few-shot exemplars, a voice-consistency self-critique pass, and a Supabase migration for team-shared profiles. Build green (`tsc -b` + `vite build`).
+
 ## 2026-06-04 — Blitz Testing: image strategy (isolate the image per angle / hook / shared) + review before publish
 
 ### What

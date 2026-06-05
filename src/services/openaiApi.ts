@@ -331,6 +331,19 @@ const BANNED_PHRASES = [
 /** Prompt-ready string listing all banned phrases for injection into system prompts. */
 const BANNED_PHRASES_PROMPT = `BANNED PHRASES — NEVER use: ${BANNED_PHRASES.map(p => `"${p}"`).join(', ')}.`;
 
+/**
+ * Specificity + numerals guidance — one source of truth injected into every copy-generation
+ * prompt so the rule can't drift between single-mode, grid, reroll, and audience paths.
+ *
+ * The old rule listed "a number" as the FIRST way to be specific and demanded a concrete element
+ * in every headline. Since a headline is only ~40 chars, the model satisfied that the cheapest way:
+ * it jammed a bare digit into every cell — filler like "1 loop" / "3 steps", often tacked onto the
+ * end ("...trigger 1"). This decouples specificity from literal numbers and makes numerals the
+ * exception (spelled as words for small counts; digits reserved for genuine stats).
+ */
+const SPECIFICITY_PROMPT = `SPECIFICITY: Ground the copy in something concrete — a named outcome, a vivid mechanism, a real timeframe, or genuine proof. Body copy must carry at least one concrete element; a headline must be specific in MEANING but does NOT need to contain a number.
+NUMBERS — USE SPARINGLY: Never insert a number just to sound specific, and never end a headline with a bare count (e.g. "...trigger 1", "...thought 1"). Most lines should contain NO number — use one only where it works as real proof, a price, a percentage, or a timeframe. When a small count is genuinely needed, spell it as a word (one, two, three); reserve digits for real statistics, percentages, prices, and timeframes (e.g. "40%", "$97", "14 days").`;
+
 /** Regex patterns derived from BANNED_PHRASES for post-processing sanitization. */
 const BANNED_PHRASE_PATTERNS: RegExp[] = [
   /you'?re not broken/gi, /you'?re not the problem/gi, /you were never broken/gi,
@@ -459,6 +472,47 @@ export interface ProductContext {
     fileName: string;
   }>;
   createdAt: string;
+}
+
+export type SpellingLocale = 'US' | 'UK' | 'AU' | 'CA';
+export type EmojiPolicy = 'none' | 'sparing' | 'liberal';
+
+/**
+ * Per-ad-account, user-authored Brand Voice & Guidelines profile.
+ *
+ * This is the AUTHORITATIVE voice for the account — it is injected into every copy prompt and
+ * overrides the voice the channel analysis infers from past ads (see buildBrandVoiceContextString
+ * and the `demoteObservedVoice` path in buildAnalysisContextString). The voice/style fields mirror
+ * the auto-extracted `ChannelAnalysisResult.brandVoice` shape so "Fill from analysis" maps 1:1.
+ *
+ * Stored per account in scoped localStorage (see lib/brandVoiceProfile.ts). Single object per account.
+ */
+export interface BrandVoiceProfile {
+  id: string;
+  enabled: boolean;   // master on/off — lets a user stage a profile before it goes live
+  locked: boolean;    // when true, "Fill from analysis" / re-analysis must not overwrite the voice fields
+
+  // — Voice & style (soft; mirrors the auto-extracted brandVoice schema) —
+  voiceSummary: string;        // 1–3 sentence north star: who is writing and how they sound
+  tonality: string;            // e.g. "Confident, warm, a little irreverent — never corporate"
+  toneAvoid: string;           // what to NEVER sound like, e.g. "hypey, clinical, salesy"
+  pointOfView: string;         // e.g. "First person (founder)" | "Second person (you/your)" | "We"
+  readingLevel: string;        // e.g. "Grade 8" — controls vocabulary / jargon ceiling
+  rhythm: string;              // cadence, e.g. "Staccato opener, longer middle, punchy close"
+  signaturePhrases: string[];  // tics to weave in naturally — NOT forced into every ad
+
+  // — Strategic substance (soft; auto-extraction never produces these) —
+  avatar: string;              // the ICP: who they are, their pain, desire, and #1 objection
+  bigIdea: string;             // the unique mechanism / core promise the brand leads with
+
+  // — Hard guardrails (v1: prompt-enforced; deterministic enforcement is a later pass) —
+  spellingLocale: SpellingLocale;
+  bannedWords: string[];       // brand-specific, stacked ON TOP of the global BANNED_PHRASES
+  requiredDisclaimers: string[]; // text that must appear verbatim in body copy
+  emojiPolicy: EmojiPolicy;
+
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Check if Gemini API is configured
@@ -2451,7 +2505,88 @@ The body should feel like a note from a trusted advisor, not a sales pitch.`,
  * (generateCopyOptions) and grid-copy generation (generateGridCopy) so the
  * analysis formatting never drifts between the two paths.
  */
-function buildAnalysisContextString(analysis: ChannelAnalysisResult | null): string {
+/**
+ * True when the profile is active AND supplies any VOICE/style guidance (not just guardrails).
+ * Used to decide whether the analysis-derived "observed voice" should be demoted to reference-only
+ * so it doesn't fight the user's authored voice. A guardrails-only profile (e.g. just banned words)
+ * leaves the observed voice as the primary voice signal.
+ */
+function brandProfileDefinesVoice(profile: BrandVoiceProfile | null | undefined): boolean {
+  if (!profile || !profile.enabled) return false;
+  return !!(
+    profile.voiceSummary?.trim() ||
+    profile.tonality?.trim() ||
+    profile.toneAvoid?.trim() ||
+    profile.pointOfView?.trim() ||
+    profile.readingLevel?.trim() ||
+    profile.rhythm?.trim() ||
+    (profile.signaturePhrases || []).some(s => s?.trim())
+  );
+}
+
+/**
+ * Serialize the per-account Brand Voice & Guidelines profile into an AUTHORITATIVE system-prompt
+ * block. Sits above the analysis-derived "observed voice" and explicitly wins on conflict. Only
+ * populated fields are emitted (keeps tokens lean, avoids empty-field noise). Returns '' when there
+ * is no profile, it is disabled, or it has no usable content.
+ */
+function buildBrandVoiceContextString(profile: BrandVoiceProfile | null | undefined): string {
+  if (!profile || !profile.enabled) return '';
+
+  const lines: string[] = [];
+  const add = (label: string, value: string | undefined) => {
+    const v = value?.trim();
+    if (v) lines.push(`${label}: ${v}`);
+  };
+
+  add('VOICE', profile.voiceSummary);
+  add('SOUND LIKE', profile.tonality);
+  add('NEVER SOUND LIKE', profile.toneAvoid);
+  add('POINT OF VIEW', profile.pointOfView);
+  if (profile.readingLevel?.trim()) {
+    lines.push(`READING LEVEL: ${profile.readingLevel.trim()} — match this vocabulary; never write above it.`);
+  }
+  add('RHYTHM & CADENCE', profile.rhythm);
+  const phrases = (profile.signaturePhrases || []).map(p => p?.trim()).filter(Boolean);
+  if (phrases.length) {
+    lines.push(`SIGNATURE PHRASES (use only where they fit naturally — do NOT force one into every ad): ${phrases.join(', ')}`);
+  }
+  add('WHO YOU ARE TALKING TO (avatar)', profile.avatar);
+  add('LEAD WITH THIS IDEA (the unique mechanism / core promise)', profile.bigIdea);
+
+  // Hard guardrails — v1 enforces these via the prompt (deterministic enforcement is a later pass).
+  const rules: string[] = [];
+  if (profile.spellingLocale && profile.spellingLocale !== 'US') {
+    const localeName: Record<string, string> = { UK: 'British', AU: 'Australian', CA: 'Canadian' };
+    rules.push(`Spelling: use ${localeName[profile.spellingLocale] || profile.spellingLocale} English spelling throughout (e.g. optimise, colour, personalise, centre).`);
+  }
+  const banned = (profile.bannedWords || []).map(w => w?.trim()).filter(Boolean);
+  if (banned.length) {
+    rules.push(`Never use these words or phrases: ${banned.map(w => `"${w}"`).join(', ')}.`);
+  }
+  if (profile.emojiPolicy === 'none') {
+    rules.push('Do not use any emoji.');
+  } else if (profile.emojiPolicy === 'sparing') {
+    rules.push('Use emoji sparingly — at most one, and only when it genuinely adds meaning.');
+  }
+  const disclaimers = (profile.requiredDisclaimers || []).map(d => d?.trim()).filter(Boolean);
+  if (disclaimers.length) {
+    rules.push(`Every body copy must include this text verbatim: ${disclaimers.map(d => `"${d}"`).join(' and ')}.`);
+  }
+
+  if (!lines.length && !rules.length) return '';
+
+  let block = `\n\n=== BRAND VOICE & GUIDELINES (AUTHORITATIVE — overrides any voice inferred from past ads) ===
+You are writing as this specific brand. Match it exactly. Where this conflicts with patterns observed in past ads, THIS PROFILE WINS.`;
+  if (lines.length) block += `\n${lines.join('\n')}`;
+  if (rules.length) block += `\n\nNON-NEGOTIABLE BRAND RULES:\n${rules.map(r => `- ${r}`).join('\n')}`;
+  return block;
+}
+
+function buildAnalysisContextString(
+  analysis: ChannelAnalysisResult | null,
+  options?: { demoteObservedVoice?: boolean },
+): string {
   if (!analysis) return '';
   let analysisContext = '';
   analysisContext += `\n=== CHANNEL PERFORMANCE SUMMARY ===
@@ -2479,16 +2614,27 @@ IMPORTANT: Study the FULL BODY COPY of these winners. Notice their structure, pa
   }
   if (analysis.brandVoice) {
     const bv = analysis.brandVoice;
-    analysisContext += `\n=== BRAND VOICE PROFILE (MATCH THIS VOICE) ===
-This is the voice that is ALREADY CONVERTING for this ad account. Your copy MUST sound like it came from the same copywriter.
+    // When a user-authored Brand Voice profile is in force, this data-derived voice is demoted to
+    // supporting evidence (header/intro reframed, the "MATCH THIS" mandate dropped) so it doesn't
+    // contradict the authoritative profile. The voice fields render identically either way.
+    const demoted = options?.demoteObservedVoice;
+    const header = demoted
+      ? '=== OBSERVED VOICE FROM PAST WINNERS (reference only) ==='
+      : '=== BRAND VOICE PROFILE (MATCH THIS VOICE) ===';
+    const intro = demoted
+      ? 'This is the voice extracted from ads that already converted for this account. Use it as supporting evidence, but DEFER to the Brand Voice & Guidelines profile on any conflict.'
+      : 'This is the voice that is ALREADY CONVERTING for this ad account. Your copy MUST sound like it came from the same copywriter.';
+    const outro = demoted
+      ? ''
+      : '\n\nCRITICAL: Do NOT override this voice with generic "ad copywriter" tone. The voice profile above is extracted from REAL winning ads. Match its specific characteristics, not a generic approximation of it.';
+    analysisContext += `\n${header}
+${intro}
 - Tonality: ${bv.tonality}
 - Sentence style: ${bv.sentenceStyle}
 - Point of view: ${bv.pointOfView}
 - Vocabulary level: ${bv.vocabularyLevel}
 - Rhythm & cadence: ${bv.rhythmAndCadence}
-${bv.distinctiveTraits?.length ? `- Distinctive traits:\n${bv.distinctiveTraits.map(t => `  * ${t}`).join('\n')}` : ''}
-
-CRITICAL: Do NOT override this voice with generic "ad copywriter" tone. The voice profile above is extracted from REAL winning ads. Match its specific characteristics, not a generic approximation of it.
+${bv.distinctiveTraits?.length ? `- Distinctive traits:\n${bv.distinctiveTraits.map(t => `  * ${t}`).join('\n')}` : ''}${outro}
 `;
   }
   if (analysis.winningPatterns) {
@@ -2693,6 +2839,7 @@ export async function generateCopyOptions(config: {
   businessType?: import('../types/organization').BusinessType;
   campaignIntent?: import('../types/organization').CampaignIntent;
   corePromise?: string; // the single idea the whole batch lives inside (BlitzScale grid)
+  brandProfile?: BrandVoiceProfile; // per-account authored voice (overrides the observed voice)
 }): Promise<CopyOptionsResult> {
   if (!isOpenAIConfigured()) {
     throw new Error('AI API not configured. Please contact support.');
@@ -2719,8 +2866,14 @@ export async function generateCopyOptions(config: {
   const analysis = config.analysisData;
   const hasAnalysis = !!analysis;
 
+  // Per-account authored Brand Voice profile — injected into the system prompt and (when it defines
+  // a voice) demotes the analysis-derived voice to reference-only.
+  const brandVoiceContext = buildBrandVoiceContextString(config.brandProfile);
+
   // Build comprehensive analysis context (shared with grid-copy generation)
-  const analysisContext = buildAnalysisContextString(analysis);
+  const analysisContext = buildAnalysisContextString(analysis, {
+    demoteObservedVoice: brandProfileDefinesVoice(config.brandProfile),
+  });
 
   // Build Ad Library inspiration context (shared with grid-copy generation)
   const inspirationContext = buildInspirationContextString(config.adLibraryInspirations);
@@ -2899,7 +3052,7 @@ NOTE: No analysis data is available. Run Channel Analysis first for data-driven 
   // Copy quality rules: anti-AI patterns, specificity, formatting
   systemPrompt += `\n\nCOPY QUALITY RULES (NON-NEGOTIABLE):
 1. ${BANNED_PHRASES_PROMPT} If you catch yourself writing any of these, delete it and write something original and specific instead.
-2. SPECIFICITY RULE: Generic claims kill conversions. Every headline and body text must contain at least one CONCRETE element: a number, a timeframe, a named outcome, or a specific mechanism. "Improve your results" is weak. "Cut your CPA 40% in 14 days" is strong.
+2. ${SPECIFICITY_PROMPT}
 3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.
 4. ${META_AD_POLICY_PROMPT}`;
 
@@ -2912,6 +3065,9 @@ NOTE: No analysis data is available. Run Channel Analysis first for data-driven 
     const intentFocusDesc = config.campaignIntent === 'purchase' ? 'purchases and sales' : config.campaignIntent === 'quiz' ? 'quiz/assessment completions (the ad sells the quiz experience, not the product directly — curiosity and self-discovery are the primary hooks)' : 'lead submissions, call bookings, or opt-ins';
     systemPrompt += `\n\nCAMPAIGN INTENT: This creative is for a "${intentConfig?.label}" campaign. Focus copy on driving ${intentFocusDesc}. Use the relevant patterns from the analysis for this intent type.`;
   }
+
+  // Authoritative per-account brand voice — appended last so it carries top priority.
+  systemPrompt += brandVoiceContext;
 
   // Build product context section
   let productSection = '';
@@ -3119,6 +3275,7 @@ export async function generateGridCopy(config: {
   businessType?: import('../types/organization').BusinessType;
   campaignIntent?: import('../types/organization').CampaignIntent;
   reasoningEffort?: ReasoningEffort;
+  brandProfile?: BrandVoiceProfile; // per-account authored voice (overrides the observed voice)
 }): Promise<GridCell[]> {
   if (!isOpenAIConfigured()) {
     throw new Error('AI API not configured. Please contact support.');
@@ -3133,7 +3290,10 @@ export async function generateGridCopy(config: {
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
   const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
 
-  const analysisContext = buildAnalysisContextString(config.analysisData);
+  const brandVoiceContext = buildBrandVoiceContextString(config.brandProfile);
+  const analysisContext = buildAnalysisContextString(config.analysisData, {
+    demoteObservedVoice: brandProfileDefinesVoice(config.brandProfile),
+  });
   const inspirationContext = buildInspirationContextString(config.adLibraryInspirations);
 
   let productSection = '';
@@ -3160,13 +3320,13 @@ CORE PROMISE — every cell must live inside this ONE promise; do not drift to o
 
 COPY QUALITY RULES (NON-NEGOTIABLE):
 1. ${BANNED_PHRASES_PROMPT}
-2. SPECIFICITY: every headline and body must contain at least one concrete element (a number, timeframe, named outcome, or mechanism).
+2. ${SPECIFICITY_PROMPT}
 3. FORMATTING: NEVER use em dashes. Max 1 exclamation mark per body. Zero in headlines.
 4. DIVERSITY: each cell must be genuinely different. The ANGLE controls the emotional frame; the HOOK controls the opening line. Never reuse the same opening line across cells.
 5. ${META_AD_POLICY_PROMPT}
 
 BUSINESS CONTEXT:
-${effectiveConversionLanguage}`;
+${effectiveConversionLanguage}${brandVoiceContext}`;
 
   const userPrompt = `Generate the copy matrix for a ${config.audienceType.toUpperCase()} audience.
 ${productSection}
@@ -3379,6 +3539,7 @@ export async function regenerateSingleCopy(config: {
   businessType?: import('../types/organization').BusinessType;
   campaignIntent?: import('../types/organization').CampaignIntent;
   corePromise?: string; // anchor the replacement to the same batch promise
+  brandProfile?: BrandVoiceProfile; // per-account authored voice (overrides the observed voice)
 }): Promise<CopyOption> {
   if (!isOpenAIConfigured()) {
     throw new Error('AI API not configured. Please contact support.');
@@ -3403,6 +3564,11 @@ export async function regenerateSingleCopy(config: {
   const analysis = config.analysisData;
   const hasAnalysis = !!analysis;
 
+  // Per-account authored Brand Voice profile — appended to the system prompt below, and (when it
+  // defines a voice) demotes the condensed observed-voice block to reference-only.
+  const brandVoiceContext = buildBrandVoiceContextString(config.brandProfile);
+  const demoteObservedVoice = brandProfileDefinesVoice(config.brandProfile);
+
   // Build a CONDENSED analysis context — deliberately lighter than buildAnalysisContextString.
   // Single-item regen runs at reasoning 'low' with a small token budget, so it intentionally
   // omits the fuller sections (psychological triggers, audience insights, recommendations).
@@ -3420,7 +3586,10 @@ Overall Health Score: ${analysis.overallHealthScore}/10
     }
     if (analysis.brandVoice) {
       const bv = analysis.brandVoice;
-      analysisContext += `\n=== BRAND VOICE (MATCH THIS) ===
+      const voiceHeader = demoteObservedVoice
+        ? '=== OBSERVED VOICE FROM PAST WINNERS (reference only — defer to the Brand Voice & Guidelines on any conflict) ==='
+        : '=== BRAND VOICE (MATCH THIS) ===';
+      analysisContext += `\n${voiceHeader}
 Tone: ${bv.tonality} | Style: ${bv.sentenceStyle} | POV: ${bv.pointOfView} | Vocab: ${bv.vocabularyLevel}
 Cadence: ${bv.rhythmAndCadence}
 ${bv.distinctiveTraits?.length ? `Traits: ${bv.distinctiveTraits.join('; ')}` : ''}
@@ -3495,7 +3664,7 @@ ${bv.distinctiveTraits?.length ? `Traits: ${bv.distinctiveTraits.join('; ')}` : 
   // Copy quality rules: anti-AI patterns, specificity, formatting
   systemPrompt += `\n\nCOPY QUALITY RULES (NON-NEGOTIABLE):
 1. ${BANNED_PHRASES_PROMPT}
-2. SPECIFICITY: Include at least one concrete element per headline and body text (a number, timeframe, named outcome, or specific mechanism). No vague claims.
+2. ${SPECIFICITY_PROMPT}
 3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.
 4. ${META_AD_POLICY_PROMPT}`;
 
@@ -3517,6 +3686,9 @@ ${bv.distinctiveTraits?.length ? `Traits: ${bv.distinctiveTraits.join('; ')}` : 
     const regenIntentFocusDesc = config.campaignIntent === 'purchase' ? 'purchases and sales' : config.campaignIntent === 'quiz' ? 'quiz/assessment completions (sell the quiz experience, not the product directly)' : 'lead submissions, call bookings, or opt-ins';
     systemPrompt += `\n\nCAMPAIGN INTENT: This creative is for a "${regenIntentConfig?.label}" campaign. Focus on driving ${regenIntentFocusDesc}.`;
   }
+
+  // Authoritative per-account brand voice — appended last so it carries top priority.
+  systemPrompt += brandVoiceContext;
 
   // Build product context
   let productSection = '';
@@ -4918,7 +5090,7 @@ Write copy that feels authentic, not corporate or overly salesy.`;
   // Copy quality rules
   systemPrompt += `\n\nCOPY QUALITY RULES (NON-NEGOTIABLE):
 1. ${BANNED_PHRASES_PROMPT}
-2. SPECIFICITY: Include at least one concrete element per headline and body text (a number, timeframe, named outcome, or specific mechanism). No vague claims.
+2. ${SPECIFICITY_PROMPT}
 3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.
 4. ${META_AD_POLICY_PROMPT}`;
 
