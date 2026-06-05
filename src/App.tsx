@@ -11,6 +11,7 @@ import Channels from './pages/Channels';
 import MetaAds from './pages/MetaAds';
 
 import Products from './pages/Products';
+import BrandVoice from './pages/BrandVoice';
 import Insights from './pages/Insights';
 import AdGenerator from './pages/AdGenerator';
 import AdPublisher from './pages/AdPublisher';
@@ -124,6 +125,7 @@ function App() {
             <Route path="/publish" element={<AdPublisher />} />
 
             <Route path="/products" element={<Products />} />
+            <Route path="/brand" element={<BrandVoice />} />
             <Route path="/insights" element={<Insights />} />
             <Route path="/seo-iq" element={<SuperAdminRoute><SeoIQ /></SuperAdminRoute>} />
             <Route path="/funnels" element={<SuperAdminRoute><Funnels /></SuperAdminRoute>} />

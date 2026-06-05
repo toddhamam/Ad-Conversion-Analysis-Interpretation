@@ -185,6 +185,8 @@ public/
 | `src/components/CopySelectionPanel.tsx` | Multi-select UI for choosing headlines, body copy, and CTAs |
 | `src/components/ImportImagesModal.tsx` | Cross-account reference image import modal with scan/merge/cap logic |
 | `src/pages/Products.tsx` | Product CRUD manager (name, author, description, URL, mockup images) |
+| `src/pages/BrandVoice.tsx` | Per-account Brand Voice & Guidelines editor (`/brand`) — authoritative voice for CreativeIQ™ copy |
+| `src/lib/brandVoiceProfile.ts` | Scoped-localStorage CRUD for the per-account `BrandVoiceProfile` (single object per account) |
 | `public/robots.txt` | Search engine crawl directives (allows AI bots for GEO) |
 | `public/sitemap.xml` | XML sitemap for search engine indexing |
 | `src/pages/SeoIQ.tsx` | SEO IQ dashboard — sites, keywords (GSC + Keyword Planner), articles, content calendar, autopilot |
@@ -222,6 +224,7 @@ public/
 /creatives      → AI ad generation
 /publish        → Ad publisher
 /products       → Products management
+/brand          → Brand Voice & Guidelines (per-account authored voice for CreativeIQ™)
 /insights       → Channel AI analysis (ConversionIQ™)
 /seo-iq         → SEO IQ dashboard (sites, keywords, articles, autopilot)
 /integrations   → Meta connection & per-account configuration
@@ -241,7 +244,7 @@ public/
 7. **Frontend/Backend API separation** - Sensitive operations (Stripe, Supabase) handled by backend serverless functions
 8. **Vercel serverless functions** - API routes in `api/` directory using `@vercel/node` (`VercelRequest`, `VercelResponse`)
 9. **React 19 peer dependency handling** - `.npmrc` with `legacy-peer-deps=true` for libraries that haven't updated React peer deps
-10. **Two-layer AI context** - Channel analysis provides performance patterns (account-wide); Product Context provides identity (product name, author, mockups). Both layers are injected into prompts independently — changing one never affects the other
+10. **Layered AI context** - Channel analysis provides performance patterns (account-wide); Product Context provides identity (product name, author, mockups); the per-account **Brand Voice profile** (`/brand`, `brandVoiceProfile.ts`) provides the *authoritative* voice + guardrails. Each layer is injected independently. The Brand Voice profile **overrides** the analysis-derived voice: when it defines a voice, `buildAnalysisContextString(..., { demoteObservedVoice: true })` relabels the auto-extracted voice block to "OBSERVED VOICE FROM PAST WINNERS (reference only)". All copy paths (`generateGridCopy` + reroll, `generateCopyOptions`, `regenerateSingleCopy`) inject it via `buildBrandVoiceContextString`
 11. **JWT auth on API routes** - All `api/seoiq.ts`, `api/billing/checkout.ts`, and `api/billing/portal.ts` routes require Bearer token authentication. Organization ID is derived from JWT, not client input. Billing endpoints fall back to client-provided IDs only when JWT is unavailable (dev mode)
 12. **404 catch-all route** - Unknown routes render a branded 404 page instead of a blank screen, preventing route enumeration
 13. **Meta API backend proxy** - All Meta Graph API calls route through `api/meta.ts` — access tokens are decrypted server-side and never sent to the browser. Frontend uses `metaProxy()` helper in `metaApi.ts` which calls `/api/meta/proxy` with JWT auth

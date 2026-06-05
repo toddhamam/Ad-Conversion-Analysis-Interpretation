@@ -61,6 +61,8 @@ import { getBatch, saveBatch, clearBatch, type BatchSessionContext } from '../se
 import { DEFAULT_GRID_ANGLES, DEFAULT_GRID_HOOKS, HOOK_LABELS, FORMAT_LABELS, isValidAngle, isValidHook, type GridAngle, type HookType, type FormatType } from '../lib/axisTags';
 import { useAdAccount } from '../contexts/AdAccountContext';
 import { getCachedAnalysis, getImportMetadata, type ImportMetadata } from '../lib/channelAnalysisCache';
+import { loadBrandVoiceProfile } from '../lib/brandVoiceProfile';
+import type { BrandVoiceProfile } from '../services/openaiApi';
 import ImportImagesModal, { getAvailableImageImports, importImages, getSyncCreatives } from '../components/ImportImagesModal';
 import SwipeLibraryPicker from '../components/SwipeLibraryPicker';
 import { fetchSwipeImage, type SwipeLibraryItem, type SwipeElementType } from '../services/swipeLibraryApi';
@@ -238,6 +240,8 @@ const AdGenerator = () => {
   const [regeneratingBlitzIndex, setRegeneratingBlitzIndex] = useState<number | null>(null);
   const [analysisData, setAnalysisData] = useState<ChannelAnalysisResult | null>(null);
   const [analysisImportMeta, setAnalysisImportMeta] = useState<ImportMetadata | null>(null);
+  // Per-account authored Brand Voice profile — injected into every copy generation call below.
+  const [brandProfile, setBrandProfile] = useState<BrandVoiceProfile | null>(null);
   const [imageSize, setImageSize] = useState<ImageSize>(DEFAULT_IMAGE_SIZE);
   const [copyLength, setCopyLength] = useState<CopyLength>(DEFAULT_COPY_LENGTH);
   const [imageModel, setImageModel] = useState<ImageModel>(() => {
@@ -700,6 +704,12 @@ const AdGenerator = () => {
     setAnalysisImportMeta(getImportMetadata('meta'));
   }, [businessType]);
 
+  // Load the per-account Brand Voice profile (scoped localStorage). Reloads on account switch
+  // so the active account's authored voice is always the one threaded into generation.
+  useEffect(() => {
+    setBrandProfile(loadBrandVoiceProfile());
+  }, [currentAccount?.ad_account_id]);
+
   // Reference image cache stats (mount-only). Account-switch refreshes are handled by
   // the auto-fetch effect below; keeping this separate keeps the batch loader focused.
   useEffect(() => {
@@ -1008,6 +1018,7 @@ const AdGenerator = () => {
         audienceType,
         conceptType,
         analysisData,
+        brandProfile: brandProfile || undefined,
         copyLength,
         copyVariationLevel: copyVariationValue,
         productContext: selectedProduct || undefined,
@@ -1126,6 +1137,7 @@ const AdGenerator = () => {
         format: gridFormat,
         audienceType,
         analysisData,
+        brandProfile: brandProfile || undefined,
         copyLength,
         productContext: selectedProduct || undefined,
         adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
@@ -1161,6 +1173,7 @@ const AdGenerator = () => {
         format: gridFormat,
         audienceType,
         analysisData,
+        brandProfile: brandProfile || undefined,
         copyLength,
         productContext: selectedProduct || undefined,
         adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
@@ -1338,6 +1351,7 @@ const AdGenerator = () => {
         audienceType,
         conceptType,
         analysisData,
+        brandProfile: brandProfile || undefined,
         copyLength,
         copyVariationLevel: copyVariationValue,
         productContext: selectedProduct || undefined,

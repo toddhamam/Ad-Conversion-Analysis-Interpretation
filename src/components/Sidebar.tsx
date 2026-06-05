@@ -145,6 +145,14 @@ const Sidebar = ({
           <span className="nav-label">Integrations</span>
         </NavLink>
 
+        <NavLink to="/brand" className="nav-item" title="Brand Voice" onClick={onCloseMobile}>
+          <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m3 11 18-5v12L3 14v-3z"/>
+            <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>
+          </svg>
+          <span className="nav-label">Brand Voice</span>
+        </NavLink>
+
         <NavLink to="/swipe-library" className="nav-item" title="Swipe Library" onClick={onCloseMobile}>
           <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
