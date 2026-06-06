@@ -406,6 +406,28 @@ const AdGenerator = () => {
   const [savedInspirations, setSavedInspirations] = useState<AdLibraryInspiration[]>([]);
   const [activeInspirationIds, setActiveInspirationIds] = useState<string[]>([]);
 
+  // True when any generated output stage exists worth persisting/scrapping. Single source for
+  // the persist gate and the "Start over" button so the two can't drift apart.
+  const hasStageContent =
+    generatedAds.length > 0 || blitzImages.length > 0 || !!copyOptions || (gridCells?.length ?? 0) > 0;
+
+  // Reset every generated-output stage to a blank slate. One definition shared by the
+  // "no batch for this account" restore path and "Start over", so the blank-state field list
+  // lives in exactly one place (the snapshot and the restore below are its two inverses).
+  const resetStageState = useCallback(() => {
+    setCopyOptions(null);
+    setSelectedHeadlines([]);
+    setSelectedBodyTexts([]);
+    setSelectedCTAs([]);
+    setGridCells(null);
+    setKeptCellIds(new Set());
+    setBlitzImages([]);
+    setBlitzImageError(undefined);
+    setGeneratedAds([]);
+    setBatchPublishedAt(null);
+    setCurrentStep('config');
+  }, []);
+
   // Live snapshot of the generation context, persisted alongside the batch so that
   // (a) every workflow stage rehydrates after a refresh and (b) per-image
   // regeneration re-runs with the same product/size/variation that made the originals.
@@ -413,7 +435,10 @@ const AdGenerator = () => {
   // current values without re-running on every keystroke.
   const sessionRef = useRef<BatchSessionContext>({});
   useEffect(() => {
-    sessionRef.current = {
+    // Snapshot every output stage — config, copy + selections, the Blitz grid, and the
+    // current step — into one session object used for both the synchronous publisher
+    // handoff (sessionRef) and IndexedDB persistence.
+    const session: BatchSessionContext = {
       audienceType,
       conceptType,
       campaignIntent: effectiveIntent,
@@ -432,12 +457,37 @@ const AdGenerator = () => {
       generationMode,
       gridFormat,
       corePromise,
+      gridCells,
+      keptCellIds: Array.from(keptCellIds),
+      currentStep,
+      blitzImageError,
     };
+    sessionRef.current = session;
+
+    // Persist the whole session to IndexedDB whenever any stage changes (debounced). This is
+    // what makes locked-in COPY survive a refresh even before any image exists, so an
+    // image-generation error never forces the user to regenerate copy from scratch. Only
+    // write once there's a generated output worth keeping, and skip while the initial restore
+    // is still running.
+    if (isLoadingAds || !hasStageContent) return;
+
+    const accountId = getScopedAccountId();
+    const saveTimerId = scheduleDeferredWork(() => {
+      debugLog(`Persisting session to IndexedDB (${generatedAds.length} ads, ${blitzImages.length} blitz images, step ${currentStep})`);
+      saveBatch(accountId, {
+        packages: generatedAds.slice(0, MAX_STORED_ADS),
+        blitzImages,
+        session,
+        publishedAt: batchPublishedAt,
+      }).catch(e => console.warn('[AdGenerator] Failed to persist batch:', e));
+    }, 200);
+    return () => clearTimeout(saveTimerId);
   }, [
     audienceType, conceptType, effectiveIntent, copySource, adType, selectedProductId,
     similarityValue, copyVariationValue, imageSize, imageModel, variationCount,
     copyOptions, selectedHeadlines, selectedBodyTexts, selectedCTAs,
-    generationMode, gridFormat, corePromise,
+    generationMode, gridFormat, corePromise, gridCells, keptCellIds, currentStep,
+    blitzImages, blitzImageError, generatedAds, isLoadingAds, batchPublishedAt, hasStageContent,
   ]);
 
   // Handle brand image upload
@@ -765,17 +815,15 @@ const AdGenerator = () => {
 
         if (cancelled) return;
 
-        if (!batch || !Array.isArray(batch.packages) || batch.packages.length === 0) {
-          setGeneratedAds([]);
-          setBatchPublishedAt(null);
+        if (!batch) {
+          // No batch for this account — blank every stage so a different/fresh account doesn't
+          // show the previously-viewed account's persisted work.
+          resetStageState();
           return;
         }
 
-        setGeneratedAds(batch.packages.slice(0, MAX_STORED_ADS));
-        setBatchPublishedAt(batch.publishedAt ?? null);
-        setStorageWarning(null);
-
-        // Rehydrate the generation context so stages and regeneration are restored.
+        // Rehydrate the generation context FIRST, so the copy stages restore even when no
+        // images exist yet — locked-in copy survives a refresh with nothing to regenerate.
         // BatchSessionContext carries the real union types, so no casts are needed.
         const s = batch.session || {};
         if (s.audienceType) setAudienceType(s.audienceType);
@@ -794,10 +842,31 @@ const AdGenerator = () => {
         if (Array.isArray(s.selectedCTAs)) setSelectedCTAs(s.selectedCTAs);
         if (s.generationMode) setGenerationMode(s.generationMode);
         if (s.gridFormat) setGridFormat(s.gridFormat);
+        // Content fields are set authoritatively (with empty defaults) so they never leak from a
+        // previously-viewed account when this account's batch lacks them.
+        setGridCells(Array.isArray(s.gridCells) ? s.gridCells : null);
+        setKeptCellIds(new Set(Array.isArray(s.keptCellIds) ? s.keptCellIds : []));
+        setBlitzImages(Array.isArray(batch.blitzImages) ? batch.blitzImages : []);
+        setBlitzImageError(s.blitzImageError);
         if (s.campaignIntent) {
           userChangedIntentRef.current = true;
           setCampaignIntent(s.campaignIntent);
         }
+        // Restore the saved stage. 'grid-images' falls back to 'grid-review' when the pool is
+        // empty (e.g. an old record saved before pools persisted); a missing step → 'config'.
+        const hasPool = Array.isArray(batch.blitzImages) && batch.blitzImages.some(img => img != null);
+        const savedStep = s.currentStep ?? 'config';
+        setCurrentStep(savedStep === 'grid-images' && !hasPool ? 'grid-review' : savedStep);
+
+        // Restore the generated image batch if this account has one.
+        if (Array.isArray(batch.packages) && batch.packages.length > 0) {
+          setGeneratedAds(batch.packages.slice(0, MAX_STORED_ADS));
+          setBatchPublishedAt(batch.publishedAt ?? null);
+        } else {
+          setGeneratedAds([]);
+          setBatchPublishedAt(null);
+        }
+        setStorageWarning(null);
       } catch (e) {
         console.error('[AdGenerator] Failed to load batch:', e);
         if (!cancelled) setGeneratedAds([]);
@@ -807,7 +876,7 @@ const AdGenerator = () => {
     })();
 
     return () => { cancelled = true; };
-  }, [currentAccount?.ad_account_id]);
+  }, [currentAccount?.ad_account_id, resetStageState]);
 
   // Auto-fetch converting ad images when account resolves or changes
   const lastFetchedAccountRef = useRef<string | null>(null);
@@ -901,28 +970,6 @@ const AdGenerator = () => {
     runAutoFetch(accountId);
   }, [currentAccount?.ad_account_id, runAutoFetch]);
 
-  // Persist the batch (packages + the generation-context snapshot) to IndexedDB
-  // whenever the ads change. IndexedDB has room for the full set of images, so there's
-  // no image stripping, no size guard, and no QuotaExceededError handling — the entire
-  // batch is kept intact and survives publish + hard refresh until a new batch replaces
-  // it. Debounced via setTimeout to coalesce rapid changes.
-  useEffect(() => {
-    if (generatedAds.length === 0 || isLoadingAds) return;
-
-    const accountId = getScopedAccountId();
-    const saveTimerId = scheduleDeferredWork(() => {
-      const packages = generatedAds.slice(0, MAX_STORED_ADS);
-      debugLog(`Persisting ${packages.length} ads to IndexedDB`);
-      saveBatch(accountId, {
-        packages,
-        session: sessionRef.current,
-        publishedAt: batchPublishedAt,
-      }).catch(e => console.warn('[AdGenerator] Failed to persist batch:', e));
-    }, 200);
-
-    return () => clearTimeout(saveTimerId);
-  }, [generatedAds, isLoadingAds, batchPublishedAt]);
-
   // Hand the batch to the publisher and persist it before navigating. The in-memory
   // publishStore is the PRIMARY, synchronous handoff (no size limit), so navigation
   // never waits on storage. The IndexedDB write is the backup that survives a hard
@@ -941,18 +988,37 @@ const AdGenerator = () => {
     }).catch(e => console.warn('[AdGenerator] Failed to persist batch on flush:', e));
   }, [generatedAds, effectiveIntent, batchPublishedAt]);
 
-  // Clear all generated ads — deletes the persisted batch for this account. Copy
-  // selections stay in memory (copyOptions untouched) so the user can regenerate.
+  // "Clear All" — remove the generated IMAGES only. The copy stages (options, selections,
+  // Blitz grid) stay in memory and the persistence effect re-saves them image-free, so the
+  // user can regenerate images without losing locked-in copy. Use "Start over" to scrap copy.
   const handleClearAllAds = useCallback(() => {
-    if (window.confirm('Are you sure you want to delete all generated creatives? Your copy selections will be preserved so you can regenerate.')) {
-      setGeneratedAds([]);
-      setBatchPublishedAt(null);
-      clearBatch(getScopedAccountId()).catch(() => { /* non-critical */ });
-      clearImageCache(); // Also clear reference image cache to free storage space
-      setStorageWarning(null);
-      setVisibleAdsCount(ADS_PER_PAGE);
-    }
+    if (!window.confirm('Delete all generated creatives? Your copy is kept so you can regenerate images — use "Start over / New brief" to clear the copy too.')) return;
+    setGeneratedAds([]);
+    setBlitzImages([]);        // the Blitz image pool is generated imagery too
+    setBlitzImageError(undefined);
+    setBatchPublishedAt(null);
+    clearImageCache(); // Also clear reference image cache to free storage space
+    setStorageWarning(null);
+    setVisibleAdsCount(ADS_PER_PAGE);
+    // The persistence effect re-saves the copy-only session automatically when copy exists.
+    // If there's no copy to keep, remove the record now (the effect won't clean it up).
+    const session = sessionRef.current;
+    const keepsCopy = !!session.copyOptions || (session.gridCells?.length ?? 0) > 0;
+    if (!keepsCopy) clearBatch(getScopedAccountId()).catch(() => { /* non-critical */ });
   }, []);
+
+  // "Start over / New brief" — scrap EVERY output stage (copy, selections, Blitz grid, and
+  // generated creatives) and return to a blank config. Unlike "Clear All" (images only, copy
+  // kept), this wipes the copy too so nothing rehydrates on refresh.
+  const handleStartOver = useCallback(() => {
+    if (!window.confirm('Start a new brief? This scraps the generated copy, Blitz grid, selections, and creatives for this account so you begin from a blank slate. This cannot be undone.')) return;
+    resetStageState();          // copy, selections, Blitz grid + pool, creatives → back to config
+    setVisibleAdsCount(ADS_PER_PAGE);
+    setStorageWarning(null);
+    setError(null);
+    // Wipe the persisted record so nothing rehydrates on refresh.
+    clearBatch(getScopedAccountId()).catch(() => { /* non-critical */ });
+  }, [resetStageState]);
 
   // Load more ads
   const handleLoadMore = useCallback(() => {
@@ -2238,6 +2304,17 @@ const AdGenerator = () => {
           <span className="step-label">Generate Creatives</span>
         </div>
       </div>
+
+      {/* Start over / New brief — scraps the copy stages too. "Clear All" (in the generated
+          section) only removes images and keeps the copy. Shown whenever there's something
+          to scrap, so it's reachable from any stage. */}
+      {hasStageContent && (
+        <div className="start-over-row">
+          <button type="button" className="start-over-btn" onClick={handleStartOver}>
+            ↺ Start over / New brief
+          </button>
+        </div>
+      )}
 
       {/* Error Display */}
       {error && (

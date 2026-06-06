@@ -24,7 +24,7 @@
  */
 
 import type {
-  GeneratedAdPackage, CopyOption,
+  GeneratedAdPackage, CopyOption, GridCell, GeneratedImageResult,
   AudienceType, ConceptType, AdType, ImageSize, ImageModel,
 } from './openaiApi';
 import type { FormatType } from '../lib/axisTags';
@@ -47,6 +47,8 @@ export interface BatchSessionContext {
   campaignIntent?: CampaignIntent;
   copySource?: 'generate' | 'import' | 'manual' | 'swipe';
   adType?: AdType;
+  // Which workflow stage the user was on, so a refresh lands them back where they were.
+  currentStep?: 'config' | 'copy-selection' | 'final-config' | 'grid-review' | 'grid-images';
   // Generation knobs — required for on-brand regeneration after a refresh
   selectedProductId?: string | null;
   similarityValue?: number;
@@ -66,6 +68,12 @@ export interface BatchSessionContext {
   // Blitz grid
   generationMode?: 'single' | 'grid';
   gridFormat?: FormatType;
+  // The generated Angle × Hook copy matrix + which cells are kept, so the Blitz copy stage
+  // survives a refresh (keptCellIds is the Set serialized to an array for storage).
+  gridCells?: GridCell[] | null;
+  keptCellIds?: string[];
+  // Partial-failure warning for the Blitz image pool (e.g. "2 of 4 images failed"), if any.
+  blitzImageError?: string;
   // The Core Promise the batch lives inside (stored for reference; the Core Promise
   // library has its own persistence, so this is not re-applied on restore).
   corePromise?: string;
@@ -75,6 +83,7 @@ export interface BatchSessionContext {
 export interface StoredBatch {
   accountId: string;                  // keyPath — one record per account
   packages: GeneratedAdPackage[];     // generated ad packages, full images intact
+  blitzImages?: (GeneratedImageResult | null)[]; // Blitz rendered image pool (slot-aligned; null = a failed slot)
   session: BatchSessionContext;       // the config that produced them
   publishedAt: number | null;         // set when the batch is published to Meta (drives the badge)
 }
@@ -181,6 +190,7 @@ export async function saveBatch(
   accountId: string | null | undefined,
   data: {
     packages: GeneratedAdPackage[];
+    blitzImages?: (GeneratedImageResult | null)[];
     session: BatchSessionContext;
     publishedAt?: number | null;
   },
@@ -192,6 +202,7 @@ export async function saveBatch(
     const entry: StoredBatch = {
       accountId: key,
       packages: data.packages,
+      blitzImages: data.blitzImages ?? [],
       session: data.session,
       publishedAt: data.publishedAt ?? null,
     };
