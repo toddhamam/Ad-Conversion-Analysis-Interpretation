@@ -438,6 +438,7 @@ const AdGenerator = () => {
       gridCells,
       keptCellIds: Array.from(keptCellIds),
       currentStep,
+      blitzImageError,
     };
     sessionRef.current = session;
 
@@ -447,14 +448,15 @@ const AdGenerator = () => {
     // write once there's a generated output worth keeping, and skip while the initial restore
     // is still running.
     if (isLoadingAds) return;
-    const hasContent = generatedAds.length > 0 || !!copyOptions || (gridCells?.length ?? 0) > 0;
+    const hasContent = generatedAds.length > 0 || blitzImages.length > 0 || !!copyOptions || (gridCells?.length ?? 0) > 0;
     if (!hasContent) return;
 
     const accountId = getScopedAccountId();
     const saveTimerId = scheduleDeferredWork(() => {
-      debugLog(`Persisting session to IndexedDB (${generatedAds.length} ads, step ${currentStep})`);
+      debugLog(`Persisting session to IndexedDB (${generatedAds.length} ads, ${blitzImages.length} blitz images, step ${currentStep})`);
       saveBatch(accountId, {
         packages: generatedAds.slice(0, MAX_STORED_ADS),
+        blitzImages,
         session,
         publishedAt: batchPublishedAt,
       }).catch(e => console.warn('[AdGenerator] Failed to persist batch:', e));
@@ -465,7 +467,7 @@ const AdGenerator = () => {
     similarityValue, copyVariationValue, imageSize, imageModel, variationCount,
     copyOptions, selectedHeadlines, selectedBodyTexts, selectedCTAs,
     generationMode, gridFormat, corePromise, gridCells, keptCellIds, currentStep,
-    generatedAds, isLoadingAds, batchPublishedAt,
+    blitzImages, blitzImageError, generatedAds, isLoadingAds, batchPublishedAt,
   ]);
 
   // Handle brand image upload
@@ -794,8 +796,19 @@ const AdGenerator = () => {
         if (cancelled) return;
 
         if (!batch) {
+          // No batch for this account — clear every stage so a different/fresh account starts
+          // blank instead of showing the previously-viewed account's persisted work.
           setGeneratedAds([]);
           setBatchPublishedAt(null);
+          setBlitzImages([]);
+          setBlitzImageError(undefined);
+          setGridCells(null);
+          setKeptCellIds(new Set());
+          setCopyOptions(null);
+          setSelectedHeadlines([]);
+          setSelectedBodyTexts([]);
+          setSelectedCTAs([]);
+          setCurrentStep('config');
           return;
         }
 
@@ -819,18 +832,21 @@ const AdGenerator = () => {
         if (Array.isArray(s.selectedCTAs)) setSelectedCTAs(s.selectedCTAs);
         if (s.generationMode) setGenerationMode(s.generationMode);
         if (s.gridFormat) setGridFormat(s.gridFormat);
-        if (Array.isArray(s.gridCells)) setGridCells(s.gridCells);
-        if (Array.isArray(s.keptCellIds)) setKeptCellIds(new Set(s.keptCellIds));
+        // Content fields are set authoritatively (with empty defaults) so they never leak from a
+        // previously-viewed account when this account's batch lacks them.
+        setGridCells(Array.isArray(s.gridCells) ? s.gridCells : null);
+        setKeptCellIds(new Set(Array.isArray(s.keptCellIds) ? s.keptCellIds : []));
+        setBlitzImages(Array.isArray(batch.blitzImages) ? batch.blitzImages : []);
+        setBlitzImageError(s.blitzImageError);
         if (s.campaignIntent) {
           userChangedIntentRef.current = true;
           setCampaignIntent(s.campaignIntent);
         }
-        if (s.currentStep) {
-          // 'grid-images' reviews the Blitz image pool, which isn't persisted — land on
-          // 'grid-review' instead (the kept copy cells ARE restored) so the user re-renders
-          // images rather than facing an empty review panel.
-          setCurrentStep(s.currentStep === 'grid-images' ? 'grid-review' : s.currentStep);
-        }
+        // Restore the saved stage. 'grid-images' falls back to 'grid-review' when the pool is
+        // empty (e.g. an old record saved before pools persisted); a missing step → 'config'.
+        const hasPool = Array.isArray(batch.blitzImages) && batch.blitzImages.some(img => img != null);
+        const savedStep = s.currentStep ?? 'config';
+        setCurrentStep(savedStep === 'grid-images' && !hasPool ? 'grid-review' : savedStep);
 
         // Restore the generated image batch if this account has one.
         if (Array.isArray(batch.packages) && batch.packages.length > 0) {
@@ -968,6 +984,8 @@ const AdGenerator = () => {
   const handleClearAllAds = useCallback(() => {
     if (!window.confirm('Delete all generated creatives? Your copy is kept so you can regenerate images — use "Start over / New brief" to clear the copy too.')) return;
     setGeneratedAds([]);
+    setBlitzImages([]);        // the Blitz image pool is generated imagery too
+    setBlitzImageError(undefined);
     setBatchPublishedAt(null);
     clearImageCache(); // Also clear reference image cache to free storage space
     setStorageWarning(null);

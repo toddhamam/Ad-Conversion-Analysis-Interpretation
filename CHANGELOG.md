@@ -1,9 +1,9 @@
 # Changelog
 
-## 2026-06-06 — CreativeIQ: persist every copy stage until manually scrapped (+ "Start over")
+## 2026-06-06 — CreativeIQ: persist every generated stage (copy AND images) until manually scrapped (+ "Start over")
 
 ### What
-CreativeIQ only persisted the **generated image batch** — the copy that produced it rode along as a *passenger* of that batch. So if you generated copy you were happy with and the **image** step then errored, a refresh wiped the copy and you had to regenerate everything from scratch (burning tokens re-writing copy you'd already locked in). Now **every output stage persists independently** the moment it's produced — generated copy options + your selections, the Blitz Angle × Hook grid + kept cells, the Step-1 config, and the current stage — surviving a hard refresh until you explicitly scrap it. An image-generation error can no longer cost you your copy.
+CreativeIQ only persisted the **final generated image batch** — the copy that produced it rode along as a *passenger*, and the Blitz **rendered image pool** (the `grid-images` review step, before you click Publish) was entirely transient. So if you generated copy you were happy with and the **image** step then errored — or you approved Blitz images and a **publish-phase** error sent you back — a refresh wiped that work and you regenerated everything from scratch (burning tokens). Now **every generated output stage persists independently** the moment it's produced — copy options + selections, the Blitz Angle × Hook grid + kept cells, **the Blitz rendered image pool**, generated creatives, the Step-1 config, and the current stage — surviving a hard refresh until you explicitly scrap it. A generation **or** publishing error can no longer cost you your copy *or* your approved images.
 
 Persistence is now split into two explicit actions:
 - **Clear All** (same place) removes the **images only** and keeps the copy, so you can re-render images without losing locked-in copy.
@@ -11,12 +11,12 @@ Persistence is now split into two explicit actions:
 
 ### Added
 - **"Start over / New brief"** button under the stepper (shown whenever there's something to scrap), with a confirm. Wipes all copy/grid/image stages and the persisted record.
-- **`gridCells`, `keptCellIds`, and `currentStep`** added to `BatchSessionContext` (`batchStore.ts`) so the Blitz copy grid and the active stage rehydrate too.
+- **`gridCells`, `keptCellIds`, `currentStep`, `blitzImageError`** (`BatchSessionContext`) + **`blitzImages`** (top-level on `StoredBatch`, parallel to `packages`) so the Blitz copy grid, the rendered image pool, and the active stage all rehydrate.
 
 ### Changed
-- **Persistence fires on every stage change, not just images.** The session snapshot and the IndexedDB write are unified into one debounced effect keyed on all stage state, so copy/grid persist even before any image exists. (Previously the save was gated on `generatedAds.length > 0`.)
-- **Restore rehydrates the copy stages before the image check.** The load path no longer bails when there are no packages — it restores copy, selections, grid, and stage first, then restores images if present. A persisted `grid-images` step restores to `grid-review` (the Blitz image pool is transient), so you land on your kept copy cells ready to re-render.
-- **"Clear All" keeps the copy.** It removes images and re-persists the copy-only session (or clears the record if there's no copy), instead of deleting everything.
+- **Persistence fires on every stage change, not just images.** The session snapshot and the IndexedDB write are unified into one debounced effect keyed on all stage state (incl. the Blitz image pool), so copy/grid/pool persist even before a final batch exists. (Previously the save was gated on `generatedAds.length > 0`.)
+- **Restore rehydrates copy + pool + stage before the image check** and is **authoritative** for content fields — it restores copy, selections, grid, the Blitz pool, and stage first, then the final packages if present. A persisted `grid-images` step restores **with its image pool intact** (falling back to `grid-review` only for legacy records saved before the pool persisted). Accounts with no batch reset every stage, so a different/fresh account never shows the previously-viewed account's work.
+- **"Clear All" keeps the copy.** It removes both image payloads (final packages + Blitz pool) and re-persists the copy-only session (or clears the record if there's no copy), instead of deleting everything.
 
 ### Internal
 - Two effects (session-snapshot builder + batch-save) collapsed into one — single dependency list, and the save reads the freshly-built `session` directly instead of a ref.
@@ -24,7 +24,7 @@ Persistence is now split into two explicit actions:
 - Build green (`tsc -b` + `vite build`); no new lint issues (3 pre-existing `exhaustive-deps` warnings untouched).
 
 ### Note
-- The Blitz **image pool** (`grid-images` review step) is still transient — only the copy grid persists, so after a refresh you re-render those images from the restored kept cells. Generated single-ad / `final-config` creatives persist as before. Persisting the Blitz image pool is a possible follow-up.
+- After you click **Publish**, the assembled creatives are also stored as `packages`, so for a published Blitz batch the rendered pool and the packages briefly co-exist on disk. IndexedDB has room (quota is a share of free disk), so this is accepted; a dedupe is a possible micro-optimization.
 
 ## 2026-06-05 — CreativeIQ images: model picker in Blitz + automatic Gemini↔OpenAI fallback
 
