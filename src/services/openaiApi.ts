@@ -472,6 +472,23 @@ export type SpellingLocale = 'US' | 'UK' | 'AU' | 'CA';
 export type EmojiPolicy = 'none' | 'sparing' | 'liberal';
 
 /**
+ * A real customer testimonial the user supplied (the "top 5" social-proof corpus).
+ *
+ * These are REAL words and are fed to the copywriter to be quoted VERBATIM — they replace the
+ * AI's tendency to invent fake named testimonials (e.g. "Sarah went from X to Y"). Only `approved`
+ * testimonials are ever serialized into a prompt (see buildTestimonialContextString), so the user
+ * explicitly attests they have the rights to use the quote and that it is accurate.
+ */
+export interface Testimonial {
+  id: string;
+  quote: string;          // REQUIRED — the customer's verbatim words (quoted exactly in copy)
+  attribution?: string;   // who said it: "Sarah M.", "Sarah M., Austin TX", or "verified buyer"
+  result?: string;        // optional structured outcome highlight, e.g. "down 15 lbs in 6 weeks"
+  theme?: string;         // optional steer for angle-matching: "result" | "ease" | "skepticism" | "price" | ''
+  approved?: boolean;     // compliance gate — user confirms rights to use + accuracy; only approved are used
+}
+
+/**
  * Per-ad-account, user-authored Brand Voice & Guidelines profile.
  *
  * This is the AUTHORITATIVE voice for the account — it is injected into every copy prompt and
@@ -498,6 +515,7 @@ export interface BrandVoiceProfile {
   // — Strategic substance (soft; auto-extraction never produces these) —
   avatar: string;              // the ICP: who they are, their pain, desire, and #1 objection
   bigIdea: string;             // the unique mechanism / core promise the brand leads with
+  testimonials: Testimonial[]; // the top ~5 real customer testimonials — quoted verbatim for social-proof angles
 
   // — Hard guardrails (v1: prompt-enforced; deterministic enforcement is a later pass) —
   spellingLocale: SpellingLocale;
@@ -2577,6 +2595,73 @@ You are writing as this specific brand. Match it exactly. Where this conflicts w
   return block;
 }
 
+// Angles where real testimonials are the PRIMARY lever, not just decoration.
+const PROOF_PRIMARY_ANGLES: readonly GridAngle[] = ['social_proof', 'transformation', 'authority', 'fear_elimination'];
+
+/**
+ * Serialize the user's REAL customer testimonials into a prompt block, weighted by how proof-driven
+ * the current request is (angle × audience). Only `approved` testimonials are ever emitted.
+ *
+ * This is the anti-fabrication mechanism: the angle guidance elsewhere literally tells the model to
+ * invent named testimonials ("Sarah went from X to Y"). When the user has supplied real quotes, this
+ * block hands the copywriter the actual words to use VERBATIM and forbids fabrication. Returns '' when
+ * there is no profile, it is disabled, or there are no approved testimonials.
+ *
+ * @param ctx.angles the angle(s) in play — pass [] for auto-select / unknown angle (e.g. 'auto' mode).
+ */
+function buildTestimonialContextString(
+  profile: BrandVoiceProfile | null | undefined,
+  ctx: { angles: GridAngle[]; audienceType: AudienceType },
+): string {
+  if (!profile || !profile.enabled) return '';
+  // The ≤MAX_TESTIMONIALS cap is a storage invariant (enforced in normalize()); no need to re-cap here.
+  const approved = (profile.testimonials || []).filter(t => t?.approved && t.quote?.trim());
+  if (!approved.length) return '';
+
+  const warm = ctx.audienceType === 'retargeting' || ctx.audienceType === 'retention';
+  const hasPrimaryAngle = ctx.angles.some(a => PROOF_PRIMARY_ANGLES.includes(a));
+  const hasSupportingAngle = ctx.angles.some(a => a === 'product_benefits' || a === 'pain');
+  // Warm audiences and proof-led angles → primary. Unknown angle (auto) or moderate angles → supporting.
+  const tier: 'primary' | 'supporting' | 'optional' =
+    warm || hasPrimaryAngle ? 'primary'
+    : ctx.angles.length === 0 || hasSupportingAngle ? 'supporting'
+    : 'optional';
+
+  const list = approved
+    .map((t, i) => {
+      const quote = t.quote.trim().replace(/\s+/g, ' ').slice(0, 400);
+      const who = t.attribution?.trim() || 'verified customer';
+      const outcome = t.result?.trim() ? ` [outcome: ${t.result.trim()}]` : '';
+      const bestFor = t.theme?.trim() ? ` [best for: ${t.theme.trim()}]` : '';
+      return `${i + 1}. "${quote}" — ${who}${outcome}${bestFor}`;
+    })
+    .join('\n');
+
+  const emphasisLead =
+    tier === 'primary'
+      ? "TESTIMONIALS ARE A PRIMARY LEVER FOR THIS REQUEST. Build the proof-driven copy (social proof, transformation, authority, objection-handling) AROUND one of the real quotes below — let the customer's own words carry the sell."
+      : tier === 'supporting'
+      ? 'Testimonials are a SUPPORTING asset here. Weave a real quote in where it strengthens credibility, but do not force one into every option.'
+      : 'Testimonials are available if useful. This angle is not primarily proof-driven — only use a quote if it genuinely fits; otherwise leave them out.';
+
+  const audienceNote = warm
+    ? 'AUDIENCE IS WARM (they already know the product and are weighing a decision): specific, named, detailed testimonials are exactly what converts — use the concrete names, numbers, and timeframes in the quotes.'
+    : 'AUDIENCE IS COLD (they do not know the brand yet): favor the most relatable, broadly credible testimonials; keep them feeling universal rather than niche.';
+
+  return `\n\n=== REAL CUSTOMER TESTIMONIALS (verbatim — actual customer words) ===
+${emphasisLead}
+${audienceNote}
+
+${list}
+
+HOW TO USE THESE TESTIMONIALS — READ CAREFULLY:
+- They are REAL. When you place a customer quote in body copy, reproduce the words EXACTLY as written, inside quotation marks. You MAY use a shorter continuous excerpt or trim the middle with an ellipsis (…), but you may NOT paraphrase, add, reorder, or change any word inside the quotation marks, and you may NOT attribute a quote to a different person.
+- A headline is too short for a full quote: there you may distill the SENTIMENT in your own words, but NEVER wrap invented words in quotation marks as if a customer said them.
+- Do NOT fabricate testimonials, names, numbers, or outcomes. Any "Sarah went from X to Y" style example anywhere in these instructions is an ILLUSTRATIVE PLACEHOLDER — replace it with one of the REAL testimonials above, or leave the quote out entirely.
+- If an angle calls for proof but none of the real testimonials genuinely fit, use the numeric proof from the performance data instead of inventing a quote.
+- Never claim more than a testimonial actually states.`;
+}
+
 function buildAnalysisContextString(
   analysis: ChannelAnalysisResult | null,
   options?: { demoteObservedVoice?: boolean },
@@ -2863,6 +2948,11 @@ export async function generateCopyOptions(config: {
   // Per-account authored Brand Voice profile — injected into the system prompt and (when it defines
   // a voice) demotes the analysis-derived voice to reference-only.
   const brandVoiceContext = buildBrandVoiceContextString(config.brandProfile);
+  // Real customer testimonials — weighted by this concept's proof-relevance (auto mode → unknown angle).
+  const testimonialContext = buildTestimonialContextString(config.brandProfile, {
+    angles: config.conceptType !== 'auto' ? [config.conceptType] : [],
+    audienceType: config.audienceType,
+  });
 
   // Build comprehensive analysis context (shared with grid-copy generation)
   const analysisContext = buildAnalysisContextString(analysis, {
@@ -3062,6 +3152,8 @@ NOTE: No analysis data is available. Run Channel Analysis first for data-driven 
 
   // Authoritative per-account brand voice — appended last so it carries top priority.
   systemPrompt += brandVoiceContext;
+  // Real customer testimonials (verbatim social-proof corpus) — sits with the brand voice.
+  systemPrompt += testimonialContext;
 
   // Build product context section
   let productSection = '';
@@ -3285,6 +3377,11 @@ export async function generateGridCopy(config: {
   const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
 
   const brandVoiceContext = buildBrandVoiceContextString(config.brandProfile);
+  // Real customer testimonials — the grid runs many angles at once, so emphasis reflects the full set.
+  const testimonialContext = buildTestimonialContextString(config.brandProfile, {
+    angles,
+    audienceType: config.audienceType,
+  });
   const analysisContext = buildAnalysisContextString(config.analysisData, {
     demoteObservedVoice: brandProfileDefinesVoice(config.brandProfile),
   });
@@ -3320,7 +3417,7 @@ COPY QUALITY RULES (NON-NEGOTIABLE):
 5. ${META_AD_POLICY_PROMPT}
 
 BUSINESS CONTEXT:
-${effectiveConversionLanguage}${brandVoiceContext}`;
+${effectiveConversionLanguage}${brandVoiceContext}${testimonialContext}`;
 
   const userPrompt = `Generate the copy matrix for a ${config.audienceType.toUpperCase()} audience.
 ${productSection}
@@ -3561,6 +3658,11 @@ export async function regenerateSingleCopy(config: {
   // Per-account authored Brand Voice profile — appended to the system prompt below, and (when it
   // defines a voice) demotes the condensed observed-voice block to reference-only.
   const brandVoiceContext = buildBrandVoiceContextString(config.brandProfile);
+  // Real customer testimonials — weighted by this concept's proof-relevance (auto mode → unknown angle).
+  const testimonialContext = buildTestimonialContextString(config.brandProfile, {
+    angles: config.conceptType !== 'auto' ? [config.conceptType] : [],
+    audienceType: config.audienceType,
+  });
   const demoteObservedVoice = brandProfileDefinesVoice(config.brandProfile);
 
   // Build a CONDENSED analysis context — deliberately lighter than buildAnalysisContextString.
@@ -3683,6 +3785,8 @@ ${bv.distinctiveTraits?.length ? `Traits: ${bv.distinctiveTraits.join('; ')}` : 
 
   // Authoritative per-account brand voice — appended last so it carries top priority.
   systemPrompt += brandVoiceContext;
+  // Real customer testimonials (verbatim social-proof corpus) — sits with the brand voice.
+  systemPrompt += testimonialContext;
 
   // Build product context
   let productSection = '';

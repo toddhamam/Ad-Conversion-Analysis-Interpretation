@@ -5,12 +5,20 @@
 // every copy prompt (see buildBrandVoiceContextString in services/openaiApi.ts).
 
 import { getScopedItem, setScopedItem, removeScopedItem } from './scopedStorage';
-import type { BrandVoiceProfile } from '../services/openaiApi';
+import type { BrandVoiceProfile, Testimonial } from '../services/openaiApi';
 
 const STORAGE_KEY = 'convertra_brand_voice';
 
-function genId(): string {
-  return `brand_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+/** The "top N" social-proof corpus is intentionally small — quality over quantity, and prompt-token safe. */
+export const MAX_TESTIMONIALS = 5;
+
+function genId(prefix = 'brand'): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** A blank testimonial card for the UI repeater. Starts unapproved so it is excluded from prompts until vetted. */
+export function createEmptyTestimonial(): Testimonial {
+  return { id: genId('tm'), quote: '', attribution: '', result: '', theme: '', approved: false };
 }
 
 /** A blank profile with safe defaults. `enabled` starts true so a saved profile takes effect immediately. */
@@ -29,6 +37,7 @@ export function createEmptyBrandVoiceProfile(): BrandVoiceProfile {
     signaturePhrases: [],
     avatar: '',
     bigIdea: '',
+    testimonials: [],
     spellingLocale: 'US',
     bannedWords: [],
     requiredDisclaimers: [],
@@ -47,6 +56,24 @@ function normalize(raw: Partial<BrandVoiceProfile> | null): BrandVoiceProfile {
   if (!raw || typeof raw !== 'object') return base;
   const asArray = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : base.signaturePhrases;
+  // Coerce stored testimonials into a clean, capped list: drop non-objects, trim strings, require a
+  // non-empty quote, backfill ids, and never exceed MAX_TESTIMONIALS.
+  const asTestimonials = (v: unknown): Testimonial[] => {
+    if (!Array.isArray(v)) return [];
+    const str = (x: unknown): string => (typeof x === 'string' ? x.trim() : '');
+    return v
+      .filter((t): t is Record<string, unknown> => !!t && typeof t === 'object')
+      .map((t) => ({
+        id: typeof t.id === 'string' && t.id ? t.id : genId(),
+        quote: str(t.quote),
+        attribution: str(t.attribution) || undefined,
+        result: str(t.result) || undefined,
+        theme: str(t.theme) || undefined,
+        approved: typeof t.approved === 'boolean' ? t.approved : false,
+      }))
+      .filter((t) => !!t.quote)
+      .slice(0, MAX_TESTIMONIALS);
+  };
   return {
     ...base,
     ...raw,
@@ -56,6 +83,7 @@ function normalize(raw: Partial<BrandVoiceProfile> | null): BrandVoiceProfile {
     signaturePhrases: asArray(raw.signaturePhrases),
     bannedWords: asArray(raw.bannedWords),
     requiredDisclaimers: asArray(raw.requiredDisclaimers),
+    testimonials: asTestimonials(raw.testimonials),
     spellingLocale: raw.spellingLocale ?? base.spellingLocale,
     emojiPolicy: raw.emojiPolicy ?? base.emojiPolicy,
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : base.createdAt,

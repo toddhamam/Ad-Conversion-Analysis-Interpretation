@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Save, Sparkles, Lock, Unlock, Trash2, X, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Save, Sparkles, Lock, Unlock, Trash2, X, CheckCircle, AlertTriangle, Plus, Quote } from 'lucide-react';
 import SEO from '../components/SEO';
 import { useAdAccount } from '../contexts/AdAccountContext';
 import { getCachedAnalysis } from '../lib/channelAnalysisCache';
@@ -8,8 +8,10 @@ import {
   saveBrandVoiceProfile,
   clearBrandVoiceProfile,
   createEmptyBrandVoiceProfile,
+  createEmptyTestimonial,
+  MAX_TESTIMONIALS,
 } from '../lib/brandVoiceProfile';
-import type { BrandVoiceProfile, SpellingLocale, EmojiPolicy } from '../services/openaiApi';
+import type { BrandVoiceProfile, SpellingLocale, EmojiPolicy, Testimonial } from '../services/openaiApi';
 import './BrandVoice.css';
 
 // A lightweight chip/tag input — add on Enter or comma, remove with the × button.
@@ -76,6 +78,105 @@ const TagInput = ({
   );
 };
 
+// One testimonial in the repeater — quote + metadata + the approval gate that lets it reach the AI.
+const TestimonialCard = ({
+  testimonial,
+  index,
+  onChange,
+  onRemove,
+}: {
+  testimonial: Testimonial;
+  index: number;
+  onChange: (partial: Partial<Testimonial>) => void;
+  onRemove: () => void;
+}) => (
+  <div className="bv-testimonial-card">
+    <div className="bv-testimonial-head">
+      <span className="bv-testimonial-title">
+        <Quote size={13} aria-hidden="true" /> Testimonial {index + 1}
+      </span>
+      <button
+        type="button"
+        className="bv-testimonial-remove"
+        onClick={onRemove}
+        aria-label={`Remove testimonial ${index + 1}`}
+      >
+        <X size={14} aria-hidden="true" />
+      </button>
+    </div>
+
+    <label className="bv-field">
+      <span className="bv-label">Quote <span className="bv-req" aria-hidden="true">*</span></span>
+      <textarea
+        className="bv-textarea"
+        rows={2}
+        value={testimonial.quote}
+        onChange={e => onChange({ quote: e.target.value })}
+        placeholder="Paste the customer's exact words — these are quoted verbatim in your ads."
+      />
+    </label>
+
+    <div className="bv-grid-2">
+      <label className="bv-field">
+        <span className="bv-label">Attribution</span>
+        <input
+          type="text"
+          className="bv-input"
+          value={testimonial.attribution || ''}
+          onChange={e => onChange({ attribution: e.target.value })}
+          placeholder="Sarah M., Austin TX"
+        />
+      </label>
+      <label className="bv-field">
+        <span className="bv-label">Result highlight</span>
+        <input
+          type="text"
+          className="bv-input"
+          value={testimonial.result || ''}
+          onChange={e => onChange({ result: e.target.value })}
+          placeholder="down 15 lbs in 6 weeks (optional)"
+        />
+      </label>
+    </div>
+
+    <div className="bv-grid-2">
+      <label className="bv-field">
+        <span className="bv-label">Best for</span>
+        <select
+          className="bv-input"
+          value={testimonial.theme || ''}
+          onChange={e => onChange({ theme: e.target.value })}
+        >
+          <option value="">General proof</option>
+          <option value="result">Result / outcome</option>
+          <option value="ease">Ease of use</option>
+          <option value="skepticism">Overcame skepticism</option>
+          <option value="price">Worth the price</option>
+          <option value="quality">Quality</option>
+          <option value="speed">Fast results</option>
+        </select>
+      </label>
+      <div className="bv-field bv-approve-field">
+        <span className="bv-label">Approved for use</span>
+        <label className="bv-approve">
+          <input
+            type="checkbox"
+            checked={!!testimonial.approved}
+            onChange={e => onChange({ approved: e.target.checked })}
+          />
+          <span>I have permission &amp; it's accurate</span>
+        </label>
+      </div>
+    </div>
+
+    {testimonial.quote.trim() && !testimonial.approved && (
+      <div className="bv-testimonial-warn">
+        <AlertTriangle size={12} aria-hidden="true" /> Not approved yet — this won't be sent to CreativeIQ™.
+      </div>
+    )}
+  </div>
+);
+
 const BrandVoice = () => {
   const { accountBusinessType: businessType, currentAccount } = useAdAccount();
   const accountId = currentAccount?.ad_account_id;
@@ -102,6 +203,18 @@ const BrandVoice = () => {
     setDirty(true);
     setSaveState({ type: 'idle' });
   }, []);
+
+  // ── Testimonials (the verbatim social-proof corpus) ──
+  const addTestimonial = () => {
+    if (profile.testimonials.length >= MAX_TESTIMONIALS) return;
+    update({ testimonials: [...profile.testimonials, createEmptyTestimonial()] });
+  };
+  const updateTestimonial = (id: string, partial: Partial<Testimonial>) => {
+    update({ testimonials: profile.testimonials.map(t => (t.id === id ? { ...t, ...partial } : t)) });
+  };
+  const removeTestimonial = (id: string) => {
+    update({ testimonials: profile.testimonials.filter(t => t.id !== id) });
+  };
 
   const handleFillFromAnalysis = () => {
     if (!analysisVoice) return;
@@ -302,6 +415,45 @@ const BrandVoice = () => {
             placeholder="e.g. Map every resistance loop to a single trigger, then dismantle it in one pass."
           />
         </label>
+      </section>
+
+      {/* ── Customer testimonials (verbatim social proof) ─────────────── */}
+      <section className="bv-section">
+        <div className="bv-section-head">
+          <h2>Customer Testimonials</h2>
+          <span className="bv-section-note">{profile.testimonials.length}/{MAX_TESTIMONIALS} · quoted verbatim</span>
+        </div>
+        <p className="bv-hint bv-section-intro">
+          Your strongest real reviews. CreativeIQ™ quotes these <strong>word-for-word</strong> when it writes
+          social-proof, transformation, and retargeting ads — and stops inventing fake testimonials. Only
+          testimonials you mark <strong>approved</strong> are ever sent to the AI.
+        </p>
+
+        {profile.testimonials.length === 0 && (
+          <div className="bv-testimonials-empty">
+            No testimonials yet. Add up to {MAX_TESTIMONIALS} verbatim customer quotes.
+          </div>
+        )}
+
+        {profile.testimonials.map((t, i) => (
+          <TestimonialCard
+            key={t.id}
+            testimonial={t}
+            index={i}
+            onChange={partial => updateTestimonial(t.id, partial)}
+            onRemove={() => removeTestimonial(t.id)}
+          />
+        ))}
+
+        <button
+          type="button"
+          className="bv-btn bv-btn-ghost bv-add-testimonial"
+          onClick={addTestimonial}
+          disabled={profile.testimonials.length >= MAX_TESTIMONIALS}
+          title={profile.testimonials.length >= MAX_TESTIMONIALS ? `Maximum ${MAX_TESTIMONIALS} testimonials` : 'Add a testimonial'}
+        >
+          <Plus size={15} aria-hidden="true" /> Add testimonial
+        </button>
       </section>
 
       {/* ── Guardrails ────────────────────────────────────────────────── */}
