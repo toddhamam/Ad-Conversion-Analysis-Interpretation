@@ -311,6 +311,116 @@ select.bv-input {
   color: var(--text-muted);
 }
 
+/* ── Testimonials ───────────────────────────────────────────────────── */
+.bv-section-intro {
+  margin-top: -4px;
+  margin-bottom: 18px;
+  max-width: 620px;
+}
+
+.bv-testimonials-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 18px;
+  text-align: center;
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border-primary);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.bv-testimonial-card {
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 14px;
+  background: var(--bg-secondary);
+}
+
+.bv-testimonial-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.bv-testimonial-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.bv-testimonial-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border-primary);
+  border-radius: 7px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.bv-testimonial-remove:hover {
+  background: rgba(220, 38, 38, 0.06);
+  border-color: rgba(220, 38, 38, 0.3);
+  color: #dc2626;
+}
+
+/* Inputs sit on the card's secondary background — lift them to primary for contrast. */
+.bv-testimonial-card .bv-input,
+.bv-testimonial-card .bv-textarea {
+  background: var(--bg-primary);
+}
+
+.bv-req {
+  color: #dc2626;
+}
+
+.bv-approve-field {
+  justify-content: flex-start;
+}
+
+.bv-approve {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  padding: 9px 0;
+}
+
+.bv-approve input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-violet);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.bv-testimonial-warn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #b45309;
+  margin-top: 10px;
+}
+
+.bv-add-testimonial {
+  margin-top: 4px;
+}
+
 /* ── Footer ─────────────────────────────────────────────────────────── */
 .bv-footer {
   display: flex;
@@ -365,7 +475,8 @@ select.bv-input {
   .bv-input,
   .bv-textarea,
   .bv-taginput,
-  .bv-tag-remove {
+  .bv-tag-remove,
+  .bv-testimonial-remove {
     transition: none;
   }
 }

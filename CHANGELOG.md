@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-06-06 — CreativeIQ copy: customer testimonials in Brand Voice (quoted verbatim, anti-fabrication)
+
+### What
+Brand Voice now holds your **top 5 real customer testimonials**, and CreativeIQ™ quotes them **word-for-word** when it writes proof-driven copy. Previously the angle guidance literally told the model to *invent* named social proof ("Sarah went from X to Y in 3 weeks") — so social-proof, transformation, and retargeting ads shipped with **fabricated** quotes. Now the copywriter is handed the user's actual customer words and is forbidden from making any up: it reproduces approved quotes verbatim (a shorter excerpt or an ellipsis is allowed; paraphrasing or re-attributing is not), and when no real quote fits it falls back to numeric proof instead of inventing one.
+
+Testimonials are weighted by how proof-driven each request is: **primary** for proof-led angles (social proof, transformation, authority, fear-elimination) or warm audiences (retargeting/retention), **supporting**/**optional** elsewhere — and warm vs. cold audiences get different usage notes (specific named quotes vs. broadly relatable). Only testimonials the user marks **approved** (an explicit rights + accuracy attestation) are ever sent to the AI.
+
+### Added
+- **`Testimonial` type + `testimonials` field on `BrandVoiceProfile`** (`src/services/openaiApi.ts`) — `quote` (verbatim, required), `attribution`, `result`, `theme` (angle-matching hint), `approved` (compliance gate).
+- **`buildTestimonialContextString(profile, { angles, audienceType })`** (`src/services/openaiApi.ts`) — serializes approved testimonials into an angle/audience-weighted prompt block with a strict verbatim + anti-fabrication directive. Wired into all three copy paths: `generateCopyOptions`, `generateGridCopy` (incl. grid-cell reroll), and `regenerateSingleCopy`.
+- **Customer Testimonials section on `/brand`** (`src/pages/BrandVoice.tsx` + `BrandVoice.css`) — a repeater of up to `MAX_TESTIMONIALS` (5) cards (quote, attribution, result, "best for" theme, approval checkbox, remove), an "Add testimonial" button that disables at the cap, an empty state, and a per-card amber warning when a quote isn't approved yet. Extracted as a `TestimonialCard` subcomponent (mirrors the existing `TagInput` pattern).
+- **`createEmptyTestimonial()` + `MAX_TESTIMONIALS`** (`src/lib/brandVoiceProfile.ts`); `normalize()` now coerces stored testimonials defensively — drops non-objects, trims strings, requires a non-empty quote, backfills ids, and caps at 5.
+
+### Internal
+- Zero new plumbing across the UI→service boundary — testimonials ride inside the `brandProfile` object already passed to every copy call. Empty/unapproved → serializer returns `''` → prompts are byte-identical to before (fully backward compatible).
+- `brandProfileDefinesVoice()` deliberately unchanged — testimonials are substance, not voice, so they never demote the analysis-derived observed voice.
+- `genId()` parameterized (`genId('tm')`); the `theme` hint is emitted to the prompt (`[best for: …]`) rather than collected-and-ignored; the serializer trusts the `normalize()` cap invariant instead of re-capping with a magic number.
+- Build green (`tsc -b` + `vite build`); no new lint issues (4 pre-existing problems untouched).
+
 ## 2026-06-06 — CreativeIQ: persist every generated stage (copy AND images) until manually scrapped (+ "Start over")
 
 ### What
