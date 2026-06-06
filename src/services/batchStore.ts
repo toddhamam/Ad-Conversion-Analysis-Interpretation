@@ -24,7 +24,7 @@
  */
 
 import type {
-  GeneratedAdPackage, CopyOption,
+  GeneratedAdPackage, CopyOption, GridCell,
   AudienceType, ConceptType, AdType, ImageSize, ImageModel,
 } from './openaiApi';
 import type { FormatType } from '../lib/axisTags';
@@ -47,6 +47,8 @@ export interface BatchSessionContext {
   campaignIntent?: CampaignIntent;
   copySource?: 'generate' | 'import' | 'manual' | 'swipe';
   adType?: AdType;
+  // Which workflow stage the user was on, so a refresh lands them back where they were.
+  currentStep?: 'config' | 'copy-selection' | 'final-config' | 'grid-review' | 'grid-images';
   // Generation knobs — required for on-brand regeneration after a refresh
   selectedProductId?: string | null;
   similarityValue?: number;
@@ -66,6 +68,10 @@ export interface BatchSessionContext {
   // Blitz grid
   generationMode?: 'single' | 'grid';
   gridFormat?: FormatType;
+  // The generated Angle × Hook copy matrix + which cells are kept, so the Blitz copy stage
+  // survives a refresh (keptCellIds is the Set serialized to an array for storage).
+  gridCells?: GridCell[] | null;
+  keptCellIds?: string[];
   // The Core Promise the batch lives inside (stored for reference; the Core Promise
   // library has its own persistence, so this is not re-applied on restore).
   corePromise?: string;
