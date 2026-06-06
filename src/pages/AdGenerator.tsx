@@ -406,6 +406,28 @@ const AdGenerator = () => {
   const [savedInspirations, setSavedInspirations] = useState<AdLibraryInspiration[]>([]);
   const [activeInspirationIds, setActiveInspirationIds] = useState<string[]>([]);
 
+  // True when any generated output stage exists worth persisting/scrapping. Single source for
+  // the persist gate and the "Start over" button so the two can't drift apart.
+  const hasStageContent =
+    generatedAds.length > 0 || blitzImages.length > 0 || !!copyOptions || (gridCells?.length ?? 0) > 0;
+
+  // Reset every generated-output stage to a blank slate. One definition shared by the
+  // "no batch for this account" restore path and "Start over", so the blank-state field list
+  // lives in exactly one place (the snapshot and the restore below are its two inverses).
+  const resetStageState = useCallback(() => {
+    setCopyOptions(null);
+    setSelectedHeadlines([]);
+    setSelectedBodyTexts([]);
+    setSelectedCTAs([]);
+    setGridCells(null);
+    setKeptCellIds(new Set());
+    setBlitzImages([]);
+    setBlitzImageError(undefined);
+    setGeneratedAds([]);
+    setBatchPublishedAt(null);
+    setCurrentStep('config');
+  }, []);
+
   // Live snapshot of the generation context, persisted alongside the batch so that
   // (a) every workflow stage rehydrates after a refresh and (b) per-image
   // regeneration re-runs with the same product/size/variation that made the originals.
@@ -447,9 +469,7 @@ const AdGenerator = () => {
     // image-generation error never forces the user to regenerate copy from scratch. Only
     // write once there's a generated output worth keeping, and skip while the initial restore
     // is still running.
-    if (isLoadingAds) return;
-    const hasContent = generatedAds.length > 0 || blitzImages.length > 0 || !!copyOptions || (gridCells?.length ?? 0) > 0;
-    if (!hasContent) return;
+    if (isLoadingAds || !hasStageContent) return;
 
     const accountId = getScopedAccountId();
     const saveTimerId = scheduleDeferredWork(() => {
@@ -467,7 +487,7 @@ const AdGenerator = () => {
     similarityValue, copyVariationValue, imageSize, imageModel, variationCount,
     copyOptions, selectedHeadlines, selectedBodyTexts, selectedCTAs,
     generationMode, gridFormat, corePromise, gridCells, keptCellIds, currentStep,
-    blitzImages, blitzImageError, generatedAds, isLoadingAds, batchPublishedAt,
+    blitzImages, blitzImageError, generatedAds, isLoadingAds, batchPublishedAt, hasStageContent,
   ]);
 
   // Handle brand image upload
@@ -796,19 +816,9 @@ const AdGenerator = () => {
         if (cancelled) return;
 
         if (!batch) {
-          // No batch for this account — clear every stage so a different/fresh account starts
-          // blank instead of showing the previously-viewed account's persisted work.
-          setGeneratedAds([]);
-          setBatchPublishedAt(null);
-          setBlitzImages([]);
-          setBlitzImageError(undefined);
-          setGridCells(null);
-          setKeptCellIds(new Set());
-          setCopyOptions(null);
-          setSelectedHeadlines([]);
-          setSelectedBodyTexts([]);
-          setSelectedCTAs([]);
-          setCurrentStep('config');
+          // No batch for this account — blank every stage so a different/fresh account doesn't
+          // show the previously-viewed account's persisted work.
+          resetStageState();
           return;
         }
 
@@ -866,7 +876,7 @@ const AdGenerator = () => {
     })();
 
     return () => { cancelled = true; };
-  }, [currentAccount?.ad_account_id]);
+  }, [currentAccount?.ad_account_id, resetStageState]);
 
   // Auto-fetch converting ad images when account resolves or changes
   const lastFetchedAccountRef = useRef<string | null>(null);
@@ -1002,26 +1012,13 @@ const AdGenerator = () => {
   // kept), this wipes the copy too so nothing rehydrates on refresh.
   const handleStartOver = useCallback(() => {
     if (!window.confirm('Start a new brief? This scraps the generated copy, Blitz grid, selections, and creatives for this account so you begin from a blank slate. This cannot be undone.')) return;
-    // Copy stages
-    setCopyOptions(null);
-    setSelectedHeadlines([]);
-    setSelectedBodyTexts([]);
-    setSelectedCTAs([]);
-    // Blitz grid stages
-    setGridCells(null);
-    setKeptCellIds(new Set());
-    setBlitzImages([]);
-    setBlitzImageError(undefined);
-    // Generated image batch
-    setGeneratedAds([]);
-    setBatchPublishedAt(null);
+    resetStageState();          // copy, selections, Blitz grid + pool, creatives → back to config
     setVisibleAdsCount(ADS_PER_PAGE);
     setStorageWarning(null);
     setError(null);
-    // Back to the first stage + wipe the persisted record so nothing rehydrates on refresh.
-    setCurrentStep('config');
+    // Wipe the persisted record so nothing rehydrates on refresh.
     clearBatch(getScopedAccountId()).catch(() => { /* non-critical */ });
-  }, []);
+  }, [resetStageState]);
 
   // Load more ads
   const handleLoadMore = useCallback(() => {
@@ -2311,7 +2308,7 @@ const AdGenerator = () => {
       {/* Start over / New brief — scraps the copy stages too. "Clear All" (in the generated
           section) only removes images and keeps the copy. Shown whenever there's something
           to scrap, so it's reachable from any stage. */}
-      {(copyOptions || (gridCells && gridCells.length > 0) || generatedAds.length > 0) && (
+      {hasStageContent && (
         <div className="start-over-row">
           <button type="button" className="start-over-btn" onClick={handleStartOver}>
             ↺ Start over / New brief
