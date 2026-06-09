@@ -338,6 +338,30 @@ const BANNED_PHRASES_PROMPT = `BANNED PHRASES — NEVER use: ${BANNED_PHRASES.ma
 const SPECIFICITY_PROMPT = `SPECIFICITY: Ground the copy in something concrete — a named outcome, a vivid mechanism, a real timeframe, or genuine proof. Body copy must carry at least one concrete element; a headline must be specific in MEANING but does NOT need to contain a number.
 NUMBERS — USE SPARINGLY: Never insert a number just to sound specific, and never end a headline with a bare count (e.g. "...trigger 1", "...thought 1"). Most lines should contain NO number — use one only where it works as real proof, a price, a percentage, or a timeframe. When a small count is genuinely needed, spell it as a word (one, two, three); reserve digits for real statistics, percentages, prices, and timeframes (e.g. "40%", "$97", "14 days").`;
 
+/**
+ * First-person / no-byline voice rule — one source of truth injected into every product-aware copy
+ * path (single-mode, grid, reroll) so it can't drift between them.
+ *
+ * Fixes the artifact where the model, told it "MUST reference '<product>' by <author>", stamped a
+ * third-person byline into otherwise first-person copy — e.g. "In <Title> by <Author>, I map…". The
+ * author IS the speaker; their name tells the model WHOSE voice to write in, it is not a credit to
+ * print in the ad. The customer-testimonial carve-out keeps real third-party quotes attributed.
+ */
+const AUTHOR_VOICE_PROMPT = `VOICE — SPEAK AS THE CREATOR, DIRECTLY TO THE READER: Write as the product's own creator talking straight to one person ("I" to "you"), like a personal message — never an announcement about someone else. NEVER name the creator/author in the third person, NEVER print a credit or byline such as "by <author>", and never open with "In <product> by <author>, I…". The reader must feel the author is talking to them, not reading about the author. The ONLY third-person voice allowed is a REAL customer testimonial — quote it verbatim and keep its own attribution (e.g. "— Sarah M."); never rewrite a customer's quote into first person.`;
+
+/**
+ * Promise/outcome clarity — a baseline QUALITY floor, deliberately written to DEFER to the angle
+ * (emotional frame) and hook (opening line) so it raises clarity without homogenizing the grid.
+ * "Concrete" means the promise is real and specific, NOT that it must lead or be fully revealed —
+ * curiosity / contrarian / cognitive-dissonance cells keep their gap. Sits beside the DIVERSITY rule.
+ */
+const PROMISE_OUTCOME_PROMPT = `PROMISE & OUTCOME — CONCRETE, NEVER VAGUE: Every ad must resolve to one real, specific promise — a tangible outcome the reader gets, not a vague label ("clarity", "no more guesswork", "confidence"). This is a CLARITY FLOOR, not a structure: the ANGLE owns the emotional frame and the HOOK owns the opening line, and they take priority on placement and pacing. Do NOT force the promise into the first line or reuse the same promise-first shape across cells. Hooks and angles built on tension — a curiosity-gap question, a pattern interrupt, a contrarian or cognitive-dissonance frame — MUST keep their gap and tease or delay the payoff on purpose. "Concrete" means the promise underneath is real and earnable, not that every detail is spelled out up front. Never flatten distinct angles into the same generic outcome statement.`;
+
+/** Escape a user-supplied string so it can be embedded literally inside a RegExp. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /** Regex patterns derived from BANNED_PHRASES for post-processing sanitization. */
 const BANNED_PHRASE_PATTERNS: RegExp[] = [
   /you'?re not broken/gi, /you'?re not the problem/gi, /you were never broken/gi,
@@ -362,7 +386,7 @@ const BANNED_PHRASE_PATTERNS: RegExp[] = [
  * Sanitize generated copy text: strip em dashes, remove banned AI phrases, clean whitespace.
  * Returns the original text if sanitization would produce degenerate output (empty or < 3 chars).
  */
-function sanitizeCopyText(text: string): string {
+function sanitizeCopyText(text: string, opts?: { author?: string }): string {
   let cleaned = text.replace(/—/g, ',');
   for (const pattern of BANNED_PHRASE_PATTERNS) {
     cleaned = cleaned.replace(pattern, '');
@@ -371,6 +395,24 @@ function sanitizeCopyText(text: string): string {
   for (const pattern of POLICY_SANITIZE_PATTERNS) {
     cleaned = cleaned.replace(pattern, '');
   }
+
+  // Deterministic backstop for the third-person author byline the model slips into first-person
+  // copy (e.g. "In <Title> by Todd Hamam, I map…" → "In <Title>, I map…"). The prompt forbids this
+  // (see AUTHOR_VOICE_PROMPT) but the rule isn't reliable, so we strip it here too. Only the
+  // high-confidence "by <author>" forms are removed, which keeps the surrounding grammar intact.
+  const author = opts?.author?.trim();
+  if (author) {
+    const a = escapeRegExp(author);
+    cleaned = cleaned
+      .replace(new RegExp(`\\s*\\(\\s*by\\s+${a}\\s*\\)`, 'gi'), '') // "(by Todd Hamam)"
+      .replace(new RegExp(`,?\\s*\\bby\\s+${a}\\b`, 'gi'), '')       // "… by Todd Hamam"
+      // Tidy punctuation/spacing left behind by the removal
+      .replace(/\(\s*\)/g, '')
+      .replace(/\s+([,.])/g, '$1')
+      .replace(/,\s*([,.])/g, '$1')
+      .replace(/^[\s,]+/, '');
+  }
+
   cleaned = cleaned.replace(/  +/g, ' ').trim();
   // Guard against degenerate output — keep original if cleaning stripped too much
   if (cleaned.length < 3 || !/[a-zA-Z]/.test(cleaned)) {
@@ -3138,7 +3180,8 @@ NOTE: No analysis data is available. Run Channel Analysis first for data-driven 
 1. ${BANNED_PHRASES_PROMPT} If you catch yourself writing any of these, delete it and write something original and specific instead.
 2. ${SPECIFICITY_PROMPT}
 3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.
-4. ${META_AD_POLICY_PROMPT}`;
+4. ${PROMISE_OUTCOME_PROMPT}
+5. ${META_AD_POLICY_PROMPT}`;
 
   // Inject business type context (use intent-specific language for hybrid)
   const effectiveConversionLanguage = intentConfig?.aiConversionLanguage || btConfig.aiConversionLanguage;
@@ -3162,12 +3205,12 @@ NOTE: No analysis data is available. Run Channel Analysis first for data-driven 
     productSection = `
 === PRODUCT YOU ARE WRITING ADS FOR ===
 Product Name: ${p.name}
-Author/Brand: ${p.author}
+Creator (write AS this person — this identifies whose voice to use; it is NOT a name to print in the ad): ${p.author}
 Description: ${p.description}
 ${p.landingPageUrl ? `Landing Page: ${p.landingPageUrl}` : ''}
 
-CRITICAL: All copy MUST be about "${p.name}" by ${p.author}. NEVER reference any other product, brand, or company name. The product name and author above are the ONLY correct references.
-VOICE: Write ad copy in the author's voice (first person). The author is speaking directly to the prospect, make the reader feel like the person who wrote the ad is talking only to them — never refer to the author in third person.
+CRITICAL: All copy is about "${p.name}". NEVER reference any other product, brand, or company name. Name "${p.name}" only where it reads naturally — never force the full title into a sentence.
+${AUTHOR_VOICE_PROMPT}
 `;
   }
 
@@ -3315,15 +3358,15 @@ Return JSON only:
     // Post-processing: sanitize all generated copy text + validate hook labels
     if (parsed.headlines) {
       for (const h of parsed.headlines) {
-        if (h.text) h.text = sanitizeCopyText(h.text);
+        if (h.text) h.text = sanitizeCopyText(h.text, { author: config.productContext?.author });
         h.hook = isValidHook(h.hook) ? h.hook : undefined;
       }
     }
     if (parsed.bodyTexts) {
-      for (const b of parsed.bodyTexts) { if (b.text) b.text = sanitizeCopyText(b.text); }
+      for (const b of parsed.bodyTexts) { if (b.text) b.text = sanitizeCopyText(b.text, { author: config.productContext?.author }); }
     }
     if (parsed.callToActions) {
-      for (const c of parsed.callToActions) { if (c.text) c.text = sanitizeCopyText(c.text); }
+      for (const c of parsed.callToActions) { if (c.text) c.text = sanitizeCopyText(c.text, { author: config.productContext?.author }); }
     }
 
     console.log('✅ Copy options generated successfully');
@@ -3390,8 +3433,9 @@ export async function generateGridCopy(config: {
   let productSection = '';
   if (config.productContext) {
     const p = config.productContext;
-    productSection = `\nPRODUCT: "${p.name}" by ${p.author}. ${p.description}${p.landingPageUrl ? ` Landing page: ${p.landingPageUrl}` : ''}
-All copy MUST reference "${p.name}" by ${p.author} — no other product or brand names. Write in the author's first-person voice.\n`;
+    productSection = `\nPRODUCT: "${p.name}", created by ${p.author} (write AS ${p.author} — their name identifies whose voice to use; do NOT print it as a byline). ${p.description}${p.landingPageUrl ? ` Landing page: ${p.landingPageUrl}` : ''}
+All copy is about "${p.name}" — no other product or brand names. Name it only where it reads naturally; never force the full title into a sentence.
+${AUTHOR_VOICE_PROMPT}\n`;
   }
 
   const angleMenu = angles
@@ -3414,7 +3458,8 @@ COPY QUALITY RULES (NON-NEGOTIABLE):
 2. ${SPECIFICITY_PROMPT}
 3. FORMATTING: NEVER use em dashes. Max 1 exclamation mark per body. Zero in headlines.
 4. DIVERSITY: each cell must be genuinely different. The ANGLE controls the emotional frame; the HOOK controls the opening line. Never reuse the same opening line across cells.
-5. ${META_AD_POLICY_PROMPT}
+5. ${PROMISE_OUTCOME_PROMPT}
+6. ${META_AD_POLICY_PROMPT}
 
 BUSINESS CONTEXT:
 ${effectiveConversionLanguage}${brandVoiceContext}${testimonialContext}`;
@@ -3467,9 +3512,9 @@ Return JSON only:
   rawCells.forEach((c, i) => {
     const angle = c.angle as string | undefined;
     const hook = c.hook as string | undefined;
-    const headline = typeof c.headline === 'string' ? sanitizeCopyText(c.headline) : '';
-    const body = typeof c.body === 'string' ? sanitizeCopyText(c.body) : '';
-    const cta = typeof c.cta === 'string' ? sanitizeCopyText(c.cta) : '';
+    const headline = typeof c.headline === 'string' ? sanitizeCopyText(c.headline, { author: config.productContext?.author }) : '';
+    const body = typeof c.body === 'string' ? sanitizeCopyText(c.body, { author: config.productContext?.author }) : '';
+    const cta = typeof c.cta === 'string' ? sanitizeCopyText(c.cta, { author: config.productContext?.author }) : '';
     // Drop malformed cells (graceful partial grid) — angle + hook + headline + body are required.
     if (!isValidAngle(angle) || !isValidHook(hook) || !headline || !body) return;
     cells.push({
@@ -3762,7 +3807,8 @@ ${bv.distinctiveTraits?.length ? `Traits: ${bv.distinctiveTraits.join('; ')}` : 
 1. ${BANNED_PHRASES_PROMPT}
 2. ${SPECIFICITY_PROMPT}
 3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.
-4. ${META_AD_POLICY_PROMPT}`;
+4. ${PROMISE_OUTCOME_PROMPT}
+5. ${META_AD_POLICY_PROMPT}`;
 
   // Inject business context (use intent-specific language for hybrid)
   const regenIntentConfig = (config.campaignIntent)
@@ -3792,9 +3838,9 @@ ${bv.distinctiveTraits?.length ? `Traits: ${bv.distinctiveTraits.join('; ')}` : 
   let productSection = '';
   if (config.productContext) {
     const p = config.productContext;
-    productSection = `\nPRODUCT: "${p.name}" by ${p.author}. ${p.description}${p.landingPageUrl ? ` Landing page: ${p.landingPageUrl}` : ''}
-All copy MUST reference "${p.name}" by ${p.author} — no other product or brand names.
-VOICE: Write ad copy in the author's voice (first person). The author is speaking directly to the prospect, make the reader feel like the person who wrote the ad is talking only to them — never refer to the author in third person.\n`;
+    productSection = `\nPRODUCT: "${p.name}", created by ${p.author} (write AS ${p.author} — their name identifies whose voice to use; do NOT print it as a byline). ${p.description}${p.landingPageUrl ? ` Landing page: ${p.landingPageUrl}` : ''}
+All copy is about "${p.name}" — no other product or brand names. Name it only where it reads naturally; never force the full title into a sentence.
+${AUTHOR_VOICE_PROMPT}\n`;
   }
 
   const corePromiseLine = config.corePromise?.trim()
@@ -3896,7 +3942,7 @@ Return JSON only:
 
       // Post-processing: sanitize generated copy text
       if (parsed.text) {
-        parsed.text = sanitizeCopyText(parsed.text);
+        parsed.text = sanitizeCopyText(parsed.text, { author: config.productContext?.author });
       }
       // Validate hook label (headlines only; strip any stray hook on body/CTA)
       parsed.hook = (config.copyType === 'headline' && isValidHook(parsed.hook)) ? parsed.hook : undefined;
@@ -5103,7 +5149,8 @@ Write copy that feels authentic, not corporate or overly salesy.`;
 1. ${BANNED_PHRASES_PROMPT}
 2. ${SPECIFICITY_PROMPT}
 3. FORMATTING: NEVER use em dashes (—). Max 1 exclamation mark per body text. Zero in headlines.
-4. ${META_AD_POLICY_PROMPT}`;
+4. ${PROMISE_OUTCOME_PROMPT}
+5. ${META_AD_POLICY_PROMPT}`;
 
   const userPrompt = `Generate ad copy for a ${config.audienceType.toUpperCase()} audience.
 
@@ -6111,9 +6158,9 @@ Top performing patterns from this account inform the suggestions below.
     contextSection += `
 === PRODUCT/SERVICE ===
 Name: ${config.productContext.name}
-${config.productContext.author ? `By: ${config.productContext.author}` : ''}
+${config.productContext.author ? `Creator (write AS them — do NOT print this name as a byline in the ad): ${config.productContext.author}` : ''}
 ${config.productContext.description || ''}
-VOICE: Write ad copy in the author's voice (first person). The author is speaking directly to the prospect, make the reader feel like the person who wrote the ad is talking only to them — never refer to the author in third person.
+VOICE: Speak directly to the reader as the product's own creator. NEVER name the creator in the third person and never print a credit or byline such as "by ${config.productContext.author || 'the author'}". The only third-person voice allowed is a real customer testimonial, quoted verbatim with its own attribution.
 `;
   }
 
@@ -6198,7 +6245,7 @@ Respond in JSON format:
 
     // Sanitize all text
     for (const item of [...(parsed.primaryTexts || []), ...(parsed.highlightTexts || []), ...(parsed.anchorTexts || [])]) {
-      if (item.text) item.text = sanitizeCopyText(item.text);
+      if (item.text) item.text = sanitizeCopyText(item.text, { author: config.productContext?.author });
     }
 
     return {

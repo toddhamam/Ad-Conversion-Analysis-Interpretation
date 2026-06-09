@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-06-09 — CreativeIQ copy: first-person voice (no third-person author bylines) + promise/outcome clarity floor
+
+### What
+CreativeIQ™ ad copy was referring to the author in the **third person** while otherwise speaking in the **first person** — e.g. *"In Resistance Mapping Guide - Expanded 2nd Edition by Todd Hamam, I map trigger to root."* The reader is supposed to feel the author is talking **directly to them**, so a "by &lt;author&gt;" byline mid-sentence reads as if a stranger wrote the ad about someone else (and most of a recent grid output had it). Root cause: every product-aware copy prompt ordered the model to *"reference '&lt;product&gt;' by &lt;author&gt;"*, which the model satisfied by literally stamping the byline into the copy — and by forcing the full literal product title into sentences. The author's name is meant to tell the model **whose voice to write in**, not to be printed as a credit.
+
+The fix reframes the author as a **voice identity, not a byline**, centralizes a single first-person voice rule across every copy path (the grid path was missing the explicit rule entirely), and adds a **deterministic byline-strip** in the copy sanitizer as a backstop for whatever the prompt doesn't catch. Real **customer testimonials are explicitly carved out** — third-party quotes keep their own attribution and are never rewritten to first person.
+
+This release also adds a **promise/outcome clarity floor**: every ad must resolve to a concrete, tangible promise (not a vague label like "no more guesswork"). It is deliberately written as a **clarity floor, not a template** — it defers to the angle (emotional frame) and hook (opening line), and explicitly tells tension-based cells (curiosity-gap question, pattern interrupt, contrarian / cognitive-dissonance) to **keep their gap** — so it raises copy quality across the split-test grid without homogenizing the cells.
+
+### Added
+- **`AUTHOR_VOICE_PROMPT`** (`src/services/openaiApi.ts`) — one source of truth for the first-person / no-byline / no-third-person-author rule, with the customer-testimonial carve-out. Injected into every product-aware copy path so the rule can't drift.
+- **`PROMISE_OUTCOME_PROMPT`** — the concrete-promise clarity floor, written to defer to the angle/hook axes; added beside the grid's existing `DIVERSITY` rule.
+- **`escapeRegExp()`** helper + **author byline-strip in `sanitizeCopyText(text, { author })`** — deterministically removes residual `by <author>` / `(by <author>)` bylines the model slips in, with punctuation cleanup. Unit-checked against the two reported examples plus parenthetical/em-dash edge cases.
+
+### Changed
+- **Product sections reframed** in `generateCopyOptions`, `generateGridCopy`, `regenerateSingleCopy`, and `generateTextAdCopy`: `"<product>" by <author>` + "MUST reference … by <author>" → an identity framing ("write AS &lt;author&gt; … do NOT print it as a byline") + "name the product only where it reads naturally; never force the full title into a sentence."
+- **`PROMISE_OUTCOME_PROMPT` injected** into the COPY QUALITY RULES of `generateCopyOptions`, `generateGridCopy`, `regenerateSingleCopy`, and `generateAudienceAdCopy`.
+- **Sanitize call sites pass `{ author }`** so the byline-strip runs on every generated headline/body/CTA in the product-aware paths.
+
+### Internal
+- The author name in **image/video generation and the Ad Library search query is untouched** — those need the real name and never emit a sentence byline. `generateAudienceAdCopy` takes no product context, so it can't produce a byline (its sanitize calls are unchanged).
+- The text-only-graphic path (`generateTextAdCopy`) keeps its second-person design; it gets only the no-byline / no-third-person half of the rule, not the first-person directive.
+- Build green (`tsc -b` + `vite build`); no new lint issues.
+
 ## 2026-06-06 — CreativeIQ copy: customer testimonials in Brand Voice (quoted verbatim, anti-fabrication)
 
 ### What
