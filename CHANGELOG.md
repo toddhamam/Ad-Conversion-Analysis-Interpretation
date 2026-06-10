@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-06-10 — CreativeIQ images: 1:1 product mockup replication (labeled refs + fidelity gate + upload quality)
+
+### What
+Generated creatives were **redesigning the product mockup** instead of replicating it — different cover art, altered title/author text, shifted fonts and colors — so the ad visibly showed a *different product* than the one uploaded in Products. Five compounding causes, all fixed:
+
+1. **Anonymous reference images.** Style refs (winning ads) and product mockups were sent to Gemini as unlabeled inline parts in one merged array — the model had to *guess* which image was the identity-locked product and which was style-to-emulate.
+2. **Style analysis pollution.** Mockups were included in `analyzeReferenceImages`, so the "copy this style" descriptors contained a lossy verbal re-description of the product that competed against the actual mockup image.
+3. **Contradictory framing.** The prompt opened with "PRECISELY match the provided reference style" across ALL images, with the identity-lock paragraph fighting uphill at the end.
+4. **GPT-Image path destroyed mockups.** All references — including mockups — were re-encoded to 768px JPEG@0.7 before the proxy, turning cover text to mush; the silent per-image Gemini↔OpenAI fallback meant some images in any batch could come from this degraded path.
+5. **Upload-time artifacts.** Both mockup upload paths stored images at JPEG 0.8 with default (low-quality) canvas interpolation — compression artifacts on cover text that the image model then "read" and reproduced as altered typography.
+
+On top of the prompt/pipeline fixes, every generated image with a mockup now passes a **product fidelity gate**: a Gemini flash inspector scores the rendered product against the mockup (0–100), a failing image is regenerated once with the inspector's concrete mismatches injected as corrective feedback, and the score is surfaced as a badge on the ad card so weak replicas are visible at a glance.
+
+### Added
+- **Product fidelity gate** (`generateAdImage`, covers both engines incl. fallbacks): `verifyProductFidelity()` compares the generated product to the mockup at temperature 0, judging only the product (scene/lighting differences excluded). Below `FIDELITY_GATE_THRESHOLD = 75` → one same-engine retry with the mismatch list in the prompt; the higher-scoring attempt wins. Inspector failures are non-fatal (image returned unscored) — the gate can never block generation.
+- **`fidelityScore` / `fidelityIssues` on `GeneratedImageResult`** + a **"Product match N%" badge** on each image in `GeneratedAdCard` (green ≥85 / amber ≥70 / red below; issue list in the tooltip). Persists with the batch through IndexedDB and publish.
+- **`src/lib/imageResize.ts`** — shared `fileToResizedJpegBase64()` (1024px bound, JPEG **0.9**, `imageSmoothingQuality: 'high'`) used by **both** upload paths (Products page and the in-flow ProductConfigurator in Integrations), replacing two diverged local copies (0.8, no smoothing). Existing products need their images re-uploaded to benefit.
+
+### Changed
+- **`precomputedRefs` split into `styleImages` / `productImages`** end-to-end (both engines + the shared precompute in `regenerateAllImages`) so each reference can be labeled for its role.
+- **Interleaved role labels in the Gemini request**: every image part is preceded by an inline `[STYLE REFERENCE n of N]` / `[PRODUCT MOCKUP n of N]` text label; mockups go last, closest to the prompt (strongest attention anchor).
+- **Style analysis runs on winning-ad references only** — mockups are identity references, not style sources, and no longer bleed into the style descriptors.
+- **Product-placement task framing**: with a mockup attached, the prompt opens with "take the EXACT product shown in the [PRODUCT MOCKUP] image(s) and place it into a new scene" instead of free-form generation, the similarity % is explicitly scoped to the scene only, and a fidelity checklist pins exact spelling, fonts, colors, layout, and no added badges/text.
+- **GPT-Image proxy payload**: mockups pass through **un-re-encoded** under a cumulative 3.8MB budget (style refs still 768@0.7); when over budget, mockups re-encode in gentle steps (1024@0.85 → 896@0.8) and trailing mockups are dropped (first always kept) as hard 413 protection — never compressed back down to the drift-causing 768@0.7. On prep failure the request falls back to mockups-only: identity beats style.
+
+### Internal
+- Gate cost: +1 Gemini flash call (~1–3s) per mockup image; a full regeneration only when an image fails the gate. Watch `🔍 Fidelity gate` console logs during generation.
+- Conversion-context lines renamed to `STYLE REFERENCE n` to match the inline labels.
+- Build green (`tsc -b` + `vite build`); 3 pre-existing lint problems untouched.
+
 ## 2026-06-09 — CreativeIQ copy: first-person voice (no third-person author bylines) + promise/outcome clarity floor
 
 ### What

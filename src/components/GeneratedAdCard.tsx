@@ -419,6 +419,16 @@ const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, o
                         src={image.imageUrl}
                         alt={`Generated ad ${index + 1}`}
                       />
+                      {image.fidelityScore !== undefined && (
+                        <span
+                          className={`fidelity-badge ${image.fidelityScore >= 85 ? 'fidelity-high' : image.fidelityScore >= 70 ? 'fidelity-mid' : 'fidelity-low'}`}
+                          title={image.fidelityIssues?.length
+                            ? `Product match issues: ${image.fidelityIssues.join('; ')}`
+                            : 'Product matches the mockup'}
+                        >
+                          Product match {image.fidelityScore}%
+                        </span>
+                      )}
                     </div>
                     <div className="image-actions">
                       {onRegenerateImage && (

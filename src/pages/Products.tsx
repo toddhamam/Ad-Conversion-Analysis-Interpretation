@@ -4,13 +4,13 @@ import { Plus, Pencil, Trash2, ImageIcon, X, Save, ArrowLeft, AlertTriangle, Che
 import type { ProductContext } from '../services/openaiApi';
 import SEO from '../components/SEO';
 import { getScopedItem, setScopedItem } from '../lib/scopedStorage';
+import { fileToResizedJpegBase64 } from '../lib/imageResize';
 import { useAdAccount } from '../contexts/AdAccountContext';
 import ImportProductsModal, { getAvailableProductImports } from '../components/ImportProductsModal';
 import './Products.css';
 
 const STORAGE_KEY = 'convertra_products';
 const MAX_IMAGES_PER_PRODUCT = 5;
-const MAX_IMAGE_DIMENSION = 1024; // Resize images to fit within this to stay under localStorage limits
 
 function loadProducts(): ProductContext[] {
   try {
@@ -144,7 +144,7 @@ const Products = () => {
     const newImages: ProductContext['productImages'] = [];
 
     for (const file of toProcess) {
-      const base64 = await fileToBase64(file);
+      const base64 = await fileToResizedJpegBase64(file);
       newImages.push({
         base64Data: base64,
         mimeType: 'image/jpeg', // Always JPEG after canvas resize
@@ -417,45 +417,5 @@ const Products = () => {
     </div>
   );
 };
-
-async function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new window.Image();
-    const url = URL.createObjectURL(file);
-
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-
-      let { width, height } = img;
-
-      // Resize if either dimension exceeds the max
-      if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
-        const scale = Math.min(MAX_IMAGE_DIMENSION / width, MAX_IMAGE_DIMENSION / height);
-        width = Math.round(width * scale);
-        height = Math.round(height * scale);
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { reject(new Error('Failed to create canvas context')); return; }
-
-      ctx.drawImage(img, 0, 0, width, height);
-
-      // Use JPEG at 0.8 quality for smaller file size
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      const base64 = dataUrl.split(',')[1];
-      resolve(base64);
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Failed to load image'));
-    };
-
-    img.src = url;
-  });
-}
 
 export default Products;

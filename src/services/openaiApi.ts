@@ -158,6 +158,12 @@ const GPT_IMAGE_FALLBACK = 'gpt-image-1';
 export type ImageModel = 'gemini' | 'openai';
 export const DEFAULT_IMAGE_MODEL_PROVIDER: ImageModel = 'gemini';
 
+// Product fidelity gate — when a product mockup is attached, every generated image is
+// inspected (Gemini flash vision compare vs the mockup) and regenerated ONCE with
+// corrective feedback if the product-match score falls below the threshold. The score is
+// surfaced on the ad card so weak replicas are visible even when the retry doesn't pass.
+const FIDELITY_GATE_THRESHOLD = 75;
+
 // Video Generation - Using Google Veo 3.1
 // Only 'veo-3.1-generate-preview' is documented in the official Gemini API docs.
 const VEO_MODEL = 'veo-3.1-generate-preview';
@@ -857,6 +863,8 @@ const CONCEPT_AUDIENCE_MODIFIERS: Record<ConceptType, Record<AudienceType, strin
 export interface GeneratedImageResult {
   imageUrl: string;
   revisedPrompt: string;
+  fidelityScore?: number;    // 0-100 product-match score from the fidelity gate (mockup ads only)
+  fidelityIssues?: string[]; // Specific product mismatches found by the gate (empty when clean)
 }
 
 export interface GeneratedVideoResult {
@@ -4171,6 +4179,117 @@ Be EXTREMELY specific - your descriptions will be used to generate new images th
 }
 
 /**
+ * Parse a base64 data URL into Gemini inlineData shape. Returns null for non-data URLs.
+ */
+function dataUrlToInline(dataUrl: string): { data: string; mimeType: string } | null {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/s);
+  if (!match) return null;
+  return { mimeType: match[1], data: match[2] };
+}
+
+/**
+ * Product fidelity inspector — compares the product as rendered in a generated ad against
+ * the product mockup reference(s) and scores how exactly the design was replicated.
+ *
+ * Non-fatal by design: returns null when the check can't run (no key, parse failure, API
+ * error) so the gate never blocks image generation.
+ */
+async function verifyProductFidelity(
+  generatedImage: { data: string; mimeType: string },
+  productImages: Array<{ data: string; mimeType: string }>,
+  productName?: string
+): Promise<{ score: number; issues: string[] } | null> {
+  if (!isGeminiConfigured() || productImages.length === 0) return null;
+
+  const inspectionPrompt = `You are a strict product-fidelity inspector for advertising creatives.
+
+Compare the product${productName ? ` "${productName}"` : ''} as it appears in the GENERATED AD image against the PRODUCT MOCKUP reference image(s). Judge ONLY the product itself — ignore the scene, background, lighting style, props, and any headline text outside the product.
+
+Score 0-100 how exactly the product's design is replicated:
+- 100 = indistinguishable from the mockup (same artwork, exact title/author spelling, same fonts, colors, layout, proportions)
+- Deduct heavily for: changed or substituted artwork, misspelled or altered title/author text, different fonts, shifted colors, changed layout or proportions, added/removed design elements (badges, stickers, extra text)
+- Deduct lightly for: minor perspective/lighting differences from being placed in a new scene (these are expected and acceptable)
+- 0 = a completely different product
+
+List every concrete mismatch you find, most severe first.
+
+Respond with ONLY this JSON (no markdown fences):
+{"score": <0-100 integer>, "issues": ["specific mismatch 1", "specific mismatch 2"]}
+
+If the product is not visible in the generated ad at all, return {"score": 0, "issues": ["product not visible in generated image"]}.`;
+
+  const requestParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
+  // Send at most 2 mockups to keep the payload small — the first images are the primary design
+  productImages.slice(0, 2).forEach((img, i) => {
+    requestParts.push({ text: `PRODUCT MOCKUP ${i + 1} (reference design):` });
+    requestParts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
+  });
+  requestParts.push({ text: 'GENERATED AD (image under inspection):' });
+  requestParts.push({ inlineData: { mimeType: generatedImage.mimeType, data: generatedImage.data } });
+  requestParts.push({ text: inspectionPrompt });
+
+  let body: string;
+  try {
+    body = JSON.stringify({
+      contents: [{ parts: requestParts }],
+      generationConfig: {
+        temperature: 0, // Deterministic inspection
+        maxOutputTokens: 800,
+      },
+    });
+    requestParts.length = 0; // Free base64 references for GC during fetch
+  } catch (serializationError) {
+    console.warn('⚠️ Fidelity check: serialization failed (payload too large), skipping:', serializationError);
+    requestParts.length = 0;
+    return null;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout
+    let response: Response;
+    try {
+      response = await fetch(`${GEMINI_API_URL}/${TEXT_ANALYSIS_MODEL}:generateContent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': GEMINI_API_KEY,
+        },
+        body,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      console.warn(`⚠️ Fidelity check failed (${response.status}) — skipping gate`);
+      return null;
+    }
+
+    const data = await response.json();
+    const textPart = data.candidates?.[0]?.content?.parts?.find((p: { text?: string }) => p.text);
+    if (!textPart?.text) return null;
+
+    let cleaned = textPart.text.trim();
+    if (cleaned.includes('```json')) {
+      cleaned = cleaned.split('```json')[1].split('```')[0];
+    } else if (cleaned.includes('```')) {
+      cleaned = cleaned.split('```')[1].split('```')[0];
+    }
+    const parsed = JSON.parse(cleaned.trim());
+    const score = Math.max(0, Math.min(100, Math.round(Number(parsed.score))));
+    if (Number.isNaN(score)) return null;
+    const issues = Array.isArray(parsed.issues) ? parsed.issues.filter((i: unknown) => typeof i === 'string').slice(0, 8) : [];
+    return { score, issues };
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.warn(`⚠️ Fidelity check error — skipping gate: ${msg.substring(0, 200)}`);
+    return null;
+  }
+}
+
+/**
  * Generate an ad image using the selected provider (Gemini Nano Banana Pro or OpenAI GPT Image 2),
  * with automatic cross-provider fallback on failure. See the fallback policy in the body.
  */
@@ -4210,9 +4329,9 @@ export async function generateAdImage(config: {
   // empty/garbled response. Safety/policy blocks are the one exception: re-thrown immediately, since
   // the same prompt would be refused by the other engine too. Fallback is per-image, so a single
   // batch can legitimately come back mixed-engine when one variation trips a transient failure.
-  const runners: Record<ImageModel, { available: boolean; run: () => Promise<GeneratedImageResult> }> = {
-    gemini: { available: isGeminiConfigured(), run: () => generateAdImageWithGemini(config) },
-    openai: { available: isOpenAIConfigured(), run: () => generateAdImageWithGptImage(config) },
+  const runners: Record<ImageModel, { available: boolean; run: (fidelityFeedback?: string) => Promise<GeneratedImageResult> }> = {
+    gemini: { available: isGeminiConfigured(), run: (fidelityFeedback?: string) => generateAdImageWithGemini({ ...config, fidelityFeedback }) },
+    openai: { available: isOpenAIConfigured(), run: (fidelityFeedback?: string) => generateAdImageWithGptImage({ ...config, fidelityFeedback }) },
   };
   const order: ImageModel[] = provider === 'openai' ? ['openai', 'gemini'] : ['gemini', 'openai'];
   const attempts = order.filter(name => runners[name].available);
@@ -4221,12 +4340,54 @@ export async function generateAdImage(config: {
     throw new Error('No image generation API configured. Please contact your administrator.');
   }
 
+  // Fidelity gate: when a product mockup exists, inspect the generated image against it
+  // and retry ONCE on the same engine with corrective feedback if the product-match score
+  // is below FIDELITY_GATE_THRESHOLD. Keeps whichever attempt replicated the product
+  // better. Inspector failures are non-fatal — the image is returned unscored.
+  const applyFidelityGate = async (engine: ImageModel, first: GeneratedImageResult): Promise<GeneratedImageResult> => {
+    const productImages = config.precomputedRefs?.productImages
+      ?? (config.productContext?.productImages ?? []).slice(0, 3).map(img => ({ data: img.base64Data, mimeType: img.mimeType }));
+    if (productImages.length === 0) return first;
+
+    const generated = dataUrlToInline(first.imageUrl);
+    if (!generated) return first;
+
+    const verdict = await verifyProductFidelity(generated, productImages, config.productContext?.name);
+    if (!verdict) return first;
+
+    if (verdict.score >= FIDELITY_GATE_THRESHOLD) {
+      console.log(`🔍 Fidelity gate passed: ${verdict.score}/100`);
+      return { ...first, fidelityScore: verdict.score, fidelityIssues: verdict.issues };
+    }
+
+    console.warn(`🔍 Fidelity gate FAILED (${verdict.score}/100): ${verdict.issues.join('; ').substring(0, 300)} — retrying once with corrective feedback`);
+    try {
+      const feedback = verdict.issues.length > 0 ? verdict.issues.join('; ') : 'The product did not match the mockup design.';
+      const retry = await runners[engine].run(feedback);
+      const retryInline = dataUrlToInline(retry.imageUrl);
+      const retryVerdict = retryInline ? await verifyProductFidelity(retryInline, productImages, config.productContext?.name) : null;
+      if (retryVerdict) {
+        console.log(`🔍 Fidelity retry scored ${retryVerdict.score}/100 (first attempt: ${verdict.score})`);
+        if (retryVerdict.score >= verdict.score) {
+          return { ...retry, fidelityScore: retryVerdict.score, fidelityIssues: retryVerdict.issues };
+        }
+        return { ...first, fidelityScore: verdict.score, fidelityIssues: verdict.issues };
+      }
+      // Retry generated but couldn't be re-verified — prefer it (it had corrective feedback)
+      return retry;
+    } catch (retryErr: unknown) {
+      const msg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+      console.warn(`⚠️ Fidelity retry failed (${msg.substring(0, 150)}) — keeping first attempt`);
+      return { ...first, fidelityScore: verdict.score, fidelityIssues: verdict.issues };
+    }
+  };
+
   let lastError: Error | null = null;
   for (let i = 0; i < attempts.length; i++) {
     const name = attempts[i];
     try {
       if (i > 0) console.log(`🔁 Falling back to ${name} for image generation...`);
-      return await runners[name].run();
+      return await applyFidelityGate(name, await runners[name].run());
     } catch (err: unknown) {
       // Content/policy block — the other engine will refuse the same prompt. Fail fast.
       if (err instanceof SafetyBlockError) throw err;
@@ -4266,6 +4427,8 @@ async function generateAdImageWithGemini(config: {
   businessType?: import('../types/organization').BusinessType;
   campaignIntent?: import('../types/organization').CampaignIntent;
   formatHint?: FormatType;
+  // Corrective feedback from a failed fidelity-gate inspection (set on gate retries only)
+  fidelityFeedback?: string;
 }): Promise<GeneratedImageResult> {
   const similarity = config.similarityLevel ?? 30; // Default to 30% variation
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
@@ -4617,6 +4780,17 @@ Explore fresh visual directions while maintaining professional quality.`,
     );
   }
 
+  // Fidelity-gate retry: surface the inspector's concrete mismatches so this attempt
+  // corrects them instead of repeating the same drift
+  if (config.fidelityFeedback) {
+    promptParts.push(
+      '',
+      '🚨 A PREVIOUS ATTEMPT FAILED THE PRODUCT FIDELITY INSPECTION.',
+      `Issues found: ${config.fidelityFeedback}`,
+      'You MUST correct every issue above. Re-examine the [PRODUCT MOCKUP] image(s) detail by detail and reproduce the product EXACTLY this time.'
+    );
+  }
+
   promptParts.push('', IMAGE_SAFETY_DIRECTIVE);
   const prompt = promptParts.join('\n');
   console.log('📝 Gemini prompt:', prompt.substring(0, 300) + '...');
@@ -4884,6 +5058,8 @@ async function generateAdImageWithGptImage(config: {
   headlineText?: string;
   businessType?: import('../types/organization').BusinessType;
   campaignIntent?: import('../types/organization').CampaignIntent;
+  // Corrective feedback from a failed fidelity-gate inspection (set on gate retries only)
+  fidelityFeedback?: string;
 }): Promise<GeneratedImageResult> {
   const similarity = config.similarityLevel ?? 30;
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
@@ -5100,6 +5276,17 @@ USE: color palette ${refAnalysis.colorPalette}; mood ${refAnalysis.mood}; visual
     );
   }
 
+  // Fidelity-gate retry: surface the inspector's concrete mismatches so this attempt
+  // corrects them instead of repeating the same drift
+  if (config.fidelityFeedback) {
+    promptParts.push(
+      '',
+      '🚨 A PREVIOUS ATTEMPT FAILED THE PRODUCT FIDELITY INSPECTION.',
+      `Issues found: ${config.fidelityFeedback}`,
+      'You MUST correct every issue above. Re-examine the PRODUCT MOCKUP image(s) detail by detail and reproduce the product EXACTLY this time.'
+    );
+  }
+
   promptParts.push('', IMAGE_SAFETY_DIRECTIVE);
   const prompt = promptParts.join('\n');
   console.log('📝 GPT-Image prompt:', prompt.substring(0, 300) + '...');
@@ -5137,6 +5324,18 @@ USE: color palette ${refAnalysis.colorPalette}; mood ${refAnalysis.mood}; visual
         proxyMockups = await Promise.all(
           productImages.map(ref => downscaleImageForProxy(ref.data, ref.mimeType, step.maxDim, step.quality))
         );
+      }
+
+      // Hard enforcement: if pathological inputs still overflow after the smallest
+      // re-encode step, drop trailing mockups rather than send a request the proxy will
+      // reject with 413. The first mockup (the primary design) is always kept — a single
+      // 896px JPEG cannot exceed the budget alone. Compressing further instead would
+      // recreate the 768@0.7 blur that caused product drift in the first place.
+      let mockupTotal = proxyMockups.reduce((sum, ref) => sum + ref.data.length, 0);
+      while (proxyMockups.length > 1 && mockupTotal > mockupBudget) {
+        const dropped = proxyMockups.pop()!;
+        mockupTotal -= dropped.data.length;
+        console.warn(`⚠️ Proxy payload budget exhausted — dropped a product mockup from the request (${proxyMockups.length} kept)`);
       }
 
       // Order must match the prompt's "Images 1–N style, then product mockups" description
