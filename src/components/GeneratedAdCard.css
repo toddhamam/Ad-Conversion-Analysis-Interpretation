@@ -262,6 +262,32 @@
   border-color: #dc2626;
 }
 
+/* Product fidelity badge — score from the mockup-match inspection (semantic state colors) */
+.fidelity-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  z-index: 2;
+  padding: 3px 8px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: help;
+}
+
+.fidelity-high {
+  background: rgba(22, 163, 74, 0.9);
+}
+
+.fidelity-mid {
+  background: rgba(217, 119, 6, 0.9);
+}
+
+.fidelity-low {
+  background: rgba(220, 38, 38, 0.9);
+}
+
 /* Regenerating Overlay */
 .regenerating-overlay {
   position: absolute;

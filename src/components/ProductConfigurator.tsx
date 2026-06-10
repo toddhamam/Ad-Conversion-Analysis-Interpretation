@@ -3,13 +3,13 @@ import { Plus, Pencil, Trash2, ImageIcon, X, Save, Download } from 'lucide-react
 import type { ProductMetadata } from '../services/metaApi';
 import type { ProductContext } from '../services/openaiApi';
 import { scopedKey } from '../lib/scopedStorage';
+import { fileToResizedJpegBase64 } from '../lib/imageResize';
 import { useAdAccount } from '../contexts/AdAccountContext';
 import ImportProductsModal, { getAvailableProductImports } from './ImportProductsModal';
 import './ProductConfigurator.css';
 
 const PRODUCTS_STORAGE_KEY = 'convertra_products';
 const MAX_IMAGES_PER_PRODUCT = 5;
-const MAX_IMAGE_DIMENSION = 1024;
 
 interface ProductConfiguratorProps {
   /** Product metadata (from Supabase or migration) */
@@ -75,38 +75,6 @@ function createEmptyProduct(): ProductContext {
     productImages: [],
     createdAt: new Date().toISOString(),
   };
-}
-
-async function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new window.Image();
-    const url = URL.createObjectURL(file);
-
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      let { width, height } = img;
-      if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
-        const scale = Math.min(MAX_IMAGE_DIMENSION / width, MAX_IMAGE_DIMENSION / height);
-        width = Math.round(width * scale);
-        height = Math.round(height * scale);
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { reject(new Error('Failed to create canvas context')); return; }
-      ctx.drawImage(img, 0, 0, width, height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      resolve(dataUrl.split(',')[1]);
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Failed to load image'));
-    };
-
-    img.src = url;
-  });
 }
 
 export default function ProductConfigurator({ products, onProductsChange, adAccountId }: ProductConfiguratorProps) {
@@ -207,7 +175,7 @@ export default function ProductConfigurator({ products, onProductsChange, adAcco
 
     const newImages: ProductContext['productImages'] = [];
     for (const file of toProcess) {
-      const base64 = await fileToBase64(file);
+      const base64 = await fileToResizedJpegBase64(file);
       newImages.push({ base64Data: base64, mimeType: 'image/jpeg', fileName: file.name });
     }
 

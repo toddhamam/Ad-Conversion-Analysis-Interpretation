@@ -158,6 +158,12 @@ const GPT_IMAGE_FALLBACK = 'gpt-image-1';
 export type ImageModel = 'gemini' | 'openai';
 export const DEFAULT_IMAGE_MODEL_PROVIDER: ImageModel = 'gemini';
 
+// Product fidelity gate — when a product mockup is attached, every generated image is
+// inspected (Gemini flash vision compare vs the mockup) and regenerated ONCE with
+// corrective feedback if the product-match score falls below the threshold. The score is
+// surfaced on the ad card so weak replicas are visible even when the retry doesn't pass.
+const FIDELITY_GATE_THRESHOLD = 75;
+
 // Video Generation - Using Google Veo 3.1
 // Only 'veo-3.1-generate-preview' is documented in the official Gemini API docs.
 const VEO_MODEL = 'veo-3.1-generate-preview';
@@ -857,6 +863,8 @@ const CONCEPT_AUDIENCE_MODIFIERS: Record<ConceptType, Record<AudienceType, strin
 export interface GeneratedImageResult {
   imageUrl: string;
   revisedPrompt: string;
+  fidelityScore?: number;    // 0-100 product-match score from the fidelity gate (mockup ads only)
+  fidelityIssues?: string[]; // Specific product mismatches found by the gate (empty when clean)
 }
 
 export interface GeneratedVideoResult {
@@ -4009,7 +4017,7 @@ function buildRefConversionContext(cachedImages: import('./imageCache').CachedIm
     if (i === highestConvIdx && conv > 0) labels.push('HIGHEST CONVERTING');
     if (i === highestCVRIdx && cvr > 0 && highestCVRIdx !== highestConvIdx) labels.push('HIGHEST CVR');
     const label = labels.length > 0 ? ` — ${labels.join(', ')}` : '';
-    return `Reference image ${i + 1}: ${conv} conversion${conv !== 1 ? 's' : ''} (${cvr.toFixed(1)}% CVR)${label}`;
+    return `STYLE REFERENCE ${i + 1}: ${conv} conversion${conv !== 1 ? 's' : ''} (${cvr.toFixed(1)}% CVR)${label}`;
   });
 }
 
@@ -4171,6 +4179,117 @@ Be EXTREMELY specific - your descriptions will be used to generate new images th
 }
 
 /**
+ * Parse a base64 data URL into Gemini inlineData shape. Returns null for non-data URLs.
+ */
+function dataUrlToInline(dataUrl: string): { data: string; mimeType: string } | null {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/s);
+  if (!match) return null;
+  return { mimeType: match[1], data: match[2] };
+}
+
+/**
+ * Product fidelity inspector — compares the product as rendered in a generated ad against
+ * the product mockup reference(s) and scores how exactly the design was replicated.
+ *
+ * Non-fatal by design: returns null when the check can't run (no key, parse failure, API
+ * error) so the gate never blocks image generation.
+ */
+async function verifyProductFidelity(
+  generatedImage: { data: string; mimeType: string },
+  productImages: Array<{ data: string; mimeType: string }>,
+  productName?: string
+): Promise<{ score: number; issues: string[] } | null> {
+  if (!isGeminiConfigured() || productImages.length === 0) return null;
+
+  const inspectionPrompt = `You are a strict product-fidelity inspector for advertising creatives.
+
+Compare the product${productName ? ` "${productName}"` : ''} as it appears in the GENERATED AD image against the PRODUCT MOCKUP reference image(s). Judge ONLY the product itself — ignore the scene, background, lighting style, props, and any headline text outside the product.
+
+Score 0-100 how exactly the product's design is replicated:
+- 100 = indistinguishable from the mockup (same artwork, exact title/author spelling, same fonts, colors, layout, proportions)
+- Deduct heavily for: changed or substituted artwork, misspelled or altered title/author text, different fonts, shifted colors, changed layout or proportions, added/removed design elements (badges, stickers, extra text)
+- Deduct lightly for: minor perspective/lighting differences from being placed in a new scene (these are expected and acceptable)
+- 0 = a completely different product
+
+List every concrete mismatch you find, most severe first.
+
+Respond with ONLY this JSON (no markdown fences):
+{"score": <0-100 integer>, "issues": ["specific mismatch 1", "specific mismatch 2"]}
+
+If the product is not visible in the generated ad at all, return {"score": 0, "issues": ["product not visible in generated image"]}.`;
+
+  const requestParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
+  // Send at most 2 mockups to keep the payload small — the first images are the primary design
+  productImages.slice(0, 2).forEach((img, i) => {
+    requestParts.push({ text: `PRODUCT MOCKUP ${i + 1} (reference design):` });
+    requestParts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
+  });
+  requestParts.push({ text: 'GENERATED AD (image under inspection):' });
+  requestParts.push({ inlineData: { mimeType: generatedImage.mimeType, data: generatedImage.data } });
+  requestParts.push({ text: inspectionPrompt });
+
+  let body: string;
+  try {
+    body = JSON.stringify({
+      contents: [{ parts: requestParts }],
+      generationConfig: {
+        temperature: 0, // Deterministic inspection
+        maxOutputTokens: 800,
+      },
+    });
+    requestParts.length = 0; // Free base64 references for GC during fetch
+  } catch (serializationError) {
+    console.warn('⚠️ Fidelity check: serialization failed (payload too large), skipping:', serializationError);
+    requestParts.length = 0;
+    return null;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout
+    let response: Response;
+    try {
+      response = await fetch(`${GEMINI_API_URL}/${TEXT_ANALYSIS_MODEL}:generateContent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': GEMINI_API_KEY,
+        },
+        body,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      console.warn(`⚠️ Fidelity check failed (${response.status}) — skipping gate`);
+      return null;
+    }
+
+    const data = await response.json();
+    const textPart = data.candidates?.[0]?.content?.parts?.find((p: { text?: string }) => p.text);
+    if (!textPart?.text) return null;
+
+    let cleaned = textPart.text.trim();
+    if (cleaned.includes('```json')) {
+      cleaned = cleaned.split('```json')[1].split('```')[0];
+    } else if (cleaned.includes('```')) {
+      cleaned = cleaned.split('```')[1].split('```')[0];
+    }
+    const parsed = JSON.parse(cleaned.trim());
+    const score = Math.max(0, Math.min(100, Math.round(Number(parsed.score))));
+    if (Number.isNaN(score)) return null;
+    const issues = Array.isArray(parsed.issues) ? parsed.issues.filter((i: unknown) => typeof i === 'string').slice(0, 8) : [];
+    return { score, issues };
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.warn(`⚠️ Fidelity check error — skipping gate: ${msg.substring(0, 200)}`);
+    return null;
+  }
+}
+
+/**
  * Generate an ad image using the selected provider (Gemini Nano Banana Pro or OpenAI GPT Image 2),
  * with automatic cross-provider fallback on failure. See the fallback policy in the body.
  */
@@ -4182,9 +4301,12 @@ export async function generateAdImage(config: {
   similarityLevel?: number; // 0 = identical to references, 100 = completely different
   imageSize?: ImageSize; // Aspect ratio for generated images
   productContext?: ProductContext;
-  // Pre-computed reference data to avoid redundant API calls during parallel generation
+  // Pre-computed reference data to avoid redundant API calls during parallel generation.
+  // Style refs (winning ads) and product mockups (identity-locked) are kept SEPARATE so
+  // each can be labeled for its distinct role in the generation request.
   precomputedRefs?: {
-    referenceImages: Array<{ data: string; mimeType: string }>;
+    styleImages: Array<{ data: string; mimeType: string }>;
+    productImages: Array<{ data: string; mimeType: string }>;
     refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
     refConversionContext?: string[];
   };
@@ -4207,9 +4329,9 @@ export async function generateAdImage(config: {
   // empty/garbled response. Safety/policy blocks are the one exception: re-thrown immediately, since
   // the same prompt would be refused by the other engine too. Fallback is per-image, so a single
   // batch can legitimately come back mixed-engine when one variation trips a transient failure.
-  const runners: Record<ImageModel, { available: boolean; run: () => Promise<GeneratedImageResult> }> = {
-    gemini: { available: isGeminiConfigured(), run: () => generateAdImageWithGemini(config) },
-    openai: { available: isOpenAIConfigured(), run: () => generateAdImageWithGptImage(config) },
+  const runners: Record<ImageModel, { available: boolean; run: (fidelityFeedback?: string) => Promise<GeneratedImageResult> }> = {
+    gemini: { available: isGeminiConfigured(), run: (fidelityFeedback?: string) => generateAdImageWithGemini({ ...config, fidelityFeedback }) },
+    openai: { available: isOpenAIConfigured(), run: (fidelityFeedback?: string) => generateAdImageWithGptImage({ ...config, fidelityFeedback }) },
   };
   const order: ImageModel[] = provider === 'openai' ? ['openai', 'gemini'] : ['gemini', 'openai'];
   const attempts = order.filter(name => runners[name].available);
@@ -4218,12 +4340,54 @@ export async function generateAdImage(config: {
     throw new Error('No image generation API configured. Please contact your administrator.');
   }
 
+  // Fidelity gate: when a product mockup exists, inspect the generated image against it
+  // and retry ONCE on the same engine with corrective feedback if the product-match score
+  // is below FIDELITY_GATE_THRESHOLD. Keeps whichever attempt replicated the product
+  // better. Inspector failures are non-fatal — the image is returned unscored.
+  const applyFidelityGate = async (engine: ImageModel, first: GeneratedImageResult): Promise<GeneratedImageResult> => {
+    const productImages = config.precomputedRefs?.productImages
+      ?? (config.productContext?.productImages ?? []).slice(0, 3).map(img => ({ data: img.base64Data, mimeType: img.mimeType }));
+    if (productImages.length === 0) return first;
+
+    const generated = dataUrlToInline(first.imageUrl);
+    if (!generated) return first;
+
+    const verdict = await verifyProductFidelity(generated, productImages, config.productContext?.name);
+    if (!verdict) return first;
+
+    if (verdict.score >= FIDELITY_GATE_THRESHOLD) {
+      console.log(`🔍 Fidelity gate passed: ${verdict.score}/100`);
+      return { ...first, fidelityScore: verdict.score, fidelityIssues: verdict.issues };
+    }
+
+    console.warn(`🔍 Fidelity gate FAILED (${verdict.score}/100): ${verdict.issues.join('; ').substring(0, 300)} — retrying once with corrective feedback`);
+    try {
+      const feedback = verdict.issues.length > 0 ? verdict.issues.join('; ') : 'The product did not match the mockup design.';
+      const retry = await runners[engine].run(feedback);
+      const retryInline = dataUrlToInline(retry.imageUrl);
+      const retryVerdict = retryInline ? await verifyProductFidelity(retryInline, productImages, config.productContext?.name) : null;
+      if (retryVerdict) {
+        console.log(`🔍 Fidelity retry scored ${retryVerdict.score}/100 (first attempt: ${verdict.score})`);
+        if (retryVerdict.score >= verdict.score) {
+          return { ...retry, fidelityScore: retryVerdict.score, fidelityIssues: retryVerdict.issues };
+        }
+        return { ...first, fidelityScore: verdict.score, fidelityIssues: verdict.issues };
+      }
+      // Retry generated but couldn't be re-verified — prefer it (it had corrective feedback)
+      return retry;
+    } catch (retryErr: unknown) {
+      const msg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+      console.warn(`⚠️ Fidelity retry failed (${msg.substring(0, 150)}) — keeping first attempt`);
+      return { ...first, fidelityScore: verdict.score, fidelityIssues: verdict.issues };
+    }
+  };
+
   let lastError: Error | null = null;
   for (let i = 0; i < attempts.length; i++) {
     const name = attempts[i];
     try {
       if (i > 0) console.log(`🔁 Falling back to ${name} for image generation...`);
-      return await runners[name].run();
+      return await applyFidelityGate(name, await runners[name].run());
     } catch (err: unknown) {
       // Content/policy block — the other engine will refuse the same prompt. Fail fast.
       if (err instanceof SafetyBlockError) throw err;
@@ -4250,7 +4414,8 @@ async function generateAdImageWithGemini(config: {
   productContext?: ProductContext;
   // Pre-computed reference data to avoid redundant API calls when generating in parallel
   precomputedRefs?: {
-    referenceImages: Array<{ data: string; mimeType: string }>;
+    styleImages: Array<{ data: string; mimeType: string }>;
+    productImages: Array<{ data: string; mimeType: string }>;
     refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
     refConversionContext?: string[];
   };
@@ -4262,6 +4427,8 @@ async function generateAdImageWithGemini(config: {
   businessType?: import('../types/organization').BusinessType;
   campaignIntent?: import('../types/organization').CampaignIntent;
   formatHint?: FormatType;
+  // Corrective feedback from a failed fidelity-gate inspection (set on gate retries only)
+  fidelityFeedback?: string;
 }): Promise<GeneratedImageResult> {
   const similarity = config.similarityLevel ?? 30; // Default to 30% variation
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
@@ -4272,18 +4439,20 @@ async function generateAdImageWithGemini(config: {
   const topAds = config.analysisData?.topAds || [];
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
 
-  let referenceImages: Array<{ data: string; mimeType: string }>;
+  let styleImages: Array<{ data: string; mimeType: string }>;
+  let productImages: Array<{ data: string; mimeType: string }>;
   let refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
   let refConversionContext: string[] = [];
 
   if (config.precomputedRefs) {
     // Use pre-computed references (avoids redundant API calls during parallel generation)
-    referenceImages = config.precomputedRefs.referenceImages;
+    styleImages = config.precomputedRefs.styleImages;
+    productImages = config.precomputedRefs.productImages;
     refAnalysis = config.precomputedRefs.refAnalysis;
     if (config.precomputedRefs.refConversionContext) {
       refConversionContext = config.precomputedRefs.refConversionContext;
     }
-    console.log(`📸 Using pre-computed reference data (${referenceImages.length} images)`);
+    console.log(`📸 Using pre-computed reference data (${styleImages.length} style + ${productImages.length} product images)`);
   } else {
     // Compute references on-the-fly (single image regeneration)
     const MIN_QUALITY_SCORE = 60;
@@ -4291,7 +4460,7 @@ async function generateAdImageWithGemini(config: {
 
     console.log(`📸 Found ${cachedImages.length} high-quality reference images (quality >= ${MIN_QUALITY_SCORE})`);
 
-    referenceImages = cachedImages.map(cached => ({
+    styleImages = cachedImages.map(cached => ({
       data: cached.base64Data,
       mimeType: cached.mimeType
     }));
@@ -4299,12 +4468,12 @@ async function generateAdImageWithGemini(config: {
     // Build conversion context for each reference image
     refConversionContext = buildRefConversionContext(cachedImages);
 
-    if (config.productContext?.productImages?.length) {
-      const productImgs = config.productContext.productImages.slice(0, 3);
-      productImgs.forEach(img => {
-        referenceImages.push({ data: img.base64Data, mimeType: img.mimeType });
-      });
-      console.log(`📦 Added ${productImgs.length} product mockup images as references`);
+    productImages = (config.productContext?.productImages ?? []).slice(0, 3).map(img => ({
+      data: img.base64Data,
+      mimeType: img.mimeType,
+    }));
+    if (productImages.length > 0) {
+      console.log(`📦 Added ${productImages.length} product mockup images as identity references`);
     }
 
     if (cachedImages.length > 0) {
@@ -4314,15 +4483,27 @@ async function generateAdImageWithGemini(config: {
       console.log('⚠️ No high-quality cached images available. Sync Meta Ads to auto-load converting ad references.');
     }
 
-    refAnalysis = await analyzeReferenceImages(referenceImages);
+    // Style analysis runs on the winning-ad references ONLY. Including product mockups
+    // here blended the mockup's own design into the "copy this style" descriptors, which
+    // pushed the model to restyle the product instead of reproducing it 1:1.
+    refAnalysis = await analyzeReferenceImages(styleImages);
     console.log('🎨 Reference analysis:', refAnalysis);
   }
 
-  // Build a detailed prompt for Gemini
-  const promptParts = [
-    'Generate a professional advertisement image that PRECISELY matches the provided reference style.',
-    '',
-  ];
+  // Build a detailed prompt for Gemini.
+  // When product mockups are attached, the task is framed as PRODUCT PLACEMENT (take the
+  // exact product, build a scene around it) rather than free-form generation — this is the
+  // single strongest lever for 1:1 product fidelity.
+  const promptParts = productImages.length > 0
+    ? [
+        'TASK: Take the EXACT product shown in the [PRODUCT MOCKUP] image(s) and place it into a new, high-converting advertisement scene.',
+        'The product must be a faithful 1:1 reproduction of the mockup — same artwork, text, fonts, colors, layout, and proportions. Only the scene around it is newly created, following the creative direction below.',
+        '',
+      ]
+    : [
+        'Generate a professional advertisement image that PRECISELY matches the provided reference style.',
+        '',
+      ];
 
   // Creative variation level instructions based on similarity setting
   const getSimilarityInstructions = () => {
@@ -4403,14 +4584,20 @@ Explore fresh visual directions while maintaining professional quality.`,
     ''
   );
 
-  // If we have reference images, add explicit note about them
-  if (referenceImages.length > 0) {
-    const productImgCount = config.productContext?.productImages?.length ? Math.min(config.productContext.productImages.length, 3) : 0;
-    const adRefCount = referenceImages.length - productImgCount;
+  // The creative direction must never be read as license to redesign the product
+  if (productImages.length > 0) {
     promptParts.push(
-      `I have attached ${referenceImages.length} REFERENCE IMAGES.`,
-      adRefCount > 0 ? `${adRefCount} are from ads with PROVEN CONVERSIONS - match their visual style, prioritizing the highest-converting image's approach.` : '',
-      productImgCount > 0 ? `${productImgCount} are PRODUCT MOCKUP images - the generated image MUST depict this exact product.` : '',
+      'SCOPE: The creative direction above governs the SCENE ONLY (environment, lighting, composition, mood, props). The product design itself is fixed by the [PRODUCT MOCKUP] image(s) and is exempt from ALL variation.',
+      ''
+    );
+  }
+
+  // If we have reference images, add explicit note about them
+  if (styleImages.length + productImages.length > 0) {
+    promptParts.push(
+      `I have attached ${styleImages.length + productImages.length} reference images, each labeled with its role immediately before it:`,
+      styleImages.length > 0 ? `- ${styleImages.length} labeled [STYLE REFERENCE]: ads with PROVEN CONVERSIONS — emulate their visual style for the scene (composition, lighting, color, mood), prioritizing the highest-converting image. Do NOT copy their products, text, or subjects.` : '',
+      productImages.length > 0 ? `- ${productImages.length} labeled [PRODUCT MOCKUP]: the exact product that must appear in the ad, reproduced 1:1.` : '',
     );
 
     // Include per-image conversion data so Gemini prioritizes the best-performing styles
@@ -4421,7 +4608,9 @@ Explore fresh visual directions while maintaining professional quality.`,
 
     promptParts.push(
       '',
-      'You MUST study these images and match the visual style of the highest-converting references.',
+      styleImages.length > 0
+        ? 'Study the [STYLE REFERENCE] images and match the visual style of the highest-converting ones for the scene.'
+        : 'Study the [PRODUCT MOCKUP] image(s) carefully — every design detail matters.',
       ''
     );
   }
@@ -4553,11 +4742,20 @@ Explore fresh visual directions while maintaining professional quality.`,
   // so it takes precedence at high-similarity settings ("Bold & Different" tells the
   // model to "explore new visual directions", which it would otherwise apply to the
   // product cover too).
-  if (config.productContext?.productImages?.length) {
+  if (productImages.length > 0) {
     promptParts.push(
       '',
       'PRODUCT MOCKUP PRESERVATION (NON-NEGOTIABLE — OVERRIDES CREATIVE DIRECTION):',
-      'The product mockup reference image(s) attached are IDENTITY-LOCKED. You must reproduce the product itself — its cover art, packaging, title text, author name, colors, layout, typography, and all visual design elements — EXACTLY as shown in the mockup. Do NOT redesign, restyle, abstract, reimagine, or "improve" the product. Do NOT change its colors, fonts, or layout. Treat it like placing a real physical product into a new scene.',
+      'The [PRODUCT MOCKUP] image(s) attached are IDENTITY-LOCKED. You must reproduce the product itself EXACTLY as shown — treat it like photographing a real physical product placed into a new scene. Do NOT redesign, restyle, abstract, reimagine, or "improve" the product.',
+      '',
+      'FIDELITY CHECKLIST — every item must match the mockup exactly:',
+      '  • Cover/packaging artwork and graphic elements — identical imagery, no substitutions or simplifications',
+      '  • Title, subtitle, and author/brand name — exact spelling, casing, and wording, rendered sharp and legible',
+      '  • Typography — same fonts, weights, sizes, and text placement',
+      '  • Colors — the exact hues of the background, artwork, and text',
+      '  • Layout and proportions — same arrangement and aspect ratio of all design elements',
+      '  • Do NOT add new text, badges, logos, stickers, or design elements to the product',
+      productImages.length > 1 ? '  • Multiple mockup images show the SAME product — use them together to understand its design fully' : '',
       '',
       'Creative variation (regardless of the % setting above, even at 100% / Bold & Different) applies ONLY to:',
       '  • The scene, environment, and background around the product',
@@ -4582,23 +4780,53 @@ Explore fresh visual directions while maintaining professional quality.`,
     );
   }
 
+  // Fidelity-gate retry: surface the inspector's concrete mismatches so this attempt
+  // corrects them instead of repeating the same drift
+  if (config.fidelityFeedback) {
+    promptParts.push(
+      '',
+      '🚨 A PREVIOUS ATTEMPT FAILED THE PRODUCT FIDELITY INSPECTION.',
+      `Issues found: ${config.fidelityFeedback}`,
+      'You MUST correct every issue above. Re-examine the [PRODUCT MOCKUP] image(s) detail by detail and reproduce the product EXACTLY this time.'
+    );
+  }
+
   promptParts.push('', IMAGE_SAFETY_DIRECTIVE);
   const prompt = promptParts.join('\n');
   console.log('📝 Gemini prompt:', prompt.substring(0, 300) + '...');
 
-  // Build the request with reference images as inline data
+  // Build the request with reference images as inline data.
+  // CRITICAL: every image is preceded by an inline text label declaring its role. Without
+  // labels the model cannot tell style references apart from the identity-locked product
+  // mockup, and applies "match the style" / "explore new directions" to the product itself.
+  // Product mockups go LAST so they sit closest to the prompt (strongest attention anchor).
   const requestParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
 
-  // Add reference images first so Gemini sees them before the prompt
-  referenceImages.forEach((img, i) => {
+  styleImages.forEach((img, i) => {
+    requestParts.push({
+      text: `[STYLE REFERENCE ${i + 1} of ${styleImages.length}] A high-converting ad. Emulate its visual style for the scene only. Do NOT copy its product, text, or subject.`,
+    });
     requestParts.push({
       inlineData: {
         mimeType: img.mimeType,
         data: img.data
       }
     });
-    console.log(`📸 Added reference image ${i + 1} to request`);
   });
+
+  productImages.forEach((img, i) => {
+    requestParts.push({
+      text: `[PRODUCT MOCKUP ${i + 1} of ${productImages.length}] The EXACT product${config.productContext?.name ? ` "${config.productContext.name}"` : ''} — IDENTITY-LOCKED. Reproduce this design 1:1 in the generated ad: same artwork, text, fonts, colors, layout, and proportions.`,
+    });
+    requestParts.push({
+      inlineData: {
+        mimeType: img.mimeType,
+        data: img.data
+      }
+    });
+  });
+
+  console.log(`📸 Added ${styleImages.length} labeled style reference(s) + ${productImages.length} labeled product mockup(s) to request`);
 
   // Add the text prompt
   requestParts.push({ text: prompt });
@@ -4615,7 +4843,7 @@ Explore fresh visual directions while maintaining professional quality.`,
     }
   };
 
-  console.log(`📤 Sending request to Gemini with ${referenceImages.length} reference images, aspect ratio: ${imageSize}`);
+  console.log(`📤 Sending request to Gemini with ${styleImages.length + productImages.length} reference images, aspect ratio: ${imageSize}`);
 
   // Stringify once, then free the request object to release base64 references sooner
   const requestBodyStr = JSON.stringify(requestBody);
@@ -4821,7 +5049,8 @@ async function generateAdImageWithGptImage(config: {
   imageSize?: ImageSize;
   productContext?: ProductContext;
   precomputedRefs?: {
-    referenceImages: Array<{ data: string; mimeType: string }>;
+    styleImages: Array<{ data: string; mimeType: string }>;
+    productImages: Array<{ data: string; mimeType: string }>;
     refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
     refConversionContext?: string[];
   };
@@ -4829,6 +5058,8 @@ async function generateAdImageWithGptImage(config: {
   headlineText?: string;
   businessType?: import('../types/organization').BusinessType;
   campaignIntent?: import('../types/organization').CampaignIntent;
+  // Corrective feedback from a failed fidelity-gate inspection (set on gate retries only)
+  fidelityFeedback?: string;
 }): Promise<GeneratedImageResult> {
   const similarity = config.similarityLevel ?? 30;
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
@@ -4839,38 +5070,47 @@ async function generateAdImageWithGptImage(config: {
   const topAds = config.analysisData?.topAds || [];
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
 
-  let referenceImages: Array<{ data: string; mimeType: string }>;
+  let styleImages: Array<{ data: string; mimeType: string }>;
+  let productImages: Array<{ data: string; mimeType: string }>;
   let refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
   let refConversionContext: string[] = [];
 
   if (config.precomputedRefs) {
-    referenceImages = config.precomputedRefs.referenceImages;
+    styleImages = config.precomputedRefs.styleImages;
+    productImages = config.precomputedRefs.productImages;
     refAnalysis = config.precomputedRefs.refAnalysis;
     if (config.precomputedRefs.refConversionContext) {
       refConversionContext = config.precomputedRefs.refConversionContext;
     }
-    console.log(`📸 Using pre-computed reference data (${referenceImages.length} images)`);
+    console.log(`📸 Using pre-computed reference data (${styleImages.length} style + ${productImages.length} product images)`);
   } else {
     const MIN_QUALITY_SCORE = 60;
     const cachedImages = getTopHighQualityCachedImages(3, MIN_QUALITY_SCORE);
-    referenceImages = cachedImages.map(c => ({ data: c.base64Data, mimeType: c.mimeType }));
+    styleImages = cachedImages.map(c => ({ data: c.base64Data, mimeType: c.mimeType }));
     refConversionContext = buildRefConversionContext(cachedImages);
 
-    if (config.productContext?.productImages?.length) {
-      const productImgs = config.productContext.productImages.slice(0, 3);
-      productImgs.forEach(img => {
-        referenceImages.push({ data: img.base64Data, mimeType: img.mimeType });
-      });
-    }
+    productImages = (config.productContext?.productImages ?? []).slice(0, 3).map(img => ({
+      data: img.base64Data,
+      mimeType: img.mimeType,
+    }));
 
-    refAnalysis = await analyzeReferenceImages(referenceImages);
+    // Style analysis on winning-ad references ONLY — mockups must not bleed into the
+    // style descriptors (see generateAdImageWithGemini for the full rationale)
+    refAnalysis = await analyzeReferenceImages(styleImages);
   }
 
-  // Build prompt — same structure as the Gemini path so outputs are comparable
-  const promptParts: string[] = [
-    'Generate a professional advertisement image that PRECISELY matches the provided reference style.',
-    '',
-  ];
+  // Build prompt — same structure as the Gemini path so outputs are comparable.
+  // With product mockups attached, frame the task as product placement (see Gemini path).
+  const promptParts: string[] = productImages.length > 0
+    ? [
+        'TASK: Take the EXACT product shown in the PRODUCT MOCKUP image(s) and place it into a new, high-converting advertisement scene.',
+        'The product must be a faithful 1:1 reproduction of the mockup — same artwork, text, fonts, colors, layout, and proportions. Only the scene around it is newly created, following the creative direction below.',
+        '',
+      ]
+    : [
+        'Generate a professional advertisement image that PRECISELY matches the provided reference style.',
+        '',
+      ];
 
   const getSimilarityInstructions = () => {
     if (similarity <= 20) {
@@ -4897,12 +5137,12 @@ USE: color palette ${refAnalysis.colorPalette}; mood ${refAnalysis.mood}; visual
 
   promptParts.push(`CREATIVE DIRECTION: ${getSimilarityInstructions()}`, '');
 
-  if (referenceImages.length > 0) {
-    const productImgCount = config.productContext?.productImages?.length ? Math.min(config.productContext.productImages.length, 3) : 0;
-    const adRefCount = referenceImages.length - productImgCount;
-    promptParts.push(`I have attached ${referenceImages.length} REFERENCE IMAGES in this exact order:`);
+  if (styleImages.length + productImages.length > 0) {
+    const productImgCount = productImages.length;
+    const adRefCount = styleImages.length;
+    promptParts.push(`I have attached ${adRefCount + productImgCount} REFERENCE IMAGES in this exact order:`);
     if (adRefCount > 0) {
-      promptParts.push(`  • Images 1–${adRefCount}: STYLE references from ads with PROVEN CONVERSIONS. Their visual style (composition, color, lighting, mood) is what to emulate — subject to the creative direction setting above.`);
+      promptParts.push(`  • Images 1–${adRefCount}: STYLE references from ads with PROVEN CONVERSIONS. Their visual style (composition, color, lighting, mood) is what to emulate — subject to the creative direction setting above. Do NOT copy their products, text, or subjects.`);
     }
     if (productImgCount > 0) {
       const start = adRefCount + 1;
@@ -5011,11 +5251,20 @@ USE: color palette ${refAnalysis.colorPalette}; mood ${refAnalysis.mood}; visual
   // so it takes precedence at high-similarity settings ("Bold & Different" tells the
   // model to "explore new visual directions", which it would otherwise apply to the
   // product cover too).
-  if (config.productContext?.productImages?.length) {
+  if (productImages.length > 0) {
     promptParts.push(
       '',
       'PRODUCT MOCKUP PRESERVATION (NON-NEGOTIABLE — OVERRIDES CREATIVE DIRECTION):',
-      'The product mockup reference image(s) attached above are IDENTITY-LOCKED. You must reproduce the product itself — its cover art, packaging, title text, author name, colors, layout, typography, and all visual design elements — EXACTLY as shown in the mockup. Do NOT redesign, restyle, abstract, reimagine, or "improve" the product. Do NOT change its colors, fonts, or layout. Treat it like placing a real physical product into a new scene.',
+      'The PRODUCT MOCKUP image(s) attached are IDENTITY-LOCKED. You must reproduce the product itself EXACTLY as shown — treat it like photographing a real physical product placed into a new scene. Do NOT redesign, restyle, abstract, reimagine, or "improve" the product.',
+      '',
+      'FIDELITY CHECKLIST — every item must match the mockup exactly:',
+      '  • Cover/packaging artwork and graphic elements — identical imagery, no substitutions or simplifications',
+      '  • Title, subtitle, and author/brand name — exact spelling, casing, and wording, rendered sharp and legible',
+      '  • Typography — same fonts, weights, sizes, and text placement',
+      '  • Colors — the exact hues of the background, artwork, and text',
+      '  • Layout and proportions — same arrangement and aspect ratio of all design elements',
+      '  • Do NOT add new text, badges, logos, stickers, or design elements to the product',
+      productImages.length > 1 ? '  • Multiple mockup images show the SAME product — use them together to understand its design fully' : '',
       '',
       'Creative variation (regardless of the % setting above, even at 100% / Bold & Different) applies ONLY to:',
       '  • The scene, environment, and background around the product',
@@ -5027,25 +5276,78 @@ USE: color palette ${refAnalysis.colorPalette}; mood ${refAnalysis.mood}; visual
     );
   }
 
+  // Fidelity-gate retry: surface the inspector's concrete mismatches so this attempt
+  // corrects them instead of repeating the same drift
+  if (config.fidelityFeedback) {
+    promptParts.push(
+      '',
+      '🚨 A PREVIOUS ATTEMPT FAILED THE PRODUCT FIDELITY INSPECTION.',
+      `Issues found: ${config.fidelityFeedback}`,
+      'You MUST correct every issue above. Re-examine the PRODUCT MOCKUP image(s) detail by detail and reproduce the product EXACTLY this time.'
+    );
+  }
+
   promptParts.push('', IMAGE_SAFETY_DIRECTIVE);
   const prompt = promptParts.join('\n');
   console.log('📝 GPT-Image prompt:', prompt.substring(0, 300) + '...');
 
-  // Downscale reference images BEFORE sending through the Vercel proxy.
-  // The proxy has a 4.5MB body limit; full-size 1024px references can blow past it.
-  // Downscaling to 768px @ JPEG 0.7 keeps total payload < 1MB even with 6 refs.
+  // Prepare reference images for the Vercel proxy (4.5MB body limit).
+  // STYLE references are aggressively downscaled (768px @ JPEG 0.7) — they only inform
+  // scene styling, so lossy compression is fine.
+  // PRODUCT MOCKUPS are passed through UNCHANGED whenever they fit: Products.tsx already
+  // bounds them at 1024px JPEG 0.8, and a second lossy re-encode (old behavior: 768px @
+  // 0.7) blurred the cover text/artwork the model must reproduce 1:1 — a direct cause of
+  // product drift. A CUMULATIVE byte budget (not a per-image cutoff) guards the proxy
+  // limit: when the combined payload would overflow, mockups are re-encoded at
+  // progressively lower — but still text-legible — settings, never as low as 768 @ 0.7.
   let proxyReferenceImages: Array<{ data: string; mimeType: string }> = [];
-  if (referenceImages.length > 0) {
+  if (styleImages.length + productImages.length > 0) {
     try {
-      proxyReferenceImages = await Promise.all(
-        referenceImages.map(ref => downscaleImageForProxy(ref.data, ref.mimeType))
+      const downscaledStyle = await Promise.all(
+        styleImages.map(ref => downscaleImageForProxy(ref.data, ref.mimeType))
       );
+      // Budget in base64 chars (1 char = 1 JSON body byte), with headroom under the
+      // 4.5MB proxy limit for the prompt and JSON framing.
+      const PROXY_IMAGE_BUDGET = 3_800_000;
+      const styleTotal = downscaledStyle.reduce((sum, ref) => sum + ref.data.length, 0);
+      const mockupBudget = Math.max(PROXY_IMAGE_BUDGET - styleTotal, 1_000_000);
+
+      let proxyMockups: Array<{ data: string; mimeType: string }> =
+        productImages.map(ref => ({ data: ref.data, mimeType: ref.mimeType }));
+      const REENCODE_STEPS = [
+        { maxDim: 1024, quality: 0.85 },
+        { maxDim: 896, quality: 0.8 },
+      ] as const;
+      for (const step of REENCODE_STEPS) {
+        if (proxyMockups.reduce((sum, ref) => sum + ref.data.length, 0) <= mockupBudget) break;
+        console.warn(`⚠️ Mockup payload exceeds proxy budget — re-encoding mockups at ${step.maxDim}px @ JPEG ${step.quality}`);
+        proxyMockups = await Promise.all(
+          productImages.map(ref => downscaleImageForProxy(ref.data, ref.mimeType, step.maxDim, step.quality))
+        );
+      }
+
+      // Hard enforcement: if pathological inputs still overflow after the smallest
+      // re-encode step, drop trailing mockups rather than send a request the proxy will
+      // reject with 413. The first mockup (the primary design) is always kept — a single
+      // 896px JPEG cannot exceed the budget alone. Compressing further instead would
+      // recreate the 768@0.7 blur that caused product drift in the first place.
+      let mockupTotal = proxyMockups.reduce((sum, ref) => sum + ref.data.length, 0);
+      while (proxyMockups.length > 1 && mockupTotal > mockupBudget) {
+        const dropped = proxyMockups.pop()!;
+        mockupTotal -= dropped.data.length;
+        console.warn(`⚠️ Proxy payload budget exhausted — dropped a product mockup from the request (${proxyMockups.length} kept)`);
+      }
+
+      // Order must match the prompt's "Images 1–N style, then product mockups" description
+      proxyReferenceImages = [...downscaledStyle, ...proxyMockups];
       const totalKB = Math.round(proxyReferenceImages.reduce((sum, ref) => sum + ref.data.length * 0.75, 0) / 1024);
-      console.log(`📦 Downscaled ${proxyReferenceImages.length} reference images (~${totalKB}KB total) for proxy`);
+      console.log(`📦 Prepared ${downscaledStyle.length} downscaled style ref(s) + ${proxyMockups.length} mockup(s) (~${totalKB}KB total) for proxy`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`⚠️ Reference image downscale failed (${msg}); proceeding without references`);
-      proxyReferenceImages = [];
+      // Identity beats style: if preparation fails, still send the raw mockups (bounded at
+      // upload time) rather than generating with no product reference at all.
+      console.warn(`⚠️ Reference image preparation failed (${msg}); falling back to product mockups only`);
+      proxyReferenceImages = productImages.map(ref => ({ data: ref.data, mimeType: ref.mimeType }));
     }
   }
 
@@ -5738,9 +6040,12 @@ export async function regenerateAllImages(config: {
   const imageModel = config.imageModel ?? DEFAULT_IMAGE_MODEL_PROVIDER;
   console.log(`🖼️ Regenerating ${config.variationCount} image(s) for ${config.audienceType} audience using ${imageModel}`);
 
-  // Pre-compute reference images and analysis ONCE before parallel generation
+  // Pre-compute reference images and analysis ONCE before parallel generation.
+  // Style refs (winning ads) and product mockups stay separate so the engines can label
+  // each image with its role — style-to-emulate vs identity-locked product.
   let precomputedRefs: {
-    referenceImages: Array<{ data: string; mimeType: string }>;
+    styleImages: Array<{ data: string; mimeType: string }>;
+    productImages: Array<{ data: string; mimeType: string }>;
     refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
     refConversionContext?: string[];
   } | undefined;
@@ -5791,22 +6096,23 @@ export async function regenerateAllImages(config: {
     // Build conversion context for Gemini prompt
     const refConversionContext = buildRefConversionContext(cachedImages);
 
-    const referenceImages: Array<{ data: string; mimeType: string }> = cachedImages.map(cached => ({
+    const styleImages: Array<{ data: string; mimeType: string }> = cachedImages.map(cached => ({
       data: cached.base64Data,
       mimeType: cached.mimeType
     }));
 
-    if (config.productContext?.productImages?.length) {
-      const productImgs = config.productContext.productImages.slice(0, 3);
-      productImgs.forEach(img => {
-        referenceImages.push({ data: img.base64Data, mimeType: img.mimeType });
-      });
-    }
+    const productImages: Array<{ data: string; mimeType: string }> =
+      (config.productContext?.productImages ?? []).slice(0, 3).map(img => ({
+        data: img.base64Data,
+        mimeType: img.mimeType,
+      }));
 
-    console.log(`📸 Pre-computing reference analysis for ${referenceImages.length} images (shared across ${config.variationCount} variations)`);
+    console.log(`📸 Pre-computing reference analysis for ${styleImages.length} style image(s) (+ ${productImages.length} product mockup(s), shared across ${config.variationCount} variations)`);
     config.onProgress?.('ConversionIQ™ analyzing reference styles...');
-    const refAnalysis = await analyzeReferenceImages(referenceImages);
-    precomputedRefs = { referenceImages, refAnalysis, refConversionContext };
+    // Style analysis runs on winning-ad references ONLY — product mockups are identity
+    // references, not style sources, and must not bleed into the style descriptors
+    const refAnalysis = await analyzeReferenceImages(styleImages);
+    precomputedRefs = { styleImages, productImages, refAnalysis, refConversionContext };
   }
 
   // Generate images with concurrency limit of 2 to prevent memory exhaustion
@@ -5844,7 +6150,8 @@ export async function regenerateAllImages(config: {
 
   // Free reference image memory now that all images are generated
   if (precomputedRefs) {
-    precomputedRefs.referenceImages.length = 0;
+    precomputedRefs.styleImages.length = 0;
+    precomputedRefs.productImages.length = 0;
     precomputedRefs = undefined;
   }
 
