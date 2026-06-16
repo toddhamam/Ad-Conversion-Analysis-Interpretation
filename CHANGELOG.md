@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-06-16 — CreativeIQ images: independent image/graphic variation slider in the Blitz testing grid
+
+### What
+The Blitz (Angle × Hook) testing grid exposed a **Copy Variation Level** slider (Follow Winners ↔ New Angles) but **no equivalent control for the generated visuals**. Image generation in that flow silently used `similarityValue` locked at its 30% default — the "Creative Variation Level" slider that drives it only rendered in the *single-concept* (final-config) flow. So in a Blitz batch you could dial copy but not graphics, and there was no way to **keep the converting copy while testing a brand-new image style** (or vice versa).
+
+The fix surfaces the existing creative-variation control as its own slider in the Blitz flow, making copy and graphics **two independent axes**. The plumbing already existed (`similarityValue` → `similarityLevel` → Gemini); this release just exposes the dial and removes the duplicated inline markup.
+
+### Added
+- **`src/components/CreativeVariationSlider.tsx`** — reusable, presentational "Creative Variation Level" slider (Match Winners ↔ Bold & New) extracted from the single-flow inline markup. Bound to `similarityValue`, reuses the global `.similarity-*` styles, and accepts a `disabled` prop so it locks during generation. One component now serves the single-flow final-config step, the Blitz config cluster, and the Blitz review step.
+- **Image variation slider in the Blitz config step** — rendered beside the image model/strategy selectors and directly above the existing **Copy Variation Level** slider, so the copy-vs-graphics independence is visible at a glance while building the grid.
+- **Image variation slider in `GridReviewPanel`** — rendered at the actual point of image generation (above "Generate N Images"), mirroring how the model and strategy selectors already appear in both config and review. Disabled while a batch renders.
+
+### Changed
+- **Single-concept flow** (`AdGenerator.tsx` final-config) now uses `CreativeVariationSlider` instead of ~45 lines of inline slider markup — behavior unchanged (`hasReference = imageCacheCount > 0 || analysisData`).
+- **`GridReviewPanel` props** gained `creativeVariation`, `onCreativeVariationChange`, and `creativeHasReference`, wired from `AdGenerator` to the shared `similarityValue` state. Both Blitz sliders and the single-flow slider read/write the same state, so the value stays in sync and continues to feed both `handleGenerateBlitzImages` and the per-image `handleRegenerateBlitzImage` reroll.
+
+### Internal
+- No new persistence work: `similarityValue` was already saved/restored in `BatchSessionContext`, so the slider value survives refresh and drives on-brand per-image regeneration as before.
+- Copy and image variation now map to fully separate generation params: `copyVariationValue` → `generateGridCopy` (`copyVariationLevel`), `similarityValue` → `regenerateAllImages` / `generateAdImage` (`similarityLevel`).
+- `tsc --noEmit` clean; ESLint clean on the changes (3 pre-existing `exhaustive-deps` warnings on untouched hooks remain).
+
 ## 2026-06-10 — CreativeIQ images: 1:1 product mockup replication (labeled refs + fidelity gate + upload quality)
 
 ### What

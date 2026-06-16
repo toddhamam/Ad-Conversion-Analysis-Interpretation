@@ -52,6 +52,7 @@ import GridReviewPanel from '../components/GridReviewPanel';
 import BlitzImageReviewPanel from '../components/BlitzImageReviewPanel';
 import BlitzImageStrategySelector from '../components/BlitzImageStrategySelector';
 import ImageModelSelector from '../components/ImageModelSelector';
+import CreativeVariationSlider from '../components/CreativeVariationSlider';
 import AdLibraryBrowser from '../components/AdLibraryBrowser';
 import InspirationSelector from '../components/InspirationSelector';
 import SEO from '../components/SEO';
@@ -2692,6 +2693,13 @@ const AdGenerator = () => {
                 onChange={setBlitzImageStrategy}
               />
               <ImageModelSelector value={imageModel} onChange={handleImageModelChange} />
+              {/* Image variation axis — independent of the Copy Variation slider below.
+                  Keep the copy, test a brand-new graphic style (or vice versa). */}
+              <CreativeVariationSlider
+                value={similarityValue}
+                onChange={setSimilarityValue}
+                hasReference={imageCacheCount > 0 || !!analysisData}
+              />
             </>
           )}
 
@@ -3019,6 +3027,9 @@ const AdGenerator = () => {
           onStrategyChange={setBlitzImageStrategy}
           imageModel={imageModel}
           onImageModelChange={handleImageModelChange}
+          creativeVariation={similarityValue}
+          onCreativeVariationChange={setSimilarityValue}
+          creativeHasReference={imageCacheCount > 0 || !!analysisData}
           onToggleKeep={handleToggleKeepCell}
           onReroll={handleRerollGridCell}
           onBack={() => setCurrentStep('config')}
@@ -3722,50 +3733,13 @@ const AdGenerator = () => {
             )}
           </div>
 
-          {/* Creative Similarity Slider */}
+          {/* Creative Variation Slider — how closely new visuals hug the reference style */}
           {adType === 'image' && (
-            <div className="config-section similarity-section">
-              <label className="config-label">
-                Creative Variation Level
-              </label>
-              <p className="config-hint">
-                {imageCacheCount > 0 || analysisData
-                  ? 'Control how closely the new visuals match the creative style already converting in your ad account'
-                  : 'Control how conventional vs. experimental the generated visuals will be'}
-              </p>
-              <div className="similarity-slider-container">
-                <div className="similarity-labels">
-                  <span className="similarity-label-left">
-                    {imageCacheCount > 0 || analysisData ? 'Match Winners' : 'Conservative'}
-                  </span>
-                  <span className="similarity-label-right">
-                    {imageCacheCount > 0 || analysisData ? 'Bold & New' : 'Experimental'}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={similarityValue}
-                  onChange={(e) => setSimilarityValue(parseInt(e.target.value))}
-                  className="similarity-slider"
-                />
-                <div className="similarity-value">
-                  {imageCacheCount > 0 || analysisData
-                    ? (similarityValue <= 20 ? '🎯 Near Identical' :
-                       similarityValue <= 40 ? '✨ Subtle Variations' :
-                       similarityValue <= 60 ? '🔄 Balanced Mix' :
-                       similarityValue <= 80 ? '🎨 Fresh Visuals' :
-                       '🚀 Bold & Different')
-                    : (similarityValue <= 20 ? '🎯 Conservative' :
-                       similarityValue <= 40 ? '✨ Slightly Creative' :
-                       similarityValue <= 60 ? '🔄 Balanced' :
-                       similarityValue <= 80 ? '🎨 Creative' :
-                       '🚀 Experimental')}
-                  <span className="similarity-percent">{similarityValue}% variation</span>
-                </div>
-              </div>
-            </div>
+            <CreativeVariationSlider
+              value={similarityValue}
+              onChange={setSimilarityValue}
+              hasReference={imageCacheCount > 0 || !!analysisData}
+            />
           )}
 
           {/* Credit Cost Hint */}
