@@ -3,6 +3,7 @@ import { CONCEPT_ANGLES, type GridCell, type BlitzImageStrategy, type ImageModel
 import { HOOK_LABELS } from '../lib/axisTags';
 import BlitzImageStrategySelector from './BlitzImageStrategySelector';
 import ImageModelSelector from './ImageModelSelector';
+import CreativeVariationSlider from './CreativeVariationSlider';
 
 // Grid-review step: prune + per-cell reroll the Angle × Hook copy matrix before
 // spending image credits. Presentational — all state/handlers live in AdGenerator.
@@ -18,6 +19,9 @@ interface GridReviewPanelProps {
   onStrategyChange: (s: BlitzImageStrategy) => void;
   imageModel: ImageModel;                               // which engine renders the images
   onImageModelChange: (m: ImageModel) => void;
+  creativeVariation: number;                            // 0 = match reference visuals, 100 = bold new style
+  onCreativeVariationChange: (v: number) => void;
+  creativeHasReference: boolean;                        // cached winners / analysis available to anchor visuals
   onToggleKeep: (id: string) => void;
   onReroll: (id: string) => void;
   onBack: () => void;
@@ -35,6 +39,9 @@ function GridReviewPanel({
   onStrategyChange,
   imageModel,
   onImageModelChange,
+  creativeVariation,
+  onCreativeVariationChange,
+  creativeHasReference,
   onToggleKeep,
   onReroll,
   onBack,
@@ -101,6 +108,12 @@ function GridReviewPanel({
         counts={strategyCounts}
         disabled={isGenerating}
         onChange={onStrategyChange}
+      />
+      <CreativeVariationSlider
+        value={creativeVariation}
+        onChange={onCreativeVariationChange}
+        hasReference={creativeHasReference}
+        disabled={isGenerating}
       />
       <div className="grid-review-actions">
         <button
