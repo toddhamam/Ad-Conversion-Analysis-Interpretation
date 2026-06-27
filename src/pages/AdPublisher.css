@@ -903,6 +903,31 @@
   font-family: monospace;
 }
 
+.publish-skipped-note {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 24px;
+  text-align: left;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.publish-skipped-note strong {
+  color: var(--text-primary);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.publish-skipped-note ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .success-actions {
   display: flex;
   gap: 12px;

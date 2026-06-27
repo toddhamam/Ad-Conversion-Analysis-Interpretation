@@ -1486,6 +1486,12 @@ export interface PublishResult {
   videoIds?: string[];
   error?: string;
   details?: string;
+  // Partial-publish accounting: publishing is resilient, so a batch can succeed with some ads
+  // skipped. `adsRequested`/`adsPublished` reflect the split; `failedAds` lists what was skipped
+  // (and why) so the UI can offer to regenerate + republish just those without re-pushing successes.
+  adsRequested?: number;
+  adsPublished?: number;
+  failedAds?: Array<{ index: number; headline?: string; stage: 'upload' | 'create'; error: string }>;
 }
 
 // ─── Ad Library Search ───────────────────────────────────────────────────────
@@ -2187,8 +2193,14 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
     adIds: [],
   };
 
-  // Per-ad upload results: image_hash for images, video_id for videos
-  const adMediaIds: Array<{ type: 'image' | 'video'; imageHash?: string; videoId?: string }> = [];
+  // Per-ad uploaded media, indexed by the ad's original position (null = that ad's upload failed).
+  // Publishing is resilient: a single failed upload skips just that ad, never the whole batch.
+  const mediaByIndex: Array<{ type: 'image' | 'video'; imageHash?: string; videoId?: string } | null> =
+    new Array(config.ads.length).fill(null);
+
+  // Ads that couldn't be published (media upload OR ad-creation failure) — surfaced so the user can
+  // regenerate + republish only the skipped ones, without re-pushing the ones that succeeded.
+  const failedAds: NonNullable<PublishResult['failedAds']> = [];
 
   const diagnostics: string[] = [];
 
@@ -2226,37 +2238,48 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
       console.warn(`Page pre-validation failed: ${pageValidation.error} — proceeding anyway`);
     }
 
-    // Step 1: Upload media per ad (image or video)
+    // Step 1: Upload media per ad (image or video). Each upload is isolated — one failure records
+    // that ad as skipped and moves on, so three good creatives still publish when a fourth errors
+    // (e.g. an image that never generated, or an upload that hits a billing/quota limit).
     for (let i = 0; i < config.ads.length; i++) {
       const ad = config.ads[i];
       const mediaType = ad.mediaType || 'image'; // Backwards compat default
 
-      if (mediaType === 'video') {
-        if (!ad.veoFileRef) {
-          throw new Error(`Video ad ${i + 1} is missing veoFileRef — regenerate the video before publishing.`);
-        }
-        try {
+      try {
+        if (mediaType === 'video') {
+          if (!ad.veoFileRef) {
+            throw new Error('missing video data — regenerate the video before publishing.');
+          }
           console.log(`Uploading video ${i + 1} to Meta via backend proxy...`);
           const videoId = await uploadVideoToMeta(ad.veoFileRef, ad.headline);
-          adMediaIds.push({ type: 'video', videoId });
+          mediaByIndex[i] = { type: 'video', videoId };
           result.videoIds!.push(videoId);
-        } catch (vidError: unknown) {
-          throw new Error(`Video upload failed for ad ${i + 1}: ${vidError instanceof Error ? vidError.message : 'Unknown error'}`);
-        }
-      } else {
-        // Image upload (default)
-        if (!ad.imageBase64) {
-          throw new Error(`Image ad ${i + 1} is missing image data — regenerate the image before publishing.`);
-        }
-        try {
+        } else {
+          // Image upload (default)
+          if (!ad.imageBase64) {
+            throw new Error('missing image data — regenerate the image before publishing.');
+          }
           const hash = await uploadAdImage(ad.imageBase64);
-          adMediaIds.push({ type: 'image', imageHash: hash });
+          mediaByIndex[i] = { type: 'image', imageHash: hash };
           result.imageHashes!.push(hash);
-        } catch (imgError: unknown) {
-          throw new Error(`Image upload failed for ad ${i + 1}: ${imgError instanceof Error ? imgError.message : 'Unknown error'}`);
         }
+      } catch (mediaError: unknown) {
+        const msg = mediaError instanceof Error ? mediaError.message : 'Unknown error';
+        console.warn(`⚠️ Media upload failed for ad ${i + 1} — skipping it: ${msg}`);
+        failedAds.push({ index: i, headline: ad.headline, stage: 'upload', error: msg });
       }
     }
+
+    // Nothing uploaded → fail fast BEFORE creating a campaign, so we never orphan an empty campaign.
+    const readyIndices = mediaByIndex.flatMap((m, i) => (m ? [i] : []));
+    if (readyIndices.length === 0) {
+      result.adsRequested = config.ads.length;
+      result.adsPublished = 0;
+      result.failedAds = failedAds;
+      result.error = `All ${config.ads.length} ad(s) failed media upload — nothing was published. ${failedAds[0]?.error || ''}`.trim();
+      return result;
+    }
+    const readySet = new Set(readyIndices);
 
     // Step 1.5: Run diagnostics
     try {
@@ -2336,9 +2359,13 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
         };
       }
 
+      // Only group ads whose media uploaded successfully. Drop any group left empty by skipped ads
+      // so we never create an ad set with nothing in it.
       const groups = (config.adSetGroups && config.adSetGroups.length > 0)
         ? config.adSetGroups
-        : [{ name: config.settings.adsetName || 'CI Generated Ad Set', adIndices: config.ads.map((_, idx) => idx) }];
+            .map(g => ({ name: g.name, adIndices: g.adIndices.filter(idx => readySet.has(idx)) }))
+            .filter(g => g.adIndices.length > 0)
+        : [{ name: config.settings.adsetName || 'CI Generated Ad Set', adIndices: readyIndices }];
 
       // ABO budget lives on each ad set — divide the daily budget across groups so the
       // total ≈ the user's intent (CBO shares one campaign budget automatically).
@@ -2368,52 +2395,69 @@ export async function publishAds(config: PublishConfig): Promise<PublishResult> 
     if (!pageId) throw new Error('Facebook Page ID is required.');
 
     for (let i = 0; i < config.ads.length; i++) {
+      const media = mediaByIndex[i];
+      if (!media) continue; // media upload was skipped for this ad — already recorded in failedAds
       const ad = config.ads[i];
-      const media = adMediaIds[i];
       const adsetForAd = adIndexToAdsetId[i] || result.adsetId!;
 
-      let adId: string;
-      let creativeId: string;
+      try {
+        let adId: string;
+        let creativeId: string;
 
-      if (media.type === 'video' && media.videoId) {
-        // Video ad — use video_data spec
-        const result2 = await createAdWithVideoCreative({
-          name: buildAdName(ad.axisTag, i, ad.headline, 'video'),
-          adsetId: adsetForAd,
-          pageId,
-          videoId: media.videoId,
-          headline: ad.headline,
-          bodyText: ad.bodyText,
-          linkUrl: config.settings.landingPageUrl,
-          callToAction: ad.callToAction,
-          pixelId: config.settings.pixelId,
-          urlTags: config.settings.urlTags,
-        });
-        adId = result2.adId;
-        creativeId = result2.creativeId;
-      } else {
-        // Image ad — use link_data spec
-        const result2 = await createAdWithCreative({
-          name: buildAdName(ad.axisTag, i, ad.headline, 'image'),
-          adsetId: adsetForAd,
-          pageId,
-          imageHash: media.imageHash || '',
-          headline: ad.headline,
-          bodyText: ad.bodyText,
-          linkUrl: config.settings.landingPageUrl,
-          callToAction: ad.callToAction,
-          pixelId: config.settings.pixelId,
-          urlTags: config.settings.urlTags,
-        });
-        adId = result2.adId;
-        creativeId = result2.creativeId;
+        if (media.type === 'video' && media.videoId) {
+          // Video ad — use video_data spec
+          const result2 = await createAdWithVideoCreative({
+            name: buildAdName(ad.axisTag, i, ad.headline, 'video'),
+            adsetId: adsetForAd,
+            pageId,
+            videoId: media.videoId,
+            headline: ad.headline,
+            bodyText: ad.bodyText,
+            linkUrl: config.settings.landingPageUrl,
+            callToAction: ad.callToAction,
+            pixelId: config.settings.pixelId,
+            urlTags: config.settings.urlTags,
+          });
+          adId = result2.adId;
+          creativeId = result2.creativeId;
+        } else {
+          // Image ad — use link_data spec
+          const result2 = await createAdWithCreative({
+            name: buildAdName(ad.axisTag, i, ad.headline, 'image'),
+            adsetId: adsetForAd,
+            pageId,
+            imageHash: media.imageHash || '',
+            headline: ad.headline,
+            bodyText: ad.bodyText,
+            linkUrl: config.settings.landingPageUrl,
+            callToAction: ad.callToAction,
+            pixelId: config.settings.pixelId,
+            urlTags: config.settings.urlTags,
+          });
+          adId = result2.adId;
+          creativeId = result2.creativeId;
+        }
+
+        result.adIds!.push(adId);
+        if (creativeId) result.creativeIds!.push(creativeId);
+      } catch (adError: unknown) {
+        const msg = adError instanceof Error ? adError.message : 'Unknown error';
+        console.warn(`⚠️ Ad creation failed for ad ${i + 1} — skipping it: ${msg}`);
+        failedAds.push({ index: i, headline: ad.headline, stage: 'create', error: msg });
       }
-
-      result.adIds!.push(adId);
-      if (creativeId) result.creativeIds!.push(creativeId);
     }
 
-    result.success = true;
+    // Partial success is still success: once at least one ad lands, the campaign and ad set(s) are
+    // real and usable. Skipped ads are reported so the user can regenerate + republish just those.
+    result.adsRequested = config.ads.length;
+    result.adsPublished = result.adIds!.length;
+    if (failedAds.length > 0) result.failedAds = failedAds;
+    result.success = result.adIds!.length > 0;
+    if (!result.success) {
+      // Campaign/ad set were created but every ad failed — report it (campaignId stays set so the
+      // user can open Ads Manager to retry or remove the empty campaign).
+      result.error = `All ads failed to publish. ${failedAds[0]?.error || ''}`.trim();
+    }
     return result;
 
   } catch (error: unknown) {

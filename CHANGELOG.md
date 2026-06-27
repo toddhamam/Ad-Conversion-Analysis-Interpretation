@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-06-27 — CreativeIQ: publish the batch even when some images fail (partial-success publishing)
+
+### What
+A single failed image blocked the **entire** batch from publishing. In a Blitz grid you'd generate (say) 3 of 4 images, the 4th would error — a Gemini billing/quota failure — and there was **no way to publish any of the ads or the campaign to Meta**, even the three good creatives. Two compounding all-or-nothing gates caused it:
+
+1. **The Blitz image-review "Publish" button was hard-disabled by any failed slot** (`disabled={... || hasFailedSlot}`, tooltip "Regenerate the failed image before publishing"). If the failed image couldn't be regenerated (e.g. the same billing error), the button stayed permanently locked.
+2. **`publishAds()` was all-or-nothing at the Meta layer.** It uploaded *all* media up front (one upload throw aborted the whole batch) and created ads in a loop with no per-ad error handling — so a mid-loop failure could leave an **orphaned campaign with partial ads, reported as total failure**.
+
+Generation itself was already resilient (`regenerateAllImages` uses `Promise.allSettled` and returns slot-aligned results with `null` for failed slots) — the blockers were entirely downstream. Now a failure at **any** stage (generation, media upload, or ad creation) skips just the affected ad and lets everything else publish, with the batch kept so the user can fix and republish the skipped ones.
+
+### Fixed
+- **Blitz grid publish is no longer blocked by failed images** (`BlitzImageReviewPanel.tsx`). The button now enables as long as ≥1 image rendered (`disabled={busy || readyCount === 0}`); a non-blocking warning explains that ads with a failed image are skipped while the rest go to Meta. Button label switches to "Publish available ads → Publisher" when some slots failed.
+- **`publishAds()` is now per-ad resilient / partial-success** (`metaApi.ts`):
+  - Media upload is isolated per ad — a failed upload records the ad as skipped instead of throwing and killing the batch.
+  - **Fail-fast only when zero ads have media**, *before* creating a campaign, so a fully-failed batch never orphans an empty campaign.
+  - Ad-set grouping filters to ads whose media uploaded and drops any group left empty, so no ad set is created with nothing in it.
+  - Ad creation is wrapped per ad — one failure skips that ad and continues.
+  - Returns `success: true` as long as at least one ad lands; a campaign + ad set created with **every** ad failing returns `success: false` but keeps `campaignId` so the user can open Ads Manager to retry/remove it.
+
+### Added
+- **Partial-publish accounting on `PublishResult`** — `adsRequested`, `adsPublished`, and `failedAds[]` (`{ index, headline?, stage: 'upload' | 'create', error }`) so the UI can report the split and offer to regenerate + republish only the skipped ads.
+- **Partial-result UI in the Ad Publisher** (`AdPublisher.tsx` + `.css`) — the success panel now shows "Published — some ads skipped", an "X of Y ads" count, and a list of skipped ads with the stage and reason for each (styled `.publish-skipped-note`).
+
+### Internal
+- No generation changes were needed — the resilience already existed via `Promise.allSettled`; this release removes the two downstream all-or-nothing gates that hid it.
+- OpenAI flagship image generation (GPT Image 2 / `gpt-image-2`, fallback `gpt-image-1`) was already wired end-to-end (backend `ai-images` route, `generateAdImageWithGptImage`, `ImageModelSelector` UI, and per-image cross-provider Gemini↔OpenAI fallback) — it only needs `OPENAI_API_KEY` set in Vercel (the same key AI copy generation already uses) plus image-gen access/billing on that OpenAI org. With OpenAI image billing active, the existing cross-provider fallback auto-recovers from mid-batch Gemini billing/quota failures.
+- `tsc --noEmit` clean; new code is ESLint-clean (pre-existing `no-explicit-any` errors on untouched lines remain).
+
 ## 2026-06-16 — CreativeIQ images: independent image/graphic variation slider in the Blitz testing grid
 
 ### What
