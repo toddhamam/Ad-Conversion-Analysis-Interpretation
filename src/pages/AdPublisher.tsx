@@ -1999,9 +1999,13 @@ const AdPublisher = () => {
 
           {publishResult?.success ? (
             <div className="publish-success">
-              <div className="success-icon">✅</div>
-              <h4>Successfully Published!</h4>
-              <p>Your ads have been created in Meta Ads Manager in DRAFT mode.</p>
+              <div className="success-icon">{publishResult.failedAds?.length ? '⚠️' : '✅'}</div>
+              <h4>{publishResult.failedAds?.length ? 'Published — some ads skipped' : 'Successfully Published!'}</h4>
+              <p>
+                {publishResult.failedAds?.length
+                  ? `${publishResult.adsPublished ?? publishResult.adIds?.length ?? 0} of ${publishResult.adsRequested ?? '?'} ads were created in Meta Ads Manager in DRAFT mode. The rest were skipped (see below) — you can regenerate and republish just those.`
+                  : 'Your ads have been created in Meta Ads Manager in DRAFT mode.'}
+              </p>
               <div className="success-details">
                 {publishResult.campaignId && (
                   <div className="detail-item">
@@ -2018,10 +2022,29 @@ const AdPublisher = () => {
                 {publishResult.adIds && (
                   <div className="detail-item">
                     <span className="detail-label">Ads Created:</span>
-                    <span className="detail-value">{publishResult.adIds.length} ads</span>
+                    <span className="detail-value">
+                      {publishResult.adIds.length}
+                      {publishResult.adsRequested && publishResult.adsRequested !== publishResult.adIds.length
+                        ? ` of ${publishResult.adsRequested}`
+                        : ''} ads
+                    </span>
                   </div>
                 )}
               </div>
+
+              {publishResult.failedAds && publishResult.failedAds.length > 0 && (
+                <div className="publish-skipped-note">
+                  <strong>{publishResult.failedAds.length} ad{publishResult.failedAds.length === 1 ? '' : 's'} skipped:</strong>
+                  <ul>
+                    {publishResult.failedAds.slice(0, 5).map(f => (
+                      <li key={f.index}>
+                        {f.headline ? `"${f.headline.slice(0, 60)}"` : `Ad ${f.index + 1}`} — {f.stage === 'upload' ? 'image/video' : 'ad'} {f.error}
+                      </li>
+                    ))}
+                    {publishResult.failedAds.length > 5 && <li>…and {publishResult.failedAds.length - 5} more</li>}
+                  </ul>
+                </div>
+              )}
               <div className="success-actions">
                 <a
                   href={(() => {

@@ -30,7 +30,9 @@ function BlitzImageReviewPanel({
 }: BlitzImageReviewPanelProps) {
   const busy = regeneratingIndex !== null;
   const count = images.length;
-  const hasFailedSlot = images.some(img => img === null);
+  const failedCount = images.filter(img => img === null).length;
+  const readyCount = count - failedCount;
+  const hasFailedSlot = failedCount > 0;
 
   return (
     <section className="config-panel blitz-img-panel">
@@ -47,6 +49,17 @@ function BlitzImageReviewPanel({
         <div className="blitz-img-error">
           <AlertTriangle size={16} strokeWidth={1.5} />
           <span>{imageError}</span>
+        </div>
+      )}
+
+      {hasFailedSlot && readyCount > 0 && (
+        <div className="blitz-img-error">
+          <AlertTriangle size={16} strokeWidth={1.5} />
+          <span>
+            {failedCount} image{failedCount === 1 ? '' : 's'} failed to render. Regenerate
+            {failedCount === 1 ? ' it' : ' them'} now, or publish anyway — ads with a failed image are
+            skipped and the rest still go to Meta. The batch is kept, so you can fix and republish later.
+          </span>
         </div>
       )}
 
@@ -104,11 +117,19 @@ function BlitzImageReviewPanel({
           type="button"
           className="generate-btn step-btn"
           onClick={onPublish}
-          disabled={busy || count === 0 || hasFailedSlot}
-          title={hasFailedSlot ? 'Regenerate the failed image before publishing' : undefined}
+          disabled={busy || readyCount === 0}
+          title={
+            readyCount === 0
+              ? 'Generate at least one image before publishing'
+              : hasFailedSlot
+                ? 'Ads whose image failed to render are skipped — the rest are published'
+                : undefined
+          }
         >
           <span className="generate-icon">🚀</span>
-          Publish {adCount} Ad{adCount === 1 ? '' : 's'} → Publisher
+          {hasFailedSlot
+            ? 'Publish available ads → Publisher'
+            : `Publish ${adCount} Ad${adCount === 1 ? '' : 's'} → Publisher`}
         </button>
       </div>
     </section>
