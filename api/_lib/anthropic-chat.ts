@@ -11,6 +11,7 @@
 // rate limited, or down).
 
 import Anthropic from '@anthropic-ai/sdk';
+import type { SSEStream } from './sse-stream.js';
 
 // Claude Fable 5 — Anthropic's most capable widely released model. ConversionIQ
 // analysis runs infrequently (only when a meaningful batch of new ad data lands),
@@ -30,6 +31,11 @@ type OpenAIContentPart =
   | { type: 'text'; text: string }
   | { type: 'image_url'; image_url: { url: string; detail?: string } };
 
+/**
+ * The OpenAI chat-completions request shape the frontend sends. Narrowed once by the
+ * router (`ai-chat.ts`) so providers don't each cast; unrecognised fields still reach
+ * OpenAI at runtime, which is what lets new OpenAI params work without a change here.
+ */
 export interface OpenAIChatBody {
   model?: string;
   messages: Array<{
@@ -40,7 +46,6 @@ export interface OpenAIChatBody {
   max_tokens?: number;
   reasoning_effort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   response_format?: { type: 'json_object' | 'text' };
-  [key: string]: unknown;
 }
 
 /** Error carrying enough context for the caller to decide whether to try another provider. */
@@ -202,13 +207,6 @@ function translateStopReason(stopReason: string | null | undefined): string {
 
 // ─── Streaming ──────────────────────────────────────────────────────────────
 
-/** Minimal response surface we need — keeps this module free of @vercel/node types. */
-export interface SSEWritable {
-  setHeader(name: string, value: string): void;
-  write(chunk: string): void;
-  end(): void;
-}
-
 function sseChunk(model: string, payload: Record<string, unknown>): string {
   return `data: ${JSON.stringify({
     id: 'chatcmpl-anthropic',
@@ -219,17 +217,15 @@ function sseChunk(model: string, payload: Record<string, unknown>): string {
 }
 
 /**
- * Run an OpenAI-shaped chat request against Claude and pipe the result back as an
+ * Run an OpenAI-shaped chat request against Claude and write the result to `sse` as an
  * OpenAI-shaped SSE stream.
  *
- * `beginStream` is invoked exactly once, immediately before the first byte is written —
- * this lets the caller keep the option of falling back to another provider for any
- * failure that happens *before* the response has been committed.
+ * Throws `ProviderError` on failure and never closes the stream — the caller owns both
+ * the failover decision (via `sse.started`) and the end of the response.
  */
 export async function streamAnthropicAsOpenAI(
   body: OpenAIChatBody,
-  res: SSEWritable,
-  beginStream: () => void
+  sse: SSEStream
 ): Promise<void> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -249,29 +245,13 @@ export async function streamAnthropicAsOpenAI(
     ...(system ? { system } : {}),
   };
 
-  let started = false;
-  const start = () => {
-    if (!started) {
-      started = true;
-      beginStream();
-    }
-  };
-
   let servedModel = model;
   let stopReason: string | null = null;
   let usage: Record<string, number> | null = null;
 
-  // `client.beta.messages.stream()` returns synchronously and issues the request
-  // lazily, so API errors surface while iterating — not at the call site.
-  const consume = async (withFallbacks: boolean): Promise<void> => {
-    const stream = withFallbacks
-      ? client.beta.messages.stream({
-          ...params,
-          betas: [SERVER_SIDE_FALLBACK_BETA],
-          fallbacks: 'default',
-        })
-      : client.beta.messages.stream(params);
-
+  const pipeEvents = async (
+    stream: AsyncIterable<Anthropic.Beta.BetaRawMessageStreamEvent>
+  ): Promise<void> => {
     for await (const event of stream) {
       switch (event.type) {
         case 'message_start':
@@ -282,8 +262,7 @@ export async function streamAnthropicAsOpenAI(
           // Only forward visible text. `thinking_delta` carries reasoning, which the
           // OpenAI-shaped consumers neither expect nor know how to strip out.
           if (event.delta.type === 'text_delta' && event.delta.text) {
-            start();
-            res.write(
+            sse.write(
               sseChunk(servedModel, {
                 choices: [{ index: 0, delta: { content: event.delta.text }, finish_reason: null }],
               })
@@ -308,61 +287,65 @@ export async function streamAnthropicAsOpenAI(
     }
   };
 
+  // `client.beta.messages.stream()` returns synchronously and issues the request lazily,
+  // so API errors surface while iterating — not at the call site. Everything that escapes
+  // is normalized to a ProviderError here, so callers only ever handle one error type.
+  const consume = async (withFallbacks: boolean): Promise<void> => {
+    const stream = withFallbacks
+      ? client.beta.messages.stream({
+          ...params,
+          betas: [SERVER_SIDE_FALLBACK_BETA],
+          fallbacks: 'default',
+        })
+      : client.beta.messages.stream(params);
+
+    try {
+      await pipeEvents(stream);
+    } catch (err: unknown) {
+      throw toProviderError(err);
+    }
+  };
+
   try {
     await consume(true);
   } catch (err: unknown) {
-    if (started) {
-      // Mid-stream failure: the frontend treats a truncated stream as a `length` finish,
-      // so just close the connection and let it surface that.
-      console.error('[anthropic] stream failed mid-response:', err);
-      res.end();
-      return;
-    }
-
-    // If the org isn't enrolled in the server-side-fallback beta the API rejects the
-    // parameter — retry once without it rather than failing the whole call.
-    if (!isFallbackParamRejection(err)) throw toProviderError(err);
+    // Mid-stream failures are unrecoverable, and anything other than the beta being
+    // unavailable is a real error — either way it's the caller's decision. Otherwise the
+    // org isn't enrolled in the server-side-fallback beta and the API rejected the
+    // parameter, so retry once without it rather than failing the call outright.
+    if (sse.started || !isFallbackParamRejection(err)) throw err;
 
     console.warn('[anthropic] server-side refusal fallbacks unavailable — retrying without');
-    try {
-      await consume(false);
-    } catch (retryErr: unknown) {
-      if (started) {
-        console.error('[anthropic] stream failed mid-response:', retryErr);
-        res.end();
-        return;
-      }
-      throw toProviderError(retryErr);
-    }
+    await consume(false);
   }
 
-  // A refusal with no text at all is a hard failure — surface it so the caller can
-  // fall back to OpenAI rather than handing the UI an empty analysis.
-  if (!started && stopReason === 'refusal') {
+  // A refusal with no text at all is a hard failure. The caller's empty-response guard
+  // would catch it anyway; naming the cause here makes classifier declines legible in
+  // the logs instead of showing up as a generic empty stream.
+  if (!sse.started && stopReason === 'refusal') {
     throw new ProviderError(
       'anthropic',
       502,
-      'Claude declined this request (safety classifier). Falling back to the other provider.'
+      'Claude declined this request (safety classifier)'
     );
   }
 
-  start();
-  res.write(
+  sse.write(
     sseChunk(servedModel, {
       choices: [{ index: 0, delta: {}, finish_reason: translateStopReason(stopReason) }],
       ...(usage ? { usage } : {}),
     })
   );
-  res.write('data: [DONE]\n\n');
-  res.end();
+  sse.write('data: [DONE]\n\n');
 }
 
 // ─── Error classification ───────────────────────────────────────────────────
 
+/** Did the API reject the `fallbacks` param itself (org not enrolled in the beta)? */
 function isFallbackParamRejection(err: unknown): boolean {
-  if (!(err instanceof Anthropic.APIError)) return false;
+  if (!(err instanceof ProviderError)) return false;
   if (err.status !== 400 && err.status !== 404) return false;
-  const message = (err.message || '').toLowerCase();
+  const message = err.message.toLowerCase();
   return message.includes('fallback') || message.includes('beta');
 }
 

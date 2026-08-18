@@ -199,7 +199,10 @@ public/
 | `src/remotion/Root.tsx` | Remotion composition entry point |
 | `remotion.config.ts` | Remotion CLI configuration |
 | `api/meta.ts` | Meta API catch-all proxy — routes: proxy, status, upload, insights, campaigns, ai-chat, ai-images (JWT-protected) |
+| `api/_lib/ai-chat.ts` | `/api/ai/chat` route handler — provider registry, provider-order resolution, request narrowing, cross-provider failover, and the OpenAI passthrough |
 | `api/_lib/anthropic-chat.ts` | Claude (Anthropic) chat helper — translates OpenAI-shaped chat requests to the Messages API and re-emits Anthropic SSE as OpenAI-shaped SSE. Powers ConversionIQ™ analysis + cross-provider failover |
+| `api/_lib/sse-stream.ts` | `SSEStream` — SSE writer with lazy headers; `started` tells a route whether the response is already committed |
+| `api/_lib/auth.ts` | Shared `authenticateRequest()` + `AuthContext` (JWT → user → organization). Used by `meta.ts`, `ai-chat.ts`, and `report-handlers.ts` |
 | `api/admin/credentials.ts` | Admin credential management — validate, save, status, disconnect (super-admin only) |
 | `src/lib/authToken.ts` | Supabase session access token helper for API calls |
 | `src/components/OnboardingChecklist.tsx` | Client welcome checklist shown on Dashboard for new orgs |
@@ -1174,21 +1177,20 @@ This is a Single Page Application (SPA) deployed on Vercel.
 
 ### Serverless Function Limit
 
-**Critical**: Vercel Hobby plan allows a maximum of **12 serverless functions** per deployment. The project currently uses exactly 12. Before adding new `api/*.ts` files, consolidate into existing catch-all handlers or the deployment will fail.
+**Critical**: Vercel Hobby plan allows a maximum of **12 serverless functions** per deployment. The project currently uses 11. Before adding new `api/*.ts` files, consolidate into existing catch-all handlers or the deployment will fail.
 
-Current serverless functions (12/12):
+Current serverless functions (11/12):
 1. `api/admin/credentials.ts` — Admin credential management
 2. `api/auth/meta/callback.ts` — Meta OAuth callback
 3. `api/auth/meta/connect.ts` — Meta OAuth initiation
-4. `api/billing/checkout.ts` — Stripe checkout (JWT-authenticated, non-fatal org lookup)
-5. `api/billing/portal.ts` — Stripe customer portal (JWT-authenticated)
-6. `api/billing/subscription.ts` — Subscription status lookup
-7. `api/billing/webhook.ts` — Stripe webhook handler
-8. `api/funnel/active-sessions.ts` — Active funnel sessions
-9. `api/funnel/metrics.ts` — Funnel metrics
-10. `api/google-auth.ts` — Google OAuth tokens
-11. `api/meta.ts` — Meta API catch-all (proxy, status, upload, insights, campaigns)
-12. `api/seoiq.ts` — SEO IQ catch-all (sites, keywords, articles, autopilot)
+4. `api/billing/subscription.ts` — Subscription status + Stripe checkout + customer portal (`route` param)
+5. `api/billing/webhook.ts` — Stripe webhook handler
+6. `api/content.ts` — Blog/content catch-all + sitemap
+7. `api/funnel/active-sessions.ts` — Active funnel sessions
+8. `api/funnel/metrics.ts` — Funnel metrics
+9. `api/google-auth.ts` — Google OAuth tokens
+10. `api/meta.ts` — Meta API catch-all (proxy, status, upload, insights, campaigns, ai-chat, ai-images, reports)
+11. `api/seoiq.ts` — SEO IQ catch-all (sites, keywords, articles, autopilot)
 
 Files in `api/_lib/` are shared helpers, NOT serverless functions.
 
@@ -1578,7 +1580,7 @@ The Ad Publisher (Step 3: Configure) provides these ad-level settings that are a
 - Don't log API tokens or keys - wrap diagnostic logging in `if (import.meta.env.DEV)` on frontend, never log secrets in serverless functions
 - Don't trust client-provided organization IDs - always derive from authenticated user's JWT token
 - Don't use `catch (error: any)` - use `catch (error: unknown)` and narrow the type
-- Don't create new `api/*.ts` files without checking the serverless function count first — Vercel Hobby plan limit is 12 functions (currently at 12/12). Add new routes to existing catch-all handlers instead
+- Don't create new `api/*.ts` files without checking the serverless function count first — Vercel Hobby plan limit is 12 functions (currently at 11/12). Add new routes to existing catch-all handlers instead; route handlers belong in `api/_lib/` (see `ai-chat.ts`, `report-handlers.ts`), which does not count toward the limit
 - Don't send Meta access tokens to the browser — all Meta API calls must go through the backend proxy (`/api/meta/proxy`)
 - Don't bake UTM parameters into `link_data.link` or body copy — use Meta's `url_tags` field on the ad creative instead
 - Don't use `requestIdleCallback` for localStorage writes that must complete before navigation — the cleanup function cancels pending callbacks on unmount, causing data loss. Use synchronous writes before `navigate()`
@@ -1621,8 +1623,11 @@ The Ad Publisher (Step 3: Configure) provides these ad-level settings that are a
 | Layer | File | Role |
 |-------|------|------|
 | Frontend | `src/services/openaiApi.ts` | Sends OpenAI-shaped bodies; `provider` option → `ci_provider` routing hint |
-| Router | `api/meta.ts` → `handleAIChat` | Resolves provider order, streams, retries on the other provider |
+| Router | `api/_lib/ai-chat.ts` | Owns the `PROVIDERS` table, provider order, request narrowing, failover, and the OpenAI passthrough. `api/meta.ts` only dispatches `case 'ai-chat'` to it |
 | Translator | `api/_lib/anthropic-chat.ts` | OpenAI request → Anthropic Messages API; Anthropic SSE → OpenAI-shaped SSE |
+| Stream writer | `api/_lib/sse-stream.ts` | `SSEStream` — sets headers lazily on first write, so `started` is the single source of truth for "response committed" |
+
+**Adding a provider** is one entry in the `PROVIDERS` table in `ai-chat.ts` (`{ stream, isConfigured }`) plus its id in `PROVIDER_IDS`. There is no branching on provider name anywhere else.
 
 **Provider order resolution** (first configured provider wins, the other follows as fallback):
 1. `ci_provider` on the request body — set per call site by the frontend
