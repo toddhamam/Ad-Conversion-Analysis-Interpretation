@@ -10,6 +10,13 @@ import {
   handleReportCron,
   handleReportHistory,
 } from './_lib/report-handlers.js';
+import {
+  streamAnthropicAsOpenAI,
+  isAnthropicConfigured,
+  shouldTryNextProvider,
+  ProviderError,
+  type OpenAIChatBody,
+} from './_lib/anthropic-chat.js';
 // DISABLED: External API access to Meta Platform Data disabled for policy compliance.
 // import { handleExternalSummary } from './_lib/external-report.js';
 
@@ -1394,9 +1401,123 @@ async function handleRefreshTokens(req: VercelRequest, res: VercelResponse) {
 }
 
 // ─── Route: ai-chat ─────────────────────────────────────────────────────────
-// Proxy for OpenAI chat completions. API key stays server-side.
+// Multi-provider proxy for chat completions. API keys stay server-side.
+//
+// Two providers speak the same (OpenAI-shaped) dialect to the frontend:
+//   • OpenAI      — direct passthrough of the SSE stream
+//   • Anthropic   — translated by api/_lib/anthropic-chat.ts
+//
+// Whichever provider is asked for first, the other is used as an automatic fallback
+// when the first can't serve the request (exhausted credits, rate limit, invalid key,
+// retired model, outage). This is what keeps ConversionIQ working when a single
+// provider's billing runs dry.
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+type AIProvider = 'openai' | 'anthropic';
+
+/**
+ * Which provider handles this request first.
+ *
+ * 1. `ci_provider` on the request body — set by the frontend per call site.
+ *    ConversionIQ analysis/interpretation asks for 'anthropic' (Claude Fable 5).
+ * 2. `AI_PRIMARY_PROVIDER` env var — account-wide default override.
+ * 3. OpenAI.
+ *
+ * The other provider always follows as fallback (when it's configured).
+ */
+function resolveProviderOrder(body: Record<string, unknown>): AIProvider[] {
+  const requested = typeof body.ci_provider === 'string' ? body.ci_provider : undefined;
+  const envDefault = process.env.AI_PRIMARY_PROVIDER;
+  const primary: AIProvider =
+    requested === 'anthropic' || requested === 'openai'
+      ? requested
+      : envDefault === 'anthropic'
+        ? 'anthropic'
+        : 'openai';
+
+  const order: AIProvider[] = primary === 'anthropic' ? ['anthropic', 'openai'] : ['openai', 'anthropic'];
+  return order.filter((p) => (p === 'openai' ? !!OPENAI_API_KEY : isAnthropicConfigured()));
+}
+
+/** Pipe OpenAI's SSE stream straight through. Throws ProviderError before any bytes are written. */
+async function streamOpenAIChat(
+  body: Record<string, unknown>,
+  res: VercelResponse,
+  beginStream: () => void
+): Promise<void> {
+  if (!OPENAI_API_KEY) {
+    throw new ProviderError('openai', 500, 'OpenAI API key not configured on server');
+  }
+
+  // Stream the response to keep the serverless function alive.
+  // Without streaming, reasoning + images exceeds the function limit because the
+  // ENTIRE response must complete before any data is sent back. With streaming,
+  // tokens start flowing within seconds and the connection stays active throughout.
+  const streamBody = {
+    ...body,
+    stream: true,
+    stream_options: { include_usage: true },
+  };
+
+  let response: Response;
+  try {
+    response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify(streamBody),
+    });
+  } catch (err: unknown) {
+    throw new ProviderError('openai', 503, err instanceof Error ? err.message : 'OpenAI request failed');
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    let message = `HTTP ${response.status}`;
+    try {
+      const parsed = JSON.parse(errorText);
+      if (parsed?.error?.message) message = parsed.error.message;
+    } catch {
+      if (errorText) message = errorText.slice(0, 300);
+    }
+    throw new ProviderError('openai', response.status, message);
+  }
+
+  if (!response.body) {
+    throw new ProviderError('openai', 502, 'Failed to read AI response stream');
+  }
+
+  const reader = (response.body as any).getReader();
+  const decoder = new TextDecoder();
+  let started = false;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!started) {
+        started = true;
+        beginStream();
+      }
+      res.write(decoder.decode(value, { stream: true }));
+    }
+  } catch (err: unknown) {
+    if (!started) {
+      throw new ProviderError('openai', 502, err instanceof Error ? err.message : 'OpenAI stream failed');
+    }
+    console.error('[openai] stream failed mid-response:', err);
+  } finally {
+    if (started) res.end();
+  }
+
+  if (!started) {
+    // Empty stream — treat as a provider failure so the fallback gets a turn.
+    throw new ProviderError('openai', 502, 'OpenAI returned an empty stream');
+  }
+}
 
 async function handleAIChat(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -1408,73 +1529,71 @@ async function handleAIChat(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  if (!OPENAI_API_KEY) {
-    return res.status(500).json({ error: 'OpenAI API key not configured on server' });
-  }
-
   const body = req.body;
   if (!body || !body.messages) {
     return res.status(400).json({ error: 'Request body with messages is required' });
   }
 
-  // Stream the response to keep the serverless function alive.
-  // Without streaming, GPT-5.4 reasoning + images exceeds the 60s
-  // function limit because the ENTIRE response must complete before
-  // any data is sent back. With streaming, tokens start flowing within
-  // seconds and the connection stays active throughout.
-  const streamBody = {
-    ...body,
-    stream: true,
-    stream_options: { include_usage: true },
-  };
-
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+  const providers = resolveProviderOrder(body);
+  if (providers.length === 0) {
+    return res.status(500).json({
+      error: {
+        message:
+          'No AI provider configured on the server. Set OPENAI_API_KEY and/or ANTHROPIC_API_KEY.',
       },
-      body: JSON.stringify(streamBody),
     });
+  }
 
-    // Non-OK responses come as JSON (not streamed) — pass through directly
-    if (!response.ok) {
-      const errorData = await response.json();
-      return res.status(response.status).json(errorData);
-    }
+  // `ci_provider` is our own routing hint — strip it before forwarding upstream.
+  const upstreamBody: Record<string, unknown> = { ...(body as Record<string, unknown>) };
+  delete upstreamBody.ci_provider;
 
-    if (!response.body) {
-      return res.status(500).json({ error: 'Failed to read AI response stream' });
-    }
-
-    // Pipe the SSE stream from OpenAI directly to the frontend
+  const beginStream = () => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
+  };
 
-    const reader = (response.body as any).getReader();
-    const decoder = new TextDecoder();
+  let lastError: unknown = null;
 
+  for (let i = 0; i < providers.length; i++) {
+    const provider = providers[i];
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        res.write(decoder.decode(value, { stream: true }));
+      if (provider === 'openai') {
+        await streamOpenAIChat(upstreamBody, res, beginStream);
+      } else {
+        await streamAnthropicAsOpenAI(upstreamBody as OpenAIChatBody, res, beginStream);
       }
-    } finally {
-      res.end();
+      return;
+    } catch (err: unknown) {
+      lastError = err;
+
+      // Once bytes are on the wire we're committed — no second attempt is possible.
+      if (res.headersSent) {
+        console.error(`[ai-chat] ${provider} failed after streaming started:`, err);
+        res.end();
+        return;
+      }
+
+      const hasNext = i < providers.length - 1;
+      if (hasNext && shouldTryNextProvider(err)) {
+        console.warn(
+          `[ai-chat] ${provider} unavailable (${err instanceof Error ? err.message : 'unknown'}) — ` +
+            `falling back to ${providers[i + 1]}`
+        );
+        continue;
+      }
+      break;
     }
-  } catch (err: unknown) {
-    // If headers haven't been sent yet, return JSON error
-    if (!res.headersSent) {
-      return res.status(500).json({
-        error: { message: err instanceof Error ? err.message : 'AI service error' },
-      });
-    }
-    // If mid-stream, just close the connection
-    res.end();
   }
+
+  const status = lastError instanceof ProviderError ? lastError.status : 500;
+  const message = lastError instanceof Error ? lastError.message : 'AI service error';
+  captureError(lastError, { route: 'meta/ai-chat', organizationId: auth.organizationId });
+  await flushSentry();
+  return res.status(status >= 400 && status < 600 ? status : 502).json({
+    error: { message: `AI service error: ${message}` },
+  });
 }
 
 // ─── Route: ai-images ───────────────────────────────────────────────────────
