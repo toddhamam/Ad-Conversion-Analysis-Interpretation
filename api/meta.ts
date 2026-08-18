@@ -10,6 +10,8 @@ import {
   handleReportCron,
   handleReportHistory,
 } from './_lib/report-handlers.js';
+import { handleAIChat } from './_lib/ai-chat.js';
+import { authenticateRequest, type AuthContext } from './_lib/auth.js';
 // DISABLED: External API access to Meta Platform Data disabled for policy compliance.
 // import { handleExternalSummary } from './_lib/external-report.js';
 
@@ -24,29 +26,6 @@ const GRAPH_API_VERSION = 'v24.0';
 const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 
 // ─── Authentication ──────────────────────────────────────────────────────────
-
-interface AuthContext {
-  userId: string;
-  organizationId: string;
-}
-
-async function authenticateRequest(req: VercelRequest): Promise<AuthContext | null> {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) return null;
-
-  const token = authHeader.slice(7);
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return null;
-
-  const { data: profile } = await supabase
-    .from('users')
-    .select('id, organization_id')
-    .eq('auth_id', user.id)
-    .single();
-
-  if (!profile) return null;
-  return { userId: profile.id, organizationId: profile.organization_id };
-}
 
 // ─── Credential loading ─────────────────────────────────────────────────────
 
@@ -1393,90 +1372,6 @@ async function handleRefreshTokens(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-// ─── Route: ai-chat ─────────────────────────────────────────────────────────
-// Proxy for OpenAI chat completions. API key stays server-side.
-
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
-async function handleAIChat(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed — use POST' });
-  }
-
-  const auth = await authenticateRequest(req);
-  if (!auth) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  if (!OPENAI_API_KEY) {
-    return res.status(500).json({ error: 'OpenAI API key not configured on server' });
-  }
-
-  const body = req.body;
-  if (!body || !body.messages) {
-    return res.status(400).json({ error: 'Request body with messages is required' });
-  }
-
-  // Stream the response to keep the serverless function alive.
-  // Without streaming, GPT-5.4 reasoning + images exceeds the 60s
-  // function limit because the ENTIRE response must complete before
-  // any data is sent back. With streaming, tokens start flowing within
-  // seconds and the connection stays active throughout.
-  const streamBody = {
-    ...body,
-    stream: true,
-    stream_options: { include_usage: true },
-  };
-
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify(streamBody),
-    });
-
-    // Non-OK responses come as JSON (not streamed) — pass through directly
-    if (!response.ok) {
-      const errorData = await response.json();
-      return res.status(response.status).json(errorData);
-    }
-
-    if (!response.body) {
-      return res.status(500).json({ error: 'Failed to read AI response stream' });
-    }
-
-    // Pipe the SSE stream from OpenAI directly to the frontend
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-
-    const reader = (response.body as any).getReader();
-    const decoder = new TextDecoder();
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        res.write(decoder.decode(value, { stream: true }));
-      }
-    } finally {
-      res.end();
-    }
-  } catch (err: unknown) {
-    // If headers haven't been sent yet, return JSON error
-    if (!res.headersSent) {
-      return res.status(500).json({
-        error: { message: err instanceof Error ? err.message : 'AI service error' },
-      });
-    }
-    // If mid-stream, just close the connection
-    res.end();
-  }
-}
-
 // ─── Route: ai-images ───────────────────────────────────────────────────────
 // Proxy for OpenAI image generation. API key stays server-side.
 //
@@ -1484,6 +1379,8 @@ async function handleAIChat(req: VercelRequest, res: VercelResponse) {
 // 1. Text-to-image via /v1/images/generations (DALL-E 3, gpt-image-1, gpt-image-2)
 // 2. Image-to-image via /v1/images/edits when `referenceImages` is provided
 //    (gpt-image-1 / gpt-image-2 only — DALL-E 3 does not support edits)
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 interface ReferenceImageInput {
   data: string; // base64-encoded image data (no data URL prefix)

@@ -198,7 +198,11 @@ public/
 | `public/vsl-background-music.mp3` | VSL background music — cinematic inspirational track |
 | `src/remotion/Root.tsx` | Remotion composition entry point |
 | `remotion.config.ts` | Remotion CLI configuration |
-| `api/meta.ts` | Meta API catch-all proxy — routes: proxy, status, upload, insights, campaigns (JWT-protected) |
+| `api/meta.ts` | Meta API catch-all proxy — routes: proxy, status, upload, insights, campaigns, ai-chat, ai-images (JWT-protected) |
+| `api/_lib/ai-chat.ts` | `/api/ai/chat` route handler — provider registry, provider-order resolution, request narrowing, cross-provider failover, and the OpenAI passthrough |
+| `api/_lib/anthropic-chat.ts` | Claude (Anthropic) chat helper — translates OpenAI-shaped chat requests to the Messages API and re-emits Anthropic SSE as OpenAI-shaped SSE. Powers ConversionIQ™ analysis + cross-provider failover |
+| `api/_lib/sse-stream.ts` | `SSEStream` — SSE writer with lazy headers; `started` tells a route whether the response is already committed |
+| `api/_lib/auth.ts` | Shared `authenticateRequest()` + `AuthContext` (JWT → user → organization). Used by `meta.ts`, `ai-chat.ts`, and `report-handlers.ts` |
 | `api/admin/credentials.ts` | Admin credential management — validate, save, status, disconnect (super-admin only) |
 | `src/lib/authToken.ts` | Supabase session access token helper for API calls |
 | `src/components/OnboardingChecklist.tsx` | Client welcome checklist shown on Dashboard for new orgs |
@@ -253,6 +257,7 @@ public/
 16. **Dev mode fallback** - When Supabase is not configured (local dev), `metaApi.ts` falls back to `VITE_META_*` env vars so development works without auth
 17. **Per-account business type** - Business type (`ecommerce` | `leadgen`) is set per ad account in Integrations, not at the org level. Resolution: account `business_type` > org `business_type` > `'ecommerce'`. Controls metric labels, dashboard visibility, AI prompt context, ad publisher defaults, and classification thresholds via `businessTypeConfig.ts`. All consumers use `useAdAccount().accountBusinessType`
 18. **Pixel ID required per account** - Pixel ID is a required field in the per-account configure panel (Integrations). Loaded via dropdown from Meta API (`fetchAvailablePixels`), not manual text entry. Account status dot shows amber until both page and pixel are configured
+19. **Dual-provider AI with automatic failover** - `/api/ai/chat` accepts one OpenAI-shaped request format and serves it from either OpenAI or Anthropic (Claude). ConversionIQ™ analysis/interpretation runs on Claude Fable 5 first; generation paths run on GPT first; either way the other provider is the automatic fallback when the first can't serve the request. Translation lives in `api/_lib/anthropic-chat.ts`, so no frontend call site knows which provider answered. See "Dual-Provider Chat with Automatic Failover"
 
 ---
 
@@ -1143,6 +1148,10 @@ STRIPE_PRICE_ENTERPRISE_SETUP=  # Stripe Price ID for one-time enterprise/veloci
 STRIPE_EARLY_BIRD_COUPON_ID=    # Stripe Coupon ID for early-bird trial-to-starter discount
 SUPABASE_URL=               # Supabase project URL (MUST be set separately from VITE_SUPABASE_URL)
 SUPABASE_SERVICE_ROLE_KEY=  # Supabase service role key (for server-side access)
+OPENAI_API_KEY=             # OpenAI key for /api/ai/chat + /api/ai/images
+ANTHROPIC_API_KEY=          # Anthropic key — ConversionIQ™ analysis (Claude Fable 5) + OpenAI fallback + SEO IQ
+ANTHROPIC_ANALYSIS_MODEL=   # Optional override for the Claude model (default: claude-fable-5)
+AI_PRIMARY_PROVIDER=        # Optional account-wide default for /api/ai/chat: openai | anthropic
 GOOGLE_CLIENT_ID=           # Google OAuth client ID (shared across GSC + Google Ads)
 GOOGLE_CLIENT_SECRET=       # Google OAuth client secret (shared across GSC + Google Ads)
 GOOGLE_ADS_DEVELOPER_TOKEN= # From Google Ads → Tools → API Center
@@ -1168,21 +1177,20 @@ This is a Single Page Application (SPA) deployed on Vercel.
 
 ### Serverless Function Limit
 
-**Critical**: Vercel Hobby plan allows a maximum of **12 serverless functions** per deployment. The project currently uses exactly 12. Before adding new `api/*.ts` files, consolidate into existing catch-all handlers or the deployment will fail.
+**Critical**: Vercel Hobby plan allows a maximum of **12 serverless functions** per deployment. The project currently uses 11. Before adding new `api/*.ts` files, consolidate into existing catch-all handlers or the deployment will fail.
 
-Current serverless functions (12/12):
+Current serverless functions (11/12):
 1. `api/admin/credentials.ts` — Admin credential management
 2. `api/auth/meta/callback.ts` — Meta OAuth callback
 3. `api/auth/meta/connect.ts` — Meta OAuth initiation
-4. `api/billing/checkout.ts` — Stripe checkout (JWT-authenticated, non-fatal org lookup)
-5. `api/billing/portal.ts` — Stripe customer portal (JWT-authenticated)
-6. `api/billing/subscription.ts` — Subscription status lookup
-7. `api/billing/webhook.ts` — Stripe webhook handler
-8. `api/funnel/active-sessions.ts` — Active funnel sessions
-9. `api/funnel/metrics.ts` — Funnel metrics
-10. `api/google-auth.ts` — Google OAuth tokens
-11. `api/meta.ts` — Meta API catch-all (proxy, status, upload, insights, campaigns)
-12. `api/seoiq.ts` — SEO IQ catch-all (sites, keywords, articles, autopilot)
+4. `api/billing/subscription.ts` — Subscription status + Stripe checkout + customer portal (`route` param)
+5. `api/billing/webhook.ts` — Stripe webhook handler
+6. `api/content.ts` — Blog/content catch-all + sitemap
+7. `api/funnel/active-sessions.ts` — Active funnel sessions
+8. `api/funnel/metrics.ts` — Funnel metrics
+9. `api/google-auth.ts` — Google OAuth tokens
+10. `api/meta.ts` — Meta API catch-all (proxy, status, upload, insights, campaigns, ai-chat, ai-images, reports)
+11. `api/seoiq.ts` — SEO IQ catch-all (sites, keywords, articles, autopilot)
 
 Files in `api/_lib/` are shared helpers, NOT serverless functions.
 
@@ -1572,7 +1580,7 @@ The Ad Publisher (Step 3: Configure) provides these ad-level settings that are a
 - Don't log API tokens or keys - wrap diagnostic logging in `if (import.meta.env.DEV)` on frontend, never log secrets in serverless functions
 - Don't trust client-provided organization IDs - always derive from authenticated user's JWT token
 - Don't use `catch (error: any)` - use `catch (error: unknown)` and narrow the type
-- Don't create new `api/*.ts` files without checking the serverless function count first — Vercel Hobby plan limit is 12 functions (currently at 12/12). Add new routes to existing catch-all handlers instead
+- Don't create new `api/*.ts` files without checking the serverless function count first — Vercel Hobby plan limit is 12 functions (currently at 11/12). Add new routes to existing catch-all handlers instead; route handlers belong in `api/_lib/` (see `ai-chat.ts`, `report-handlers.ts`), which does not count toward the limit
 - Don't send Meta access tokens to the browser — all Meta API calls must go through the backend proxy (`/api/meta/proxy`)
 - Don't bake UTM parameters into `link_data.link` or body copy — use Meta's `url_tags` field on the ad creative instead
 - Don't use `requestIdleCallback` for localStorage writes that must complete before navigation — the cleanup function cancels pending callbacks on unmount, causing data loss. Use synchronous writes before `navigate()`
@@ -1589,6 +1597,9 @@ The Ad Publisher (Step 3: Configure) provides these ad-level settings that are a
 - Don't ignore Meta rate limit response headers (`X-App-Usage`, `X-Business-Use-Case-Usage`, `x-fb-ads-insights-throttle`) — these warn you before enforcement. The guard extracts them automatically
 - Don't bypass the `metaDevPolicyGuard` queue for Meta API calls — all requests must go through `guardedFetch()` to respect rate limits and caching. Direct `fetch()` to Meta endpoints is prohibited
 - Don't make Meta API calls without caching read responses — insights, campaigns, audiences, and pixels should use the guard's TTL cache to prevent redundant calls on page navigation
+- Don't add a hard dependency on a single AI provider in a chat path — `/api/ai/chat` serves OpenAI-shaped requests from either OpenAI or Anthropic with automatic failover. New chat call sites should keep sending the OpenAI shape and (optionally) set `provider` to pick which one goes first
+- Don't send Anthropic-native request fields (`thinking`, `temperature`, assistant prefills) from a chat call site — the frontend speaks OpenAI's dialect and `api/_lib/anthropic-chat.ts` owns the translation. Claude Fable 5 rejects all three
+- Don't retry the other provider on 400/422 — those are request-shape errors that fail identically on both providers and just double the user's wait. `shouldTryNextProvider()` already encodes this
 
 ---
 
@@ -1598,11 +1609,50 @@ The Ad Publisher (Step 3: Configure) provides these ad-level settings that are a
 
 | Provider | Model ID | Purpose |
 |----------|----------|---------|
-| OpenAI | `gpt-5.4` | Ad analysis, copy generation, creative evaluation |
+| Anthropic | `claude-fable-5` | ConversionIQ™ analysis & interpretation (primary), OpenAI fallback for all chat |
+| OpenAI | `gpt-5.5` | Copy generation, creative evaluation, Claude fallback for all chat |
 | Google | `gemini-3-pro-image-preview` | Professional image asset generation |
 | Google | Veo | Video variant generation |
 
-**Important**: Model IDs and API URLs should be defined as constants at the top of `src/services/openaiApi.ts` for easy management and updates.
+**Important**: Model IDs and API URLs should be defined as constants at the top of `src/services/openaiApi.ts` (frontend) and `api/_lib/anthropic-chat.ts` (Claude) for easy management and updates.
+
+### Dual-Provider Chat with Automatic Failover
+
+`/api/ai/chat` is provider-agnostic: it accepts an **OpenAI-shaped** chat-completions request and can serve it from either OpenAI or Anthropic. Whichever provider runs first, the other is used automatically as a fallback — so one provider running out of credits (or hitting a rate limit, invalid key, retired model, or outage) no longer takes ConversionIQ™ down.
+
+| Layer | File | Role |
+|-------|------|------|
+| Frontend | `src/services/openaiApi.ts` | Sends OpenAI-shaped bodies; `provider` option → `ci_provider` routing hint |
+| Router | `api/_lib/ai-chat.ts` | Owns the `PROVIDERS` table, provider order, request narrowing, failover, and the OpenAI passthrough. `api/meta.ts` only dispatches `case 'ai-chat'` to it |
+| Translator | `api/_lib/anthropic-chat.ts` | OpenAI request → Anthropic Messages API; Anthropic SSE → OpenAI-shaped SSE |
+| Stream writer | `api/_lib/sse-stream.ts` | `SSEStream` — sets headers lazily on first write, so `started` is the single source of truth for "response committed" |
+
+**Adding a provider** is one entry in the `PROVIDERS` table in `ai-chat.ts` (`{ stream, isConfigured }`) plus its id in `PROVIDER_IDS`. There is no branching on provider name anywhere else.
+
+**Provider order resolution** (first configured provider wins, the other follows as fallback):
+1. `ci_provider` on the request body — set per call site by the frontend
+2. `AI_PRIMARY_PROVIDER` env var — account-wide default
+3. OpenAI
+
+**Which calls go to Claude first**: ConversionIQ™ analysis and interpretation only — `analyzeAdCreative`, `analyzeCampaignAds`, `analyzeChannelPerformance`, and `distillManualAnalysis` pass `provider: ANALYSIS_PROVIDER` (`'anthropic'`). These are infrequent, deep-reasoning runs that only fire when a meaningful batch of new ad data has landed, so the highest-reasoning tier is worth it. Generation paths (copy, grid, creative) stay on OpenAI first — they run constantly and their prompts are tuned for GPT.
+
+**Translation rules** (`anthropic-chat.ts`):
+
+| OpenAI concept | Anthropic equivalent |
+|----------------|----------------------|
+| `system` role messages | Concatenated into the top-level `system` field |
+| `image_url` with a `data:` URL | `{type:'image', source:{type:'base64', media_type, data}}` |
+| `image_url` with an `http(s)` URL | `{type:'image', source:{type:'url', url}}` |
+| `response_format: {type:'json_object'}` | JSON-only directive appended to `system` (Anthropic's structured outputs need a full schema, which these call sites don't supply) |
+| `reasoning_effort` | `output_config.effort` (`none`/`low`→`low`, `medium`, `high`, `xhigh`) |
+| `max_completion_tokens` | `max_tokens × 3` (capped 64K) — Claude Fable 5's thinking shares the output budget, so the OpenAI-sized budget would truncate long JSON |
+| `finish_reason` | `max_tokens`→`length`, `refusal`→`content_filter`, else `stop` |
+
+**Failover rules**: retry on the other provider for 401/402/403/404/408/409/429/5xx and network errors; **do not** retry for 400/422 (request-shape errors would fail identically on both and only double the user's wait). Once bytes are on the wire the response is committed — no mid-stream failover.
+
+**Claude Fable 5 specifics**: thinking is always on (never send a `thinking` param), sampling params (`temperature`/`top_p`/`top_k`) are rejected, and assistant prefills are rejected. Server-side refusal fallbacks (`fallbacks: 'default'` + beta `server-side-fallback-2026-07-01`) are enabled by default so classifier declines are re-run on Anthropic's recommended model; if the org isn't enrolled in that beta, the helper retries once without it. Claude Fable 5 also requires 30-day data retention — it is unavailable under zero-data-retention org settings.
+
+**Billing note**: `ANTHROPIC_API_KEY` is Anthropic **API** billing (console.anthropic.com). A Claude Pro/Max subscription cannot be used by a deployed server — the two are separate products with separate billing.
 
 ### ConversionIQ™ Reasoning Levels
 

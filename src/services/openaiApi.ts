@@ -137,6 +137,20 @@ type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'medium';
 const ANALYSIS_REASONING_EFFORT: ReasoningEffort = 'medium';
 
+// ── AI provider routing ──────────────────────────────────────────────────────
+// The backend (`/api/ai/chat`) speaks one OpenAI-shaped dialect but can serve it from
+// either OpenAI or Anthropic (Claude). Whichever provider goes first, the other is used
+// automatically as a fallback when the first can't serve the request — exhausted
+// credits, rate limit, invalid key, retired model, outage. So a single provider running
+// out of credits no longer takes ConversionIQ™ down.
+//
+// ConversionIQ™ ANALYSIS + INTERPRETATION is routed to Claude (Fable 5) first: these are
+// one-off, deep-reasoning runs that only happen when a meaningful batch of new ad data
+// has landed, so the highest-reasoning tier is worth it. Generation paths (copy, grid,
+// creative) stay on OpenAI first — they run constantly and are tuned for GPT.
+type AIProviderPreference = 'openai' | 'anthropic';
+const ANALYSIS_PROVIDER: AIProviderPreference = 'anthropic';
+
 // Image Generation - Gemini models with automatic fallback
 // Primary: gemini-3-pro-image-preview (highest quality)
 // Fallback: gemini-3.1-flash-image-preview (faster, more reliable during high demand)
@@ -966,6 +980,7 @@ async function callOpenAI(
     maxTokens?: number;
     reasoningEffort?: ReasoningEffort;
     responseFormat?: { type: 'json_object' } | { type: 'text' };
+    provider?: AIProviderPreference;
   } = {}
 ): Promise<string> {
   if (!isOpenAIConfigured()) {
@@ -976,10 +991,11 @@ async function callOpenAI(
     model = DEFAULT_CHAT_MODEL,
     maxTokens = 2000,
     reasoningEffort = DEFAULT_REASONING_EFFORT,
-    responseFormat
+    responseFormat,
+    provider
   } = options;
 
-  console.log('🤖 Calling OpenAI API with model:', model);
+  console.log('🤖 Calling AI API with model:', model, provider ? `| provider: ${provider}` : '');
   console.log('🧠 Reasoning effort:', reasoningEffort);
 
   // GPT-5.4 with reasoning_effort only supports temperature=1 (default)
@@ -989,6 +1005,12 @@ async function callOpenAI(
     max_completion_tokens: maxTokens,
     reasoning_effort: reasoningEffort,
   };
+
+  // Backend routing hint — picks the primary provider. Stripped before the
+  // request is forwarded upstream; the other provider remains the fallback.
+  if (provider) {
+    requestBody.ci_provider = provider;
+  }
 
   // Add response_format if specified — forces model to output valid JSON
   if (responseFormat) {
@@ -1080,6 +1102,7 @@ async function callOpenAIWithVision(
     maxTokens?: number;
     reasoningEffort?: ReasoningEffort;
     responseFormat?: { type: 'json_object' } | { type: 'text' };
+    provider?: AIProviderPreference;
   } = {}
 ): Promise<string> {
   if (!isOpenAIConfigured()) {
@@ -1091,10 +1114,11 @@ async function callOpenAIWithVision(
     model = DEFAULT_VISION_MODEL,
     maxTokens = 4000,
     reasoningEffort = DEFAULT_REASONING_EFFORT,
-    responseFormat
+    responseFormat,
+    provider
   } = options;
 
-  console.log('🖼️ Calling OpenAI Vision API with model:', model);
+  console.log('🖼️ Calling AI Vision API with model:', model, provider ? `| provider: ${provider}` : '');
   console.log('🧠 Reasoning effort:', reasoningEffort);
   console.log('📸 Processing images for analysis...');
 
@@ -1105,6 +1129,12 @@ async function callOpenAIWithVision(
     max_completion_tokens: maxTokens,
     reasoning_effort: reasoningEffort,
   };
+
+  // Backend routing hint — picks the primary provider. Stripped before the
+  // request is forwarded upstream; the other provider remains the fallback.
+  if (provider) {
+    requestBody.ci_provider = provider;
+  }
 
   // Add response_format if specified — forces model to output valid JSON
   if (responseFormat) {
@@ -1258,7 +1288,7 @@ Return ONLY the JSON object, no additional text.`;
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { maxTokens: 8192, reasoningEffort, responseFormat: { type: 'json_object' } });
+  ], { maxTokens: 8192, reasoningEffort, responseFormat: { type: 'json_object' }, provider: ANALYSIS_PROVIDER });
 
   try {
     // Clean the response - remove markdown code blocks if present
@@ -1350,7 +1380,7 @@ Return ONLY the JSON object, no additional text.`;
   const response = await callOpenAI([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], { maxTokens: 8192, responseFormat: { type: 'json_object' } });
+  ], { maxTokens: 8192, responseFormat: { type: 'json_object' }, provider: ANALYSIS_PROVIDER });
 
   try {
     let cleanedResponse = response.trim();
@@ -1963,7 +1993,8 @@ Return ONLY the JSON object, no additional text.`;
   const response = await callOpenAIWithVision(messages, {
     maxTokens: 16384,
     reasoningEffort,
-    responseFormat: { type: 'json_object' }
+    responseFormat: { type: 'json_object' },
+    provider: ANALYSIS_PROVIDER
   });
 
   try {
@@ -2933,7 +2964,7 @@ export async function distillManualAnalysis(
 
   const response = await callOpenAI(
     [{ role: 'user', content: userPrompt }],
-    { maxTokens: 16384, reasoningEffort, responseFormat: { type: 'json_object' } },
+    { maxTokens: 16384, reasoningEffort, responseFormat: { type: 'json_object' }, provider: ANALYSIS_PROVIDER },
   );
 
   let cleaned = response.trim();

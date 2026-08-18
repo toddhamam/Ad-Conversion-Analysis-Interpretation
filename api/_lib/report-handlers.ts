@@ -10,6 +10,7 @@ import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { decrypt } from './encryption.js';
 import { captureError, flushSentry } from './sentry.js';
+import { authenticateRequest, type AuthContext } from './auth.js';
 import {
   computeMetrics,
   fetchAllCampaignInsights,
@@ -71,29 +72,6 @@ function isSchemaError(err: unknown): boolean {
 
 
 // ─── Auth Helpers ─────────────────────────────────────────────────────────────
-
-interface AuthContext {
-  userId: string;
-  organizationId: string;
-}
-
-async function authenticateRequest(req: VercelRequest): Promise<AuthContext | null> {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) return null;
-
-  const token = authHeader.slice(7);
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return null;
-
-  const { data: profile } = await supabase
-    .from('users')
-    .select('id, organization_id')
-    .eq('auth_id', user.id)
-    .single();
-
-  if (!profile) return null;
-  return { userId: profile.id, organizationId: profile.organization_id };
-}
 
 async function requireAdmin(auth: AuthContext): Promise<boolean> {
   const { data: userProfile } = await supabase
