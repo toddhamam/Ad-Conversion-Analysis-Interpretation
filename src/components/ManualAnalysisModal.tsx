@@ -1,14 +1,12 @@
 import { useState, useRef } from 'react';
-import type { ChannelAnalysisResult } from '../services/openaiApi';
 import { MANUAL_ANALYSIS_PROMPT_TEMPLATE, distillManualAnalysis } from '../services/openaiApi';
-import { normalizeManualAnalysis } from '../lib/channelAnalysisCache';
 import './ManualAnalysisModal.css';
 
 type Mode = 'json' | 'brief';
 
 interface ManualAnalysisModalProps {
-  /** Persist the normalized analysis. Returns true on a verified cache write. */
-  onImport: (analysis: ChannelAnalysisResult) => boolean;
+  /** Parse + persist the raw seed (JSON or distilled brief). Returns true on a verified write. */
+  onImport: (raw: unknown) => boolean;
   onClose: () => void;
 }
 
@@ -76,8 +74,7 @@ export default function ManualAnalysisModal({ onImport, onClose }: ManualAnalysi
       } else {
         raw = await distillManualAnalysis(clean);
       }
-      const analysis = normalizeManualAnalysis(raw);
-      const ok = onImport(analysis);
+      const ok = onImport(raw);
       if (ok) {
         setDone(true);
         setTimeout(onClose, 600);

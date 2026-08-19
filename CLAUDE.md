@@ -187,6 +187,10 @@ public/
 | `src/pages/Products.tsx` | Product CRUD manager (name, author, description, URL, mockup images) |
 | `src/pages/BrandVoice.tsx` | Per-account Brand Voice & Guidelines editor (`/brand`) — authoritative voice for CreativeIQ™ copy |
 | `src/lib/brandVoiceProfile.ts` | Scoped-localStorage CRUD for the per-account `BrandVoiceProfile` (single object per account) |
+| `src/lib/analysisMode.ts` | Analysis mode model — run planning, `observed`/`seeded`/`hybrid` builders, seed-constraint extraction, hybrid merge. Pure functions, unit-tested |
+| `src/lib/manualSeed.ts` | Manual-seed parsing — coerces untrusted pasted/distilled JSON into a valid `ChannelAnalysisResult`; `parseManualSeed` is the whole ingest path in one call |
+| `src/services/analysisContext.ts` | Builds the prompt text generation reads from an analysis. Mode-keyed vocabulary (`MODE_PROMPT`) decides whether a pattern is framed as a proven winner or an untested hypothesis |
+| `src/lib/channelAnalysisCache.ts` | Scoped-localStorage channel analysis cache, cross-account import, and the durable manual-seed slot (`_seed_{channel}`) |
 | `public/robots.txt` | Search engine crawl directives (allows AI bots for GEO) |
 | `public/sitemap.xml` | XML sitemap for search engine indexing |
 | `src/pages/SeoIQ.tsx` | SEO IQ dashboard — sites, keywords (GSC + Keyword Planner), articles, content calendar, autopilot |
@@ -257,7 +261,10 @@ public/
 16. **Dev mode fallback** - When Supabase is not configured (local dev), `metaApi.ts` falls back to `VITE_META_*` env vars so development works without auth
 17. **Per-account business type** - Business type (`ecommerce` | `leadgen`) is set per ad account in Integrations, not at the org level. Resolution: account `business_type` > org `business_type` > `'ecommerce'`. Controls metric labels, dashboard visibility, AI prompt context, ad publisher defaults, and classification thresholds via `businessTypeConfig.ts`. All consumers use `useAdAccount().accountBusinessType`
 18. **Pixel ID required per account** - Pixel ID is a required field in the per-account configure panel (Integrations). Loaded via dropdown from Meta API (`fetchAvailablePixels`), not manual text entry. Account status dot shows amber until both page and pixel are configured
-19. **Dual-provider AI with automatic failover** - `/api/ai/chat` accepts one OpenAI-shaped request format and serves it from either OpenAI or Anthropic (Claude). ConversionIQ™ analysis/interpretation runs on Claude Fable 5 first; generation paths run on GPT first; either way the other provider is the automatic fallback when the first can't serve the request. Translation lives in `api/_lib/anthropic-chat.ts`, so no frontend call site knows which provider answered. See "Dual-Provider Chat with Automatic Failover"
+19. **Channel analysis has three modes** — `observed` (live ads), `seeded` (no ad history, manual seed present), `hybrid` (both). `Run Channel Analysis` branches on what's actually available instead of erroring on zero ads; the no-ads error now fires only when there is *also* no seed. Observed data is authoritative for what performs; the seed stays authoritative for voice, banned vocabulary and claim guardrails, which is why a hybrid run merges rather than overwrites. All three modes emit the same `ChannelAnalysisResult` contract — measured-only fields come back as empty collections, never omitted. `overallHealthScore` is `null` in seeded mode: scoring an account with zero delivery data measures the absence of data. The manual seed lives in its own durable slot (`_seed_{channel}`) so an observed run can never destroy it.
+
+    **`analysisMode` is the only mode fact that gets persisted.** Evidence labelling (`MEASURED` / `VALIDATED` / `HYPOTHESIS`), section titles and health-score applicability are all *derived* from it at the point of use — via `MODE_PROMPT` in `services/analysisContext.ts` for prompts and `MODE_COPY` in `ChannelInsightsPanel` for the UI. Do not add a parallel evidence field to the record; that would be two sources of truth for one fact. See `src/lib/analysisMode.ts`
+20. **Dual-provider AI with automatic failover** - `/api/ai/chat` accepts one OpenAI-shaped request format and serves it from either OpenAI or Anthropic (Claude). ConversionIQ™ analysis/interpretation runs on Claude Fable 5 first; generation paths run on GPT first; either way the other provider is the automatic fallback when the first can't serve the request. Translation lives in `api/_lib/anthropic-chat.ts`, so no frontend call site knows which provider answered. See "Dual-Provider Chat with Automatic Failover"
 
 ---
 
@@ -1218,6 +1225,7 @@ The catch-all `/(.*) → /index.html` must be **last** — it enables `react-rou
 npm run dev    # Start dev server (port 5175)
 npm run build  # TypeScript check + Vite build
 npm run lint   # ESLint with TypeScript rules
+npm test       # Vitest unit tests (single run)
 npx remotion studio  # Open Remotion Studio for VSL preview/editing
 ```
 
@@ -1990,7 +1998,8 @@ To maximize AI citations:
 
 ## Testing Notes
 
-- No test framework currently configured
+- **Vitest** for unit tests — `npm test` (single run) / `npm run test:watch`. Config in `vitest.config.ts`; tests live beside their source as `src/**/*.test.ts`
+- Node environment, no jsdom: tests cover pure logic (analysis modes, cache helpers) and stub `localStorage` directly. Add jsdom + testing-library only if component tests become necessary
 - Manual testing against live Meta API
 - Use mock data in `src/data/` for UI development
 - Dev server: `http://localhost:5175`

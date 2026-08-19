@@ -17,6 +17,7 @@ import {
   Mail,
   ScanSearch,
   AlertTriangle,
+  Info,
   BarChart3,
   Construction,
   Download,
@@ -36,10 +37,23 @@ import {
   getAvailableImports,
   importAnalysis,
   setManualAnalysis,
+  getManualSeed,
+  clearManualSeed,
+  clearChannelAnalysis,
   clearImportMetadata,
   type Channel,
   type ImportMetadata,
 } from '../lib/channelAnalysisCache';
+import {
+  planAnalysisRun,
+  analysisModeOf,
+  isSeeded,
+  unapplySeed,
+  buildObservedAnalysis,
+  buildSeededAnalysis,
+  mergeHybridAnalysis,
+} from '../lib/analysisMode';
+import { parseManualSeed } from '../lib/manualSeed';
 import './Insights.css';
 
 interface ChannelConfig {
@@ -88,6 +102,9 @@ const Insights = () => {
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // Zero ads + a seed present is an informational state, not a failure — it gets its own
+  // non-destructive banner rather than the red error treatment.
+  const [notice, setNotice] = useState<string | null>(null);
   const [adsCount, setAdsCount] = useState(0);
   const [importMeta, setImportMeta] = useState<ImportMetadata | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -103,6 +120,7 @@ const Insights = () => {
   useEffect(() => {
     refreshFromCache();
     setError(null);
+    setNotice(null);
   }, [refreshFromCache]);
 
   const canImport = isMultiAccount && accounts.length > 1;
@@ -113,12 +131,39 @@ const Insights = () => {
     return success;
   }, [selectedChannel, accounts, businessType, refreshFromCache]);
 
-  // Cold-start: seed a manual analysis (pasted JSON or distilled brief) for this account
-  const handleManualImport = useCallback((manual: ChannelAnalysisResult): boolean => {
-    const success = setManualAnalysis(selectedChannel, manual, businessType);
-    if (success) refreshFromCache();
+  // Cold-start: seed a manual analysis (pasted JSON or distilled brief) for this account.
+  // Stored as a seeded-mode analysis so it renders honestly from the moment it lands — no health
+  // score against an account with no delivery data, sections labelled as hypotheses.
+  const handleManualImport = useCallback((raw: unknown): boolean => {
+    const seeded = parseManualSeed(raw, {
+      channelName: CHANNELS.find(c => c.id === selectedChannel)?.name,
+    });
+    const success = setManualAnalysis(selectedChannel, seeded, businessType);
+    if (success) {
+      refreshFromCache();
+      setError(null);
+      setNotice(null);
+    }
     return success;
   }, [selectedChannel, businessType, refreshFromCache]);
+
+  // A seed now outlives an observed run (that's what makes hybrid possible), so there has to be a
+  // way back out of a seed that was pasted by mistake. Removing it un-applies it from the cached
+  // analysis straight away: a seeded analysis IS the seed, so it goes; a hybrid one keeps its
+  // measured half and hands the voice back to the one extracted from winners. Without this the
+  // seed's voice and guardrails would keep steering copy generation with no banner left to say so.
+  const handleRemoveSeed = useCallback(() => {
+    clearManualSeed(selectedChannel);
+    const withoutSeed = analysis ? unapplySeed(analysis) : null;
+    if (withoutSeed) {
+      setCachedAnalysis(selectedChannel, withoutSeed, businessType);
+    } else {
+      clearChannelAnalysis(selectedChannel);
+    }
+    refreshFromCache();
+    setNotice(null);
+    setError(null);
+  }, [selectedChannel, analysis, businessType, refreshFromCache]);
 
   // Credit exhaustion modal state
   const [showCreditModal, setShowCreditModal] = useState(false);
@@ -138,6 +183,7 @@ const Insights = () => {
 
     setLoading(true);
     setError(null);
+    setNotice(null);
     setLoadingMessage('ConversionIQ™ preparing analysis...');
 
     // Reserve credits before analysis
@@ -156,8 +202,8 @@ const Insights = () => {
       console.warn('Credit reservation failed, proceeding:', err);
     }
 
-    // Clear previous analysis only after credits are confirmed
-    setAnalysis(null);
+    // NOTE: the previous analysis is deliberately NOT cleared here. A run that fails or comes back
+    // empty must leave what's already on screen intact, exactly as it leaves the cache intact.
     setLoadingMessage('Fetching ad data...');
 
     try {
@@ -178,11 +224,33 @@ const Insights = () => {
         setAdsCount(ads.length);
       }
 
-      if (ads.length === 0) {
+      // A cold account is a supported state, not a failure. What this run produces depends on
+      // what's actually available: live ads, a manual seed, both, or neither.
+      const plan = planAnalysisRun({
+        hasAds: ads.length > 0,
+        seed: getManualSeed(selectedChannel, businessType),
+      });
+
+      // Neither ads nor a seed — the only state in which the original message is accurate.
+      if (plan.mode === 'none') {
         setError('No ads found for analysis. Make sure you have active ads in your account.');
         setLoading(false);
         // Refund credits since no analysis was run
         if (transactionId) refundCredits(transactionId);
+        return;
+      }
+
+      // Seeded: no ad history, but a seed is present. The seed is already an interpreted profile
+      // (distilled at ingest), so materializing it needs no model call — which means no credit.
+      if (plan.mode === 'seeded') {
+        if (transactionId) refundCredits(transactionId);
+        const seededResult = buildSeededAnalysis(plan.seed, { channelName: channelConfig.name });
+        setCachedAnalysis(selectedChannel, seededResult, businessType);
+        // Provenance stays — this analysis IS the seed, and the banner should keep saying so.
+        setAnalysis(seededResult);
+        setImportMeta(getImportMetadata(selectedChannel));
+        setNotice('No ad history yet. This analysis is built from your manual seed.');
+        setLoading(false);
         return;
       }
 
@@ -199,12 +267,23 @@ const Insights = () => {
       const axisPrimaryField = businessType === 'leadgen' ? 'leads' : 'purchases';
       result.axisInsights = aggregateByAxis(ads, axisPrimaryField);
 
-      // Cache the result and clear any import provenance (native replaces imported)
-      setCachedAnalysis(selectedChannel, result, businessType);
-      clearImportMetadata(selectedChannel);
+      // Hybrid folds the seed's voice and guardrails back in; observed passes through untouched
+      // apart from its mode/evidence markers.
+      const observed = buildObservedAnalysis(result);
+      const finalResult = plan.mode === 'hybrid' ? mergeHybridAnalysis(observed, plan.seed) : observed;
 
-      setAnalysis(result);
-      setImportMeta(null);
+      setCachedAnalysis(selectedChannel, finalResult, businessType);
+
+      if (plan.mode === 'observed') {
+        // Native analysis replaces imported provenance. In hybrid the seed is still contributing,
+        // so its provenance is kept and the banner reflects the combined run.
+        clearImportMetadata(selectedChannel);
+        setImportMeta(null);
+      } else {
+        setImportMeta(getImportMetadata(selectedChannel));
+      }
+
+      setAnalysis(finalResult);
     } catch (err: unknown) {
       // Refund credits on failure
       if (transactionId) refundCredits(transactionId);
@@ -217,6 +296,9 @@ const Insights = () => {
   }, [selectedChannel, businessType]);
 
   const selectedChannelConfig = CHANNELS.find(c => c.id === selectedChannel);
+  // Once a run has landed in seeded mode we know this account has no ad history, so the primary
+  // action is honestly "re-run from seed" rather than an invitation to analyze ads that don't exist.
+  const isSeededView = isSeeded(analysis);
 
   return (
     <div className="page">
@@ -254,6 +336,11 @@ const Insights = () => {
           className="run-analysis-btn"
           onClick={runAnalysis}
           disabled={loading || !selectedChannelConfig?.available}
+          title={
+            isSeededView
+              ? 'This account has no ad history yet. This rebuilds the analysis from your manual seed — no credits used.'
+              : undefined
+          }
         >
           {loading ? (
             <>
@@ -263,7 +350,7 @@ const Insights = () => {
           ) : (
             <>
               <span className="btn-icon"><ScanSearch size={18} strokeWidth={1.5} /></span>
-              Run Channel Analysis
+              {isSeededView ? 'Re-run from seed' : 'Run Channel Analysis'}
             </>
           )}
         </button>
@@ -307,7 +394,11 @@ const Insights = () => {
           </span>
           <span className="provenance-text">
             {importMeta.source === 'manual' ? (
-              <>Seeded from a <strong>manual analysis</strong> on {new Date(importMeta.importedAt).toLocaleDateString()}</>
+              analysisModeOf(analysis) === 'hybrid' ? (
+                <>Your live ad data, with <strong>manual seed</strong> voice and guardrails applied</>
+              ) : (
+                <>Seeded from a <strong>manual analysis</strong> on {new Date(importMeta.importedAt).toLocaleDateString()}</>
+              )
             ) : (
               <>
                 Imported from <strong>{importMeta.adAccountName}</strong> on {new Date(importMeta.importedAt).toLocaleDateString()}
@@ -317,7 +408,28 @@ const Insights = () => {
               </>
             )}
           </span>
-          <span className="provenance-hint">Run your own analysis to replace</span>
+          <span className="provenance-hint">
+            {/* On a cold account the old "run your own analysis to replace" copy invited the exact
+                action that used to dead-end in a red error. Say what a re-run will actually do. */}
+            {importMeta.source !== 'manual'
+              ? 'Run your own analysis to replace'
+              : analysisModeOf(analysis) === 'hybrid'
+                ? 'Your ad data leads; the seed keeps voice and compliance'
+                : 'Re-runs stay seeded until this account has live ads'}
+          </span>
+          {importMeta.source === 'manual' && (
+            <button type="button" className="provenance-remove-btn" onClick={handleRemoveSeed}>
+              Remove seed
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Informational State — zero ads with a seed present is expected, not an error */}
+      {!loading && notice && (
+        <div className="insights-notice">
+          <span className="notice-icon"><Info size={18} strokeWidth={1.5} /></span>
+          {notice}
         </div>
       )}
 

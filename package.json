@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "preview": "vite preview",
     "remotion:studio": "remotion studio",
     "remotion:render": "remotion render ConvertraVSL out/convertra-vsl.mp4",
@@ -54,6 +56,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vercel": "^50.5.0",
-    "vite": "^7.2.4"
+    "vite": "^7.2.4",
+    "vitest": "^3.2.7"
   }
 }

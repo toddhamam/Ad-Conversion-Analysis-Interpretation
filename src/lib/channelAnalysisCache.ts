@@ -10,6 +10,16 @@ export type Channel = 'meta' | 'google' | 'tiktok' | 'email';
 
 const CACHE_KEY = 'channel_analysis_cache';
 
+/**
+ * Per-channel key for the manual seed's own slot.
+ *
+ * The seed is stored SEPARATELY from the analysis it seeds. They used to share one slot, which
+ * meant the first successful observed run overwrote the seed and its constraints were gone for
+ * good. Keeping the seed in its own slot is what makes `hybrid` possible and what lets a cold
+ * account re-run from seed indefinitely.
+ */
+const seedKeyFor = (channel: Channel) => `_seed_${channel}`;
+
 export interface ImportMetadata {
   adAccountId: string;
   adAccountName: string;
@@ -202,155 +212,115 @@ export function importAnalysis(
 // Manual analysis (cold-start seed)
 // ---------------------------------------------------------------------------
 
-function asString(v: unknown, fallback = ''): string {
-  return typeof v === 'string' ? v : fallback;
-}
-
-function asNumber(v: unknown, fallback = 0): number {
-  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
-}
-
-function asStringArray(v: unknown): string[] {
-  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
-}
-
-function asRecord(v: unknown): Record<string, unknown> {
-  return v !== null && typeof v === 'object' && !Array.isArray(v)
-    ? (v as Record<string, unknown>)
-    : {};
-}
-
-/**
- * Coerce a loosely-shaped object into a fully-valid ChannelAnalysisResult. The input may come from
- * `distillManualAnalysis` (our own distill of a brand brief) OR from a ConversionIQ analysis the user
- * generated in another repo using MANUAL_ANALYSIS_PROMPT_TEMPLATE and pasted in — so shapes vary.
- *
- * Every required field is defaulted so downstream readers (buildAnalysisContextString,
- * ChannelInsightsPanel) can never hit `undefined`. Measured-only fields (axisInsights, creativeFatigue,
- * visualClusters, bottomAds, headlineImageAnalysis) are left empty — a manual seed has no live ad data.
- * This function never throws on missing/oddly-typed input.
- */
-export function normalizeManualAnalysis(raw: unknown): ChannelAnalysisResult {
-  const r = asRecord(raw);
-  const perf = asRecord(r.performanceBreakdown);
-  const visual = asRecord(r.visualAnalysis);
-  const winning = asRecord(r.winningPatterns);
-  const losing = asRecord(r.losingPatterns);
-  const audience = asRecord(r.audienceInsights);
-  const recs = asRecord(r.recommendations);
-  const voice = asRecord(r.brandVoice);
-
-  const result: ChannelAnalysisResult = {
-    channelName: asString(r.channelName, 'Meta'),
-    analyzedAt: asString(r.analyzedAt, new Date().toISOString()),
-
-    executiveSummary: asString(r.executiveSummary),
-    overallHealthScore: asNumber(r.overallHealthScore, 5),
-
-    performanceBreakdown: {
-      totalAdsAnalyzed: asNumber(perf.totalAdsAnalyzed),
-      highPerformers: asNumber(perf.highPerformers),
-      midPerformers: asNumber(perf.midPerformers),
-      lowPerformers: asNumber(perf.lowPerformers),
-      avgConversionRate: asNumber(perf.avgConversionRate),
-      avgCostPerConversion: asNumber(perf.avgCostPerConversion),
-      totalSpend: asNumber(perf.totalSpend),
-      totalConversions: asNumber(perf.totalConversions),
-    },
-
-    visualAnalysis: {
-      winningVisualElements: asStringArray(visual.winningVisualElements),
-      losingVisualElements: asStringArray(visual.losingVisualElements),
-      colorPsychology: asString(visual.colorPsychology),
-      imageryPatterns: asString(visual.imageryPatterns),
-      inImageMessaging: asString(visual.inImageMessaging),
-      psychologicalTriggers: asStringArray(visual.psychologicalTriggers),
-    },
-
-    headlineImageAnalysis: [],
-
-    winningPatterns: {
-      headlines: asStringArray(winning.headlines),
-      copyElements: asStringArray(winning.copyElements),
-      emotionalTriggers: asStringArray(winning.emotionalTriggers),
-      callToActions: asStringArray(winning.callToActions),
-      visualElements: asStringArray(winning.visualElements),
-    },
-
-    losingPatterns: {
-      headlines: asStringArray(losing.headlines),
-      copyElements: asStringArray(losing.copyElements),
-      issues: asStringArray(losing.issues),
-      visualIssues: asStringArray(losing.visualIssues),
-    },
-
-    audienceInsights: {
-      whatResonates: asStringArray(audience.whatResonates),
-      whatDoesntWork: asStringArray(audience.whatDoesntWork),
-      targetingRecommendations: asStringArray(audience.targetingRecommendations),
-      visualPreferences: asStringArray(audience.visualPreferences),
-    },
-
-    recommendations: {
-      immediate: asStringArray(recs.immediate),
-      shortTerm: asStringArray(recs.shortTerm),
-      strategic: asStringArray(recs.strategic),
-      creativeDirection: asStringArray(recs.creativeDirection),
-    },
-
-    topAds: Array.isArray(r.topAds)
-      ? r.topAds.slice(0, 10).map((adRaw, i) => {
-          const ad = asRecord(adRaw);
-          return {
-            id: asString(ad.id, `seed_${i + 1}`),
-            headline: asString(ad.headline),
-            bodyText: asString(ad.bodyText),
-            conversionRate: asNumber(ad.conversionRate),
-            whyItWorks: asString(ad.whyItWorks),
-            imageAnalysis: asString(ad.imageAnalysis),
-            psychologicalDrivers: asStringArray(ad.psychologicalDrivers),
-          };
-        })
-      : [],
-
-    bottomAds: [],
-  };
-
-  // brandVoice is optional — only attach when the seed provided something usable
-  const distinctiveTraits = asStringArray(voice.distinctiveTraits);
-  if (
-    voice.tonality || voice.sentenceStyle || voice.pointOfView ||
-    voice.vocabularyLevel || voice.rhythmAndCadence || distinctiveTraits.length
-  ) {
-    result.brandVoice = {
-      tonality: asString(voice.tonality),
-      sentenceStyle: asString(voice.sentenceStyle),
-      pointOfView: asString(voice.pointOfView),
-      vocabularyLevel: asString(voice.vocabularyLevel),
-      rhythmAndCadence: asString(voice.rhythmAndCadence),
-      distinctiveTraits,
-    };
-  }
-
-  return result;
-}
 
 /**
  * Persist a manually-supplied (cold-start) analysis to the current account's cache, tagged with
- * `source: 'manual'` provenance so the UI shows a seed banner and native analysis cleanly replaces it
- * later (see clearImportMetadata on a native run). Mirrors importAnalysis' write+verify pattern.
- * Returns true on a verified write, false otherwise.
+ * `source: 'manual'` provenance so the UI shows a seed banner. Mirrors importAnalysis' write+verify
+ * pattern. Returns true on a verified write, false otherwise.
+ *
+ * Writes TWO slots: the displayable analysis (so the seed renders immediately) and the durable
+ * `_seed_{channel}` slot. The durable copy is what `Run Channel Analysis` later reads to produce a
+ * seeded or hybrid run, and it is never overwritten by an observed run.
  */
 export function setManualAnalysis(
   channel: Channel,
   analysis: ChannelAnalysisResult,
   businessType: string,
 ): boolean {
-  return writeAnalysisWithProvenance(channel, analysis, businessType, {
+  const wrote = writeAnalysisWithProvenance(channel, analysis, businessType, {
     adAccountId: '',
     adAccountName: 'Manual seed',
     importedAt: new Date().toISOString(),
     sourceBusinessType: businessType,
     source: 'manual',
   });
+  if (!wrote) return false;
+  return saveManualSeed(channel, analysis);
+}
+
+/**
+ * Write the durable seed slot, preserving everything else in the cache object.
+ */
+function saveManualSeed(channel: Channel, seed: ChannelAnalysisResult): boolean {
+  try {
+    const raw = getScopedItem(CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    parsed[seedKeyFor(channel)] = seed;
+    const serialized = JSON.stringify(parsed);
+    setScopedItem(CACHE_KEY, serialized);
+    return getScopedItem(CACHE_KEY) === serialized;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Read the durable manual seed for a channel, if one exists.
+ *
+ * Applies the same businessType gate as `getCachedAnalysis` — a seed authored for a lead-gen
+ * account should not silently drive creative for an e-commerce one.
+ *
+ * Includes a lazy migration for seeds written before the durable slot existed: if the cached
+ * analysis carries `source: 'manual'` provenance and no seed slot is present, that analysis IS the
+ * seed, so adopt it. Without this, accounts seeded by the previous release would report "no seed"
+ * and fall straight back into the old error.
+ */
+export function getManualSeed(channel: Channel, businessType: string): ChannelAnalysisResult | null {
+  try {
+    const raw = getScopedItem(CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed._businessType && parsed._businessType !== businessType) return null;
+
+    const stored = parsed[seedKeyFor(channel)] as ChannelAnalysisResult | undefined;
+    if (stored) return stored;
+
+    const provenance = parsed[`_importedFrom_${channel}`] as ImportMetadata | undefined;
+    const legacy = parsed[channel] as ChannelAnalysisResult | undefined;
+    if (provenance?.source === 'manual' && legacy) {
+      saveManualSeed(channel, legacy); // adopt, so the next read is a plain hit
+      return legacy;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Whether a manual seed exists for this channel — the branch that decides seeded vs. error. */
+export function hasManualSeed(channel: Channel, businessType: string): boolean {
+  return getManualSeed(channel, businessType) !== null;
+}
+
+/**
+ * Remove the durable seed for a channel. Only ever user-initiated.
+ *
+ * Also drops the manual provenance: leaving it behind would let the legacy-adoption path in
+ * `getManualSeed` resurrect the seed from the analysis slot on the very next read.
+ */
+export function clearManualSeed(channel: Channel): void {
+  try {
+    const raw = getScopedItem(CACHE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    delete parsed[seedKeyFor(channel)];
+    const provenance = parsed[`_importedFrom_${channel}`] as ImportMetadata | undefined;
+    if (provenance?.source === 'manual') delete parsed[`_importedFrom_${channel}`];
+    setScopedItem(CACHE_KEY, JSON.stringify(parsed));
+  } catch {
+    // Ignore cache errors
+  }
+}
+
+/** Drop the stored analysis for a channel, leaving other channels and the seed slot alone. */
+export function clearChannelAnalysis(channel: Channel): void {
+  try {
+    const raw = getScopedItem(CACHE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    delete parsed[channel];
+    setScopedItem(CACHE_KEY, JSON.stringify(parsed));
+  } catch {
+    // Ignore cache errors
+  }
 }

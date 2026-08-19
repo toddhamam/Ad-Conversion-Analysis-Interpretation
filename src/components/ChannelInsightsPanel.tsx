@@ -1,10 +1,15 @@
 import type { ChannelAnalysisResult } from '../services/openaiApi';
+import { analysisModeOf, isSeeded } from '../lib/analysisMode';
+import { MODE_COPY } from './channelInsightsCopy';
 import { Rocket, CalendarDays, Target, Palette, Activity, Layers } from 'lucide-react';
 import './ChannelInsightsPanel.css';
 
 interface ChannelInsightsPanelProps {
   analysis: ChannelAnalysisResult;
 }
+
+/** Render a list card only when it has something in it — true in every mode. */
+const hasItems = (list: unknown[] | undefined): boolean => !!list?.length;
 
 function formatCurrency(value: number): string {
   if (value >= 1000) {
@@ -48,22 +53,43 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
   const audienceInsights = analysis.audienceInsights;
   const recommendations = analysis.recommendations;
 
+  // Seeded = no ad history behind any of this. Sections that describe observed performance get
+  // replaced with the seed's forward-looking equivalents rather than rendering empty or zeroed.
+  const mode = analysisModeOf(analysis);
+  const seeded = isSeeded(analysis);
+  const copy = MODE_COPY[mode];
+  const constraints = analysis.seedConstraints;
+  const healthScore = analysis.overallHealthScore;
+
   return (
     <div className="channel-insights-panel">
       {/* Executive Summary */}
       <section className="insights-section executive-summary">
         <div className="section-header">
           <h3>Executive Summary</h3>
-          <span className="analyzed-at">Analyzed {formatDate(analysis.analyzedAt)}</span>
+          <div className="section-header-meta">
+            {copy.badge && (
+              <span className={`analysis-mode-badge ${mode}`}>{copy.badge}</span>
+            )}
+            <span className="analyzed-at">Analyzed {formatDate(analysis.analyzedAt)}</span>
+          </div>
         </div>
         <div className="summary-content">
-          <div className="health-score" style={{ borderColor: getScoreColor(analysis.overallHealthScore) }}>
-            <span className="score-value" style={{ color: getScoreColor(analysis.overallHealthScore) }}>
-              {analysis.overallHealthScore}
-            </span>
-            <span className="score-label">/10</span>
-            <span className="score-title">Health Score</span>
-          </div>
+          {typeof healthScore === 'number' ? (
+            <div className="health-score" style={{ borderColor: getScoreColor(healthScore) }}>
+              <span className="score-value" style={{ color: getScoreColor(healthScore) }}>
+                {healthScore}
+              </span>
+              <span className="score-label">/10</span>
+              <span className="score-title">Health Score</span>
+            </div>
+          ) : (
+            /* Scoring an account with zero delivery data would be scoring the absence of data. */
+            <div className="health-score not-applicable">
+              <span className="score-na">No delivery data yet</span>
+              <span className="score-title">Health Score</span>
+            </div>
+          )}
           <div className="summary-text">
             <p>{analysis.executiveSummary}</p>
           </div>
@@ -210,8 +236,19 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
         </section>
       )}
 
-      {/* Performance Metrics */}
-      {performanceBreakdown && (
+      {/* Performance Metrics — a grid of zeroes reads as "your ads failed" rather than
+          "your ads haven't run", so seeded mode gets an explanatory panel instead. */}
+      {seeded && (
+        <section className="insights-section metrics-overview seeded-placeholder">
+          <h3>Performance Overview</h3>
+          <p className="seeded-note">
+            This account hasn't delivered any ads yet, so there is no performance data to report.
+            The profile below is a strategist seed: use it to build the first campaign, then re-run
+            this analysis once those ads have delivery data behind them.
+          </p>
+        </section>
+      )}
+      {!seeded && performanceBreakdown && (
       <section className="insights-section metrics-overview">
         <h3>Performance Overview</h3>
         <div className="metrics-grid">
@@ -256,16 +293,21 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
       {/* NEW: Visual/Creative Analysis Section */}
       {analysis.visualAnalysis && (
         <section className="insights-section visual-analysis-section">
-          <h3>Visual & Creative Analysis</h3>
+          <h3>{copy.visualTitle}</h3>
+          {/* Visual findings come from looking at delivered creative. A seed has none, so in seeded
+              mode each card renders only if the seed actually filled it — no empty panels. */}
           <div className="visual-analysis-grid">
+            {hasItems(analysis.visualAnalysis.winningVisualElements) && (
             <div className="visual-card winning-visuals">
-              <h4>Winning Visual Elements</h4>
+              <h4>{copy.visualWinning}</h4>
               <ul>
                 {analysis.visualAnalysis.winningVisualElements?.map((item, i) => (
                   <li key={i}>{item}</li>
                 ))}
               </ul>
             </div>
+            )}
+            {hasItems(analysis.visualAnalysis.losingVisualElements) && (
             <div className="visual-card losing-visuals">
               <h4>Visual Elements to Avoid</h4>
               <ul>
@@ -274,18 +316,26 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
                 ))}
               </ul>
             </div>
+            )}
+            {!!analysis.visualAnalysis.colorPsychology && (
             <div className="visual-card color-psychology">
               <h4>Color Psychology</h4>
               <p>{analysis.visualAnalysis.colorPsychology}</p>
             </div>
+            )}
+            {!!analysis.visualAnalysis.imageryPatterns && (
             <div className="visual-card imagery-patterns">
               <h4>Imagery Patterns</h4>
               <p>{analysis.visualAnalysis.imageryPatterns}</p>
             </div>
+            )}
+            {!!analysis.visualAnalysis.inImageMessaging && (
             <div className="visual-card in-image-messaging">
               <h4>In-Image Messaging</h4>
               <p>{analysis.visualAnalysis.inImageMessaging}</p>
             </div>
+            )}
+            {hasItems(analysis.visualAnalysis.psychologicalTriggers) && (
             <div className="visual-card psychological-triggers">
               <h4>Psychological Triggers</h4>
               <div className="tags">
@@ -294,6 +344,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
                 ))}
               </div>
             </div>
+            )}
           </div>
         </section>
       )}
@@ -337,13 +388,14 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
       {/* Patterns Analysis (Enhanced with Visual Elements) */}
       {(winningPatterns || losingPatterns) && (
       <section className="insights-section patterns-section">
-        <h3>Pattern Analysis</h3>
+        <h3>{copy.patternsTitle}</h3>
+        {copy.patternsIntro && <p className="section-description">{copy.patternsIntro}</p>}
         <div className="patterns-grid">
           {winningPatterns && (
           <div className="pattern-card winning">
-            <h4>What's Working</h4>
+            <h4>{copy.winningTitle}</h4>
             <div className="pattern-group">
-              <span className="pattern-label">Winning Headlines</span>
+              <span className="pattern-label">{copy.winningHeadlines}</span>
               <ul>
                 {winningPatterns.headlines?.map((item, i) => (
                   <li key={i}>{item}</li>
@@ -351,7 +403,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
               </ul>
             </div>
             <div className="pattern-group">
-              <span className="pattern-label">Effective Copy Elements</span>
+              <span className="pattern-label">{copy.winningCopyElements}</span>
               <ul>
                 {winningPatterns.copyElements?.map((item, i) => (
                   <li key={i}>{item}</li>
@@ -360,7 +412,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
             </div>
             {winningPatterns.visualElements && winningPatterns.visualElements.length > 0 && (
               <div className="pattern-group">
-                <span className="pattern-label">Winning Visual Elements</span>
+                <span className="pattern-label">{copy.winningVisuals}</span>
                 <ul>
                   {winningPatterns.visualElements.map((item, i) => (
                     <li key={i}>{item}</li>
@@ -389,9 +441,9 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
 
           {losingPatterns && (
           <div className="pattern-card losing">
-            <h4>What's Not Working</h4>
+            <h4>{copy.losingTitle}</h4>
             <div className="pattern-group">
-              <span className="pattern-label">Problematic Headlines</span>
+              <span className="pattern-label">{copy.losingHeadlines}</span>
               <ul>
                 {losingPatterns.headlines?.map((item, i) => (
                   <li key={i}>{item}</li>
@@ -399,7 +451,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
               </ul>
             </div>
             <div className="pattern-group">
-              <span className="pattern-label">Ineffective Copy</span>
+              <span className="pattern-label">{copy.losingCopyElements}</span>
               <ul>
                 {losingPatterns.copyElements?.map((item, i) => (
                   <li key={i}>{item}</li>
@@ -417,7 +469,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
               </div>
             )}
             <div className="pattern-group">
-              <span className="pattern-label">Common Issues</span>
+              <span className="pattern-label">{copy.losingIssues}</span>
               <ul>
                 {losingPatterns.issues?.map((item, i) => (
                   <li key={i}>{item}</li>
@@ -433,24 +485,31 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
       {/* Audience Insights (Enhanced with Visual Preferences) */}
       {audienceInsights && (
       <section className="insights-section audience-section">
-        <h3>Audience Insights</h3>
+        <h3>{copy.audienceTitle}</h3>
+        {/* An empty card reads as "we found nothing" rather than "this wasn't stated" — so a card
+            renders only when it has content. That is the right rule in every mode. */}
         <div className="audience-grid">
+          {hasItems(audienceInsights.whatResonates) && (
           <div className="audience-card resonates">
-            <h4>What Resonates</h4>
+            <h4>{copy.audienceResonates}</h4>
             <ul>
               {audienceInsights.whatResonates?.map((item, i) => (
                 <li key={i}>{item}</li>
               ))}
             </ul>
           </div>
+          )}
+          {hasItems(audienceInsights.whatDoesntWork) && (
           <div className="audience-card doesnt-work">
-            <h4>What Doesn't Work</h4>
+            <h4>{copy.audienceAvoid}</h4>
             <ul>
               {audienceInsights.whatDoesntWork?.map((item, i) => (
                 <li key={i}>{item}</li>
               ))}
             </ul>
           </div>
+          )}
+          {hasItems(audienceInsights.targetingRecommendations) && (
           <div className="audience-card targeting">
             <h4>Targeting Recommendations</h4>
             <ul>
@@ -459,6 +518,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
               ))}
             </ul>
           </div>
+          )}
           {audienceInsights.visualPreferences && audienceInsights.visualPreferences.length > 0 && (
             <div className="audience-card visual-prefs">
               <h4>Visual Preferences</h4>
@@ -473,7 +533,76 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
       </section>
       )}
 
+      {/* Exemplars & constraints — the seeded stand-in for the performance breakdown. The seed's
+          exemplar ads have never run, so no CVR is shown against them. */}
+      {seeded && (
+        <section className="insights-section performers-section">
+          <h3>Exemplars & Constraints</h3>
+          <div className="performers-grid">
+            <div className="performers-card top">
+              <h4>Exemplar Ads (untested)</h4>
+              <p className="seeded-note">
+                Written to demonstrate the brand's voice and structure. Match how they sound; their
+                angles are still hypotheses.
+              </p>
+              {analysis.topAds?.map((ad, i) => (
+                <div key={ad.id || i} className="performer-item">
+                  <div className="performer-rank">{i + 1}</div>
+                  <div className="performer-details">
+                    <span className="performer-headline">{ad.headline}</span>
+                    <p className="performer-explanation">{ad.whyItWorks}</p>
+                    {ad.psychologicalDrivers && ad.psychologicalDrivers.length > 0 && (
+                      <div className="psychological-drivers">
+                        <span className="drivers-label">Psychological Drivers:</span>
+                        <div className="tags">
+                          {ad.psychologicalDrivers.map((driver, j) => (
+                            <span key={j} className="tag psychology">{driver}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="performers-card bottom">
+              <h4>Non-Negotiable Constraints</h4>
+              <p className="seeded-note">
+                Operator-asserted. These stay binding once real ad data arrives.
+              </p>
+              {constraints?.bannedVocabulary && constraints.bannedVocabulary.length > 0 && (
+                <div className="pattern-group">
+                  <span className="pattern-label">Banned Vocabulary</span>
+                  <ul>{constraints.bannedVocabulary.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                </div>
+              )}
+              {constraints?.claimGuardrails && constraints.claimGuardrails.length > 0 && (
+                <div className="pattern-group">
+                  <span className="pattern-label">Claim Guardrails</span>
+                  <ul>{constraints.claimGuardrails.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                </div>
+              )}
+              {constraints?.avoidHeadlinePatterns && constraints.avoidHeadlinePatterns.length > 0 && (
+                <div className="pattern-group">
+                  <span className="pattern-label">Headline Shapes to Avoid</span>
+                  <ul>{constraints.avoidHeadlinePatterns.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                </div>
+              )}
+              {!constraints?.bannedVocabulary.length &&
+                !constraints?.claimGuardrails.length &&
+                !constraints?.avoidHeadlinePatterns.length && (
+                  <p className="seeded-note">
+                    Your seed didn't specify any hard constraints. Add banned vocabulary or claim
+                    guardrails to your seed if this brand has rules copy must respect.
+                  </p>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Top & Bottom Performers (Enhanced with Image Analysis) */}
+      {!seeded && (
       <section className="insights-section performers-section">
         <h3>Ad Performance Breakdown</h3>
         <div className="performers-grid">
@@ -537,12 +666,14 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
           </div>
         </div>
       </section>
+      )}
 
       {/* Strategic Recommendations (Enhanced with Creative Direction) */}
       {recommendations && (
       <section className="insights-section recommendations-section">
-        <h3>Strategic Recommendations</h3>
+        <h3>{copy.recommendationsTitle}</h3>
         <div className="recommendations-grid">
+          {hasItems(recommendations.immediate) && (
           <div className="recommendation-card immediate">
             <div className="recommendation-header">
               <span className="recommendation-icon"><Rocket size={18} strokeWidth={1.5} /></span>
@@ -554,6 +685,8 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
               ))}
             </ul>
           </div>
+          )}
+          {hasItems(recommendations.shortTerm) && (
           <div className="recommendation-card short-term">
             <div className="recommendation-header">
               <span className="recommendation-icon"><CalendarDays size={18} strokeWidth={1.5} /></span>
@@ -565,6 +698,8 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
               ))}
             </ul>
           </div>
+          )}
+          {hasItems(recommendations.strategic) && (
           <div className="recommendation-card strategic">
             <div className="recommendation-header">
               <span className="recommendation-icon"><Target size={18} strokeWidth={1.5} /></span>
@@ -576,6 +711,7 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
               ))}
             </ul>
           </div>
+          )}
           {recommendations.creativeDirection && recommendations.creativeDirection.length > 0 && (
             <div className="recommendation-card creative-direction">
               <div className="recommendation-header">
