@@ -93,7 +93,10 @@ export default function ImportAnalysisModal({
                       </span>
                       <span className="import-detail-sep">&middot;</span>
                       <span className="import-detail">
-                        Score: {analysis.overallHealthScore}/10
+                        {/* A seeded source account has no delivery data to score. */}
+                        {typeof analysis.overallHealthScore === 'number'
+                          ? `Score: ${analysis.overallHealthScore}/10`
+                          : 'No delivery data'}
                       </span>
                       <span className="import-detail-sep">&middot;</span>
                       <span className="import-detail">

@@ -84,6 +84,50 @@
   margin-top: 2px;
 }
 
+/* Seeded mode: no delivery data, so no score. Neutral treatment — this is not a bad score,
+   it is the absence of one. */
+.health-score.not-applicable {
+  border-color: var(--border-primary);
+  padding: 0 12px;
+  text-align: center;
+}
+
+.health-score .score-na {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 1.3;
+}
+
+.section-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.analysis-mode-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 100px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  background: var(--accent-violet-glow);
+  color: var(--accent-violet);
+  border: 1px solid var(--border-violet);
+}
+
+.seeded-note {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 16px 0;
+}
+
+.metrics-overview.seeded-placeholder .seeded-note {
+  margin-bottom: 0;
+}
+
 .summary-text {
   flex: 1;
 }

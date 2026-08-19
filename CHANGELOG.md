@@ -1,5 +1,48 @@
 # Changelog
 
+## 2026-08-19 — ConversionIQ™ cold start: seeded and hybrid channel analysis for accounts with no ad history
+
+### What
+On a brand-new Meta ad account with zero ads ever created, `Run Channel Analysis` failed with a red **"No ads found for analysis. Make sure you have active ads in your account."** That message was wrong for that account state, and it made the documented cold-start path a dead end at the first step: `Seed Manual Analysis` exists *precisely* so an account with no advertising history can build its first campaigns from a pasted strategist analysis, and the very next action the UI invited then hard-failed.
+
+`Run Channel Analysis` now branches on what the account actually has instead of assuming ads exist. Zero ads is a **supported state**, not a failure:
+
+| Ads | Seed | Mode | Behaviour |
+|-----|------|------|-----------|
+| yes | no | `observed` | Exactly as before. Byte-identical output, proven by test. |
+| no | yes | `seeded` | Analysis built from the seed. No error, no credit charged. |
+| yes | yes | `hybrid` | Observed data is authoritative for what *performs*; the seed stays authoritative for voice, banned vocabulary and claim guardrails. |
+| no | no | — | The original error still fires, and now it's accurate. |
+
+The seed is no longer destroyed by a successful analysis run — it lives in its own durable slot, which is what makes `hybrid` possible at all.
+
+### Added
+- **`src/lib/analysisMode.ts`** — the mode model, as pure functions with no storage, network or React. `planAnalysisRun()` returns a discriminated union carrying the seed, so callers get it pre-narrowed; `buildObservedAnalysis` / `buildSeededAnalysis` / `mergeHybridAnalysis` construct the three modes; `unapplySeed()` reverses a seed's contribution; `extractSeedConstraints()` derives the durable guardrails from a seed.
+- **`src/lib/manualSeed.ts`** — seed parsing, moved out of the storage layer. Coerces untrusted pasted/distilled JSON into a valid `ChannelAnalysisResult` and never throws on malformed input. `parseManualSeed()` is the whole ingest path in one call, replacing a normalize-then-build dance spread across three modules.
+- **`src/services/analysisContext.ts`** — the analysis→prompt-text builder, extracted from `openaiApi.ts`. A mode-keyed `MODE_PROMPT` table decides whether a pattern is framed as a proven winner or an untested hypothesis; a `CONDENSED_MODE_COPY` table does the same for the two condensed prompt builders that keep their own layout.
+- **`src/components/channelInsightsCopy.ts`** — `MODE_COPY`, the per-mode section titles and labels for the insights panel, so all user-facing analysis wording lives in one reviewable file.
+- **Durable manual-seed slot** (`_seed_{channel}` in `channelAnalysisCache.ts`) with `getManualSeed` / `hasManualSeed` / `clearManualSeed`, per-account and per-channel scoped and business-type gated. Includes a lazy migration that adopts seeds written before the slot existed, so already-seeded accounts aren't stranded.
+- **"Remove seed" action** on the provenance banner. A seed now outlives an observed run, so there has to be a way back out of one pasted by mistake.
+- **Vitest** (`npm test` / `npm run test:watch`, config in `vitest.config.ts`) — the repo had no test framework. **71 tests** covering all four account states, the hybrid merge rules, seed persistence/migration/isolation, prompt shaping in every mode, and the real request bodies sent to the model.
+
+### Changed
+- **`overallHealthScore` is now `number | null`.** A numeric score computed against an account with zero delivery data measures the absence of data, not the quality of anything, and would steer generation toward "repair your account" when the correct advice is "build the first campaign". Seeded analyses report `null`, rendered as **"No delivery data yet"**. Previously the seed hardcoded a fabricated `5`.
+- **Prompt text is mode-aware in all three builders.** A seeded account's content is labelled `HYPOTHESIS` and framed as angles to test; its exemplar ads print without a conversion rate (they've never run, so `0.00% CVR` read as "zero-converting"); the health-score line is omitted entirely rather than emitting `null/10`. Hybrid marks performance `MEASURED` while keeping seed constraints binding. Observed wording is unchanged — the `observed` entries reproduce the previous strings verbatim.
+- **Zero ads + a seed is an informational state, not an error.** Violet notice (*"No ad history yet. This analysis is built from your manual seed."*) instead of the red error, primary button relabelled **"Re-run from seed"** with an explanatory tooltip, and the seed banner's *"Run your own analysis to replace"* hint — which on a cold account invited the exact action that used to fail — now says what a re-run will actually do.
+- **Seeded sections are replaced, not blanked.** "What's Working" / "What's Not Working" become "Angles to Test First" / "Guardrails to Respect"; the zeroed performance grid becomes an explanatory panel; top/bottom performers become exemplars and operator-asserted constraints.
+- **A failed or empty run no longer blanks the on-screen analysis.** The pre-run `setAnalysis(null)` is gone; cache writes were already success-only and remain so.
+- **Seeded runs cost no credit.** The seed is already an interpreted profile, so materializing it needs no model call and the reserved credit is refunded.
+- `ManualAnalysisModal` hands raw input straight to the page; parsing is no longer its concern.
+
+### Internal
+- **`analysisMode` is the only mode fact persisted.** Evidence labelling, section titles and health-score applicability are all derived from it at the point of use. An earlier iteration stored a parallel `sectionEvidence` map — it had four write sites and zero readers, and the tests asserting on it manufactured false confidence that evidence "propagated". Deleted. Do not reintroduce a second source of truth for one fact.
+- **Extraction verified byte-identical**, not assumed: the pre-refactor prompt builder was staged as a temporary harness and diffed against the extracted one across observed, demoted-voice and bare-analysis inputs before the harness was removed.
+- **Prompt regressions caught by capturing real payloads.** Two condensed builders (`regenerateSingleCopy`, `generateTextAdCopy`) were still interpolating the score directly, sending `Overall Health Score: null/10` plus `TOP AD #1 (0.00% CVR)` under a `YOUR TOP PERFORMING ADS` heading for cold-start accounts — the exact failure this work exists to prevent. `src/services/seededPrompt.test.ts` now stubs the network layer and asserts on the actual request body. Those tests initially passed *vacuously* (negative-only assertions succeed against an empty string when the call never reaches the network), so every case asserts a non-empty payload first.
+- **Removing a seed un-applies it immediately.** Clearing the slot alone left a hybrid record still carrying the seed's voice and constraints, steering generation with no banner left to say so. `unapplySeed()` keeps the measured half and hands the voice back to the one extracted from winners. One residue is accepted deliberately: the seed's entries in the unioned "avoid" lists remain, since the pre-merge observed lists aren't retained — they're additive guardrails, and the next observed run clears them.
+- **Net structural effect**: `openaiApi.ts` **6598 → 6551** and `channelAnalysisCache.ts` **356 → 326** — both files end up *smaller* than before this feature existed. `ChannelInsightsPanel.tsx` 597 → 733 with its mode branching down from 28 inline conditionals to zero. Nothing crosses 1000 lines.
+- Ten `(!seeded || …)` render guards collapsed to plain "has content" checks, matching six such guards already in that file. The rule is correct in every mode, so this also stopped observed analyses rendering empty cards.
+- `npm test` (71 passing), `tsc -b`, `npm run build` and `eslint` all clean; lint count unchanged from baseline. Verified in-browser for seeded, observed and hybrid, including clicking "Remove seed" on a hybrid record. **Not** verified end to end against a live Meta account with zero ads — that needs real credentials.
+
 ## 2026-08-18 — ConversionIQ™ analysis on Claude Fable 5 + automatic cross-provider AI failover
 
 ### What

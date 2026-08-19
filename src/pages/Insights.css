@@ -187,6 +187,29 @@
   margin-left: auto;
 }
 
+.provenance-remove-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.provenance-remove-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-violet);
+  color: var(--text-primary);
+}
+
+.provenance-remove-btn:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 2px;
+}
+
 /* Empty state import link */
 .import-empty-link {
   margin-top: 16px;
@@ -220,6 +243,25 @@
 
 .error-icon {
   font-size: 20px;
+}
+
+/* Informational State — e.g. a seeded analysis on an account with no ad history.
+   Violet/neutral, deliberately NOT the red error treatment: nothing has gone wrong. */
+.insights-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: var(--accent-violet-glow);
+  border: 1px solid var(--border-violet);
+  border-radius: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+}
+
+.notice-icon {
+  display: inline-flex;
+  color: var(--accent-violet);
 }
 
 /* Loading State */

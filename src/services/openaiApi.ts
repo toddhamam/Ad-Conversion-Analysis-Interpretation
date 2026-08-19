@@ -8,6 +8,7 @@ import { getEmbedding, setEmbedding } from './embeddingStore';
 import { getAuthToken } from '../lib/authToken';
 import { getBusinessTypeConfig, getCampaignIntentConfig } from '../lib/businessTypeConfig';
 import { META_AD_POLICY_PROMPT, IMAGE_SAFETY_DIRECTIVE, POLICY_SANITIZE_PATTERNS } from './adPolicyGuard';
+import { buildAnalysisContextString, condensedCopyFor, healthScoreLine } from './analysisContext';
 import { isValidHook, isValidAngle, DEFAULT_GRID_ANGLES, DEFAULT_GRID_HOOKS, HOOKS, HOOK_PROMPT_MENU, HOOK_LABELS, type HookType, type AxisTag, type GridAngle, type FormatType } from '../lib/axisTags';
 
 // ─── OpenAI API Calls ───────────────────────────────────────────────────────
@@ -1415,9 +1416,23 @@ export interface ChannelAnalysisResult {
   channelName: string;
   analyzedAt: string;
 
+  // How this analysis was produced — observed (live ads), seeded (manual seed, no ad history),
+  // or hybrid (both). Absent on records written before modes existed; those are observed.
+  // This is the ONLY mode-related fact stored: evidence labelling, section titles and health-score
+  // applicability are all derived from it at the point of use. See lib/analysisMode.ts.
+  analysisMode?: import('../lib/analysisMode').AnalysisMode;
+
+  // Constraints carried over from a manual seed (voice, banned vocabulary, claim guardrails).
+  // Present in seeded and hybrid modes — these survive a hybrid run instead of being discarded.
+  seedConstraints?: import('../lib/analysisMode').SeedConstraints;
+
   // Executive Summary
   executiveSummary: string;
-  overallHealthScore: number; // 1-10
+  /**
+   * 1-10. `null` means NOT APPLICABLE — a seeded account has no delivery data, and a number here
+   * would be scoring the absence of data rather than the quality of anything.
+   */
+  overallHealthScore: number | null;
 
   // Performance Breakdown
   performanceBreakdown: {
@@ -1452,6 +1467,19 @@ export interface ChannelAnalysisResult {
     }>;
     keyDifferentiator: string; // What in the IMAGE made the difference
   }>;
+
+  /**
+   * In `hybrid` mode the seed's operator-asserted voice takes the authoritative `brandVoice` slot
+   * and the voice extracted from winning ads is preserved here as supporting evidence.
+   */
+  observedBrandVoice?: {
+    tonality: string;
+    sentenceStyle: string;
+    pointOfView: string;
+    vocabularyLevel: string;
+    rhythmAndCadence: string;
+    distinctiveTraits: string[];
+  };
 
   // Brand Voice Profile (extracted from winning ads)
   brandVoice?: {
@@ -2743,97 +2771,6 @@ HOW TO USE THESE TESTIMONIALS — READ CAREFULLY:
 - Never claim more than a testimonial actually states.`;
 }
 
-function buildAnalysisContextString(
-  analysis: ChannelAnalysisResult | null,
-  options?: { demoteObservedVoice?: boolean },
-): string {
-  if (!analysis) return '';
-  let analysisContext = '';
-  analysisContext += `\n=== CHANNEL PERFORMANCE SUMMARY ===
-${analysis.executiveSummary}
-
-Overall Health Score: ${analysis.overallHealthScore}/10
-Total Ads Analyzed: ${analysis.performanceBreakdown.totalAdsAnalyzed}
-High Performers: ${analysis.performanceBreakdown.highPerformers} ads
-Avg Conversion Rate: ${(analysis.performanceBreakdown.avgConversionRate * 100).toFixed(2)}%
-`;
-  if (analysis.topAds && analysis.topAds.length > 0) {
-    analysisContext += `\n=== YOUR TOP PERFORMING ADS (COPY THESE PATTERNS) ===\n`;
-    analysis.topAds.forEach((ad, i) => {
-      analysisContext += `
-TOP AD #${i + 1} (${(ad.conversionRate * 100).toFixed(2)}% conversion rate):
-- Headline: "${ad.headline}"${ad.bodyText ? `
-- Full Body Copy: "${ad.bodyText}"` : ''}
-- Why it converts: ${ad.whyItWorks}
-- Psychological drivers: ${ad.psychologicalDrivers?.join(', ') || 'N/A'}
-`;
-    });
-    analysisContext += `
-IMPORTANT: Study the FULL BODY COPY of these winners. Notice their structure, pacing, opening hooks, how they build tension, and how they close. Your generated body copy should follow the same structural patterns and voice.
-`;
-  }
-  if (analysis.brandVoice) {
-    const bv = analysis.brandVoice;
-    // When a user-authored Brand Voice profile is in force, this data-derived voice is demoted to
-    // supporting evidence (header/intro reframed, the "MATCH THIS" mandate dropped) so it doesn't
-    // contradict the authoritative profile. The voice fields render identically either way.
-    const demoted = options?.demoteObservedVoice;
-    const header = demoted
-      ? '=== OBSERVED VOICE FROM PAST WINNERS (reference only) ==='
-      : '=== BRAND VOICE PROFILE (MATCH THIS VOICE) ===';
-    const intro = demoted
-      ? 'This is the voice extracted from ads that already converted for this account. Use it as supporting evidence, but DEFER to the Brand Voice & Guidelines profile on any conflict.'
-      : 'This is the voice that is ALREADY CONVERTING for this ad account. Your copy MUST sound like it came from the same copywriter.';
-    const outro = demoted
-      ? ''
-      : '\n\nCRITICAL: Do NOT override this voice with generic "ad copywriter" tone. The voice profile above is extracted from REAL winning ads. Match its specific characteristics, not a generic approximation of it.';
-    analysisContext += `\n${header}
-${intro}
-- Tonality: ${bv.tonality}
-- Sentence style: ${bv.sentenceStyle}
-- Point of view: ${bv.pointOfView}
-- Vocabulary level: ${bv.vocabularyLevel}
-- Rhythm & cadence: ${bv.rhythmAndCadence}
-${bv.distinctiveTraits?.length ? `- Distinctive traits:\n${bv.distinctiveTraits.map(t => `  * ${t}`).join('\n')}` : ''}${outro}
-`;
-  }
-  if (analysis.winningPatterns) {
-    analysisContext += `\n=== WINNING COPY PATTERNS (USE THESE) ===
-- Headlines that convert: ${analysis.winningPatterns.headlines?.join(' | ') || 'N/A'}
-- Effective copy elements: ${analysis.winningPatterns.copyElements?.join(' | ') || 'N/A'}
-- Emotional triggers that work: ${analysis.winningPatterns.emotionalTriggers?.join(', ') || 'N/A'}
-- CTAs that drive action: ${analysis.winningPatterns.callToActions?.join(', ') || 'N/A'}
-`;
-  }
-  if (analysis.visualAnalysis?.psychologicalTriggers?.length) {
-    analysisContext += `\n=== PSYCHOLOGICAL TRIGGERS THAT WORK ===
-${analysis.visualAnalysis.psychologicalTriggers.map(t => `- ${t}`).join('\n')}
-`;
-  }
-  if (analysis.audienceInsights) {
-    analysisContext += `\n=== AUDIENCE INSIGHTS ===
-What resonates with this audience:
-${analysis.audienceInsights.whatResonates?.map(r => `- ${r}`).join('\n') || '- N/A'}
-
-What to AVOID (doesn't work):
-${analysis.audienceInsights.whatDoesntWork?.map(r => `- ${r}`).join('\n') || '- N/A'}
-`;
-  }
-  if (analysis.losingPatterns) {
-    analysisContext += `\n=== AVOID THESE PATTERNS (LOW PERFORMERS) ===
-- Headlines that fail: ${analysis.losingPatterns.headlines?.join(' | ') || 'N/A'}
-- Copy issues: ${analysis.losingPatterns.issues?.join(', ') || 'N/A'}
-- Problematic elements: ${analysis.losingPatterns.copyElements?.join(', ') || 'N/A'}
-`;
-  }
-  if (analysis.recommendations) {
-    analysisContext += `\n=== STRATEGIC RECOMMENDATIONS ===
-Immediate actions: ${analysis.recommendations.immediate?.join('; ') || 'N/A'}
-Creative direction: ${analysis.recommendations.creativeDirection?.join('; ') || 'N/A'}
-`;
-  }
-  return analysisContext;
-}
 
 /**
  * Build the Ad Library inspiration context string. Shared by single-copy and
@@ -2884,13 +2821,21 @@ IMPORTANT: These are EXTERNAL inspiration sources. Your job is to:
  */
 export const MANUAL_ANALYSIS_PROMPT_TEMPLATE = `You are an elite direct-response strategist building a ConversionIQ creative-intelligence profile for a brand that has NO live ad data yet. Using ONLY the brand/positioning context below, synthesize a well-reasoned profile a copywriter can immediately draw on. These are informed hypotheses, not measured results — make them specific, realistic, and grounded in the brand context. Do NOT use em dashes.
 
+You have NO measured delivery data, so everything you infer is a HYPOTHESIS, not a proven winner. The only things that count as VALIDATED are what the operator states outright in the brief below (voice, rules, compliance limits) — put those in "constraints", which is treated as binding downstream.
+
+Do NOT output an overall health score. This account has no delivery data, so there is nothing to score.
+
 === BRAND / POSITIONING CONTEXT ===
 {{BRAND_CONTEXT}}
 
 Return JSON ONLY, matching this exact shape (omit nothing; use [] for lists you can't fill):
 {
   "executiveSummary": "<2-3 sentences: who this brand is, who it sells to, and the core creative angle that should win>",
-  "overallHealthScore": 5,
+  "constraints": {
+    "bannedVocabulary": ["<word or phrase this brand must never use, from the brief>"],
+    "claimGuardrails": ["<claim this brand may not make, or must qualify, e.g. no guaranteed outcomes>"],
+    "avoidHeadlinePatterns": ["<headline shape that falls flat for this audience>"]
+  },
   "brandVoice": {
     "tonality": "<e.g. 'Warm, grounded, quietly authoritative'>",
     "sentenceStyle": "<e.g. 'Short plain sentences with the occasional one-line punch'>",
@@ -3754,14 +3699,16 @@ export async function regenerateSingleCopy(config: {
   // omits the fuller sections (psychological triggers, audience insights, recommendations).
   let analysisContext = '';
   if (hasAnalysis) {
-    analysisContext += `\n=== CHANNEL PERFORMANCE SUMMARY ===
+    // Mode-aware vocabulary: a seeded account has no winners, so nothing here may be framed as one.
+    const cc = condensedCopyFor(analysis);
+    analysisContext += `\n${cc.preamble}=== ${cc.summaryHeader} ===
 ${analysis.executiveSummary}
-Overall Health Score: ${analysis.overallHealthScore}/10
-`;
+${healthScoreLine(analysis)}`;
     if (analysis.topAds && analysis.topAds.length > 0) {
-      analysisContext += `\n=== YOUR TOP PERFORMING ADS ===\n`;
+      analysisContext += `\n=== ${cc.topAdsHeader} ===\n`;
       analysis.topAds.forEach((ad, i) => {
-        analysisContext += `TOP AD #${i + 1} (${(ad.conversionRate * 100).toFixed(2)}% CVR): "${ad.headline}"${ad.bodyText ? ` | Body: "${ad.bodyText}"` : ''} | ${ad.whyItWorks}\n`;
+        const cvr = cc.showConversionRate ? ` (${(ad.conversionRate * 100).toFixed(2)}% CVR)` : '';
+        analysisContext += `${cc.topAdsEntry} #${i + 1}${cvr}: "${ad.headline}"${ad.bodyText ? ` | Body: "${ad.bodyText}"` : ''} | ${ad.whyItWorks}\n`;
       });
     }
     if (analysis.brandVoice) {
@@ -3776,7 +3723,7 @@ ${bv.distinctiveTraits?.length ? `Traits: ${bv.distinctiveTraits.join('; ')}` : 
 `;
     }
     if (analysis.winningPatterns) {
-      analysisContext += `\n=== WINNING PATTERNS ===
+      analysisContext += `\n=== ${cc.patternsHeader} ===
 - Headlines: ${analysis.winningPatterns.headlines?.join(' | ') || 'N/A'}
 - Copy elements: ${analysis.winningPatterns.copyElements?.join(' | ') || 'N/A'}
 - Emotional triggers: ${analysis.winningPatterns.emotionalTriggers?.join(', ') || 'N/A'}
@@ -3784,7 +3731,7 @@ ${bv.distinctiveTraits?.length ? `Traits: ${bv.distinctiveTraits.join('; ')}` : 
 `;
     }
     if (analysis.losingPatterns) {
-      analysisContext += `\n=== AVOID THESE ===
+      analysisContext += `\n=== ${cc.avoidHeader} ===
 - Headlines: ${analysis.losingPatterns.headlines?.join(' | ') || 'N/A'}
 - Issues: ${analysis.losingPatterns.issues?.join(', ') || 'N/A'}
 `;
@@ -6477,17 +6424,23 @@ export async function generateTextAdCopy(config: {
 
   // Inject channel analysis if available
   if (analysis) {
+    // Mode-aware vocabulary — a seeded account has no measured "top performers" to point at.
+    const cc = condensedCopyFor(analysis);
+    const seededProfile = cc.showConversionRate === false;
     contextSection += `
-=== PERFORMANCE CONTEXT ===
+=== ${cc.textAdHeader} ===
 ${analysis.executiveSummary || ''}
 
-Health Score: ${analysis.overallHealthScore}/10
-Top performing patterns from this account inform the suggestions below.
+${healthScoreLine(analysis, 'Health Score')}${cc.textAdIntro}
 `;
     if (analysis.winningPatterns) {
       const wp = analysis.winningPatterns;
-      if (wp.headlines?.length) contextSection += `\nWinning headline patterns: ${wp.headlines.join('; ')}`;
-      if (wp.emotionalTriggers?.length) contextSection += `\nEmotional triggers that work: ${wp.emotionalTriggers.join('; ')}`;
+      if (wp.headlines?.length) {
+        contextSection += `\n${seededProfile ? 'Headline directions to try' : 'Winning headline patterns'}: ${wp.headlines.join('; ')}`;
+      }
+      if (wp.emotionalTriggers?.length) {
+        contextSection += `\n${seededProfile ? 'Emotional triggers to try' : 'Emotional triggers that work'}: ${wp.emotionalTriggers.join('; ')}`;
+      }
     }
   }
 
