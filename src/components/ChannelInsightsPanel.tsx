@@ -109,6 +109,9 @@ export default function ChannelInsightsPanel({ analysis }: ChannelInsightsPanelP
               { title: 'By Angle', stats: analysis.axisInsights.byAngle, winner: analysis.axisInsights.winningAngle },
               { title: 'By Hook', stats: analysis.axisInsights.byHook, winner: analysis.axisInsights.winningHook },
               { title: 'By Format', stats: analysis.axisInsights.byFormat, winner: analysis.axisInsights.winningFormat },
+              // byCallout is optional — absent on every analysis cached before the callout
+              // axis existed. `?? []` plus the length filter below is what handles that.
+              { title: 'By Callout', stats: analysis.axisInsights.byCallout ?? [], winner: analysis.axisInsights.winningCallout },
             ].filter(group => group.stats.length > 0).map(group => (
               <div className="axis-group" key={group.title}>
                 <h4>{group.title}</h4>

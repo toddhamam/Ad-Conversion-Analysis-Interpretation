@@ -14,11 +14,26 @@ import { fetchImageViaBackend } from './swipeLibraryApi';
 
 const IMAGE_CACHE_KEY = 'conversion_intelligence_image_cache';
 
+/**
+ * How many of the 20 cache slots operator uploads may reserve against CVR-ranked eviction.
+ * Bounded so a bulk upload can't crowd out an account's actual measured winners.
+ */
+const MAX_UPLOAD_SLOTS = 8;
+
 export interface CachedImage {
   adId: string;
   base64Data: string;
   mimeType: string;
   capturedAt: number;
+  /**
+   * Where the pixels came from. ABSENT MEANS `'own_winner'` — entries written before this
+   * field existed are all account ads, so the legacy default is the honest one (same idiom
+   * as `analysisModeOf`'s "records written before modes existed are observed").
+   *
+   * `'own_upload'` entries have NO delivery data. They must never be given a synthetic
+   * conversionRate to make them rank: see `getTopHighQualityCachedImages`, which sorts by CVR.
+   */
+  source?: 'own_winner' | 'own_upload';
   conversionRate?: number; // For sorting by performance
   conversions?: number;    // Absolute conversion count from the ad
   // Quality metadata for filtering out low-res images
@@ -33,9 +48,12 @@ export interface CachedImage {
 
 /**
  * Calculate image quality score based on dimensions
- * Used to filter out low-resolution images from reference set
+ * Used to filter out low-resolution images from reference set.
+ *
+ * Exported so every ingest path scores on ONE ladder. A second copy of these thresholds
+ * elsewhere would silently let images in at one door that are rejected at another.
  */
-function calculateQualityScore(width: number, height: number): number {
+export function calculateQualityScore(width: number, height: number): number {
   const minDimension = Math.min(width, height);
   if (minDimension >= 1080) return 100;  // Excellent (1080p+)
   if (minDimension >= 720) return 80;    // Good (720p)
@@ -74,18 +92,29 @@ function saveCache(cache: ImageCache): void {
     if (imageIds.length > 20) {
       const allImages = imageIds.map(id => cache.images[id]);
 
+      // Operator uploads carry no conversion data, so a pure CVR sort would evict them
+      // FIRST, always — they would rank below even a 0%-CVR account ad. Reserve slots for
+      // them instead. (This is why uploads previously had to fake a 10% CVR to survive.)
+      const uploads = allImages
+        .filter(img => img.source === 'own_upload')
+        .sort((a, b) => b.capturedAt - a.capturedAt)
+        .slice(0, MAX_UPLOAD_SLOTS);
+      const uploadIds = new Set(uploads.map(img => img.adId));
+
+      const winners = allImages.filter(img => !uploadIds.has(img.adId));
+
       // Find the highest-converting image (by absolute count) to protect it from eviction
       let highestConvImg: CachedImage | null = null;
-      for (const img of allImages) {
+      for (const img of winners) {
         if ((img.conversions ?? 0) > (highestConvImg?.conversions ?? 0)) {
           highestConvImg = img;
         }
       }
 
-      // Sort by conversion rate and keep top 20
-      const sortedImages = allImages
+      // Sort by conversion rate and fill the slots the uploads didn't reserve
+      const sortedImages = winners
         .sort((a, b) => (b.conversionRate || 0) - (a.conversionRate || 0))
-        .slice(0, 20);
+        .slice(0, 20 - uploads.length);
 
       // Ensure highest-converting image is retained even if its CVR is low
       if (highestConvImg && (highestConvImg.conversions ?? 0) > 0 && !sortedImages.includes(highestConvImg)) {
@@ -93,7 +122,7 @@ function saveCache(cache: ImageCache): void {
       }
 
       cache.images = {};
-      sortedImages.forEach(img => {
+      [...sortedImages, ...uploads].forEach(img => {
         cache.images[img.adId] = img;
       });
     }
@@ -150,12 +179,23 @@ export function captureImage(
       return null;
     }
 
+    // Record real dimensions + quality. Without these the entry is unusable as a style
+    // reference (generation filters at qualityScore >= 60) AND is deleted outright by
+    // clearLegacyCache on the next Meta Ads sync.
+    const width = canvas.width;
+    const height = canvas.height;
+    const qualityScore = calculateQualityScore(width, height);
+
     const cachedImage: CachedImage = {
       adId,
       mimeType: matches[1],
       base64Data: matches[2],
       capturedAt: Date.now(),
+      source: 'own_winner',
       conversionRate,
+      width,
+      height,
+      qualityScore,
       headline: headline?.slice(0, 200),
       bodyText: bodyText?.slice(0, 200),
     };
@@ -165,7 +205,7 @@ export function captureImage(
     cache.images[adId] = cachedImage;
     saveCache(cache);
 
-    console.log(`✅ Captured image for ad ${adId} (${conversionRate?.toFixed(1)}% conv rate)`);
+    console.log(`✅ Captured image for ad ${adId}: ${width}x${height}, quality ${qualityScore} (${conversionRate?.toFixed(1)}% conv rate)`);
 
     return cachedImage;
   } catch (e) {
@@ -263,6 +303,13 @@ export function clearLegacyCache(): number {
 
     for (const id of imageIds) {
       const img = cache.images[id];
+      // Operator uploads are never "legacy" — they are the only reference material a
+      // cold-start account has, and they cannot be re-fetched from anywhere. Deleting
+      // them here is what previously made the "upload images manually" affordance a
+      // dead end: the upload was filtered out at generation, then destroyed on the next
+      // Meta Ads sync.
+      if (img.source === 'own_upload') continue;
+
       // Remove images without quality metadata
       if (img.qualityScore === undefined || img.width === undefined) {
         delete cache.images[id];
@@ -548,59 +595,72 @@ export async function storeImagesFromUrls(
  * Upload a brand image from a File object
  * This is the workaround for CORS restrictions on Facebook CDN images
  */
-export function uploadBrandImage(
-  file: File,
-  conversionRate: number = 10 // Default high rate for uploaded brand images
-): Promise<CachedImage | null> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
+export async function uploadBrandImage(file: File): Promise<CachedImage | null> {
+  try {
+    const dataUrl = await readFileAsDataUrl(file);
+    if (!dataUrl) return null;
 
-    reader.onload = (event) => {
-      try {
-        const dataUrl = event.target?.result as string;
-        if (!dataUrl) {
-          console.warn('Failed to read file');
-          resolve(null);
-          return;
-        }
+    // Extract base64 data and mime type
+    const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (!matches) {
+      console.warn('Failed to parse data URL from uploaded file');
+      return null;
+    }
 
-        // Extract base64 data and mime type
-        const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-        if (!matches) {
-          console.warn('Failed to parse data URL from uploaded file');
-          resolve(null);
-          return;
-        }
+    const mimeType = matches[1];
+    const base64Data = matches[2];
 
-        // Generate a unique ID for uploaded images
-        const adId = `uploaded_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    // Real dimensions, not a guess. Without a qualityScore the entry is invisible to
+    // getTopHighQualityCachedImages (which filters at 60) and used to be deleted outright
+    // by clearLegacyCache — so uploads looked like they worked and silently did nothing.
+    const dimensions = await getImageDimensions(file);
+    if (!dimensions) {
+      console.warn(`Could not determine dimensions for ${file.name} — not caching`);
+      return null;
+    }
 
-        const cachedImage: CachedImage = {
-          adId,
-          mimeType: matches[1],
-          base64Data: matches[2],
-          capturedAt: Date.now(),
-          conversionRate,
-        };
+    const { width, height } = dimensions;
+    const qualityScore = calculateQualityScore(width, height);
 
-        // Store in cache
-        const cache = getCache();
-        cache.images[adId] = cachedImage;
-        saveCache(cache);
+    // Generate a unique ID for uploaded images
+    const adId = `uploaded_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-        console.log(`✅ Uploaded brand image: ${file.name} (assigned ${conversionRate}% conv rate)`);
-        resolve(cachedImage);
-      } catch (e) {
-        console.warn('Failed to process uploaded image:', e);
-        resolve(null);
-      }
+    const cachedImage: CachedImage = {
+      adId,
+      mimeType,
+      base64Data,
+      capturedAt: Date.now(),
+      // No conversionRate. An upload has no delivery data, and inventing one (this used to
+      // default to 10%) makes it outrank the account's real winners in every CVR-ranked
+      // selection path. Eviction protection lives in saveCache instead.
+      source: 'own_upload',
+      width,
+      height,
+      fileSize: file.size,
+      qualityScore,
     };
 
+    const cache = getCache();
+    cache.images[adId] = cachedImage;
+    saveCache(cache);
+
+    console.log(`✅ Uploaded brand image: ${file.name} — ${width}x${height}, quality ${qualityScore}`);
+    return cachedImage;
+  } catch (e) {
+    console.warn('Failed to process uploaded image:', e);
+    return null;
+  }
+}
+
+/** Promise wrapper around FileReader so the upload path can be written linearly. */
+function readFileAsDataUrl(file: File): Promise<string | null> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (event) => resolve((event.target?.result as string) || null);
     reader.onerror = () => {
       console.warn('Failed to read uploaded file');
       resolve(null);
     };
-
     reader.readAsDataURL(file);
   });
 }
@@ -608,16 +668,11 @@ export function uploadBrandImage(
 /**
  * Upload multiple brand images
  */
-export async function uploadBrandImages(
-  files: FileList,
-  conversionRates?: number[]
-): Promise<CachedImage[]> {
+export async function uploadBrandImages(files: FileList): Promise<CachedImage[]> {
   const results: CachedImage[] = [];
 
   for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const rate = conversionRates?.[i] ?? 10 - i; // Default: descending rates
-    const result = await uploadBrandImage(file, rate);
+    const result = await uploadBrandImage(files[i]);
     if (result) {
       results.push(result);
     }

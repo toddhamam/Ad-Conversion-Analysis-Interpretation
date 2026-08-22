@@ -22,6 +22,7 @@ import AccountSettings from './pages/AccountSettings';
 import Integrations from './pages/Integrations';
 import ReportSettings from './pages/ReportSettings';
 import SwipeLibrary from './pages/SwipeLibrary';
+import InspirationLibrary from './pages/InspirationLibrary';
 import SalesLanding from './pages/SalesLanding';
 import AgencySalesLanding from './pages/AgencySalesLanding';
 import Login from './pages/Login';
@@ -133,6 +134,7 @@ function App() {
             <Route path="/account" element={<AccountSettings />} />
             <Route path="/integrations" element={<Integrations />} />
             <Route path="/swipe-library" element={<SwipeLibrary />} />
+            <Route path="/inspiration" element={<InspirationLibrary />} />
             <Route path="/reports" element={<ReportSettings />} />
           </Route>
 

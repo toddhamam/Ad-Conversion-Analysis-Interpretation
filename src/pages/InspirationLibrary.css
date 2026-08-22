@@ -1,0 +1,656 @@
+/* Inspiration Library — external creative references.
+ *
+ * Two rules this file exists to hold:
+ *  1. NEVER `transition: all`. Base64 thumbnails in a grid force Chrome to recalculate every
+ *     property per frame and the tab dies. Enumerate properties. (Crashes #181, #182.)
+ *  2. CSS containment on the card and the grid so a base64 image decoding cannot propagate a
+ *     layout recalculation across the whole page.
+ */
+
+.inspiration-page {
+  padding: 0;
+}
+
+/* ── Provenance preamble ───────────────────────────────────────────────────
+   First thing on the page, and visually distinct from anything that reports
+   measured performance. */
+
+.inspiration-preamble {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-violet);
+  border-left: 3px solid var(--accent-violet);
+  border-radius: var(--radius-card, 12px);
+}
+
+.inspiration-preamble-icon {
+  font-size: 20px;
+  line-height: 1;
+  color: var(--accent-violet);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.inspiration-preamble strong {
+  display: block;
+  font-size: 14px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.inspiration-preamble p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.inspiration-preamble a {
+  color: var(--accent-violet);
+  font-weight: 500;
+}
+
+/* ── Ingest drop zone ──────────────────────────────────────────────────────
+   Focusable so the scoped paste listener can receive a paste event without a
+   document-level handler hijacking every other textarea in the app. */
+
+.inspiration-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 132px;
+  padding: 24px;
+  margin-bottom: 20px;
+  background: var(--bg-card);
+  border: 2px dashed var(--border-primary);
+  border-radius: var(--radius-card, 12px);
+  text-align: center;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.inspiration-dropzone:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 2px;
+}
+
+.inspiration-dropzone.is-dragging {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-violet);
+}
+
+.inspiration-dropzone-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.inspiration-dropzone-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.inspiration-upload-btn {
+  margin-top: 4px;
+  padding: 8px 18px;
+  background: var(--accent-primary);
+  color: var(--text-primary);
+  border: none;
+  border-radius: var(--radius-md, 8px);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.inspiration-upload-btn:hover {
+  background: var(--accent-secondary);
+  box-shadow: var(--shadow-md);
+}
+
+/* ── Banners ───────────────────────────────────────────────────────────────── */
+
+.inspiration-banner {
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-md, 8px);
+  font-size: 13px;
+}
+
+.inspiration-banner.is-error {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #991b1b;
+}
+
+.inspiration-banner.is-notice {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-secondary);
+}
+
+/* ── Filter bar ────────────────────────────────────────────────────────────── */
+
+.inspiration-filter-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 14px 18px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-card, 12px);
+  box-shadow: var(--shadow-sm);
+  flex-wrap: wrap;
+}
+
+.inspiration-lane-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.inspiration-lane-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md, 8px);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.inspiration-lane-tab:hover {
+  background: var(--bg-card-hover);
+}
+
+.inspiration-lane-tab.active {
+  background: var(--accent-violet-glow);
+  border-color: var(--border-violet);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.inspiration-lane-count {
+  padding: 1px 6px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-pill, 100px);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.inspiration-filter-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.inspiration-search,
+.inspiration-sort {
+  padding: 8px 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md, 8px);
+  font-size: 13px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.inspiration-search {
+  min-width: 220px;
+}
+
+/* ── Count row + bulk bar ──────────────────────────────────────────────────── */
+
+.inspiration-count-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.inspiration-count-row .is-full {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.inspiration-purge-btn {
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md, 8px);
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.inspiration-purge-btn:hover {
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #991b1b;
+}
+
+.inspiration-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md, 8px);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.inspiration-bulk-bar button {
+  padding: 5px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md, 8px);
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.inspiration-bulk-bar button:hover {
+  background: var(--bg-card-hover);
+}
+
+/* ── Grid + cards ──────────────────────────────────────────────────────────
+   `contain` isolates paint/layout so decoding a base64 thumbnail cannot force a
+   recalculation across the whole grid. */
+
+.inspiration-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  contain: layout style;
+}
+
+.inspiration-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-card, 12px);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  contain: content;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.inspiration-card:hover {
+  border-color: var(--border-violet);
+  box-shadow: var(--shadow-md);
+}
+
+.inspiration-card.is-selected {
+  border-color: var(--accent-violet);
+  box-shadow: var(--shadow-glow);
+}
+
+.inspiration-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-secondary);
+}
+
+.inspiration-chip {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill, 100px);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* External is the only tone this page renders — every row here is external by
+   construction. The other tones live on the CreativeIQ reference panel. */
+.inspiration-chip.is-external {
+  background: var(--accent-violet-glow);
+  border: 1px solid var(--border-violet);
+  color: var(--accent-violet);
+}
+
+.inspiration-lane {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.inspiration-pin {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.inspiration-thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+}
+
+.inspiration-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.inspiration-thumb-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.inspiration-lowres {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  padding: 2px 8px;
+  background: rgba(30, 41, 59, 0.82);
+  border-radius: var(--radius-pill, 100px);
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.inspiration-card-body {
+  padding: 12px;
+  flex: 1;
+}
+
+.inspiration-advertiser {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.inspiration-longevity {
+  font-size: 12px;
+  color: var(--accent-violet);
+  margin-bottom: 8px;
+}
+
+.inspiration-snippet {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.inspiration-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.inspiration-tag {
+  padding: 2px 8px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-pill, 100px);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.inspiration-notes {
+  margin: 0;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.inspiration-card-actions {
+  display: flex;
+  gap: 4px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border-secondary);
+}
+
+.inspiration-card-actions button {
+  flex: 1;
+  padding: 6px 8px;
+  background: transparent;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md, 8px);
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.inspiration-card-actions button:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+/* ── Empty state ───────────────────────────────────────────────────────────── */
+
+.inspiration-empty {
+  padding: 60px 24px;
+  text-align: center;
+}
+
+.inspiration-empty h2 {
+  font-size: 18px;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.inspiration-empty p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* ── Modals ────────────────────────────────────────────────────────────────── */
+
+.inspiration-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.inspiration-modal {
+  width: 100%;
+  max-width: 460px;
+  padding: 24px;
+  background: var(--bg-card);
+  border-radius: var(--radius-card, 12px);
+  box-shadow: var(--shadow-lg);
+}
+
+.inspiration-modal h3 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.inspiration-modal label {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.inspiration-modal label span {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.inspiration-modal input,
+.inspiration-modal textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md, 8px);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  resize: vertical;
+}
+
+.inspiration-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.inspiration-modal-actions button {
+  padding: 8px 18px;
+  background: transparent;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md, 8px);
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.inspiration-modal-actions button.is-primary {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.inspiration-lightbox {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: var(--radius-md, 8px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .inspiration-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .inspiration-filter-controls {
+    flex-direction: column;
+  }
+
+  .inspiration-search {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .inspiration-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+  }
+
+  .inspiration-preamble {
+    padding: 12px 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inspiration-dropzone,
+  .inspiration-card,
+  .inspiration-lane-tab,
+  .inspiration-upload-btn,
+  .inspiration-card-actions button {
+    transition: none;
+  }
+}
+
+/* ── URL import row (lane d) ─────────────────────────────────────────────────
+   Server-side this lane is behind a flag; the row stays visible so the disabled
+   response can point the user at the screenshot lane instead of failing silently. */
+
+.inspiration-url-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.inspiration-url-input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md, 8px);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+.inspiration-url-input:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 1px;
+}
+
+.inspiration-url-btn {
+  padding: 9px 18px;
+  background: transparent;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md, 8px);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.inspiration-url-btn:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.inspiration-url-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .inspiration-url-row {
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inspiration-url-btn {
+    transition: none;
+  }
+}

@@ -31,6 +31,9 @@ import {
 import { getPublishData, getPublishIntent, clearPublishIntent } from '../services/publishStore';
 import { getScopedItem, setScopedItem, getScopedAccountId } from '../lib/scopedStorage';
 import { getBatch, markBatchPublished } from '../services/batchStore';
+import { checkNearDuplicates } from '../services/nearDuplicateCheck';
+import { fetchInspirationLibrary, type InspirationItem } from '../services/inspirationLibraryApi';
+import { formatSimilarity, type DuplicateFlag } from '../lib/nearDuplicate';
 import type { GeneratedAdPackage } from '../services/openaiApi';
 import { useAdAccount } from '../contexts/AdAccountContext';
 import { getBusinessTypeConfig, getCampaignIntentConfig } from '../lib/businessTypeConfig';
@@ -384,7 +387,7 @@ type PublishStep = 'select' | 'destination' | 'configure' | 'review';
 
 const AdPublisher = () => {
   const navigate = useNavigate();
-  const { accountBusinessType: businessType } = useAdAccount();
+  const { accountBusinessType: businessType, currentAccount } = useAdAccount();
   const btConfig = getBusinessTypeConfig(businessType);
 
   const renderCountRef = useRef(0);
@@ -410,6 +413,14 @@ const AdPublisher = () => {
   const [isLoadingAdSets, setIsLoadingAdSets] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
+
+  // Near-duplicate warning. Advisory only — it never blocks a publish (see lib/nearDuplicate.ts
+  // for why: the threshold is uncalibrated and false positives are structural for this ad
+  // format). Precomputed on the review step so the wait is hidden rather than added to the
+  // publish click.
+  const [duplicateFlags, setDuplicateFlags] = useState<DuplicateFlag[]>([]);
+  const [duplicateNoticeDismissed, setDuplicateNoticeDismissed] = useState(false);
+  const [inspirationRefs, setInspirationRefs] = useState<InspirationItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [visibleAdsCount, setVisibleAdsCount] = useState(MAX_VISIBLE_ADS);
 
@@ -655,6 +666,44 @@ const AdPublisher = () => {
     return adMetadata.filter(a => selectedIds.has(a.id));
   }, [adMetadata, selectedIds]);
 
+  // Load the account's external references once. Cheap (thumbnails only) and needed to know
+  // whether a near-duplicate scan is even applicable.
+  useEffect(() => {
+    const accountId = currentAccount?.ad_account_id;
+    if (!accountId) return;
+    let cancelled = false;
+    fetchInspirationLibrary(accountId, { sort: 'newest' })
+      .then(result => { if (!cancelled) setInspirationRefs(result.items); })
+      .catch(() => { if (!cancelled) setInspirationRefs([]); });
+    return () => { cancelled = true; };
+  }, [currentAccount?.ad_account_id]);
+
+  // Scan when the user reaches the review step, NOT on the publish click — embedding a batch
+  // takes seconds, and the wait belongs in the step the user is already reading.
+  useEffect(() => {
+    if (currentStep !== 'review' || selectedMetadata.length === 0 || inspirationRefs.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const withMedia = await loadMediaDataForPublish(selectedMetadata).catch(() => []);
+      if (cancelled) return;
+
+      const images = withMedia
+        .map((ad, index) => ({ index, imageUrl: (ad.mediaType === 'image' ? ad.imageUrl : '') ?? '' }))
+        .filter(entry => entry.imageUrl.startsWith('data:'));
+      if (images.length === 0) return;
+
+      const result = await checkNearDuplicates(images, inspirationRefs);
+      if (cancelled) return;
+      setDuplicateFlags(result.flags);
+      setDuplicateNoticeDismissed(false);
+    })();
+
+    return () => { cancelled = true; };
+  }, [currentStep, selectedMetadata, inspirationRefs]);
+
   // Country tag handlers
   const addCountry = useCallback((code: string) => {
     const upper = code.toUpperCase().trim();
@@ -849,8 +898,8 @@ const AdPublisher = () => {
     try {
       const result = await fetchCampaignsForPublish();
       setCampaigns(result || []);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load campaigns');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load campaigns');
     } finally {
       setIsLoadingCampaigns(false);
     }
@@ -863,8 +912,8 @@ const AdPublisher = () => {
     try {
       const result = await fetchAdSetsForPublish(campaignId);
       setAdSets(result || []);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load ad sets');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load ad sets');
     } finally {
       setIsLoadingAdSets(false);
     }
@@ -1016,8 +1065,8 @@ const AdPublisher = () => {
       } else {
         setError(result?.error || 'Failed to publish');
       }
-    } catch (err: any) {
-      setError(err?.message || 'Publish failed');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Publish failed');
     } finally {
       setIsPublishing(false);
     }
@@ -2201,6 +2250,48 @@ const AdPublisher = () => {
                   )}
                 </div>
               </div>
+
+              {duplicateFlags.length > 0 && !duplicateNoticeDismissed && (
+                <div className="duplicate-notice" role="status">
+                  <div className="duplicate-notice-head">
+                    <span aria-hidden="true">◇</span>
+                    <strong>
+                      {duplicateFlags.length} creative{duplicateFlags.length === 1 ? '' : 's'} closely
+                      resemble{duplicateFlags.length === 1 ? 's' : ''} an inspiration reference
+                    </strong>
+                    <button
+                      type="button"
+                      className="duplicate-notice-dismiss"
+                      onClick={() => setDuplicateNoticeDismissed(true)}
+                      aria-label="Dismiss similarity notice"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <p className="duplicate-notice-body">
+                    Publishing is not blocked. Worth a look before these go live under your brand —
+                    a close derivative of someone else&apos;s ad is a different thing from an ad
+                    built on the same construct.
+                  </p>
+                  <ul className="duplicate-notice-list">
+                    {duplicateFlags.map(flag => (
+                      <li key={`${flag.index}-${flag.referenceId}`}>
+                        {flag.referenceThumbnail && (
+                          <img
+                            src={`data:image/jpeg;base64,${flag.referenceThumbnail}`}
+                            alt=""
+                            loading="lazy"
+                          />
+                        )}
+                        <span>
+                          Ad {flag.index + 1} · {formatSimilarity(flag.similarity)} similar to{' '}
+                          {flag.advertiser || 'an external reference'}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               <button
                 className="publish-btn"

@@ -25,9 +25,9 @@
 
 import type {
   GeneratedAdPackage, CopyOption, GridCell, GeneratedImageResult,
-  AudienceType, ConceptType, AdType, ImageSize, ImageModel,
+  AudienceType, ConceptType, AdType, ImageSize, ImageModel, BlitzImageStrategy,
 } from './openaiApi';
-import type { FormatType } from '../lib/axisTags';
+import type { FormatType, GridShape, GridAngle, HookType } from '../lib/axisTags';
 import type { CampaignIntent } from '../types/organization';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -68,6 +68,14 @@ export interface BatchSessionContext {
   // Blitz grid
   generationMode?: 'single' | 'grid';
   gridFormat?: FormatType;
+  // Grid CONFIG, not just its output. Without these a refresh mid-Blitz restores the cells but
+  // loses the shape that produced them, so a reroll would silently rebuild a different grid —
+  // a callout matrix would come back as an angle x hook grid with no visible cause.
+  gridShape?: GridShape;
+  gridAngles?: GridAngle[];
+  gridHooks?: HookType[];
+  gridCallouts?: string[];
+  blitzImageStrategy?: BlitzImageStrategy;
   // The generated Angle × Hook copy matrix + which cells are kept, so the Blitz copy stage
   // survives a refresh (keptCellIds is the Set serialized to an array for storage).
   gridCells?: GridCell[] | null;

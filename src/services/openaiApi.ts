@@ -2,14 +2,19 @@
 console.log('🤖 openaiApi.ts loaded at', new Date().toISOString());
 
 // Import image cache for using captured reference images
-import { getTopHighQualityCachedImages, getCachedImage, storeImageFromUrl, getSemanticallySimilarImages, computeMissingEmbeddings, getAverageCVR } from './imageCache';
-import { isEmbeddingAvailable, embedText, embedMultimodal, pairwiseSimilarityMatrix, kMeansClustering, findOptimalK, cosineSimilarity } from './embeddingService';
+// Reference SELECTION now lives in services/referenceSet.ts — this module only needs the
+// direct cache reads that the analysis paths do.
+import { getCachedImage, storeImageFromUrl } from './imageCache';
+import { isEmbeddingAvailable, embedMultimodal, pairwiseSimilarityMatrix, kMeansClustering, findOptimalK, cosineSimilarity } from './embeddingService';
 import { getEmbedding, setEmbedding } from './embeddingStore';
 import { getAuthToken } from '../lib/authToken';
 import { getBusinessTypeConfig, getCampaignIntentConfig } from '../lib/businessTypeConfig';
 import { META_AD_POLICY_PROMPT, IMAGE_SAFETY_DIRECTIVE, POLICY_SANITIZE_PATTERNS } from './adPolicyGuard';
 import { buildAnalysisContextString, condensedCopyFor, healthScoreLine } from './analysisContext';
-import { isValidHook, isValidAngle, DEFAULT_GRID_ANGLES, DEFAULT_GRID_HOOKS, HOOKS, HOOK_PROMPT_MENU, HOOK_LABELS, type HookType, type AxisTag, type GridAngle, type FormatType } from '../lib/axisTags';
+import { isValidHook, isValidAngle, DEFAULT_GRID_ANGLES, DEFAULT_GRID_HOOKS, HOOKS, HOOK_PROMPT_MENU, HOOK_LABELS, slugifyCallout, type HookType, type AxisTag, type GridAngle, type FormatType } from '../lib/axisTags';
+import { buildReferenceBlock, type StyleReference } from '../lib/referenceProvenance';
+import { resolveReferenceSet, projectProductImages } from './referenceSet';
+import { mergeStyleDescriptors, isDescriptorCacheEnabled, isUsableDescriptor, type StyleDescriptor } from '../lib/styleDescriptor';
 
 // ─── OpenAI API Calls ───────────────────────────────────────────────────────
 // All OpenAI calls route through the backend proxy (/api/ai/*) so the API key
@@ -654,9 +659,16 @@ export interface AxisInsights {
   byAngle: AxisStat[];
   byHook: AxisStat[];
   byFormat: AxisStat[];
+  /**
+   * Per-avatar-callout performance. OPTIONAL and absent (not empty) when no ad in the window
+   * carried a callout — AxisInsights is embedded in the persisted ChannelAnalysisResult, so
+   * cached records predate this field entirely.
+   */
+  byCallout?: AxisStat[];
   winningAngle?: string;
   winningHook?: string;
   winningFormat?: string;
+  winningCallout?: string;
   taggedAdCount: number;
   untaggedAdCount: number;
 }
@@ -967,6 +979,12 @@ export interface GridCell {
   body: string;
   cta: string;
   rationale: string;
+  /**
+   * Avatar callout line for callout-matrix grids. When set, this is the text rendered ONTO
+   * the shared base image and the value that becomes the `c:` attribution axis. Absent for
+   * ordinary angle x hook grids.
+   */
+  callout?: string;
 }
 
 // (Hook descriptions live in HOOKS in axisTags.ts — single source of truth.)
@@ -3375,6 +3393,100 @@ Return JSON only:
  * Reuses the SAME analysis/inspiration context builders as generateCopyOptions so the
  * two paths never drift. Malformed cells are dropped (graceful partial grid).
  */
+/**
+ * Propose avatar callout lines for the callout matrix.
+ *
+ * The framework this implements is emphatic that the operator knows their avatars — this is
+ * a starting point, not an authority. The UI keeps the list editable and never requires
+ * generation. Routed through the SAME brand-voice, analysis-context and banned-phrase path as
+ * generateGridCopy so a callout cannot bypass guardrails that ordinary copy is held to.
+ */
+export async function generateAvatarCallouts(config: {
+  count?: number;
+  corePromise?: string;
+  audienceType: AudienceType;
+  analysisData: ChannelAnalysisResult | null;
+  productContext?: ProductContext;
+  brandProfile?: BrandVoiceProfile;
+  businessType?: import('../types/organization').BusinessType;
+  reasoningEffort?: ReasoningEffort;
+}): Promise<string[]> {
+  if (!isOpenAIConfigured()) {
+    throw new Error('AI API not configured. Please contact support.');
+  }
+
+  const count = Math.min(Math.max(config.count ?? 8, 1), 24);
+  const brandVoiceContext = buildBrandVoiceContextString(config.brandProfile);
+  const analysisContext = buildAnalysisContextString(config.analysisData, {
+    demoteObservedVoice: Boolean(brandVoiceContext),
+  });
+  const btConfig = getBusinessTypeConfig(config.businessType || 'ecommerce');
+
+  const systemPrompt = `You write avatar callout lines for direct-response image ads.
+
+A callout NAMES THE PERSON the ad is for, so the right reader self-selects in the first half
+second. The canonical example is a bare product photo captioned "Dads over 40 need this".
+
+HARD RULES:
+1. Six words maximum. Shorter is better. These are rendered large on an image.
+2. Name a PERSON or a SITUATION, never a benefit, feature or outcome.
+   GOOD: "Dads over 40", "Nurses on night shift", "Parents at weekend tournaments"
+   BAD: "Boost your energy", "Save 40% today", "Clinically proven formula"
+3. Make no claim of any kind. A callout identifies; it does not promise.
+4. Get specific. "Men" is useless. "Men over 45 who sit all day" is a callout.
+5. Vary the AXIS of specificity across the set — age, role, life stage, routine, pain moment —
+   so the batch tests genuinely different segments rather than one segment reworded.
+6. ${BANNED_PHRASES_PROMPT}
+7. ${META_AD_POLICY_PROMPT}
+
+BUSINESS CONTEXT:
+${btConfig.aiConversionLanguage}
+
+Return ONLY JSON: { "callouts": ["...", "..."] }`;
+
+  const userParts: string[] = [`Write ${count} distinct avatar callout lines.`];
+  if (config.corePromise) userParts.push(`\nCORE PROMISE: ${config.corePromise}`);
+  if (config.productContext) {
+    userParts.push(`\nPRODUCT: ${config.productContext.name}${config.productContext.author ? ` by ${config.productContext.author}` : ''}`);
+    if (config.productContext.description) userParts.push(config.productContext.description);
+  }
+  userParts.push(`\nAUDIENCE STAGE: ${config.audienceType}`);
+  if (brandVoiceContext) userParts.push(`\n${brandVoiceContext}`);
+  if (analysisContext) userParts.push(`\n${analysisContext}`);
+
+  const content = await callOpenAI(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userParts.join('\n') },
+    ],
+    {
+      maxTokens: 1500,
+      reasoningEffort: config.reasoningEffort ?? DEFAULT_REASONING_EFFORT,
+      responseFormat: { type: 'json_object' },
+    }
+  );
+
+  const parsed = JSON.parse(content) as { callouts?: unknown };
+  const raw = Array.isArray(parsed.callouts) ? parsed.callouts : [];
+
+  // Coerce hard: this text is rendered onto a creative and slugged into an ad name, so an
+  // over-long or empty entry is a defect downstream rather than here.
+  const seen = new Set<string>();
+  const callouts: string[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== 'string') continue;
+    const text = entry.trim().replace(/\s+/g, ' ');
+    if (!text || text.length > 60) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    callouts.push(text);
+    if (callouts.length >= count) break;
+  }
+
+  return callouts;
+}
+
 export async function generateGridCopy(config: {
   corePromise: string;
   angles: GridAngle[];
@@ -3594,6 +3706,41 @@ export function blitzStrategyImageCounts(
  * test variable. The pool is SLOT-ALIGNED (one entry per rendered slot, `null` where a slot's
  * render failed), so a failed slot maps cleanly to packages with no image + `imageError`.
  */
+/**
+ * Expand one generated cell into a callout matrix: same angle, same hook, same body copy —
+ * only the avatar callout changes.
+ *
+ * Copy is generated ONCE and shared deliberately. The experiment being run is "which person
+ * do I name", so the body copy has to be a constant; regenerating it per callout would
+ * confound the variable with copy variance and make the result unreadable.
+ */
+export function expandCalloutMatrix(base: GridCell, callouts: string[]): GridCell[] {
+  const seen = new Set<string>();
+  const cells: GridCell[] = [];
+
+  for (const raw of callouts) {
+    const text = raw.trim();
+    if (!text) continue;
+    // Dedupe on the SLUG, not the text: two callouts that slug identically would collide into
+    // one attribution bucket and make the axis report wrong.
+    const slug = slugifyCallout(text);
+    if (!slug || seen.has(slug)) continue;
+    seen.add(slug);
+
+    cells.push({
+      ...base,
+      id: `${base.id}_c_${slug}`,
+      // The callout becomes the headline: it is what gets rendered onto the creative and what
+      // the reader actually sees first.
+      headline: text,
+      callout: text,
+      hook: 'callout',
+    });
+  }
+
+  return cells;
+}
+
 export function buildGridPackages(config: {
   cells: GridCell[];
   images: (GeneratedImageResult | null)[];   // slot-aligned pool; null = that slot's render failed
@@ -3620,7 +3767,13 @@ export function buildGridPackages(config: {
       conceptType: cell.angle,
       images: img ? [img] : [],
       headlineHooks: [cell.hook],
-      axisTag: { angle: cell.angle, hook: cell.hook, ...(config.format ? { format: config.format } : {}) },
+      axisTag: {
+        angle: cell.angle,
+        hook: cell.hook,
+        ...(config.format ? { format: config.format } : {}),
+        // Slugged here so the tag is already wire-safe by the time it reaches buildAdName.
+        ...(cell.callout ? { callout: slugifyCallout(cell.callout) } : {}),
+      },
       corePromise: config.corePromise,
       copy: {
         headlines: [cell.headline],
@@ -3969,40 +4122,104 @@ Return JSON only:
   throw new Error(`Failed to generate a unique ${typeLabel} after ${MAX_REGEN_ATTEMPTS} attempts`);
 }
 
-/**
- * Build conversion context strings for reference images.
- * Identifies highest-converting and highest-CVR images for Gemini prompt.
- */
-function buildRefConversionContext(cachedImages: import('./imageCache').CachedImage[]): string[] {
-  if (cachedImages.length === 0) return [];
 
-  // Find the best performers
-  let highestConvIdx = 0;
-  let highestCVRIdx = 0;
-  for (let i = 1; i < cachedImages.length; i++) {
-    if ((cachedImages[i].conversions ?? 0) > (cachedImages[highestConvIdx].conversions ?? 0)) {
-      highestConvIdx = i;
-    }
-    if ((cachedImages[i].conversionRate ?? 0) > (cachedImages[highestCVRIdx].conversionRate ?? 0)) {
-      highestCVRIdx = i;
+/**
+ * The reference payload every image-generation path shares.
+ *
+ * `styleRefs` carries provenance, so the prompt builders can describe each image honestly
+ * instead of assuming every reference is a proven winner. There is deliberately no
+ * `refConversionContext` field: it is derived from `styleRefs` at the point of use, and
+ * storing it alongside would be two sources of truth for one fact.
+ */
+export interface PrecomputedRefs {
+  styleRefs: StyleReference[];
+  productImages: Array<{ data: string; mimeType: string }>;
+  refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
+}
+
+/**
+ * Resolve + describe the reference set for a generation request.
+ *
+ * Previously duplicated three times (once per engine, once on the batch path) and already
+ * drifted — only the batch copy did embedding-based selection, so a reroll pulled a different
+ * reference set than the batch it belonged to. `resolveReferenceSet` is now the only selector.
+ */
+async function precomputeReferenceSet(config: {
+  productContext?: ProductContext;
+  audienceType: AudienceType;
+  externalRefs?: StyleReference[];
+  /** Cached style descriptors by reference id — Phase 7 fast path, flagged off by default. */
+  descriptorsById?: Record<string, StyleDescriptor>;
+  computeMissingEmbeddings?: boolean;
+  onProgress?: (message: string) => void;
+}): Promise<PrecomputedRefs> {
+  const set = await resolveReferenceSet({
+    productContext: config.productContext,
+    audienceType: config.audienceType,
+    externalRefs: config.externalRefs,
+    computeMissingEmbeddings: config.computeMissingEmbeddings,
+    descriptorsById: config.descriptorsById,
+  });
+
+  // FAST PATH (flagged off by default). Substituting cached per-image descriptors for the live
+  // joint vision call is NOT a pure optimisation: analyzeReferenceImages describes what the
+  // whole set has in common, and merging per-image descriptors only approximates that. It is
+  // taken only when EVERY reference in the set has a usable cached descriptor — a partial
+  // cache would silently narrow the style block while appearing to work.
+  if (isDescriptorCacheEnabled() && set.styleRefs.length > 0) {
+    const allCached = set.cachedDescriptors.every(d => d !== null);
+    if (allCached) {
+      const merged = mergeStyleDescriptors(set.cachedDescriptors as StyleDescriptor[]);
+      if (merged) {
+        console.log(`🎨 Style descriptor cache hit (${set.styleRefs.length} refs) — skipping the vision call`);
+        return { styleRefs: set.styleRefs, productImages: set.productImages, refAnalysis: merged };
+      }
     }
   }
 
-  return cachedImages.map((img, i) => {
-    const conv = img.conversions ?? 0;
-    const cvr = img.conversionRate ?? 0;
-    const labels: string[] = [];
-    if (i === highestConvIdx && conv > 0) labels.push('HIGHEST CONVERTING');
-    if (i === highestCVRIdx && cvr > 0 && highestCVRIdx !== highestConvIdx) labels.push('HIGHEST CVR');
-    const label = labels.length > 0 ? ` — ${labels.join(', ')}` : '';
-    return `STYLE REFERENCE ${i + 1}: ${conv} conversion${conv !== 1 ? 's' : ''} (${cvr.toFixed(1)}% CVR)${label}`;
-  });
+  config.onProgress?.('ConversionIQ™ analyzing reference styles...');
+  // Style analysis runs on the style references ONLY. Product mockups are identity
+  // references, not style sources: blending them in pushed the model to restyle the
+  // product instead of reproducing it 1:1.
+  const refAnalysis = await analyzeReferenceImages(set.styleRefs);
+
+  return { styleRefs: set.styleRefs, productImages: set.productImages, refAnalysis };
+}
+
+/**
+ * The per-reference performance lines for a set. Only own-account winners appear — uploads and
+ * external captures have no conversion figures, and a non-empty result is exactly the predicate
+ * "this request may use measured wording".
+ */
+function refConversionContextFor(styleRefs: StyleReference[]): string[] {
+  return buildReferenceBlock('own_winner', styleRefs.filter(r => r.source === 'own_winner'));
 }
 
 /**
  * Analyze reference images to extract specific visual characteristics
  * This enables precise style replication in generated images
  */
+/**
+ * Describe ONE image's visual style, for caching against an inspiration-library row.
+ *
+ * Exported for the ingest path so the vision call is paid once per image instead of once per
+ * generation. Note this is a per-image descriptor: `analyzeReferenceImages` describes a SET
+ * jointly, and mergeStyleDescriptors only approximates that — which is why the fast path that
+ * consumes these is behind a flag. Returns null on any failure; the caller stores nothing and
+ * generation falls back to the live joint call.
+ */
+export async function describeReferenceImage(
+  image: { data: string; mimeType: string }
+): Promise<StyleDescriptor | null> {
+  try {
+    const descriptor = await analyzeReferenceImages([image]);
+    return isUsableDescriptor(descriptor) ? descriptor : null;
+  } catch (error: unknown) {
+    console.warn('Could not describe reference image:', error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
 async function analyzeReferenceImages(
   referenceImages: Array<{ data: string; mimeType: string }>
 ): Promise<{
@@ -4279,15 +4496,18 @@ export async function generateAdImage(config: {
   similarityLevel?: number; // 0 = identical to references, 100 = completely different
   imageSize?: ImageSize; // Aspect ratio for generated images
   productContext?: ProductContext;
+  /**
+   * External inspiration references (competitor / market creative), already loaded with pixels.
+   * They fill only the reference slots the account's own winners left empty, and the prompt
+   * builders describe them as unproven — see lib/referenceProvenance.ts.
+   */
+  externalRefs?: StyleReference[];
+  /** Cached style descriptors by reference id — Phase 7 fast path, flagged off by default. */
+  descriptorsById?: Record<string, StyleDescriptor>;
   // Pre-computed reference data to avoid redundant API calls during parallel generation.
   // Style refs (winning ads) and product mockups (identity-locked) are kept SEPARATE so
   // each can be labeled for its distinct role in the generation request.
-  precomputedRefs?: {
-    styleImages: Array<{ data: string; mimeType: string }>;
-    productImages: Array<{ data: string; mimeType: string }>;
-    refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
-    refConversionContext?: string[];
-  };
+  precomputedRefs?: PrecomputedRefs;
   // Ad Library inspirations for thematic direction
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
   // Headline to render directly into the generated image
@@ -4324,7 +4544,7 @@ export async function generateAdImage(config: {
   // better. Inspector failures are non-fatal — the image is returned unscored.
   const applyFidelityGate = async (engine: ImageModel, first: GeneratedImageResult): Promise<GeneratedImageResult> => {
     const productImages = config.precomputedRefs?.productImages
-      ?? (config.productContext?.productImages ?? []).slice(0, 3).map(img => ({ data: img.base64Data, mimeType: img.mimeType }));
+      ?? projectProductImages(config.productContext);
     if (productImages.length === 0) return first;
 
     const generated = dataUrlToInline(first.imageUrl);
@@ -4391,12 +4611,7 @@ async function generateAdImageWithGemini(config: {
   imageSize?: ImageSize; // Aspect ratio for generated images
   productContext?: ProductContext;
   // Pre-computed reference data to avoid redundant API calls when generating in parallel
-  precomputedRefs?: {
-    styleImages: Array<{ data: string; mimeType: string }>;
-    productImages: Array<{ data: string; mimeType: string }>;
-    refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
-    refConversionContext?: string[];
-  };
+  precomputedRefs?: PrecomputedRefs;
   // Ad Library inspirations for thematic direction
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
   // Headline to render directly into the generated image
@@ -4417,56 +4632,19 @@ async function generateAdImageWithGemini(config: {
   const topAds = config.analysisData?.topAds || [];
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
 
-  let styleImages: Array<{ data: string; mimeType: string }>;
-  let productImages: Array<{ data: string; mimeType: string }>;
-  let refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
-  let refConversionContext: string[] = [];
+  // Pre-computed on the batch path so N variations share one selection + one vision call.
+  // On a single-image reroll there is nothing to share, so resolve here — but skip embedding
+  // computation, since the batch this reroll belongs to already populated the store and
+  // recomputing would add n sequential network calls to an interactive action.
+  const refs: PrecomputedRefs = config.precomputedRefs
+    ?? await precomputeReferenceSet({ ...config, computeMissingEmbeddings: false });
 
-  if (config.precomputedRefs) {
-    // Use pre-computed references (avoids redundant API calls during parallel generation)
-    styleImages = config.precomputedRefs.styleImages;
-    productImages = config.precomputedRefs.productImages;
-    refAnalysis = config.precomputedRefs.refAnalysis;
-    if (config.precomputedRefs.refConversionContext) {
-      refConversionContext = config.precomputedRefs.refConversionContext;
-    }
-    console.log(`📸 Using pre-computed reference data (${styleImages.length} style + ${productImages.length} product images)`);
-  } else {
-    // Compute references on-the-fly (single image regeneration)
-    const MIN_QUALITY_SCORE = 60;
-    const cachedImages = getTopHighQualityCachedImages(3, MIN_QUALITY_SCORE);
-
-    console.log(`📸 Found ${cachedImages.length} high-quality reference images (quality >= ${MIN_QUALITY_SCORE})`);
-
-    styleImages = cachedImages.map(cached => ({
-      data: cached.base64Data,
-      mimeType: cached.mimeType
-    }));
-
-    // Build conversion context for each reference image
-    refConversionContext = buildRefConversionContext(cachedImages);
-
-    productImages = (config.productContext?.productImages ?? []).slice(0, 3).map(img => ({
-      data: img.base64Data,
-      mimeType: img.mimeType,
-    }));
-    if (productImages.length > 0) {
-      console.log(`📦 Added ${productImages.length} product mockup images as identity references`);
-    }
-
-    if (cachedImages.length > 0) {
-      console.log('📸 Using high-quality reference images:',
-        cachedImages.map(c => `${c.width}x${c.height} (Q:${c.qualityScore}, ${c.conversions ?? '?'} conv, ${c.conversionRate?.toFixed(1)}%)`).join(', '));
-    } else {
-      console.log('⚠️ No high-quality cached images available. Sync Meta Ads to auto-load converting ad references.');
-    }
-
-    // Style analysis runs on the winning-ad references ONLY. Including product mockups
-    // here blended the mockup's own design into the "copy this style" descriptors, which
-    // pushed the model to restyle the product instead of reproducing it 1:1.
-    refAnalysis = await analyzeReferenceImages(styleImages);
-    console.log('🎨 Reference analysis:', refAnalysis);
-  }
+  // StyleReference is structurally a { data, mimeType } — the inline-attachment code below
+  // reads it directly, while the prompt builders read the provenance fields.
+  const styleImages = refs.styleRefs;
+  const productImages = refs.productImages;
+  const refAnalysis = refs.refAnalysis;
+  const refConversionContext = refConversionContextFor(refs.styleRefs);
 
   // Build a detailed prompt for Gemini.
   // When product mockups are attached, the task is framed as PRODUCT PLACEMENT (take the
@@ -4570,11 +4748,22 @@ Explore fresh visual directions while maintaining professional quality.`,
     );
   }
 
-  // If we have reference images, add explicit note about them
+  // If we have reference images, add explicit note about them.
+  //
+  // `refConversionContext` is built from own-account winners ONLY, so a non-empty list is
+  // exactly the predicate "at least one reference has measured delivery data behind it".
+  // The PROVEN CONVERSIONS claim must be gated on THAT, not on how many images are attached —
+  // gating on the count told cold-start accounts that their uploads and competitor captures
+  // were proven winners.
+  const hasMeasuredRefs = refConversionContext.length > 0;
   if (styleImages.length + productImages.length > 0) {
     promptParts.push(
       `I have attached ${styleImages.length + productImages.length} reference images, each labeled with its role immediately before it:`,
-      styleImages.length > 0 ? `- ${styleImages.length} labeled [STYLE REFERENCE]: ads with PROVEN CONVERSIONS — emulate their visual style for the scene (composition, lighting, color, mood), prioritizing the highest-converting image. Do NOT copy their products, text, or subjects.` : '',
+      styleImages.length > 0
+        ? (hasMeasuredRefs
+            ? `- ${styleImages.length} labeled [STYLE REFERENCE]: ads with PROVEN CONVERSIONS — emulate their visual style for the scene (composition, lighting, color, mood), prioritizing the highest-converting image. Do NOT copy their products, text, or subjects.`
+            : `- ${styleImages.length} labeled [STYLE REFERENCE]: reference ads with NO conversion data for this account — emulate their construction and visual style for the scene (composition, lighting, color, mood). They are UNPROVEN here: treat them as a hypothesis to test, not a formula that already works. Do NOT copy their products, text, or subjects.`)
+        : '',
       productImages.length > 0 ? `- ${productImages.length} labeled [PRODUCT MOCKUP]: the exact product that must appear in the ad, reproduced 1:1.` : '',
     );
 
@@ -4587,7 +4776,9 @@ Explore fresh visual directions while maintaining professional quality.`,
     promptParts.push(
       '',
       styleImages.length > 0
-        ? 'Study the [STYLE REFERENCE] images and match the visual style of the highest-converting ones for the scene.'
+        ? (hasMeasuredRefs
+            ? 'Study the [STYLE REFERENCE] images and match the visual style of the highest-converting ones for the scene.'
+            : 'Study the [STYLE REFERENCE] images and match their visual construction for the scene. None of them has performance data for this account, so there is no highest-converting one to prioritize.')
         : 'Study the [PRODUCT MOCKUP] image(s) carefully — every design detail matters.',
       ''
     );
@@ -5026,12 +5217,7 @@ async function generateAdImageWithGptImage(config: {
   similarityLevel?: number;
   imageSize?: ImageSize;
   productContext?: ProductContext;
-  precomputedRefs?: {
-    styleImages: Array<{ data: string; mimeType: string }>;
-    productImages: Array<{ data: string; mimeType: string }>;
-    refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
-    refConversionContext?: string[];
-  };
+  precomputedRefs?: PrecomputedRefs;
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
   headlineText?: string;
   businessType?: import('../types/organization').BusinessType;
@@ -5048,34 +5234,15 @@ async function generateAdImageWithGptImage(config: {
   const topAds = config.analysisData?.topAds || [];
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
 
-  let styleImages: Array<{ data: string; mimeType: string }>;
-  let productImages: Array<{ data: string; mimeType: string }>;
-  let refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
-  let refConversionContext: string[] = [];
+  // Identical resolution to the Gemini path — see generateAdImageWithGemini for why the
+  // reroll path skips embedding computation.
+  const refs: PrecomputedRefs = config.precomputedRefs
+    ?? await precomputeReferenceSet({ ...config, computeMissingEmbeddings: false });
 
-  if (config.precomputedRefs) {
-    styleImages = config.precomputedRefs.styleImages;
-    productImages = config.precomputedRefs.productImages;
-    refAnalysis = config.precomputedRefs.refAnalysis;
-    if (config.precomputedRefs.refConversionContext) {
-      refConversionContext = config.precomputedRefs.refConversionContext;
-    }
-    console.log(`📸 Using pre-computed reference data (${styleImages.length} style + ${productImages.length} product images)`);
-  } else {
-    const MIN_QUALITY_SCORE = 60;
-    const cachedImages = getTopHighQualityCachedImages(3, MIN_QUALITY_SCORE);
-    styleImages = cachedImages.map(c => ({ data: c.base64Data, mimeType: c.mimeType }));
-    refConversionContext = buildRefConversionContext(cachedImages);
-
-    productImages = (config.productContext?.productImages ?? []).slice(0, 3).map(img => ({
-      data: img.base64Data,
-      mimeType: img.mimeType,
-    }));
-
-    // Style analysis on winning-ad references ONLY — mockups must not bleed into the
-    // style descriptors (see generateAdImageWithGemini for the full rationale)
-    refAnalysis = await analyzeReferenceImages(styleImages);
-  }
+  const styleImages = refs.styleRefs;
+  const productImages = refs.productImages;
+  const refAnalysis = refs.refAnalysis;
+  const refConversionContext = refConversionContextFor(refs.styleRefs);
 
   // Build prompt — same structure as the Gemini path so outputs are comparable.
   // With product mockups attached, frame the task as product placement (see Gemini path).
@@ -5115,12 +5282,17 @@ USE: color palette ${refAnalysis.colorPalette}; mood ${refAnalysis.mood}; visual
 
   promptParts.push(`CREATIVE DIRECTION: ${getSimilarityInstructions()}`, '');
 
+  // See the note in the Gemini builder: a non-empty refConversionContext is the predicate
+  // "at least one reference is an own-account winner with measured delivery data".
+  const hasMeasuredRefs = refConversionContext.length > 0;
   if (styleImages.length + productImages.length > 0) {
     const productImgCount = productImages.length;
     const adRefCount = styleImages.length;
     promptParts.push(`I have attached ${adRefCount + productImgCount} REFERENCE IMAGES in this exact order:`);
     if (adRefCount > 0) {
-      promptParts.push(`  • Images 1–${adRefCount}: STYLE references from ads with PROVEN CONVERSIONS. Their visual style (composition, color, lighting, mood) is what to emulate — subject to the creative direction setting above. Do NOT copy their products, text, or subjects.`);
+      promptParts.push(hasMeasuredRefs
+        ? `  • Images 1–${adRefCount}: STYLE references from ads with PROVEN CONVERSIONS. Their visual style (composition, color, lighting, mood) is what to emulate — subject to the creative direction setting above. Do NOT copy their products, text, or subjects.`
+        : `  • Images 1–${adRefCount}: STYLE references with NO conversion data for this account. Their visual construction (composition, color, lighting, mood) is what to emulate — subject to the creative direction setting above. They are UNPROVEN here: treat them as a hypothesis to test, not a formula that already works. Do NOT copy their products, text, or subjects.`);
     }
     if (productImgCount > 0) {
       const start = adRefCount + 1;
@@ -6003,6 +6175,15 @@ export async function regenerateAllImages(config: {
   audienceType: AudienceType;
   analysisData: ChannelAnalysisResult | null;
   variationCount: number;
+  /**
+   * External inspiration references (competitor / market creative), already loaded with pixels.
+   * They fill only the reference slots the account's own winners left empty, and the prompt
+   * builders describe them as unproven — see lib/referenceProvenance.ts.
+   */
+  externalRefs?: StyleReference[];
+  /** Cached style descriptors by reference id — Phase 7 fast path, flagged off by default. */
+  descriptorsById?: Record<string, StyleDescriptor>;
+
   similarityLevel?: number;
   imageSize?: ImageSize;
   productContext?: ProductContext;
@@ -6021,12 +6202,7 @@ export async function regenerateAllImages(config: {
   // Pre-compute reference images and analysis ONCE before parallel generation.
   // Style refs (winning ads) and product mockups stay separate so the engines can label
   // each image with its role — style-to-emulate vs identity-locked product.
-  let precomputedRefs: {
-    styleImages: Array<{ data: string; mimeType: string }>;
-    productImages: Array<{ data: string; mimeType: string }>;
-    refAnalysis: Awaited<ReturnType<typeof analyzeReferenceImages>>;
-    refConversionContext?: string[];
-  } | undefined;
+  let precomputedRefs: PrecomputedRefs | undefined;
 
   // Pre-compute reference data when refAnalysis is needed.
   // - Gemini path always uses refAnalysis (Gemini-2.5-flash text analysis of references)
@@ -6034,63 +6210,8 @@ export async function regenerateAllImages(config: {
   const needsPrecompute = (imageModel === 'openai' && isOpenAIConfigured())
     || (imageModel === 'gemini' && isGeminiConfigured());
   if (needsPrecompute) {
-    const MIN_QUALITY_SCORE = 60;
-    let cachedImages;
-
-    // Try semantic reference selection first (embedding-based)
-    if (isEmbeddingAvailable()) {
-      try {
-        // Ensure embeddings are computed for cached images
-        await computeMissingEmbeddings();
-
-        // Build query text from generation context
-        const queryParts: string[] = [];
-        if (config.productContext?.name) queryParts.push(`Product: ${config.productContext.name}`);
-        if (config.productContext?.author) queryParts.push(`by ${config.productContext.author}`);
-        if (config.productContext?.description) queryParts.push(config.productContext.description.slice(0, 200));
-        queryParts.push(`Audience: ${config.audienceType}`);
-        const queryText = queryParts.join('. ');
-
-        const queryEmbedding = await embedText(queryText, 'SEMANTIC_SIMILARITY');
-        if (queryEmbedding) {
-          const avgCVR = getAverageCVR();
-          const semanticImages = await getSemanticallySimilarImages(queryEmbedding, 3, MIN_QUALITY_SCORE, avgCVR);
-          if (semanticImages.length >= 2) {
-            cachedImages = semanticImages;
-            console.log(`🧬 Semantic reference selection: ${semanticImages.length} images (similarity-ranked)`);
-          }
-        }
-      } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : 'Unknown error';
-        console.warn('🧬 Semantic reference selection failed, falling back to CVR-based:', msg);
-      }
-    }
-
-    // Fallback to existing CVR-based selection
-    if (!cachedImages) {
-      cachedImages = getTopHighQualityCachedImages(3, MIN_QUALITY_SCORE);
-    }
-
-    // Build conversion context for Gemini prompt
-    const refConversionContext = buildRefConversionContext(cachedImages);
-
-    const styleImages: Array<{ data: string; mimeType: string }> = cachedImages.map(cached => ({
-      data: cached.base64Data,
-      mimeType: cached.mimeType
-    }));
-
-    const productImages: Array<{ data: string; mimeType: string }> =
-      (config.productContext?.productImages ?? []).slice(0, 3).map(img => ({
-        data: img.base64Data,
-        mimeType: img.mimeType,
-      }));
-
-    console.log(`📸 Pre-computing reference analysis for ${styleImages.length} style image(s) (+ ${productImages.length} product mockup(s), shared across ${config.variationCount} variations)`);
-    config.onProgress?.('ConversionIQ™ analyzing reference styles...');
-    // Style analysis runs on winning-ad references ONLY — product mockups are identity
-    // references, not style sources, and must not bleed into the style descriptors
-    const refAnalysis = await analyzeReferenceImages(styleImages);
-    precomputedRefs = { styleImages, productImages, refAnalysis, refConversionContext };
+    // Resolved ONCE and shared across every variation: one selection, one vision call.
+    precomputedRefs = await precomputeReferenceSet(config);
   }
 
   // Generate images with concurrency limit of 2 to prevent memory exhaustion
@@ -6113,6 +6234,8 @@ export async function regenerateAllImages(config: {
         similarityLevel: config.similarityLevel,
         imageSize,
         productContext: config.productContext,
+        externalRefs: config.externalRefs,
+        descriptorsById: config.descriptorsById,
         precomputedRefs,
         adLibraryInspirations: config.adLibraryInspirations,
         headlineText,
@@ -6128,7 +6251,7 @@ export async function regenerateAllImages(config: {
 
   // Free reference image memory now that all images are generated
   if (precomputedRefs) {
-    precomputedRefs.styleImages.length = 0;
+    precomputedRefs.styleRefs.length = 0;
     precomputedRefs.productImages.length = 0;
     precomputedRefs = undefined;
   }
@@ -6192,6 +6315,14 @@ export async function generateAdPackage(config: {
   imageSize?: ImageSize;
   // Product context for accurate product references
   productContext?: ProductContext;
+  /**
+   * External inspiration references (competitor / market creative), already loaded with pixels.
+   * They fill only the reference slots the account's own winners left empty, and the prompt
+   * builders describe them as unproven — see lib/referenceProvenance.ts.
+   */
+  externalRefs?: StyleReference[];
+  /** Cached style descriptors by reference id — Phase 7 fast path, flagged off by default. */
+  descriptorsById?: Record<string, StyleDescriptor>;
   // Ad Library inspirations for competitor/cross-industry reference
   adLibraryInspirations?: import('../types').AdLibraryInspiration[];
   // Headlines to render directly into images, rotated across variations
@@ -6250,6 +6381,8 @@ export async function generateAdPackage(config: {
       similarityLevel: config.similarityLevel,
       imageSize: config.imageSize,
       productContext: config.productContext,
+      externalRefs: config.externalRefs,
+      descriptorsById: config.descriptorsById,
       adLibraryInspirations: config.adLibraryInspirations,
       imageHeadlines: config.imageHeadlines,
       onProgress: config.onProgress,
