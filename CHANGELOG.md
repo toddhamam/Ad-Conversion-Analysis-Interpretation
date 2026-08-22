@@ -1,5 +1,57 @@
 # Changelog
 
+## 2026-08-22 — Inspiration Library: external creative as CreativeIQ™ style references, with honest provenance
+
+### What
+CreativeIQ could only steer image generation from **the account's own converting ads**. A brand-new ad account therefore had zero visual reference material, so the highest-leverage input to generation was simply absent at the exact moment a new customer forms their first impression — and an established brand had no way to bring fresh outside inspiration in at all.
+
+The blocker wasn't ingest, it was **honesty**. Every reference the pipeline knew about was assumed measured: the prompt told the model its references were "ads with PROVEN CONVERSIONS", gated only on *how many images were attached*. Pour competitor screenshots into that and a cold-start account gets told its borrowed material is a proven winner. So the provenance model had to land before the ingest did.
+
+This release adds the **Inspiration Library** (`/inspiration`): externally-sourced creative, ingested four ways, fed to Gemini as real style references, and framed throughout as what it is — unproven, with longevity as the only available proof signal.
+
+| Reference source | Evidence | What the prompt may claim |
+|---|---|---|
+| `own_winner` — this account's ad | `MEASURED` | Conversions and CVR, verbatim as before |
+| `own_upload` — operator brand asset | `VALIDATED` | Brand truth; explicitly *no* performance data |
+| `external` — competitor / market | `HYPOTHESIS` | Advertiser and run length only. Never a conversion figure |
+
+### Added
+- **`src/lib/referenceProvenance.ts`** — the visual provenance model, and the sibling of `analysisMode.ts` (ADR #19). `ReferenceSource` is the **one persisted fact**; evidence level, prompt wording, UI badge and whether performance numbers may be printed are all *derived at the point of use*. Shares `EvidenceLevel` with the copy layer so there is one vocabulary, not two — the module header states why the two models describe different artefacts and must not be merged.
+- **`/inspiration` route** (`InspirationLibrary.tsx`) — browse, filter by lane, tag, pin, search, bulk-delete and **purge** external references. The provenance statement is the first thing on the page, deliberately.
+- **Four ingest lanes.** Ad Library capture-with-image (reuses the existing `/api/meta/image-fetch` allowlist, so **no new SSRF surface**); screenshot paste/drop; bulk image and **PDF deck** upload; and arbitrary-URL import **behind `ENABLE_URL_IMPORT`, off by default**.
+- **Migration `022_inspiration_library.sql`** — per-ad-account, separate from `swipe_library_items` by design. There is deliberately **no cvr/cpa/conversions column**: competitor material has no place to hold a number that would let it be ranked as if it were measured. The unique constraint is explicitly named, because migration 017's generated name was truncated and its own `DROP IF EXISTS` silently no-op'd.
+- **`api/_lib/inspiration-handlers.ts`** + 7 dispatcher routes. In `api/_lib/`, so Vercel stays at **11/12 functions**.
+- **`api/_lib/url-guard.ts`** — SSRF defence for the one endpoint that fetches a user-chosen host. DNS resolved and vetted before connecting, IPv4/IPv6 blocklists including the cloud-metadata endpoint, **IPv4-mapped IPv6 unwrapped and re-checked** (without which every v4 rule is bypassed by writing the address in v6 form), per-hop redirect re-validation, magic-byte verification, streaming byte cap, and deliberately generic errors so it cannot become a blind-SSRF oracle.
+- **Avatar callout matrix** — a second grid *shape*: one angle, hook pinned to `callout`, N avatar callout lines ("Dads over 40 need this"). Generates **one** base image and composites each callout with the existing Canvas renderer, so the whole batch costs **1 image credit** and every variant is pixel-identical below the callout band — which is what makes the callout the only variable. `AxisTag` gains `callout`, `axisAnalytics` gains `byCallout`.
+- **Pre-publish near-duplicate warning** — embeds the creatives about to go live against the references that inspired them. Advisory only, never blocking: the threshold is uncalibrated and false positives are structural for this ad format (a product on a flat background with one line of text is *literally* the construct being reproduced). Logs every max similarity so it can be calibrated from real data.
+- **131 new tests** (71 → 225), including byte-identity guards on the observed prompt path and a wire-level test asserting an external-only request never contains `PROVEN CONVERSIONS`, `CONVERSION PERFORMANCE DATA` or `% CVR`.
+
+### Fixed
+- **Operator-uploaded reference images never worked, and were then deleted.** `uploadBrandImage` wrote no `qualityScore`/`width`, so generation's ≥60 filter never selected them — and `clearLegacyCache` deletes exactly those entries on every Meta Ads sync. The "upload images manually" affordance in the CreativeIQ empty state was a dead end that also destroyed the uploads. Now scored properly, tagged `own_upload`, and given reserved eviction slots instead of the **fabricated 10% conversion rate** that previously let them outrank real winners.
+- **Single-image rerolls used a different reference set than their siblings.** Reference selection was duplicated three times and only the batch copy did embedding-based ranking, so a reroll silently pulled a different set than the batch it was meant to match.
+- **`handleSnapshotImages` had no `AbortController`** — the only outbound fetch without one. Acceptable for a decorative preview; not once it backs a save action.
+- Three `catch (err: any)` in `AdPublisher.tsx`, against the explicit CLAUDE.md rule.
+
+### Changed
+- **The "PROVEN CONVERSIONS" claim is gated on evidence, not image count.** When no measured reference is present, both engines now say the references are `UNPROVEN here` and a `hypothesis to test, not a formula that already works`, and stop pointing at a "highest-converting" reference that doesn't exist. Observed wording is unchanged — asserted byte-for-byte.
+- **Own-account and external reference counts are shown as two separate rows** in CreativeIQ and are **never summed**. A combined "N references" figure is precisely the confusion the model exists to prevent.
+- Ad Library cards gain **"Save with image"** alongside the copy-only save, tracked as a separate saved state — an ad can be saved as copy, as an image, or both.
+- `BatchSessionContext` now snapshots `gridShape`, `gridAngles`, `gridHooks`, `gridCallouts` and `blitzImageStrategy`; without them a mid-Blitz refresh restored the cells but lost the shape that produced them.
+
+### Internal
+- **`src/lib/gridPlan.ts` — the code-judo move of this release.** Adding the callout matrix initially meant a `isCalloutMatrix ? … : …` ternary at **thirteen** points across the grid flow in a 4000-line component, and every future shape would have added thirteen more. The shape now resolves **once** into a typed spec and the flow asks the spec. All thirteen are gone; a third shape is one table entry and zero component changes. Same idiom as `MODE_PROMPT` and `MODE_COPY`.
+- **`src/services/referenceSet.ts`** — one selector replacing three drifted copies (`openaiApi.ts` −180 lines on that path). Own references stay capped at the historical **3** so an account with no external material sends a byte-identical payload; external fills only unused slots. An earlier revision let own refs reach 5, a ~66% payload increase on a path with documented OOM history — caught and pinned back before it shipped.
+- **`useInspirationReferences`** extracted from `AdGenerator.tsx`. Its state is keyed `{accountId, items}` and derived by match rather than stored bare and cleared on switch: no clearing effect, and the previous account's references can no longer appear in the gap before the new load resolves.
+- **Validation moved to the boundary.** `descriptorsById` was `Record<string, unknown>` threaded through three modules and re-checked at the bottom; untrusted JSONB is now validated where it enters the app and the type is `Record<string, StyleDescriptor>` all the way down.
+- PDF rasterisation split to `src/lib/pdfPages.ts` — image processing, not transport, and it drags a ~1MB optional dependency (dynamically imported) that has no business being reachable from a file every ingest path imports.
+- The image-strategy selector is **hidden** for the callout matrix rather than shown with four options that all render one image.
+- **Two defects the tooling caught in this work**: a `useMemo` missing `isCalloutMatrix` (stale image-count preview after switching shape) and a reroll callback missing its reference-set dependencies.
+- **Descriptor-cache fast path is flagged off** (`VITE_ENABLE_DESCRIPTOR_CACHE`). Substituting cached per-image descriptors for the live joint vision call is *not* a pure optimisation — `analyzeReferenceImages` describes a set jointly and merging only approximates that, so it changes generation output and needs an explicit quality comparison first.
+- **Meta Platform Terms**: storing Ad Library creative durably is a posture change from today's transient `<img src>` previews — `api/meta.ts:238` already disabled an endpoint citing Terms 3.a. Shipped with per-item hard delete, an account-level purge and an in-product note as mitigations.
+- **Accepted risk, stated once**: the Creative Variation slider keeps its full range and the near-duplicate check is dismissible, so at variation ≤20 nothing structurally prevents publishing a close derivative. A deliberate product call; the Phase 5 similarity telemetry is what should inform revisiting it.
+- **Net structural effect**: no file crossed 1000 lines. `AdGenerator.tsx` 3913 → 4221. `npm test` (225 passing), `tsc -b` and `npm run build` clean; **lint 96 problems vs a 99 baseline** — 3 net removed, every new module clean.
+- **Not verified**: migration `022` has been applied, but nothing has been exercised against live Meta or Gemini APIs. The cold-start end-to-end check — zero-history account, paste competitor screenshots, confirm the Gemini request carries the unproven framing and no CVR string — still needs a run against real data.
+
 ## 2026-08-19 — ConversionIQ™ cold start: seeded and hybrid channel analysis for accounts with no ad history
 
 ### What

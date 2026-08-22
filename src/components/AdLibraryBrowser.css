@@ -932,3 +932,49 @@
     max-height: 500px;
   }
 }
+
+/* ── Inspiration image capture ───────────────────────────────────────────────
+   Distinct from the copy-save button: an ad can be saved as copy, as an image,
+   or both, so the two states are never shown as one. */
+
+.ad-library-capture-btn {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--border-violet);
+  border-radius: var(--radius-md, 8px);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-violet);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.ad-library-capture-btn:hover:not(:disabled) {
+  background: var(--accent-violet-glow);
+}
+
+.ad-library-capture-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ad-library-capture-btn.saved {
+  background: var(--accent-violet-glow);
+  font-weight: 600;
+}
+
+.ad-library-capture-notice {
+  padding: 8px 14px;
+  margin-bottom: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-violet);
+  border-radius: var(--radius-md, 8px);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ad-library-capture-btn {
+    transition: none;
+  }
+}

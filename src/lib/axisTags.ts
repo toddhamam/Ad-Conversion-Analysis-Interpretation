@@ -21,12 +21,20 @@ export type HookType =
 // Production style. v1 is image-only; video formats are deferred.
 export type FormatType = 'static_graphic' | 'static_screenshot';
 
-// Encoded into the ad name (a/h/f only). The core promise is batch context, not an
+// Encoded into the ad name (a/h/f/c). The core promise is batch context, not an
 // attribution axis, so it stays package-only and is NOT part of this tag.
+//
+// NOTE ON `callout`: unlike angle/hook/format it is unbounded operator text, not a closed
+// union, so there is no compile-time completeness check for it and none is possible. The
+// `_AssertGridAnglesComplete` guard below stays scoped to angles deliberately — do not
+// "fix" the asymmetry. What keeps callout safe on the wire is `slugifyCallout`, which is
+// the only thing that may produce a `c:` token value.
 export interface AxisTag {
   angle: GridAngle;
   hook?: HookType;
   format?: FormatType;
+  /** Slug of the avatar callout line, e.g. `dads-over-40`. See slugifyCallout. */
+  callout?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,6 +102,55 @@ export const FORMAT_LABELS: Record<FormatType, string> = {
 export const DEFAULT_GRID_ANGLES = ['pain', 'transformation', 'social_proof', 'contrarian_pov'] as const satisfies readonly GridAngle[];
 export const DEFAULT_GRID_HOOKS = ['question', 'stat', 'contrarian', 'callout'] as const satisfies readonly HookType[];
 
+/**
+ * Shape of a BlitzScale grid.
+ *
+ * `angle_hook` is the original Angle x Hook matrix. `callout_matrix` collapses to ONE angle
+ * with the hook pinned to 'callout' and permutes the avatar callout line instead — the
+ * "Dads over 40 need this" construct, where the visual is held constant and only the person
+ * being named changes. It is a different grid SHAPE, not a third multiplier: 4 angles x
+ * 4 hooks x N callouts exceeds GRID_CELL_CAP at N = 2.
+ */
+export type GridShape = 'angle_hook' | 'callout_matrix';
+
+/**
+ * Maximum cells in one Blitz grid. Lives here rather than in AdGenerator so the UI and the
+ * generator cannot disagree about the limit.
+ */
+export const GRID_CELL_CAP = 24;
+
+/** Longest slug written into an ad name. Keeps the token inside the MAX_AD_NAME budget. */
+export const CALLOUT_SLUG_MAX = 24;
+
+/**
+ * Turn operator text into an ad-name-safe slug.
+ *
+ * `sanitizeTokenValue` only strips the token delimiters, which is enough for controlled
+ * snake_case enums but not for free text — a callout can contain spaces, punctuation, emoji
+ * and non-Latin characters, any of which would corrupt the token or survive into it
+ * unparseably. Returns '' when nothing usable remains, and callers must then omit `c:`
+ * entirely rather than emit an empty value.
+ */
+export function slugifyCallout(text: string): string {
+  return (text || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')   // strip combining accents rather than mangle them
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, CALLOUT_SLUG_MAX)
+    .replace(/-+$/g, '');               // a trailing dash from the slice is noise
+}
+
+/** Best-effort inverse for display when the original text is no longer in scope. */
+export function deslugifyCallout(slug: string): string {
+  return slug
+    .split('-')
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
 // ---------------------------------------------------------------------------
 // Validators
 // ---------------------------------------------------------------------------
@@ -126,6 +183,12 @@ function buildToken(tag: AxisTag): string {
   const parts = [`a:${sanitizeTokenValue(tag.angle)}`];
   if (tag.hook) parts.push(`h:${sanitizeTokenValue(tag.hook)}`);
   if (tag.format) parts.push(`f:${sanitizeTokenValue(tag.format)}`);
+  // Re-slugified rather than trusted: this is the only place free text enters the token,
+  // and an already-slugged value is idempotent under slugifyCallout.
+  if (tag.callout) {
+    const slug = slugifyCallout(tag.callout);
+    if (slug) parts.push(`c:${slug}`);
+  }
   return `[CI|${parts.join('|')}]`;
 }
 
@@ -165,6 +228,7 @@ export function parseAxisTag(adName: string | undefined): AxisTag | undefined {
   let angle: GridAngle | undefined;
   let hook: HookType | undefined;
   let format: FormatType | undefined;
+  let callout: string | undefined;
 
   for (const pair of match[1].split('|')) {
     const sep = pair.indexOf(':');
@@ -174,8 +238,16 @@ export function parseAxisTag(adName: string | undefined): AxisTag | undefined {
     if (key === 'a' && isValidAngle(val)) angle = val;
     else if (key === 'h' && isValidHook(val)) hook = val;
     else if (key === 'f' && isValidFormat(val)) format = val;
+    // No membership check is possible for a free-text axis. Re-slugify so a truncated or
+    // hand-edited ad name still yields a stable attribution key rather than a junk bucket.
+    else if (key === 'c' && val) callout = slugifyCallout(val) || undefined;
   }
 
   if (!angle) return undefined;
-  return { angle, ...(hook ? { hook } : {}), ...(format ? { format } : {}) };
+  return {
+    angle,
+    ...(hook ? { hook } : {}),
+    ...(format ? { format } : {}),
+    ...(callout ? { callout } : {}),
+  };
 }

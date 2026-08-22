@@ -2,6 +2,8 @@ import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { searchAdLibrary, fetchSnapshotImages, type AdLibraryResult } from '../services/metaApi';
 import type { AdLibraryInspiration } from '../types';
 import { isEmbeddingAvailable, embedText, batchEmbed, cosineSimilarity } from '../services/embeddingService';
+import { useAdAccount } from '../contexts/AdAccountContext';
+import { captureAdLibraryInspiration, LibraryFullError } from '../services/inspirationLibraryApi';
 import './AdLibraryBrowser.css';
 
 // EU/UK countries where commercial ads are available via the Ad Library API.
@@ -139,13 +141,20 @@ interface AdLibraryBrowserProps {
   savedInspirations: AdLibraryInspiration[];
   onSaveInspiration: (inspiration: AdLibraryInspiration) => void;
   onRemoveInspiration: (id: string) => void;
+  /** Fired after a creative image is captured, so the caller can refresh its reference counts. */
+  onCaptured?: () => void;
 }
 
 export default function AdLibraryBrowser({
   savedInspirations,
   onSaveInspiration,
   onRemoveInspiration,
+  onCaptured,
 }: AdLibraryBrowserProps) {
+  // Read the account directly rather than accepting a fourth prop. captured_for_ad_account_id
+  // is where the capture is filed, not who owns it, and prop-drilling it through AdGenerator
+  // for that would be noise. Same idiom as SwipeLibrary.tsx.
+  const { currentAccount } = useAdAccount();
   const [isExpanded, setIsExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState<AdLibraryResult[]>([]);
@@ -169,6 +178,13 @@ export default function AdLibraryBrowser({
 
   // Preview image URLs extracted from snapshot pages (snapshot_url → image_url)
   const [previewImages, setPreviewImages] = useState<Record<string, string | null>>({});
+
+  // Image capture state. Tracked SEPARATELY from `savedIds` (copy-only saves) because an ad
+  // can be saved as copy, as an image, or both — one shared set would mislabel all three.
+  const [capturedKeys, setCapturedKeys] = useState<Set<string>>(new Set());
+  const [capturingKey, setCapturingKey] = useState<string | null>(null);
+  const [captureError, setCaptureError] = useState<string | null>(null);
+  const [captureNotice, setCaptureNotice] = useState<string | null>(null);
 
   // Semantic search state
   const [semanticMode, setSemanticMode] = useState(false);
@@ -390,6 +406,66 @@ export default function AdLibraryBrowser({
     }
   }, [savedIds, onSaveInspiration, onRemoveInspiration]);
 
+  /**
+   * Capture the ad's creative image into the Inspiration Library.
+   *
+   * Separate from "Save as Inspiration", which stores the COPY only. The image is what feeds
+   * CreativeIQ's visual reference set, and it needs the advertiser and run-length alongside it
+   * — longevity is the only proof signal a competitor ad carries.
+   */
+  const handleCaptureImage = useCallback(async (result: AdLibraryResult) => {
+    const adAccountId = currentAccount?.ad_account_id;
+    if (!adAccountId) {
+      setCaptureError('Select an ad account before saving inspiration.');
+      return;
+    }
+
+    const key = getResultKey(result);
+    const previewUrl = result.ad_snapshot_url ? previewImages[result.ad_snapshot_url] : null;
+    if (!previewUrl) {
+      setCaptureError('No preview image is available for this ad. Open it and screenshot it instead.');
+      return;
+    }
+
+    setCapturingKey(key);
+    setCaptureError(null);
+    setCaptureNotice(null);
+    try {
+      const duration = calculateDuration(
+        result.ad_delivery_start_time || new Date().toISOString(),
+        result.ad_delivery_stop_time || undefined
+      );
+      const outcome = await captureAdLibraryInspiration(adAccountId, {
+        imageUrl: previewUrl,
+        advertiserName: result.page_name,
+        advertiserPageId: result.page_id,
+        snapshotUrl: result.ad_snapshot_url,
+        deliveryStartTime: result.ad_delivery_start_time,
+        deliveryStopTime: result.ad_delivery_stop_time,
+        daysRunning: duration.days,
+        adCopySnippet: (result.ad_creative_bodies || [])[0],
+      });
+
+      setCapturedKeys(prev => new Set(prev).add(key));
+
+      if (outcome.saved === 0 && outcome.duplicates > 0) {
+        setCaptureNotice('Already in your Inspiration Library.');
+      } else if (outcome.qualityScore !== null && outcome.qualityScore < 60) {
+        // Say so rather than let it silently fail the reference-set quality gate later.
+        setCaptureNotice('Saved, but the preview is low-resolution and will not be used as a style reference. Screenshot the ad for a usable version.');
+      } else {
+        setCaptureNotice('Saved to your Inspiration Library.');
+      }
+      onCaptured?.();
+    } catch (err: unknown) {
+      setCaptureError(err instanceof LibraryFullError
+        ? err.message
+        : err instanceof Error ? err.message : 'Could not save that creative.');
+    } finally {
+      setCapturingKey(null);
+    }
+  }, [currentAccount?.ad_account_id, previewImages, onCaptured]);
+
   const handleSemanticSearch = useCallback(async () => {
     if (!semanticQuery.trim() || !embeddingsAvailable) return;
     setIsEmbedding(true);
@@ -575,6 +651,13 @@ export default function AdLibraryBrowser({
                 [...OTHER_COUNTRIES, ...EU_UK_COUNTRIES].find(c => c.code === country)?.label || country
               }, only political/issue ads are available. Switch to an EU/UK country for commercial ad results.
             </div>
+          )}
+
+          {captureError && (
+            <div className="ad-library-error" role="alert">{captureError}</div>
+          )}
+          {captureNotice && (
+            <div className="ad-library-capture-notice">{captureNotice}</div>
           )}
 
           {error && (
@@ -790,8 +873,28 @@ export default function AdLibraryBrowser({
                         <button
                           className={`ad-library-save-btn ${isSaved ? 'saved' : ''}`}
                           onClick={() => handleSaveToggle(result)}
+                          title="Save this ad's copy as a writing reference"
                         >
-                          {isSaved ? '✓ Saved' : '+ Save as Inspiration'}
+                          {isSaved ? '✓ Copy saved' : '+ Save copy'}
+                        </button>
+                        <button
+                          className={`ad-library-capture-btn ${capturedKeys.has(getResultKey(result)) ? 'saved' : ''}`}
+                          onClick={() => handleCaptureImage(result)}
+                          disabled={
+                            capturingKey === getResultKey(result)
+                            || !(result.ad_snapshot_url && previewImages[result.ad_snapshot_url])
+                          }
+                          title={
+                            result.ad_snapshot_url && previewImages[result.ad_snapshot_url]
+                              ? "Save this ad's creative as a visual reference"
+                              : 'No preview image available — open the ad and screenshot it instead'
+                          }
+                        >
+                          {capturingKey === getResultKey(result)
+                            ? 'Saving...'
+                            : capturedKeys.has(getResultKey(result))
+                              ? '✓ Image saved'
+                              : '◇ Save with image'}
                         </button>
                         {semanticMode && resultEmbeddings.has(getResultKey(result)) && (
                           <button

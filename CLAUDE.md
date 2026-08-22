@@ -187,6 +187,15 @@ public/
 | `src/pages/Products.tsx` | Product CRUD manager (name, author, description, URL, mockup images) |
 | `src/pages/BrandVoice.tsx` | Per-account Brand Voice & Guidelines editor (`/brand`) — authoritative voice for CreativeIQ™ copy |
 | `src/lib/brandVoiceProfile.ts` | Scoped-localStorage CRUD for the per-account `BrandVoiceProfile` (single object per account) |
+| `src/lib/referenceProvenance.ts` | Visual provenance model — `ReferenceSource` is the ONE persisted fact; evidence level, prompt wording and UI badge are derived. Sibling of `analysisMode.ts`, shares its `EvidenceLevel` |
+| `src/services/referenceSet.ts` | `resolveReferenceSet` — the single reference selector (was duplicated 3× in `openaiApi.ts`). Own winners capped at 3; external fills only unused slots |
+| `src/services/inspirationLibraryApi.ts` | Inspiration Library client — all four ingest lanes, plus `loadExternalStyleReferences` (the bridge into generation) |
+| `api/_lib/inspiration-handlers.ts` | Inspiration Library API routes (dispatched from `api/meta.ts`; does not count toward the 12-function limit) |
+| `api/_lib/url-guard.ts` | SSRF defence for the URL-import lane — DNS resolution + IP blocklist + magic-byte checks. The only user-chosen-host fetch in the app |
+| `src/lib/imageNormalize.ts` | One resize/thumbnail/score path for every ingested image (800px JPEG q0.82 + 200px thumb) |
+| `src/lib/nearDuplicate.ts` | Pure near-duplicate scoring. `NEAR_DUPLICATE_THRESHOLD` is uncalibrated and lives here alone |
+| `src/lib/styleDescriptor.ts` | Merges cached per-image style descriptors into the joint descriptor the engines want (flagged off) |
+| `src/pages/InspirationLibrary.tsx` | `/inspiration` — browse, ingest, tag and purge external references |
 | `src/lib/analysisMode.ts` | Analysis mode model — run planning, `observed`/`seeded`/`hybrid` builders, seed-constraint extraction, hybrid merge. Pure functions, unit-tested |
 | `src/lib/manualSeed.ts` | Manual-seed parsing — coerces untrusted pasted/distilled JSON into a valid `ChannelAnalysisResult`; `parseManualSeed` is the whole ingest path in one call |
 | `src/services/analysisContext.ts` | Builds the prompt text generation reads from an analysis. Mode-keyed vocabulary (`MODE_PROMPT`) decides whether a pattern is framed as a proven winner or an untested hypothesis |
@@ -234,6 +243,7 @@ public/
 /products       → Products management
 /brand          → Brand Voice & Guidelines (per-account authored voice for CreativeIQ™)
 /insights       → Channel AI analysis (ConversionIQ™)
+/inspiration    → Inspiration Library (external competitor/market creative references)
 /seo-iq         → SEO IQ dashboard (sites, keywords, articles, autopilot)
 /integrations   → Meta connection & per-account configuration
 /billing        → Billing & subscription management
@@ -264,7 +274,13 @@ public/
 19. **Channel analysis has three modes** — `observed` (live ads), `seeded` (no ad history, manual seed present), `hybrid` (both). `Run Channel Analysis` branches on what's actually available instead of erroring on zero ads; the no-ads error now fires only when there is *also* no seed. Observed data is authoritative for what performs; the seed stays authoritative for voice, banned vocabulary and claim guardrails, which is why a hybrid run merges rather than overwrites. All three modes emit the same `ChannelAnalysisResult` contract — measured-only fields come back as empty collections, never omitted. `overallHealthScore` is `null` in seeded mode: scoring an account with zero delivery data measures the absence of data. The manual seed lives in its own durable slot (`_seed_{channel}`) so an observed run can never destroy it.
 
     **`analysisMode` is the only mode fact that gets persisted.** Evidence labelling (`MEASURED` / `VALIDATED` / `HYPOTHESIS`), section titles and health-score applicability are all *derived* from it at the point of use — via `MODE_PROMPT` in `services/analysisContext.ts` for prompts and `MODE_COPY` in `ChannelInsightsPanel` for the UI. Do not add a parallel evidence field to the record; that would be two sources of truth for one fact. See `src/lib/analysisMode.ts`
-20. **Dual-provider AI with automatic failover** - `/api/ai/chat` accepts one OpenAI-shaped request format and serves it from either OpenAI or Anthropic (Claude). ConversionIQ™ analysis/interpretation runs on Claude Fable 5 first; generation paths run on GPT first; either way the other provider is the automatic fallback when the first can't serve the request. Translation lives in `api/_lib/anthropic-chat.ts`, so no frontend call site knows which provider answered. See "Dual-Provider Chat with Automatic Failover"
+20. **Visual reference provenance** — `ReferenceSource` (`own_winner` | `own_upload` | `external`) is the ONE persisted fact about an image reference; evidence level, prompt framing, UI badge and whether performance numbers may be printed are all DERIVED at the point of use (`src/lib/referenceProvenance.ts`). It is the visual sibling of ADR #19's `analysisMode` and shares its `EvidenceLevel` vocabulary, but the two describe different artefacts — copy claims vs image exemplars — and must not be merged. `IngestLane` is descriptive provenance, not an evidence axis: it is displayed and audited but never forks prompt wording.
+
+    Consequences enforced in code: the "ads with PROVEN CONVERSIONS" claim is gated on whether a MEASURED reference is actually present, not on how many images are attached; external references never carry a conversion figure (there is no cvr column on `inspiration_library_items` to hold one); own-account and external reference counts are shown as two separate rows in CreativeIQ and are never summed. Byte-identity of the observed prompt path is asserted in `referenceProvenance.test.ts` and end-to-end in `imagePrompt.test.ts`.
+
+21. **The avatar callout matrix is a grid SHAPE, not a third axis** — `GridShape` is `angle_hook` (the original matrix) or `callout_matrix` (one angle, hook pinned to `callout`, N avatar callouts). A third multiplier is arithmetically impossible: 4 angles × 4 hooks × N callouts exceeds `GRID_CELL_CAP` at N = 2. A callout matrix generates ONE base image and composites the callout with the existing Canvas renderer (`renderCalloutMatrix` in `textAdCanvas.ts`), so the whole batch costs one image credit and every variant is pixel-identical below the callout band — which is what makes the callout the only variable. `AxisTag.callout` is unbounded operator text, so it has no compile-time completeness check (unlike angle/hook/format); `slugifyCallout` is the only thing that may produce a `c:` token value.
+
+22. **Dual-provider AI with automatic failover** - `/api/ai/chat` accepts one OpenAI-shaped request format and serves it from either OpenAI or Anthropic (Claude). ConversionIQ™ analysis/interpretation runs on Claude Fable 5 first; generation paths run on GPT first; either way the other provider is the automatic fallback when the first can't serve the request. Translation lives in `api/_lib/anthropic-chat.ts`, so no frontend call site knows which provider answered. See "Dual-Provider Chat with Automatic Failover"
 
 ---
 
@@ -1135,6 +1151,7 @@ VITE_SUPABASE_URL=          # Supabase project URL (MUST include https://)
 VITE_SUPABASE_ANON_KEY=     # Supabase anonymous key for frontend auth
 VITE_APP_URL=               # App URL for redirects (https://www.convertraiq.com)
 VITE_SENTRY_DSN=            # Sentry DSN for frontend error tracking (public)
+VITE_ENABLE_DESCRIPTOR_CACHE= # 'true' to reuse cached per-image style descriptors instead of the live joint vision call (off by default — it changes generation output, see src/lib/styleDescriptor.ts)
 ```
 
 **Important**: URL environment variables (VITE_SUPABASE_URL, VITE_APP_URL) must include the full protocol (`https://`). Missing the protocol will cause the app to crash at runtime.

@@ -11,6 +11,8 @@ import {
   regenerateAllImages,
   generateAdVideoWithVeo,
   generateGridCopy,
+  expandCalloutMatrix,
+  generateAvatarCallouts,
   buildGridPackages,
   planBlitzImageSlots,
   blitzStrategyImageCounts,
@@ -67,6 +69,14 @@ import { loadBrandVoiceProfile } from '../lib/brandVoiceProfile';
 import type { BrandVoiceProfile } from '../services/openaiApi';
 import ImportImagesModal, { getAvailableImageImports, importImages, getSyncCreatives } from '../components/ImportImagesModal';
 import SwipeLibraryPicker from '../components/SwipeLibraryPicker';
+import { renderCalloutMatrix } from '../services/textAdCanvas';
+import {
+  useInspirationReferences,
+  MAX_ACTIVE_INSPIRATION_REFS,
+} from '../hooks/useInspirationReferences';
+import { slugifyCallout, GRID_CELL_CAP, type GridShape } from '../lib/axisTags';
+import { resolveGridPlan, GRID_SHAPES, GRID_SHAPE_VALUES } from '../lib/gridPlan';
+import { longevityLabel } from '../components/referenceProvenanceCopy';
 import { fetchSwipeImage, type SwipeLibraryItem, type SwipeElementType } from '../services/swipeLibraryApi';
 import { reserveCredits, confirmCredits, refundCredits, InsufficientCreditsError, checkCredits } from '../services/stripeApi';
 import type { CreditActionType, CampaignIntent } from '../types/organization';
@@ -154,7 +164,6 @@ const GRID_FORMAT_OPTIONS = (Object.keys(FORMAT_LABELS) as FormatType[]).map(id 
   name: FORMAT_LABELS[id],
   description: id === 'static_screenshot' ? 'Authentic screenshot — often out-converts designed graphics' : 'Designed graphic',
 }));
-const GRID_CELL_CAP = 24;
 
 // getCachedAnalysis is now imported from ../lib/channelAnalysisCache
 
@@ -236,6 +245,13 @@ const AdGenerator = () => {
   // slot, null where a render failed), a per-image reroll indicator, and any partial-failure warning.
   // Default 'single': one image shared across every ad — isolates angle/hook/copy as the variable.
   // The per-cell image assignment (blitzPlan) is DERIVED from (keptCells, strategy), not stored.
+  // Callout matrix: one angle, hook pinned to 'callout', and the avatar callout line as the
+  // second axis. A different grid SHAPE, not a third multiplier — 4 angles x 4 hooks x N
+  // callouts blows GRID_CELL_CAP at N = 2.
+  const [gridShape, setGridShape] = useState<GridShape>('angle_hook');
+  const [gridCallouts, setGridCallouts] = useState<string[]>([]);
+  const [calloutDraft, setCalloutDraft] = useState('');
+  const [isGeneratingCallouts, setIsGeneratingCallouts] = useState(false);
   const [blitzImageStrategy, setBlitzImageStrategy] = useState<BlitzImageStrategy>('single');
   const [blitzImages, setBlitzImages] = useState<(GeneratedImageResult | null)[]>([]);
   const [blitzImageError, setBlitzImageError] = useState<string | undefined>(undefined);
@@ -392,6 +408,12 @@ const AdGenerator = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showImageImportModal, setShowImageImportModal] = useState(false);
 
+  // External inspiration references. Counted and displayed SEPARATELY from own-account
+  // references and never summed with them — a combined "N references" figure is exactly the
+  // confusion the provenance model exists to prevent.
+  const inspiration = useInspirationReferences(currentAccount?.ad_account_id);
+  const [showInspirationPicker, setShowInspirationPicker] = useState(false);
+
   // Creative variation control (0 = identical to references, 100 = completely different)
   const [similarityValue, setSimilarityValue] = useState(30); // Default: 30% variation (70% similar)
 
@@ -457,6 +479,11 @@ const AdGenerator = () => {
       selectedCTAs,
       generationMode,
       gridFormat,
+      gridShape,
+      gridAngles,
+      gridHooks,
+      gridCallouts,
+      blitzImageStrategy,
       corePromise,
       gridCells,
       keptCellIds: Array.from(keptCellIds),
@@ -487,7 +514,8 @@ const AdGenerator = () => {
     audienceType, conceptType, effectiveIntent, copySource, adType, selectedProductId,
     similarityValue, copyVariationValue, imageSize, imageModel, variationCount,
     copyOptions, selectedHeadlines, selectedBodyTexts, selectedCTAs,
-    generationMode, gridFormat, corePromise, gridCells, keptCellIds, currentStep,
+    generationMode, gridFormat, gridShape, gridAngles, gridHooks, gridCallouts,
+    blitzImageStrategy, corePromise, gridCells, keptCellIds, currentStep,
     blitzImages, blitzImageError, generatedAds, isLoadingAds, batchPublishedAt, hasStageContent,
   ]);
 
@@ -843,6 +871,14 @@ const AdGenerator = () => {
         if (Array.isArray(s.selectedCTAs)) setSelectedCTAs(s.selectedCTAs);
         if (s.generationMode) setGenerationMode(s.generationMode);
         if (s.gridFormat) setGridFormat(s.gridFormat);
+        // Grid CONFIG. Restored before the cells below so a reroll after a refresh rebuilds
+        // the same shape of grid rather than silently reverting to angle x hook.
+        if (s.gridShape) setGridShape(s.gridShape);
+        if (Array.isArray(s.gridAngles) && s.gridAngles.length > 0) setGridAngles(s.gridAngles);
+        if (Array.isArray(s.gridHooks) && s.gridHooks.length > 0) setGridHooks(s.gridHooks);
+        if (s.blitzImageStrategy) setBlitzImageStrategy(s.blitzImageStrategy);
+        // Set authoritatively: an empty callout list must not leak in from another account.
+        setGridCallouts(Array.isArray(s.gridCallouts) ? s.gridCallouts : []);
         // Content fields are set authoritatively (with empty defaults) so they never leak from a
         // previously-viewed account when this account's batch lacks them.
         setGridCells(Array.isArray(s.gridCells) ? s.gridCells : null);
@@ -970,6 +1006,7 @@ const AdGenerator = () => {
 
     runAutoFetch(accountId);
   }, [currentAccount?.ad_account_id, runAutoFetch]);
+
 
   // Hand the batch to the publisher and persist it before navigating. The in-memory
   // publishStore is the PRIMARY, synchronous handoff (no size limit), so navigation
@@ -1147,16 +1184,82 @@ const AdGenerator = () => {
   );
 
   // ─── BlitzScale grid handlers ──────────────────────────────────────────
-  const gridCellCount = Math.min(gridAngles.length * gridHooks.length, GRID_CELL_CAP);
-  const gridOverCap = gridAngles.length * gridHooks.length > GRID_CELL_CAP;
-  // First unmet requirement for the grid — surfaced under the disabled Generate button so it
-  // never sits dead with no explanation (Core Promise is required in grid mode, easy to miss).
-  const gridBlockReason =
-    gridAngles.length === 0 ? 'Select at least one angle'
-    : gridHooks.length === 0 ? 'Select at least one hook'
-    : !corePromise.trim() ? (savedPromises.length > 0 ? 'Pick or add a Core Promise to continue' : 'Add a Core Promise to continue')
-    : gridOverCap ? `Reduce to ${GRID_CELL_CAP} or fewer creatives to generate`
-    : null;
+  //
+  // The grid SHAPE is resolved once into a spec (lib/gridPlan.ts) and every question below is
+  // asked of that spec. Adding a shape is one entry in GRID_SHAPES, not another ternary in
+  // each of these derivations.
+  const gridConfig = useMemo(
+    () => ({ angles: gridAngles, hooks: gridHooks, callouts: gridCallouts }),
+    [gridAngles, gridHooks, gridCallouts],
+  );
+  const gridPlan = useMemo(
+    () => resolveGridPlan(gridShape, gridConfig, {
+      hasCorePromise: Boolean(corePromise.trim()),
+      hasSavedPromises: savedPromises.length > 0,
+    }),
+    [gridShape, gridConfig, corePromise, savedPromises.length],
+  );
+  const gridSpec = gridPlan.spec;
+  const gridCellCount = gridPlan.cellCount;
+  const gridOverCap = gridPlan.overCap;
+  const gridBlockReason = gridPlan.blockReason;
+
+  // ── Avatar callout matrix ───────────────────────────────────────────────
+  //
+  // Dedupe on the SLUG rather than the text: two callouts that slug identically would collide
+  // into one attribution bucket and make the axis report silently wrong.
+  const addCallout = useCallback((text: string) => {
+    const clean = text.trim().replace(/\s+/g, ' ');
+    if (!clean) return;
+    setGridCallouts(prev => {
+      if (prev.length >= GRID_CELL_CAP) return prev;
+      const slug = slugifyCallout(clean);
+      if (!slug) return prev;
+      if (prev.some(c => slugifyCallout(c) === slug)) return prev;
+      return [...prev, clean];
+    });
+    setCalloutDraft('');
+  }, []);
+
+  const removeCallout = useCallback((text: string) => {
+    setGridCallouts(prev => prev.filter(c => c !== text));
+  }, []);
+
+  /**
+   * Ask ConversionIQ for callout suggestions. Additive, never destructive — the operator's own
+   * callouts are the point, and this is a starting list they edit, not a replacement for it.
+   */
+  const handleSuggestCallouts = useCallback(async () => {
+    setIsGeneratingCallouts(true);
+    setError(null);
+    try {
+      const suggestions = await generateAvatarCallouts({
+        count: Math.max(1, Math.min(8, GRID_CELL_CAP - gridCallouts.length)),
+        corePromise: corePromise.trim() || undefined,
+        audienceType,
+        analysisData,
+        productContext: selectedProduct || undefined,
+        brandProfile: brandProfile || undefined,
+        businessType,
+      });
+      setGridCallouts(prev => {
+        const next = [...prev];
+        const seen = new Set(prev.map(c => slugifyCallout(c)));
+        for (const suggestion of suggestions) {
+          if (next.length >= GRID_CELL_CAP) break;
+          const slug = slugifyCallout(suggestion);
+          if (!slug || seen.has(slug)) continue;
+          seen.add(slug);
+          next.push(suggestion);
+        }
+        return next;
+      });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not write callout suggestions.');
+    } finally {
+      setIsGeneratingCallouts(false);
+    }
+  }, [gridCallouts.length, corePromise, audienceType, analysisData, selectedProduct, brandProfile, businessType]);
 
   const toggleGridAngle = useCallback((id: GridAngle) => {
     setGridAngles(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]);
@@ -1188,20 +1291,17 @@ const AdGenerator = () => {
   const handleGenerateGrid = async () => {
     if (!isOpenAIConfigured()) { setError('OpenAI API is not configured. Please contact your administrator.'); return; }
     if (!corePromise.trim()) { setError('Blitz Testing needs a Core Promise — the one idea every creative anchors to.'); return; }
-    if (gridAngles.length === 0 || gridHooks.length === 0) { setError('Select at least one angle and one hook.'); return; }
-    if (gridAngles.length * gridHooks.length > GRID_CELL_CAP) {
-      setError(`That's ${gridAngles.length * gridHooks.length} creatives — reduce angles or hooks to stay at or under ${GRID_CELL_CAP}.`);
-      return;
-    }
+    if (gridBlockReason) { setError(gridBlockReason); return; }
     setIsGeneratingGrid(true);
     setError(null);
     setGenerationProgress('ConversionIQ™ generating the copy matrix...');
     try {
       const activeInspirations = savedInspirations.filter(i => activeInspirationIds.includes(i.id));
-      const cells = await generateGridCopy({
+      const request = gridSpec.copyRequest(gridConfig);
+      const generated = await generateGridCopy({
         corePromise: corePromise.trim(),
-        angles: gridAngles,
-        hooks: gridHooks,
+        angles: request.angles,
+        hooks: request.hooks,
         format: gridFormat,
         audienceType,
         analysisData,
@@ -1212,6 +1312,7 @@ const AdGenerator = () => {
         businessType,
         campaignIntent: effectiveIntent,
       });
+      const cells = gridSpec.expandCells(generated, gridConfig, expandCalloutMatrix);
       if (cells.length === 0) { setError('The grid came back empty — please try again.'); return; }
       setGridCells(cells);
       setKeptCellIds(new Set(cells.map(c => c.id)));
@@ -1270,28 +1371,30 @@ const AdGenerator = () => {
   // Derived (not stored) — keptCells + strategy are frozen between generation and publish, so this
   // always matches the plan the rendered pool was built from.
   const blitzPlan = useMemo(
-    () => planBlitzImageSlots(keptCells, blitzImageStrategy),
-    [keptCells, blitzImageStrategy],
+    () => gridSpec.planImages(keptCells, blitzImageStrategy, planBlitzImageSlots),
+    [keptCells, blitzImageStrategy, gridSpec],
   );
   // Render count per strategy for the selector preview — planned axes on the config step (no copy
   // yet), the kept set's distinct angles/hooks afterward.
   const blitzStrategyCounts = useMemo<Record<BlitzImageStrategy, number>>(() => {
-    if (currentStep === 'config') {
-      const angles = gridAngles.length, hooks = gridHooks.length;
-      return blitzStrategyImageCounts({ angles, hooks, cells: Math.min(angles * hooks, GRID_CELL_CAP) });
-    }
-    return blitzStrategyImageCounts({
-      angles: new Set(keptCells.map(c => c.angle)).size,
-      hooks: new Set(keptCells.map(c => c.hook)).size,
-      cells: keptCells.length,
-    });
-  }, [currentStep, gridAngles.length, gridHooks.length, keptCells]);
+    // Planned axes on the config step (no copy exists yet); the kept set's distinct axes after.
+    const sizes = currentStep === 'config'
+      ? { angles: gridAngles.length, hooks: gridHooks.length, cells: gridCellCount }
+      : {
+          angles: new Set(keptCells.map(c => c.angle)).size,
+          hooks: new Set(keptCells.map(c => c.hook)).size,
+          cells: keptCells.length,
+        };
+    return gridSpec.strategyCounts(sizes, blitzStrategyImageCounts);
+  }, [currentStep, gridAngles.length, gridHooks.length, gridCellCount, keptCells, gridSpec]);
 
   // Step 1 of the Blitz image flow: render the small image pool the strategy calls for (far fewer
   // than one-per-cell) and land on the review step. Credits are charged for images actually rendered.
   const handleGenerateBlitzImages = async () => {
     if (keptCells.length === 0) { setError('Keep at least one creative to generate.'); return; }
-    const imageCount = blitzPlan.slotCount;
+    // What is actually sent to the model — diverges from slotCount for shapes that composite
+    // the remaining slots locally rather than generating each one.
+    const imageCount = gridSpec.generatedImageCount(blitzPlan);
 
     setIsGeneratingCreatives(true);
     setError(null);
@@ -1315,6 +1418,7 @@ const AdGenerator = () => {
 
     try {
       const activeInspirations = savedInspirations.filter(i => activeInspirationIds.includes(i.id));
+      const externalRefs = await inspiration.loadActiveStyleReferences();
       const result = await regenerateAllImages({
         audienceType,
         analysisData,
@@ -1322,6 +1426,8 @@ const AdGenerator = () => {
         similarityLevel: similarityValue,
         imageSize,
         productContext: selectedProduct || undefined,
+        externalRefs,
+        descriptorsById: inspiration.activeDescriptorsById,
         adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
         businessType,
         campaignIntent: effectiveIntent,
@@ -1336,8 +1442,32 @@ const AdGenerator = () => {
         return;
       }
       if (transactionId) confirmCredits(transactionId);
-      setBlitzImages(result.indexedResults);   // slot-aligned (null = a slot whose render failed)
-      setBlitzImageError(result.imageError);
+
+      if (gridSpec.compositesOverlays) {
+        const base = result.images[0];
+        if (!base) {
+          setGenerationProgress('');
+          setError('The base image failed to generate. Please try again.');
+          return;
+        }
+        setGenerationProgress('ConversionIQ™ rendering callouts...');
+        // Slot-aligned with keptCells: a null means that one overlay failed, and keeping the
+        // position means the failure maps back to the callout that produced it.
+        const overlays = await renderCalloutMatrix(
+          base.imageUrl,
+          keptCells.map(c => c.callout || c.headline),
+        );
+        setBlitzImages(overlays);
+        setBlitzImageError(
+          overlays.some(o => o === null)
+            ? 'Some callout overlays could not be rendered. Those ads are skipped.'
+            : result.imageError
+        );
+      } else {
+        setBlitzImages(result.indexedResults);   // slot-aligned (null = a slot whose render failed)
+        setBlitzImageError(result.imageError);
+      }
+
       setGenerationProgress('');
       setCurrentStep('grid-images');
     } catch (err: unknown) {
@@ -1356,6 +1486,7 @@ const AdGenerator = () => {
     setError(null);
     try {
       const activeInspirations = savedInspirations.filter(i => activeInspirationIds.includes(i.id));
+      const externalRefs = await inspiration.loadActiveStyleReferences();
       const newImage = await generateAdImage({
         audienceType,
         analysisData,
@@ -1364,6 +1495,8 @@ const AdGenerator = () => {
         similarityLevel: similarityValue,
         imageSize,
         productContext: selectedProduct || undefined,
+        externalRefs,
+        descriptorsById: inspiration.activeDescriptorsById,
         adLibraryInspirations: activeInspirations.length > 0 ? activeInspirations : undefined,
         businessType,
         campaignIntent: effectiveIntent,
@@ -1604,6 +1737,7 @@ const AdGenerator = () => {
 
     try {
       const activeInspirationsForCreative = savedInspirations.filter(i => activeInspirationIds.includes(i.id));
+      const externalRefsForCreative = await inspiration.loadActiveStyleReferences();
       const result = await generateAdPackage({
         adType,
         audienceType,
@@ -1618,6 +1752,8 @@ const AdGenerator = () => {
         similarityLevel: similarityValue, // 0 = identical to references, 100 = completely different
         imageSize, // Selected image dimensions/aspect ratio
         productContext: selectedProduct || undefined,
+        externalRefs: externalRefsForCreative,
+        descriptorsById: inspiration.activeDescriptorsById,
         adLibraryInspirations: activeInspirationsForCreative.length > 0 ? activeInspirationsForCreative : undefined,
         imageHeadlines,
         videoConfig: adType === 'video' ? {
@@ -1917,6 +2053,8 @@ const AdGenerator = () => {
         similarityLevel: similarityValue,
         imageSize,
         productContext: selectedProduct || undefined,
+        externalRefs: await inspiration.loadActiveStyleReferences(),
+        descriptorsById: inspiration.activeDescriptorsById,
         headlineText,
         businessType,
         campaignIntent: adToUpdate.campaignIntent || effectiveIntent,
@@ -1941,7 +2079,8 @@ const AdGenerator = () => {
       console.error('❌ Failed to regenerate image:', err);
       throw new Error(err instanceof Error ? err.message : 'Failed to regenerate image');
     }
-  }, [generatedAds, analysisData, similarityValue, imageSize, selectedProduct, imageModel]);
+  }, [generatedAds, analysisData, similarityValue, imageSize, selectedProduct, imageModel,
+      inspiration, businessType, effectiveIntent]);
 
   // Regenerate ALL images for an ad package (keeps copy intact)
   const handleRegenerateAllImages = useCallback(async (adId: string) => {
@@ -1963,6 +2102,8 @@ const AdGenerator = () => {
         similarityLevel: similarityValue,
         imageSize,
         productContext: selectedProduct || undefined,
+        externalRefs: await inspiration.loadActiveStyleReferences(),
+        descriptorsById: inspiration.activeDescriptorsById,
         imageHeadlines: adToUpdate.imageHeadlines,
         imageModel,
       });
@@ -2008,7 +2149,8 @@ const AdGenerator = () => {
       console.error('❌ Failed to regenerate all images:', err);
       throw new Error(errorMessage);
     }
-  }, [generatedAds, analysisData, similarityValue, imageSize, selectedProduct, variationCount, imageModel]);
+  }, [generatedAds, analysisData, similarityValue, imageSize, selectedProduct, variationCount, imageModel,
+      inspiration]);
 
   // Regenerate a single video within an ad package
   const handleRegenerateVideo = useCallback(async (adId: string, videoIndex: number) => {
@@ -2248,6 +2390,76 @@ const AdGenerator = () => {
           </>
         )}
       </div>
+
+      {/* External inspiration references.
+          A SEPARATE row from the own-account references above, deliberately: the two counts are
+          never summed into one "N references" figure, because a user must never be able to
+          mistake unproven competitor material for a proven winner. */}
+      {inspiration.items.length > 0 && (
+        <div className="analysis-status external-refs-status" style={{ marginTop: '8px' }}>
+          <span className="status-icon" aria-hidden="true">◇</span>
+          <span className="status-text">
+            {inspiration.activeIds.length} of {inspiration.items.length} inspiration reference
+            {inspiration.items.length !== 1 ? 's' : ''} active
+            <span style={{ marginLeft: '8px', color: 'var(--text-muted)', fontSize: '12px' }}>
+              external, unproven
+              {inspiration.longestRunningDays !== null && ` · longest-running: ${inspiration.longestRunningDays} days`}
+            </span>
+          </span>
+          <button
+            className="status-action-btn"
+            onClick={() => setShowInspirationPicker(v => !v)}
+            style={{ marginLeft: '12px' }}
+          >
+            {showInspirationPicker ? 'Done' : 'Choose'}
+          </button>
+          <Link to="/inspiration" className="status-action-btn" style={{ marginLeft: '8px' }}>
+            Manage
+          </Link>
+        </div>
+      )}
+
+      {showInspirationPicker && inspiration.items.length > 0 && (
+        <div className="external-refs-picker">
+          <p className="external-refs-picker-hint">
+            Up to {MAX_ACTIVE_INSPIRATION_REFS} references are sent with each generation. They
+            steer visual construction only — CreativeIQ™ is told explicitly that they have no
+            conversion data for this account.
+          </p>
+          <div className="external-refs-list">
+            {inspiration.items.map(item => {
+              const isActive = inspiration.activeIds.includes(item.id);
+              const atLimit = !isActive && inspiration.activeIds.length >= MAX_ACTIVE_INSPIRATION_REFS;
+              return (
+                <label
+                  key={item.id}
+                  className={`external-ref-item ${isActive ? 'is-active' : ''} ${atLimit ? 'is-disabled' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isActive}
+                    disabled={atLimit}
+                    onChange={() => inspiration.toggle(item.id)}
+                  />
+                  {item.image_thumbnail && (
+                    <img
+                      src={`data:${item.image_mime_type};base64,${item.image_thumbnail}`}
+                      alt=""
+                      loading="lazy"
+                    />
+                  )}
+                  <span className="external-ref-meta">
+                    <span className="external-ref-advertiser">
+                      {item.advertiser_name || 'Unknown advertiser'}
+                    </span>
+                    <span className="external-ref-longevity">{longevityLabel(item.days_running)}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Hidden file input for image uploads */}
       <input
@@ -2544,6 +2756,7 @@ const AdGenerator = () => {
               savedInspirations={savedInspirations}
               onSaveInspiration={handleSaveInspiration}
               onRemoveInspiration={handleRemoveInspiration}
+              onCaptured={inspiration.refresh}
             />
             {savedInspirations.length > 0 && (
               <InspirationSelector
@@ -2627,8 +2840,29 @@ const AdGenerator = () => {
           {copySource === 'generate' && generationMode === 'grid' && (
             <>
               <div className="config-section">
-                <label className="config-label">Angles</label>
-                <p className="config-hint">The strategic frame — each becomes a row. {gridAngles.length} selected.</p>
+                <label className="config-label">Grid Shape</label>
+                <p className="config-hint">
+                  What the batch actually tests. A callout matrix holds the creative constant and
+                  changes only who it names.
+                </p>
+                <div className="grid-shape-options">
+                  {GRID_SHAPE_VALUES.map(shape => (
+                    <button
+                      key={shape}
+                      type="button"
+                      className={`grid-shape-btn ${gridShape === shape ? 'active' : ''}`}
+                      onClick={() => setGridShape(shape)}
+                    >
+                      <span className="grid-shape-name">{GRID_SHAPES[shape].label}</span>
+                      <span className="grid-shape-desc">{GRID_SHAPES[shape].description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="config-section">
+                <label className="config-label">{gridSpec.angleLabel}</label>
+                <p className="config-hint">{gridSpec.angleHint(gridConfig)}</p>
                 <div className="concept-options">
                   {GRID_ANGLE_OPTIONS.map(option => (
                     <button
@@ -2647,22 +2881,83 @@ const AdGenerator = () => {
                 </div>
               </div>
 
-              <div className="config-section">
-                <label className="config-label">Hooks</label>
-                <p className="config-hint">The first 3 seconds — each becomes a column. {gridHooks.length} selected.</p>
-                <div className="grid-hook-options">
-                  {GRID_HOOK_OPTIONS.map(option => (
+              {gridSpec.compositesOverlays ? (
+                <div className="config-section">
+                  <label className="config-label">Avatar Callouts</label>
+                  <p className="config-hint">
+                    Each callout becomes one ad, rendered onto the same base image. Name a person
+                    or a situation, not a benefit — "Dads over 40", not "Boost your energy".
+                    {' '}{gridCallouts.length} added.
+                  </p>
+
+                  <div className="callout-input-row">
+                    <input
+                      type="text"
+                      className="callout-input"
+                      placeholder="Dads over 40 need this"
+                      value={calloutDraft}
+                      onChange={e => setCalloutDraft(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addCallout(calloutDraft);
+                        }
+                      }}
+                      maxLength={60}
+                    />
                     <button
-                      key={option.id}
                       type="button"
-                      className={`grid-hook-btn ${gridHooks.includes(option.id) ? 'active' : ''}`}
-                      onClick={() => toggleGridHook(option.id)}
+                      className="callout-add-btn"
+                      onClick={() => addCallout(calloutDraft)}
+                      disabled={!calloutDraft.trim() || gridCallouts.length >= GRID_CELL_CAP}
                     >
-                      {option.name}
+                      Add
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      className="callout-suggest-btn"
+                      onClick={handleSuggestCallouts}
+                      disabled={isGeneratingCallouts || gridCallouts.length >= GRID_CELL_CAP}
+                    >
+                      {isGeneratingCallouts ? 'ConversionIQ™ writing...' : 'Suggest'}
+                    </button>
+                  </div>
+
+                  {gridCallouts.length > 0 && (
+                    <div className="callout-chips">
+                      {gridCallouts.map(callout => (
+                        <span key={callout} className="callout-chip">
+                          {callout}
+                          <button
+                            type="button"
+                            onClick={() => removeCallout(callout)}
+                            aria-label={`Remove callout ${callout}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <div className="config-section">
+                  <label className="config-label">Hooks</label>
+                  <p className="config-hint">The first 3 seconds — each becomes a column. {gridHooks.length} selected.</p>
+                  <div className="grid-hook-options">
+                    {GRID_HOOK_OPTIONS.map(option => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={`grid-hook-btn ${gridHooks.includes(option.id) ? 'active' : ''}`}
+                        onClick={() => toggleGridHook(option.id)}
+                      >
+                        {option.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="config-section">
                 <label className="config-label">Format</label>
@@ -2687,11 +2982,24 @@ const AdGenerator = () => {
                 {gridOverCap && <span className="grid-cap-warning"> — reduce to {GRID_CELL_CAP} or fewer to generate</span>}
               </div>
 
-              <BlitzImageStrategySelector
-                value={blitzImageStrategy}
-                counts={blitzStrategyCounts}
-                onChange={setBlitzImageStrategy}
-              />
+              {gridSpec.strategySelectable ? (
+                <BlitzImageStrategySelector
+                  value={blitzImageStrategy}
+                  counts={blitzStrategyCounts}
+                  onChange={setBlitzImageStrategy}
+                />
+              ) : (
+                // Hidden rather than disabled: for a shape that composites from one base image
+                // every strategy renders exactly one image, so all four options are identical
+                // and picking between them would be a decision with no consequence.
+                <div className="config-section">
+                  <label className="config-label">Image Strategy</label>
+                  <p className="config-hint">
+                    One base image, rendered once and shared across every callout — that shared
+                    image is what makes the callout the only variable.
+                  </p>
+                </div>
+              )}
               <ImageModelSelector value={imageModel} onChange={handleImageModelChange} />
               {/* Image variation axis — independent of the Copy Variation slider below.
                   Keep the copy, test a brand-new graphic style (or vice versa). */}

@@ -509,3 +509,114 @@ export function getStyleById(id: string): TextAdStyle | undefined {
 export function getDefaultStyleId(): string {
   return 'clean-orange';
 }
+
+// ---------------------------------------------------------------------------
+// Avatar Callout Overlay
+// ---------------------------------------------------------------------------
+
+/** Where the callout band sits on the base image. */
+export type CalloutPosition = 'top' | 'bottom';
+
+export interface CalloutOverlayConfig {
+  /** Base image as a data URL — the shared, text-free creative for the whole matrix. */
+  baseImageUrl: string;
+  /** The avatar callout line, e.g. "Dads over 40 need this". */
+  calloutText: string;
+  position?: CalloutPosition;
+  /** Band height as a fraction of image height. */
+  bandRatio?: number;
+  bandColor?: string;
+  textColor?: string;
+}
+
+const CALLOUT_BAND_RATIO = 0.22;
+const CALLOUT_MAX_FONT = 96;
+
+/**
+ * Composite an avatar callout onto an already-generated base image.
+ *
+ * This is the whole point of the callout matrix: ONE generated image, N callout lines. Doing
+ * the overlay on canvas rather than re-generating means the construct is *pixel-identical*
+ * across every variant, so the callout is genuinely the only variable — which is what makes
+ * the test valid. It also costs zero credits and zero latency, where N generations would cost
+ * N credits and drift the composition between them.
+ *
+ * Reuses fitText / drawCenteredText, so wrapping and auto-sizing behave exactly as they do in
+ * the text-ad renderer. Returns null rather than throwing: one failed overlay must not lose
+ * the base image or the other variants.
+ */
+export async function renderCalloutOverlay(
+  config: CalloutOverlayConfig
+): Promise<GeneratedImageResult | null> {
+  const {
+    baseImageUrl,
+    calloutText,
+    position = 'bottom',
+    bandRatio = CALLOUT_BAND_RATIO,
+    bandColor = 'rgba(15, 23, 42, 0.88)',
+    textColor = '#ffffff',
+  } = config;
+
+  const text = calloutText.trim();
+  if (!text) return null;
+
+  const img = await new Promise<HTMLImageElement | null>(resolve => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = baseImageUrl;
+  });
+  if (!img || img.naturalWidth === 0) return null;
+
+  const width = img.naturalWidth;
+  const height = img.naturalHeight;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.drawImage(img, 0, 0, width, height);
+
+  const bandHeight = height * bandRatio;
+  const bandY = position === 'top' ? 0 : height - bandHeight;
+
+  ctx.fillStyle = bandColor;
+  ctx.fillRect(0, bandY, width, bandHeight);
+
+  const padX = width * HORIZONTAL_PADDING_RATIO;
+  const section = fitText(
+    ctx,
+    text.toUpperCase(),
+    width - padX * 2,
+    bandHeight * 0.72,
+    900,
+    Math.min(CALLOUT_MAX_FONT, height * 0.09)
+  );
+  const textHeight = section.lines.length * section.lineHeight;
+  drawCenteredText(ctx, section, textColor, width / 2, bandY + (bandHeight - textHeight) / 2);
+
+  return {
+    imageUrl: canvas.toDataURL('image/png'),
+    revisedPrompt: `Avatar callout overlay: "${text}"`,
+  };
+}
+
+/**
+ * Render one base image into N callout variants, position-aligned with `callouts`.
+ *
+ * A null slot means that overlay failed; callers keep the position so a failure maps back to
+ * the callout that produced it rather than silently shifting the rest.
+ */
+export async function renderCalloutMatrix(
+  baseImageUrl: string,
+  callouts: string[],
+  options?: Omit<CalloutOverlayConfig, 'baseImageUrl' | 'calloutText'>
+): Promise<(GeneratedImageResult | null)[]> {
+  const results: (GeneratedImageResult | null)[] = [];
+  for (const callout of callouts) {
+    results.push(await renderCalloutOverlay({ baseImageUrl, calloutText: callout, ...options }));
+  }
+  return results;
+}

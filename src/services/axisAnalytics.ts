@@ -2,7 +2,7 @@
 // axis-tagged ad data (no AI). Sibling of metaApi's aggregateByType; kept out of the
 // AI service (openaiApi) since it does deterministic metric aggregation only.
 import { CONCEPT_ANGLES, type AdCreativeData, type AxisStat, type AxisInsights } from './openaiApi';
-import { HOOK_LABELS, FORMAT_LABELS } from '../lib/axisTags';
+import { HOOK_LABELS, FORMAT_LABELS, deslugifyCallout } from '../lib/axisTags';
 
 const MIN_AXIS_IMPRESSIONS = 100; // small-sample guard for axis winners
 
@@ -23,6 +23,7 @@ export function aggregateByAxis(
   const angleMap = new Map<string, AxisStat>();
   const hookMap = new Map<string, AxisStat>();
   const formatMap = new Map<string, AxisStat>();
+  const calloutMap = new Map<string, AxisStat>();
   let taggedAdCount = 0;
   let untaggedAdCount = 0;
 
@@ -46,6 +47,9 @@ export function aggregateByAxis(
     bump(angleMap, tag.angle, CONCEPT_ANGLES[tag.angle]?.name ?? tag.angle, ad);
     if (tag.hook) bump(hookMap, tag.hook, HOOK_LABELS[tag.hook] ?? tag.hook, ad);
     if (tag.format) bump(formatMap, tag.format, FORMAT_LABELS[tag.format] ?? tag.format, ad);
+    // Callout is free text with no label table to look up, so the slug is de-slugged for
+    // display. The slug stays the attribution key so it is stable across batches.
+    if (tag.callout) bump(calloutMap, tag.callout, deslugifyCallout(tag.callout) || tag.callout, ad);
   }
 
   const finalize = (map: Map<string, AxisStat>): AxisStat[] => {
@@ -61,6 +65,7 @@ export function aggregateByAxis(
   const byAngle = finalize(angleMap);
   const byHook = finalize(hookMap);
   const byFormat = finalize(formatMap);
+  const byCallout = finalize(calloutMap);
   const pickWinner = (arr: AxisStat[]): string | undefined => {
     const eligible = arr.filter(s => s.impressions >= MIN_AXIS_IMPRESSIONS);
     return eligible.length > 0 ? eligible[0].key : undefined;
@@ -70,6 +75,13 @@ export function aggregateByAxis(
     winningAngle: pickWinner(byAngle),
     winningHook: pickWinner(byHook),
     winningFormat: pickWinner(byFormat),
+    // Optional, and omitted entirely when no ad carried a callout. AxisInsights is embedded
+    // in the PERSISTED ChannelAnalysisResult, so cached records predate this field and every
+    // consumer has to tolerate its absence — emitting an empty array instead would make
+    // "no callouts were tested" indistinguishable from "callouts were tested and all lost".
+    ...(byCallout.length > 0
+      ? { byCallout, winningCallout: pickWinner(byCallout) }
+      : {}),
     taggedAdCount,
     untaggedAdCount,
   };

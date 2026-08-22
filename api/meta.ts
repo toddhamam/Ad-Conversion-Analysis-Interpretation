@@ -11,6 +11,15 @@ import {
   handleReportHistory,
 } from './_lib/report-handlers.js';
 import { handleAIChat } from './_lib/ai-chat.js';
+import {
+  handleInspirationList,
+  handleInspirationSave,
+  handleInspirationUpdate,
+  handleInspirationDelete,
+  handleInspirationImage,
+  handleInspirationCheck,
+  handleInspirationImportUrl,
+} from './_lib/inspiration-handlers.js';
 import { authenticateRequest, type AuthContext } from './_lib/auth.js';
 // DISABLED: External API access to Meta Platform Data disabled for policy compliance.
 // import { handleExternalSummary } from './_lib/external-report.js';
@@ -235,6 +244,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleSwipeCheck(req, res);
       case 'image-fetch':
         return handleImageFetch(req, res);
+      case 'inspiration-list':
+        return handleInspirationList(req, res);
+      case 'inspiration-save':
+        return handleInspirationSave(req, res);
+      case 'inspiration-update':
+        return handleInspirationUpdate(req, res);
+      case 'inspiration-delete':
+        return handleInspirationDelete(req, res);
+      case 'inspiration-image':
+        return handleInspirationImage(req, res);
+      case 'inspiration-check':
+        return handleInspirationCheck(req, res);
+      case 'inspiration-import-url':
+        return handleInspirationImportUrl(req, res);
       case 'external-summary':
       case 'reports-external-summary':
         // DISABLED: External API access to Meta Platform Data is not covered by
@@ -1233,6 +1256,9 @@ async function handleSnapshotImages(req: VercelRequest, res: VercelResponse) {
 
   // Extract og:image from each snapshot URL in parallel (max 6 concurrent)
   const MAX_CONCURRENT = 6;
+  // Matches handleImageFetch's abort budget. Without a timeout a single hung connection
+  // holds a chunk slot until the whole function times out at maxDuration.
+  const SNAPSHOT_FETCH_TIMEOUT_MS = 30_000;
   const results: Record<string, string | null> = {};
 
   for (let i = 0; i < batch.length; i += MAX_CONCURRENT) {
@@ -1243,6 +1269,11 @@ async function handleSnapshotImages(req: VercelRequest, res: VercelResponse) {
         results[url] = null;
         return;
       }
+      // `redirect: 'follow'` is safe here ONLY because the URL is prefix-pinned to
+      // facebook.com/ads/archive/render_ad/ above. Do not copy this into a handler that
+      // accepts an arbitrary host — following redirects unvalidated is an SSRF primitive.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), SNAPSHOT_FETCH_TIMEOUT_MS);
       try {
         const response = await fetch(url, {
           headers: {
@@ -1250,6 +1281,7 @@ async function handleSnapshotImages(req: VercelRequest, res: VercelResponse) {
             'Accept': 'text/html',
           },
           redirect: 'follow',
+          signal: controller.signal,
         });
         if (!response.ok) {
           results[url] = null;
@@ -1271,6 +1303,8 @@ async function handleSnapshotImages(req: VercelRequest, res: VercelResponse) {
         results[url] = imgMatch ? imgMatch[1] : null;
       } catch {
         results[url] = null;
+      } finally {
+        clearTimeout(timeout);
       }
     });
     await Promise.all(promises);
