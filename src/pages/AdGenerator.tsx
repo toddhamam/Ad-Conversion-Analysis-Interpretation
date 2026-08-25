@@ -75,8 +75,8 @@ import {
   useInspirationReferences,
   MAX_ACTIVE_INSPIRATION_REFS,
 } from '../hooks/useInspirationReferences';
-import { slugifyCallout, GRID_CELL_CAP, type GridShape } from '../lib/axisTags';
-import { resolveGridPlan, GRID_SHAPES, GRID_SHAPE_VALUES } from '../lib/gridPlan';
+import { slugifyCallout, concreteAngle, GRID_CELL_CAP, type GridShape } from '../lib/axisTags';
+import { resolveGridPlan, resolveSlotAngles, GRID_SHAPES, GRID_SHAPE_VALUES } from '../lib/gridPlan';
 import {
   EMPTY_CUSTOM_DIRECTION, draftToInput,
   type CustomDirectionDraft, type CustomDirectionInput,
@@ -169,6 +169,15 @@ const GRID_FORMAT_OPTIONS = (Object.keys(FORMAT_LABELS) as FormatType[]).map(id 
   name: FORMAT_LABELS[id],
   description: id === 'static_screenshot' ? 'Authentic screenshot — often out-converts designed graphics' : 'Designed graphic',
 }));
+
+/**
+ * The angle a generated package asserts, used when regenerating its images so a reroll rebuilds
+ * the same scene the original was directed toward. Grid packages carry it on the axis tag; the
+ * single flow carries it as the concept. 'auto' asserts nothing by design — see lib/angleScene.ts.
+ */
+function angleOf(pkg: GeneratedAdPackage): GridAngle | undefined {
+  return pkg.axisTag?.angle ?? concreteAngle(pkg.conceptType);
+}
 
 // getCachedAnalysis is now imported from ../lib/channelAnalysisCache
 
@@ -1400,6 +1409,9 @@ const AdGenerator = () => {
     () => gridSpec.planImages(keptCells, blitzImageStrategy, planBlitzImageSlots),
     [keptCells, blitzImageStrategy, gridSpec],
   );
+  // Which pooled images may be directed at an angle — derived alongside the plan for the same
+  // reason keptCells is: the pool generator and the per-slot reroll must not answer this twice.
+  const slotAngles = useMemo(() => resolveSlotAngles(keptCells, blitzPlan), [keptCells, blitzPlan]);
   // Render count per strategy for the selector preview — planned axes on the config step (no copy
   // yet), the kept set's distinct angles/hooks afterward.
   const blitzStrategyCounts = useMemo<Record<BlitzImageStrategy, number>>(() => {
@@ -1459,6 +1471,9 @@ const AdGenerator = () => {
         campaignIntent: effectiveIntent,
         imageModel,
         formatHint: gridFormat,
+        // Per-slot, not per-batch: only a slot whose every cell shares one angle may be directed
+        // toward that angle's scene, or a shared image would be biased toward one cell's angle.
+        angles: slotAngles,
         customDirection: batchCustomDirection,
         onProgress: setGenerationProgress,
       });
@@ -1529,6 +1544,7 @@ const AdGenerator = () => {
         campaignIntent: effectiveIntent,
         imageModel,
         formatHint: gridFormat,
+        angle: slotAngles[index],
         // A note written on this card is about this image, so it beats the batch brief. With no
         // note, the reroll inherits the batch brief and stays consistent with its siblings.
         customDirection: slotDirection ?? batchCustomDirection,
@@ -2090,6 +2106,7 @@ const AdGenerator = () => {
         businessType,
         campaignIntent: adToUpdate.campaignIntent || effectiveIntent,
         imageModel,
+        angle: angleOf(adToUpdate),
         // Regeneration must re-run against the brief that produced the batch, for the same
         // reason it re-runs against the same product and variation strength.
         customDirection: batchCustomDirection,
@@ -2140,6 +2157,7 @@ const AdGenerator = () => {
         descriptorsById: inspiration.activeDescriptorsById,
         imageHeadlines: adToUpdate.imageHeadlines,
         imageModel,
+        angles: Array(count).fill(angleOf(adToUpdate)),
         customDirection: batchCustomDirection,
       });
 

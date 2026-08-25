@@ -165,6 +165,19 @@ export function isValidFormat(s: string | undefined): s is FormatType {
   return !!s && (FORMAT_VALUES as readonly string[]).includes(s);
 }
 
+/**
+ * The runtime counterpart of `GridAngle = Exclude<ConceptType, 'auto'>`: the concrete angle a
+ * concept selection stands for, or `undefined` for the auto sentinel (which stands for "let the
+ * analysis decide" and so names no single angle).
+ *
+ * Lives here because the type it mirrors does. It existed three times as an inline ternary —
+ * copy generation, the Veo prompt and the image path — and two of them disagreed about whether
+ * "no angle" was `null` or `undefined`.
+ */
+export function concreteAngle(concept: ConceptType | undefined): GridAngle | undefined {
+  return concept && concept !== 'auto' ? concept : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Ad-name token: build (publish) + parse (analysis)
 // Format: [CI|a:pain|h:callout|f:static_screenshot] <readable name>
