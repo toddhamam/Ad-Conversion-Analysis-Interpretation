@@ -29,6 +29,7 @@ import type {
 } from './openaiApi';
 import type { FormatType, GridShape, GridAngle, HookType } from '../lib/axisTags';
 import type { CampaignIntent } from '../types/organization';
+import type { CustomDirectionMode } from '../lib/customDirection';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -56,6 +57,11 @@ export interface BatchSessionContext {
   imageSize?: ImageSize;
   imageModel?: ImageModel;
   variationCount?: number;
+  // Operator creative brief for image generation. Persisted for the same reason the other
+  // generation knobs are: per-image regeneration days later must re-run against the brief that
+  // produced the batch, not against a default it never used. See lib/customDirection.ts.
+  customDirectionText?: string;
+  customDirectionMode?: CustomDirectionMode;
   // Step 2 — copy options + the user's selections
   copyOptions?: {
     headlines: CopyOption[];

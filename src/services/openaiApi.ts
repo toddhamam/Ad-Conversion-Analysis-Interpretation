@@ -15,6 +15,14 @@ import { isValidHook, isValidAngle, DEFAULT_GRID_ANGLES, DEFAULT_GRID_HOOKS, HOO
 import { buildReferenceBlock, type StyleReference } from '../lib/referenceProvenance';
 import { resolveReferenceSet, projectProductImages } from './referenceSet';
 import { mergeStyleDescriptors, isDescriptorCacheEnabled, isUsableDescriptor, type StyleDescriptor } from '../lib/styleDescriptor';
+import {
+  normalizeCustomDirection,
+  buildCustomDirectionBlock,
+  suppressesDerivedDirection,
+  OVERRIDDEN_DIRECTION_NOTICE,
+  type CustomDirectionInput,
+  type CustomDirectionMode,
+} from '../lib/customDirection';
 
 // ─── OpenAI API Calls ───────────────────────────────────────────────────────
 // All OpenAI calls route through the backend proxy (/api/ai/*) so the API key
@@ -892,6 +900,13 @@ export interface GeneratedImageResult {
   revisedPrompt: string;
   fidelityScore?: number;    // 0-100 product-match score from the fidelity gate (mockup ads only)
   fidelityIssues?: string[]; // Specific product mismatches found by the gate (empty when clean)
+  /**
+   * Which brief mode produced this image; absent when no operator brief was used. THE ONE
+   * PERSISTED FACT about the brief's involvement — the badge text and whether the image may be
+   * presented as derived from proven winners are DERIVED from it, in the same shape as ADR #20's
+   * `ReferenceSource`. Do not add a parallel boolean.
+   */
+  customDirectionMode?: CustomDirectionMode;
 }
 
 export interface GeneratedVideoResult {
@@ -4152,7 +4167,26 @@ async function precomputeReferenceSet(config: {
   descriptorsById?: Record<string, StyleDescriptor>;
   computeMissingEmbeddings?: boolean;
   onProgress?: (message: string) => void;
+  /** Operator brief. In `override` mode style references are dropped here — see below. */
+  customDirection?: CustomDirectionInput | null;
 }): Promise<PrecomputedRefs> {
+  // An override brief means "ignore what this account has been running". Attaching style
+  // references anyway and then telling the model not to emulate them is the muddy-compromise
+  // failure mode this mode exists to avoid — so they are dropped at the source, which also
+  // skips the vision call and keeps 25-50MB of base64 out of the request entirely.
+  // Product mockups are NOT dropped: they are identity, not direction.
+  if (suppressesDerivedDirection(normalizeCustomDirection(config.customDirection))) {
+    console.log('🎯 Operator brief in override mode — style references withheld, no vision call');
+    return {
+      styleRefs: [],
+      // Straight from the product context: mockups are identity, and style selection (which is
+      // what resolveReferenceSet exists for) has nothing left to choose here.
+      productImages: projectProductImages(config.productContext),
+      // The zero-reference branch of analyzeReferenceImages: neutral defaults, no network call.
+      refAnalysis: await analyzeReferenceImages([]),
+    };
+  }
+
   const set = await resolveReferenceSet({
     productContext: config.productContext,
     audienceType: config.audienceType,
@@ -4519,8 +4553,23 @@ export async function generateAdImage(config: {
   imageModel?: ImageModel;
   // Format axis hint (BlitzScale grid): 'static_screenshot' | 'static_graphic'
   formatHint?: FormatType;
+  /**
+   * Operator-authored creative brief. `blend` layers it over the account-derived direction;
+   * `override` replaces that direction and withholds style references. Never overrides the
+   * product identity lock, text rules, format directive, or safety directive — see
+   * `lib/customDirection.ts`.
+   */
+  customDirection?: CustomDirectionInput | null;
 }): Promise<GeneratedImageResult> {
   const provider = config.imageModel ?? DEFAULT_IMAGE_MODEL_PROVIDER;
+
+  // An override brief means the account contributed nothing to this image. Rather than gating
+  // every account-derived block inside both prompt builders, empty the INPUTS those blocks read
+  // — each one is already conditional on its data being present, so they omit themselves.
+  // Style references are withheld the same way, in precomputeReferenceSet.
+  const engineConfig = suppressesDerivedDirection(normalizeCustomDirection(config.customDirection))
+    ? { ...config, analysisData: null, adLibraryInspirations: undefined }
+    : config;
 
   // Cross-provider fallback: try the selected engine, then automatically fall over to the other on
   // any infra/account failure — billing hard limit, quota, timeout, 5xx, out-of-memory, or an
@@ -4528,8 +4577,8 @@ export async function generateAdImage(config: {
   // the same prompt would be refused by the other engine too. Fallback is per-image, so a single
   // batch can legitimately come back mixed-engine when one variation trips a transient failure.
   const runners: Record<ImageModel, { available: boolean; run: (fidelityFeedback?: string) => Promise<GeneratedImageResult> }> = {
-    gemini: { available: isGeminiConfigured(), run: (fidelityFeedback?: string) => generateAdImageWithGemini({ ...config, fidelityFeedback }) },
-    openai: { available: isOpenAIConfigured(), run: (fidelityFeedback?: string) => generateAdImageWithGptImage({ ...config, fidelityFeedback }) },
+    gemini: { available: isGeminiConfigured(), run: (fidelityFeedback?: string) => generateAdImageWithGemini({ ...engineConfig, fidelityFeedback }) },
+    openai: { available: isOpenAIConfigured(), run: (fidelityFeedback?: string) => generateAdImageWithGptImage({ ...engineConfig, fidelityFeedback }) },
   };
   const order: ImageModel[] = provider === 'openai' ? ['openai', 'gemini'] : ['gemini', 'openai'];
   const attempts = order.filter(name => runners[name].available);
@@ -4543,14 +4592,14 @@ export async function generateAdImage(config: {
   // is below FIDELITY_GATE_THRESHOLD. Keeps whichever attempt replicated the product
   // better. Inspector failures are non-fatal — the image is returned unscored.
   const applyFidelityGate = async (engine: ImageModel, first: GeneratedImageResult): Promise<GeneratedImageResult> => {
-    const productImages = config.precomputedRefs?.productImages
-      ?? projectProductImages(config.productContext);
+    const productImages = engineConfig.precomputedRefs?.productImages
+      ?? projectProductImages(engineConfig.productContext);
     if (productImages.length === 0) return first;
 
     const generated = dataUrlToInline(first.imageUrl);
     if (!generated) return first;
 
-    const verdict = await verifyProductFidelity(generated, productImages, config.productContext?.name);
+    const verdict = await verifyProductFidelity(generated, productImages, engineConfig.productContext?.name);
     if (!verdict) return first;
 
     if (verdict.score >= FIDELITY_GATE_THRESHOLD) {
@@ -4599,6 +4648,30 @@ export async function generateAdImage(config: {
 }
 
 /**
+ * The BlitzScale format-axis directive.
+ *
+ * Defined once because it must ship identically on both engines: format is an axis UNDER TEST in
+ * a Blitz grid, and `generateAdImage` fails over between engines per image — so a directive that
+ * exists on only one builder silently drops the variable being measured for whichever cells the
+ * other engine happened to answer. It lived only in the Gemini builder until this was extracted.
+ */
+function formatDirectiveFor(formatHint?: FormatType): string[] {
+  if (formatHint === 'static_screenshot') {
+    return [
+      '',
+      'FORMAT — AUTHENTIC SCREENSHOT: Render this as a realistic phone/app screenshot (a real text message, DM, Stripe/revenue dashboard, results screen, or social post), NOT a polished marketing graphic. It should look genuinely captured and native to the platform. Authentic screenshots consistently out-convert designed graphics for proof-driven ads.',
+    ];
+  }
+  if (formatHint === 'static_graphic') {
+    return [
+      '',
+      'FORMAT — POLISHED GRAPHIC: Render this as a clean, intentional, professionally designed marketing graphic.',
+    ];
+  }
+  return [];
+}
+
+/**
  * Generate an ad image using Google Gemini Nano Banana Pro
  * Now includes visual references from top-performing ads for brand consistency
  */
@@ -4622,6 +4695,7 @@ async function generateAdImageWithGemini(config: {
   formatHint?: FormatType;
   // Corrective feedback from a failed fidelity-gate inspection (set on gate retries only)
   fidelityFeedback?: string;
+  customDirection?: CustomDirectionInput | null;
 }): Promise<GeneratedImageResult> {
   const similarity = config.similarityLevel ?? 30; // Default to 30% variation
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
@@ -4639,12 +4713,26 @@ async function generateAdImageWithGemini(config: {
   const refs: PrecomputedRefs = config.precomputedRefs
     ?? await precomputeReferenceSet({ ...config, computeMissingEmbeddings: false });
 
+  // Operator brief. In `override` mode the account-derived visual blocks below are withheld and
+  // the brief supplies the direction instead; the contract blocks (product identity lock,
+  // reference roles, aspect ratio, text rules, format, safety) ship in BOTH modes and are
+  // emitted after the brief so they read last. See lib/customDirection.ts.
+  const customDirection = normalizeCustomDirection(config.customDirection);
+  const useDerivedDirection = !suppressesDerivedDirection(customDirection);
+
   // StyleReference is structurally a { data, mimeType } — the inline-attachment code below
   // reads it directly, while the prompt builders read the provenance fields.
-  const styleImages = refs.styleRefs;
+  //
+  // Belt-and-braces on the override contract: `precomputeReferenceSet` already withholds style
+  // references for an override brief, but a caller supplying `precomputedRefs` directly skips
+  // that function entirely — so the rule is enforced again here, where the prompt is assembled.
+  // Product mockups are never dropped: they are identity, not direction.
+  const styleImages = useDerivedDirection ? refs.styleRefs : [];
   const productImages = refs.productImages;
   const refAnalysis = refs.refAnalysis;
-  const refConversionContext = refConversionContextFor(refs.styleRefs);
+  // Derived from the images actually being sent — an override request has no measured wording
+  // to earn, because it has no references left to have measured.
+  const refConversionContext = refConversionContextFor(styleImages);
 
   // Build a detailed prompt for Gemini.
   // When product mockups are attached, the task is framed as PRODUCT PLACEMENT (take the
@@ -4656,10 +4744,17 @@ async function generateAdImageWithGemini(config: {
         'The product must be a faithful 1:1 reproduction of the mockup — same artwork, text, fonts, colors, layout, and proportions. Only the scene around it is newly created, following the creative direction below.',
         '',
       ]
-    : [
-        'Generate a professional advertisement image that PRECISELY matches the provided reference style.',
-        '',
-      ];
+    : styleImages.length > 0
+      ? [
+          'Generate a professional advertisement image that PRECISELY matches the provided reference style.',
+          '',
+        ]
+      // No product mockup and no style references — the state an override brief always produces.
+      // Promising a "provided reference style" that isn't attached invents a constraint.
+      : [
+          'Generate a professional advertisement image from the creative direction below.',
+          '',
+        ];
 
   // Creative variation level instructions based on similarity setting
   const getSimilarityInstructions = () => {
@@ -4730,15 +4825,20 @@ Explore fresh visual directions while maintaining professional quality.`,
 
   const similarityInstructions = getSimilarityInstructions();
 
-  // Always include creative direction
-  promptParts.push(
-    `⚠️ CREATIVE DIRECTION: ${similarityInstructions.level} (${similarity}% variation from references)`,
-    '',
-    similarityInstructions.instruction,
-    '',
-    `Emphasis: ${similarityInstructions.emphasis}`,
-    ''
-  );
+  // The ladder reads entirely off refAnalysis, which carries no information once an override
+  // brief has withheld the style references it describes.
+  if (useDerivedDirection) {
+    promptParts.push(
+      `⚠️ CREATIVE DIRECTION: ${similarityInstructions.level} (${similarity}% variation from references)`,
+      '',
+      similarityInstructions.instruction,
+      '',
+      `Emphasis: ${similarityInstructions.emphasis}`,
+      ''
+    );
+  } else {
+    promptParts.push(OVERRIDDEN_DIRECTION_NOTICE, '');
+  }
 
   // The creative direction must never be read as license to redesign the product
   if (productImages.length > 0) {
@@ -4801,11 +4901,13 @@ Explore fresh visual directions while maintaining professional quality.`,
     `TARGET AUDIENCE: ${config.audienceType.toUpperCase()} (${audienceAngle.awarenessLevel})`,
     `- Focus: ${audienceAngle.focus}`,
     `- Tone: ${audienceAngle.tone}`,
-    `- Visual implication: ${config.audienceType === 'prospecting'
+    // WHO the audience is stays in every mode — that is targeting. The visual implication is a
+    // prescription about how the image should LOOK, so an override brief drops it.
+    ...(useDerivedDirection ? [`- Visual implication: ${config.audienceType === 'prospecting'
       ? 'Image should evoke curiosity and problem recognition -- NOT product showcase'
       : config.audienceType === 'retargeting'
       ? 'Image should reinforce product credibility and mechanism -- can feature the product prominently'
-      : 'Image should feel exclusive and premium -- VIP treatment, insider access'}`,
+      : 'Image should feel exclusive and premium -- VIP treatment, insider access'}`] : []),
     ''
   );
 
@@ -4815,11 +4917,11 @@ Explore fresh visual directions while maintaining professional quality.`,
     promptParts.push(
       `CAMPAIGN INTENT: ${imgIntentConfig.label}`,
       `- ${imgIntentConfig.description}`,
-      `- ${config.campaignIntent === 'purchase'
+      ...(useDerivedDirection ? [`- ${config.campaignIntent === 'purchase'
         ? 'Visual should emphasize the product, its value, and the purchase outcome — show what the buyer gets'
         : config.campaignIntent === 'quiz'
         ? 'Visual should evoke curiosity and self-discovery — abstract imagery of hidden layers, identity, or inner exploration. Avoid showing the product. The visual should make the viewer wonder "what will I discover about myself?"'
-        : 'Visual should emphasize the transformation, the result of taking action — consultation, freedom, next step'}`,
+        : 'Visual should emphasize the transformation, the result of taking action — consultation, freedom, next step'}`] : []),
       ''
     );
   }
@@ -4865,6 +4967,12 @@ Explore fresh visual directions while maintaining professional quality.`,
       promptParts.push(`  ${i + 1}. ${insp.pageName} (ran ${insp.durationDays} days): ${bodyPreview}`);
     });
     promptParts.push('');
+  }
+
+  // THE SEAM. Everything above may be overridden by the brief; everything below may not.
+  // Do not move this push without re-reading lib/customDirection.ts — position is the guarantee.
+  if (customDirection) {
+    promptParts.push(...buildCustomDirectionBlock(customDirection));
   }
 
   if (config.headlineText) {
@@ -4937,17 +5045,7 @@ Explore fresh visual directions while maintaining professional quality.`,
   }
 
   // Format axis directive (BlitzScale grid). Static-only in v1.
-  if (config.formatHint === 'static_screenshot') {
-    promptParts.push(
-      '',
-      'FORMAT — AUTHENTIC SCREENSHOT: Render this as a realistic phone/app screenshot (a real text message, DM, Stripe/revenue dashboard, results screen, or social post), NOT a polished marketing graphic. It should look genuinely captured and native to the platform. Authentic screenshots consistently out-convert designed graphics for proof-driven ads.'
-    );
-  } else if (config.formatHint === 'static_graphic') {
-    promptParts.push(
-      '',
-      'FORMAT — POLISHED GRAPHIC: Render this as a clean, intentional, professionally designed marketing graphic.'
-    );
-  }
+  promptParts.push(...formatDirectiveFor(config.formatHint));
 
   // Fidelity-gate retry: surface the inspector's concrete mismatches so this attempt
   // corrects them instead of repeating the same drift
@@ -5126,6 +5224,7 @@ Explore fresh visual directions while maintaining professional quality.`,
       return {
         imageUrl: `data:${mimeType};base64,${imageData}`,
         revisedPrompt: textResponse || prompt,
+        customDirectionMode: customDirection?.mode,
       };
     } catch (err: unknown) {
       // Safety/policy blocks are not retryable — fail immediately
@@ -5224,6 +5323,8 @@ async function generateAdImageWithGptImage(config: {
   campaignIntent?: import('../types/organization').CampaignIntent;
   // Corrective feedback from a failed fidelity-gate inspection (set on gate retries only)
   fidelityFeedback?: string;
+  customDirection?: CustomDirectionInput | null;
+  formatHint?: FormatType;
 }): Promise<GeneratedImageResult> {
   const similarity = config.similarityLevel ?? 30;
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
@@ -5239,10 +5340,16 @@ async function generateAdImageWithGptImage(config: {
   const refs: PrecomputedRefs = config.precomputedRefs
     ?? await precomputeReferenceSet({ ...config, computeMissingEmbeddings: false });
 
-  const styleImages = refs.styleRefs;
+  // Same brief semantics as the Gemini path — the block text and the mode rules come from the
+  // one module both engines import, so a brief cannot be honoured here and dropped there.
+  const customDirection = normalizeCustomDirection(config.customDirection);
+  const useDerivedDirection = !suppressesDerivedDirection(customDirection);
+
+  // See the Gemini builder for why the override filter is repeated at prompt-assembly time.
+  const styleImages = useDerivedDirection ? refs.styleRefs : [];
   const productImages = refs.productImages;
   const refAnalysis = refs.refAnalysis;
-  const refConversionContext = refConversionContextFor(refs.styleRefs);
+  const refConversionContext = refConversionContextFor(styleImages);
 
   // Build prompt — same structure as the Gemini path so outputs are comparable.
   // With product mockups attached, frame the task as product placement (see Gemini path).
@@ -5252,10 +5359,17 @@ async function generateAdImageWithGptImage(config: {
         'The product must be a faithful 1:1 reproduction of the mockup — same artwork, text, fonts, colors, layout, and proportions. Only the scene around it is newly created, following the creative direction below.',
         '',
       ]
-    : [
-        'Generate a professional advertisement image that PRECISELY matches the provided reference style.',
-        '',
-      ];
+    : styleImages.length > 0
+      ? [
+          'Generate a professional advertisement image that PRECISELY matches the provided reference style.',
+          '',
+        ]
+      // See the Gemini builder: an override brief withholds style references, so there is no
+      // "provided reference style" to match.
+      : [
+          'Generate a professional advertisement image from the creative direction below.',
+          '',
+        ];
 
   const getSimilarityInstructions = () => {
     if (similarity <= 20) {
@@ -5280,7 +5394,11 @@ USE: color palette ${refAnalysis.colorPalette}; mood ${refAnalysis.mood}; visual
     return `BOLD & DIFFERENT (${similarity}% variation). Use references only as a quality benchmark. Explore completely new visual directions.`;
   };
 
-  promptParts.push(`CREATIVE DIRECTION: ${getSimilarityInstructions()}`, '');
+  if (useDerivedDirection) {
+    promptParts.push(`CREATIVE DIRECTION: ${getSimilarityInstructions()}`, '');
+  } else {
+    promptParts.push(OVERRIDDEN_DIRECTION_NOTICE, '');
+  }
 
   // See the note in the Gemini builder: a non-empty refConversionContext is the predicate
   // "at least one reference is an own-account winner with measured delivery data".
@@ -5323,11 +5441,12 @@ USE: color palette ${refAnalysis.colorPalette}; mood ${refAnalysis.mood}; visual
     `TARGET AUDIENCE: ${config.audienceType.toUpperCase()} (${audienceAngle.awarenessLevel})`,
     `- Focus: ${audienceAngle.focus}`,
     `- Tone: ${audienceAngle.tone}`,
-    `- Visual implication: ${config.audienceType === 'prospecting'
+    // See the Gemini builder: targeting stays, the visual prescription drops under an override.
+    ...(useDerivedDirection ? [`- Visual implication: ${config.audienceType === 'prospecting'
       ? 'Image should evoke curiosity and problem recognition'
       : config.audienceType === 'retargeting'
       ? 'Image should reinforce product credibility and mechanism'
-      : 'Image should feel exclusive and premium'}`,
+      : 'Image should feel exclusive and premium'}`] : []),
     ''
   );
 
@@ -5364,6 +5483,11 @@ USE: color palette ${refAnalysis.colorPalette}; mood ${refAnalysis.mood}; visual
       promptParts.push(`  ${i + 1}. ${insp.pageName} (${insp.durationDays} days): ${bodyPreview}`);
     });
     promptParts.push('');
+  }
+
+  // THE SEAM — same position as the Gemini builder. See lib/customDirection.ts.
+  if (customDirection) {
+    promptParts.push(...buildCustomDirectionBlock(customDirection));
   }
 
   if (config.headlineText) {
@@ -5425,6 +5549,8 @@ USE: color palette ${refAnalysis.colorPalette}; mood ${refAnalysis.mood}; visual
       'The product itself never changes. You are placing the existing product into different scenes — not redesigning it.'
     );
   }
+
+  promptParts.push(...formatDirectiveFor(config.formatHint));
 
   // Fidelity-gate retry: surface the inspector's concrete mismatches so this attempt
   // corrects them instead of repeating the same drift
@@ -5555,6 +5681,7 @@ USE: color palette ${refAnalysis.colorPalette}; mood ${refAnalysis.mood}; visual
       return {
         imageUrl,
         revisedPrompt: result.revised_prompt || prompt,
+        customDirectionMode: customDirection?.mode,
       };
     } catch (err: unknown) {
       lastError = err instanceof Error ? err : new Error(String(err));
@@ -6194,6 +6321,8 @@ export async function regenerateAllImages(config: {
   campaignIntent?: import('../types/organization').CampaignIntent;
   imageModel?: ImageModel;
   formatHint?: FormatType;
+  /** Operator brief — applies to every variation in the batch. See lib/customDirection.ts. */
+  customDirection?: CustomDirectionInput | null;
 }): Promise<{ images: GeneratedImageResult[]; indexedResults: (GeneratedImageResult | null)[]; imageError?: string }> {
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
   const imageModel = config.imageModel ?? DEFAULT_IMAGE_MODEL_PROVIDER;
@@ -6243,6 +6372,7 @@ export async function regenerateAllImages(config: {
         campaignIntent: config.campaignIntent,
         imageModel,
         formatHint: config.formatHint,
+        customDirection: config.customDirection,
       });
     });
     const batchResults = await Promise.allSettled(batchPromises);
@@ -6338,6 +6468,8 @@ export async function generateAdPackage(config: {
   campaignIntent?: import('../types/organization').CampaignIntent;
   // Image generation provider — 'gemini' (default) or 'openai' (gpt-image-2)
   imageModel?: ImageModel;
+  /** Operator brief for the image half of the package. See lib/customDirection.ts. */
+  customDirection?: CustomDirectionInput | null;
 }): Promise<GeneratedAdPackage> {
   const conceptName = config.conceptType ? CONCEPT_ANGLES[config.conceptType].name : 'general';
   const reasoningEffort = config.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
@@ -6389,6 +6521,7 @@ export async function generateAdPackage(config: {
       businessType: config.businessType,
       campaignIntent: config.campaignIntent,
       imageModel: config.imageModel,
+      customDirection: config.customDirection,
     });
     images = imageResult.images;
     imageError = imageResult.imageError;

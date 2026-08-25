@@ -4,6 +4,8 @@ import { HOOK_LABELS } from '../lib/axisTags';
 import BlitzImageStrategySelector from './BlitzImageStrategySelector';
 import ImageModelSelector from './ImageModelSelector';
 import CreativeVariationSlider from './CreativeVariationSlider';
+import CustomDirectionField from './CustomDirectionField';
+import type { CustomDirectionDraft } from '../lib/customDirection';
 
 // Grid-review step: prune + per-cell reroll the Angle × Hook copy matrix before
 // spending image credits. Presentational — all state/handlers live in AdGenerator.
@@ -22,6 +24,9 @@ interface GridReviewPanelProps {
   creativeVariation: number;                            // 0 = match reference visuals, 100 = bold new style
   onCreativeVariationChange: (v: number) => void;
   creativeHasReference: boolean;                        // cached winners / analysis available to anchor visuals
+  // Operator creative brief for every image in this batch — see lib/customDirection.ts
+  customDirection: CustomDirectionDraft;
+  onCustomDirectionChange: (draft: CustomDirectionDraft) => void;
   onToggleKeep: (id: string) => void;
   onReroll: (id: string) => void;
   onBack: () => void;
@@ -42,6 +47,8 @@ function GridReviewPanel({
   creativeVariation,
   onCreativeVariationChange,
   creativeHasReference,
+  customDirection,
+  onCustomDirectionChange,
   onToggleKeep,
   onReroll,
   onBack,
@@ -115,6 +122,18 @@ function GridReviewPanel({
         hasReference={creativeHasReference}
         disabled={isGenerating}
       />
+      <div className="config-section">
+        <label className="config-label">Creative Brief <span className="manual-entry-optional">(optional)</span></label>
+        <p className="config-hint">
+          Have something specific in mind? Describe it and ConversionIQ™ builds to your brief instead of
+          guessing from past ads. Useful on a new account with no ad history to learn from.
+        </p>
+        <CustomDirectionField
+          draft={customDirection}
+          onChange={onCustomDirectionChange}
+          disabled={isGenerating}
+        />
+      </div>
       <div className="grid-review-actions">
         <button
           type="button"

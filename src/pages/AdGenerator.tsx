@@ -55,6 +55,7 @@ import BlitzImageReviewPanel from '../components/BlitzImageReviewPanel';
 import BlitzImageStrategySelector from '../components/BlitzImageStrategySelector';
 import ImageModelSelector from '../components/ImageModelSelector';
 import CreativeVariationSlider from '../components/CreativeVariationSlider';
+import CustomDirectionField from '../components/CustomDirectionField';
 import AdLibraryBrowser from '../components/AdLibraryBrowser';
 import InspirationSelector from '../components/InspirationSelector';
 import SEO from '../components/SEO';
@@ -76,6 +77,10 @@ import {
 } from '../hooks/useInspirationReferences';
 import { slugifyCallout, GRID_CELL_CAP, type GridShape } from '../lib/axisTags';
 import { resolveGridPlan, GRID_SHAPES, GRID_SHAPE_VALUES } from '../lib/gridPlan';
+import {
+  EMPTY_CUSTOM_DIRECTION, draftToInput,
+  type CustomDirectionDraft, type CustomDirectionInput,
+} from '../lib/customDirection';
 import { longevityLabel } from '../components/referenceProvenanceCopy';
 import { fetchSwipeImage, type SwipeLibraryItem, type SwipeElementType } from '../services/swipeLibraryApi';
 import { reserveCredits, confirmCredits, refundCredits, InsufficientCreditsError, checkCredits } from '../services/stripeApi';
@@ -416,6 +421,13 @@ const AdGenerator = () => {
 
   // Creative variation control (0 = identical to references, 100 = completely different)
   const [similarityValue, setSimilarityValue] = useState(30); // Default: 30% variation (70% similar)
+  // Operator creative brief for the whole batch. `blend` layers it over ConversionIQ™'s derived
+  // direction; `override` replaces that direction outright. Applies to image generation only —
+  // copy has its own authored layer in Brand Voice. See lib/customDirection.ts.
+  const [customDirection, setCustomDirection] = useState<CustomDirectionDraft>(EMPTY_CUSTOM_DIRECTION);
+  // Memoized because it is a useCallback dependency: a fresh object each keystroke would rebuild
+  // the regeneration handlers and defeat memo() on every generated ad card.
+  const batchCustomDirection = useMemo(() => draftToInput(customDirection), [customDirection]);
 
   // Copy variation control (0 = replicate winners exactly, 100 = radically different angles)
   const [copyVariationValue, setCopyVariationValue] = useState(30);
@@ -448,6 +460,9 @@ const AdGenerator = () => {
     setBlitzImageError(undefined);
     setGeneratedAds([]);
     setBatchPublishedAt(null);
+    // "Start over / New brief" means a new brief in the literal sense too — carrying the old
+    // creative brief into a blank slate would silently steer the next batch.
+    setCustomDirection(EMPTY_CUSTOM_DIRECTION);
     setCurrentStep('config');
   }, []);
 
@@ -473,6 +488,8 @@ const AdGenerator = () => {
       imageSize,
       imageModel,
       variationCount,
+      customDirectionText: customDirection.text,
+      customDirectionMode: customDirection.mode,
       copyOptions,
       selectedHeadlines,
       selectedBodyTexts,
@@ -513,6 +530,7 @@ const AdGenerator = () => {
   }, [
     audienceType, conceptType, effectiveIntent, copySource, adType, selectedProductId,
     similarityValue, copyVariationValue, imageSize, imageModel, variationCount,
+    customDirection,
     copyOptions, selectedHeadlines, selectedBodyTexts, selectedCTAs,
     generationMode, gridFormat, gridShape, gridAngles, gridHooks, gridCallouts,
     blitzImageStrategy, corePromise, gridCells, keptCellIds, currentStep,
@@ -865,6 +883,14 @@ const AdGenerator = () => {
         if (s.imageSize) setImageSize(s.imageSize);
         if (s.imageModel) setImageModel(s.imageModel);
         if (typeof s.variationCount === 'number') setVariationCount(s.variationCount);
+        // Set authoritatively so a brief never leaks in from a previously-viewed account. `open`
+        // is view state and is not persisted — it is derived from whether a brief came back.
+        const restoredBrief = typeof s.customDirectionText === 'string' ? s.customDirectionText : '';
+        setCustomDirection({
+          text: restoredBrief,
+          mode: s.customDirectionMode === 'override' ? 'override' : 'blend',
+          open: !!restoredBrief.trim(),
+        });
         if (s.copyOptions !== undefined) setCopyOptions(s.copyOptions);
         if (Array.isArray(s.selectedHeadlines)) setSelectedHeadlines(s.selectedHeadlines);
         if (Array.isArray(s.selectedBodyTexts)) setSelectedBodyTexts(s.selectedBodyTexts);
@@ -1433,6 +1459,7 @@ const AdGenerator = () => {
         campaignIntent: effectiveIntent,
         imageModel,
         formatHint: gridFormat,
+        customDirection: batchCustomDirection,
         onProgress: setGenerationProgress,
       });
       if (result.images.length === 0) {
@@ -1480,7 +1507,7 @@ const AdGenerator = () => {
   };
 
   // Reroll a single image in the reviewed pool (free, mirrors the single-ad per-image regen).
-  const handleRegenerateBlitzImage = async (index: number) => {
+  const handleRegenerateBlitzImage = async (index: number, slotDirection?: CustomDirectionInput) => {
     if (regeneratingBlitzIndex !== null) return;
     setRegeneratingBlitzIndex(index);
     setError(null);
@@ -1502,6 +1529,9 @@ const AdGenerator = () => {
         campaignIntent: effectiveIntent,
         imageModel,
         formatHint: gridFormat,
+        // A note written on this card is about this image, so it beats the batch brief. With no
+        // note, the reroll inherits the batch brief and stays consistent with its siblings.
+        customDirection: slotDirection ?? batchCustomDirection,
       });
       setBlitzImages(prev => prev.map((img, i) => (i === index ? newImage : img)));
     } catch (err: unknown) {
@@ -1772,6 +1802,7 @@ const AdGenerator = () => {
         businessType,
         campaignIntent: effectiveIntent,
         imageModel,
+        customDirection: batchCustomDirection,
       });
 
       // Confirm credit consumption on success
@@ -2059,6 +2090,9 @@ const AdGenerator = () => {
         businessType,
         campaignIntent: adToUpdate.campaignIntent || effectiveIntent,
         imageModel,
+        // Regeneration must re-run against the brief that produced the batch, for the same
+        // reason it re-runs against the same product and variation strength.
+        customDirection: batchCustomDirection,
       });
 
       // Update the ad with the new image
@@ -2080,7 +2114,7 @@ const AdGenerator = () => {
       throw new Error(err instanceof Error ? err.message : 'Failed to regenerate image');
     }
   }, [generatedAds, analysisData, similarityValue, imageSize, selectedProduct, imageModel,
-      inspiration, businessType, effectiveIntent]);
+      inspiration, businessType, effectiveIntent, batchCustomDirection]);
 
   // Regenerate ALL images for an ad package (keeps copy intact)
   const handleRegenerateAllImages = useCallback(async (adId: string) => {
@@ -2106,6 +2140,7 @@ const AdGenerator = () => {
         descriptorsById: inspiration.activeDescriptorsById,
         imageHeadlines: adToUpdate.imageHeadlines,
         imageModel,
+        customDirection: batchCustomDirection,
       });
 
       // Use indexedResults for per-slot merging: keep existing image where new generation failed
@@ -2150,7 +2185,7 @@ const AdGenerator = () => {
       throw new Error(errorMessage);
     }
   }, [generatedAds, analysisData, similarityValue, imageSize, selectedProduct, variationCount, imageModel,
-      inspiration]);
+      inspiration, batchCustomDirection]);
 
   // Regenerate a single video within an ad package
   const handleRegenerateVideo = useCallback(async (adId: string, videoIndex: number) => {
@@ -3338,6 +3373,8 @@ const AdGenerator = () => {
           creativeVariation={similarityValue}
           onCreativeVariationChange={setSimilarityValue}
           creativeHasReference={imageCacheCount > 0 || !!analysisData}
+          customDirection={customDirection}
+          onCustomDirectionChange={setCustomDirection}
           onToggleKeep={handleToggleKeepCell}
           onReroll={handleRerollGridCell}
           onBack={() => setCurrentStep('config')}
@@ -4048,6 +4085,25 @@ const AdGenerator = () => {
               onChange={setSimilarityValue}
               hasReference={imageCacheCount > 0 || !!analysisData}
             />
+          )}
+
+          {/* Operator creative brief — image generation only, so it is hidden for video/text ads
+              where the brief has nothing to steer. */}
+          {adType === 'image' && (
+            <div className="config-section">
+              <label className="config-label">
+                Creative Brief <span className="manual-entry-optional">(optional)</span>
+              </label>
+              <p className="config-hint">
+                Have something specific in mind? Describe it and ConversionIQ™ builds to your brief instead
+                of guessing from past ads. Useful on a new account with no ad history to learn from.
+              </p>
+              <CustomDirectionField
+                draft={customDirection}
+                onChange={setCustomDirection}
+                disabled={isGeneratingCreatives}
+              />
+            </div>
           )}
 
           {/* Credit Cost Hint */}
