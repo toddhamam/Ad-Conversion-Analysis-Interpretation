@@ -1,5 +1,59 @@
 # Changelog
 
+## 2026-08-25 — CreativeIQ™: an operator creative brief for image generation
+
+### What
+Image generation could only be steered by what ConversionIQ™ inferred from the account: past winners, `visualAnalysis`, top-ad descriptions, reference style. There was no way for the operator to say *what they actually wanted the image to be*. That is a gap in two directions — a brand-new account has no history to infer from, so the highest-leverage input is a guess; and an established account with a specific idea in mind had no way to express it short of rerolling until the model happened to agree.
+
+This adds a **creative brief** field: free text the operator writes, fed into the image prompt. It is the visual sibling of ADR #19's manual seed — both let a human supply evidence where the account has none.
+
+The design question was not *whether* a brief should outrank the derived direction. It was **what it must never be allowed to outrank**:
+
+| A brief may replace | A brief may never touch |
+|---|---|
+| similarity ladder / style-match instructions | product mockup identity lock |
+| `VISUAL ANALYSIS FROM HIGH-CONVERTING ADS` | reference-image role labelling |
+| `TOP PERFORMING AD IMAGE DESCRIPTIONS` | aspect ratio |
+| `COMPETITOR/INDUSTRY INSPIRATION` | in-image text rules (headline / no-text) |
+| audience + campaign-intent visual implication | format-axis directive |
+| | `IMAGE_SAFETY_DIRECTIVE` |
+
+Two modes, one field:
+
+| Mode | Behaviour |
+|---|---|
+| `blend` *(default)* | The brief layers over the derived direction and wins on conflict. References stay attached. |
+| `override` | The brief **replaces** the derived direction, and style references are withheld from the request entirely. "Emulate these ads" and "do something completely different" cannot both be satisfied — asking for both yields a muddy compromise rather than either one. |
+
+### Added
+- **`src/lib/customDirection.ts`** — modes, normalization, and the **one** definition of the prompt block. Both engine builders import it, so a brief cannot be honoured on Gemini and silently dropped on gpt-image when `generateAdImage` fails over mid-batch. The module header states the invariant and the reason it holds.
+- **The contract is enforced by ORDERING, not by trust.** The brief is emitted at a single seam: after everything it may override, before everything it may not — so the binding rules are the last thing the model reads. A brief saying *"ignore the product mockup and redesign the cover"* is still followed by the identity lock. Asserted in `imagePrompt.test.ts` by **index comparison**, not by substring presence, because presence alone would pass on a prompt where the lock came first and lost.
+- **`CustomDirectionField.tsx`** — collapsed by default in both placements. The point of ConversionIQ™ is that the operator does *not* have to write a brief; an always-open textarea would read as a required field.
+- **Two placements, deliberately different.** Batch-level on the Blitz grid-review and single-flow config steps ("I know what I want"); **per-image "Regenerate with notes"** under each card on the review step ("this one is wrong, make it X"). A note on a card beats the batch brief for that slot; with no note, the reroll inherits the batch brief and stays consistent with its siblings.
+- **`customDirectionMode` on `GeneratedImageResult`** — the one persisted fact about the brief's involvement. The review-card badge and whether an image may be presented as derived from proven winners are **derived** from it, exactly as ADR #20 does for `ReferenceSource`. A briefed image must never read as one built from measured winners — in `override` no reference informed it at all.
+- **25 new tests** (225 → 250), including a **control** test that asserts the derived blocks are present without a brief. Without that control, the suppression assertions would pass on a prompt that never carried those blocks in the first place.
+
+### Fixed
+- **The BlitzScale format directive shipped on only one engine.** `FORMAT — AUTHENTIC SCREENSHOT` / `POLISHED GRAPHIC` existed solely in the Gemini builder. Since `generateAdImage` fails over between engines **per image**, any cell gpt-image answered silently lost the axis under test — the variable being measured, absent from the measurement. Extracted to `formatDirectiveFor()`, emitted by both, with a test. Found while adding the brief, and exactly the drift class the shared-module rule above exists to prevent.
+
+### Changed
+- `BatchSessionContext` now snapshots the brief, for the same reason it snapshots product and variation strength: per-image regeneration days later must re-run against the brief that produced the batch, not a default it never used. `open` is view state and is **not** persisted — it is derived from whether a brief came back.
+- **"Start over / New brief"** now clears the brief. Carrying the old one into a blank slate would silently steer the next batch.
+- `precomputeReferenceSet` returns early under an `override` brief: no style refs, **no vision call**, and 25–50MB of base64 kept off the wire.
+- The no-mockup/no-reference prompt opening no longer promises *"PRECISELY matches the provided reference style"* — a constraint invented out of references the request isn't carrying. That state is exactly what `override` produces.
+
+### Internal
+- **The code-judo move.** Override was first implemented as *suppression*: `&& useDerivedDirection` bolted onto each derived block in **both** builders — 14 new gates. But those blocks were already conditional on their own data. Override doesn't mean "suppress the blocks", it means **the account contributed nothing to this image** — so the *inputs* are emptied once, at the only place both engines converge, and every block omits itself. Six conditionals deleted; neither builder has any per-block override awareness. **14 gates → 4**, three of which are one-line inline spreads.
+- **Two cohesive `promptParts.push(...)` calls had been split into three statements each** to omit a single line — ad-hoc branching tangling a flow that wasn't ours to restructure. Reverted to their original single-call shape using `...(cond ? [line] : [])`.
+- **`CustomDirectionDraft` + `draftToInput`** replaced three loose `useState`s and six threaded props. `CustomDirectionField` 9 props → 5, `GridReviewPanel` 6 → 2, `AdGenerator` 3 state → 1. `draftToInput` is now the single home of the "opened-but-empty behaves as no brief at all" rule, which had been duplicated in two places.
+- **`normalizeCustomDirection` deliberately does NOT run `POLICY_SANITIZE_PATTERNS`.** Those detect personal-attribute assertions in ad *copy* ("Are you struggling with…"); a scene description is not a claim made to a viewer, and silently rewriting *"a woman who looks exhausted at her desk"* would corrupt a legitimate brief. Image-policy enforcement is `IMAGE_SAFETY_DIRECTIVE`, emitted last and therefore outranking anything the brief asks for.
+- The `CustomDirectionInput` / `CustomDirection` split is the untrusted boundary shape vs the validated one, so no call site downstream of `normalizeCustomDirection` handles a half-valid brief.
+- Per-slot notes stay **local** to `BlitzImageReviewPanel`: ephemeral, never persisted, dead when the step ends. Lifting them would add props and state to a 4.2k-line file to buy nothing. The panel's "all state lives in AdGenerator" header was corrected rather than the state moved.
+- **Net structural effect**: no file crossed 1000 lines. `AdGenerator.tsx` 4221 → 4277, `openaiApi.ts` 6684 → 6817. `npm test` (250 passing), `tsc --noEmit` and `npm run build` clean; **lint 96 problems, unchanged from baseline** — every new module clean.
+- **Flagged, not fixed — the two image-prompt builders remain ~90% duplicated**, and `openaiApi.ts` is 6817 lines. The right move is extracting both builders into `src/services/imagePromptBuilder.ts` (~600 lines out), with a per-engine strategy for the one genuine difference: Gemini labels images inline (`[STYLE REFERENCE 1 of 3]`), gpt-image refers to them positionally (`Images 1–3`). That duplication is the **root cause** of the format-directive bug above, not an incidental. Deliberately not bundled here: a 600-line mechanical move on the file that owns every generation path is precisely what breaks the byte-identity guarantees in `imagePrompt.test.ts` quietly. It wants its own PR, where the diff reads as pure motion.
+- **Not verified**: nothing has been exercised in a browser. The flow sits behind auth and needs connected Meta credentials plus a generated copy matrix to reach the review step. Rendering is type-checked and builds; it has not been seen on screen, and no request has gone to a live Gemini or gpt-image endpoint carrying a brief.
+- **Open product question**: a brief-driven reroll currently costs nothing, as plain rerolls always have. A notes box makes rerolling considerably more attractive, so whether that stays free is worth an explicit decision rather than a default.
+
 ## 2026-08-22 — Inspiration Library: external creative as CreativeIQ™ style references, with honest provenance
 
 ### What

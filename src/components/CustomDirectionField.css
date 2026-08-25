@@ -1,0 +1,211 @@
+/* Operator creative brief — collapsed trigger + expanded field.
+   Targeted transitions only: this component renders inside image grids holding base64
+   creatives, where `transition: all` causes paint storms (see CLAUDE.md). */
+
+.cd-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: transparent;
+  border: 1px dashed var(--border-primary);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.cd-toggle:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  border-color: var(--border-violet);
+  color: var(--accent-violet);
+}
+
+.cd-toggle:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 2px;
+}
+
+.cd-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cd-toggle-panel {
+  align-self: flex-start;
+}
+
+.cd-toggle-inline {
+  width: 100%;
+  justify-content: center;
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+/* Dot marking "a brief is already set" on the collapsed trigger */
+.cd-toggle-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-violet);
+}
+
+.cd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-violet);
+  border-radius: 12px;
+  /* Isolate paint from sibling image cards */
+  contain: content;
+}
+
+.cd-field-inline {
+  padding: 10px;
+  gap: 8px;
+  border-radius: 8px;
+}
+
+.cd-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cd-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.cd-close {
+  display: inline-flex;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.cd-close:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.cd-close:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 1px;
+}
+
+.cd-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cd-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.cd-textarea:focus {
+  outline: none;
+  border-color: var(--accent-violet);
+  box-shadow: 0 0 0 3px var(--accent-violet-glow);
+}
+
+.cd-textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cd-modes {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cd-mode {
+  flex: 1 1 auto;
+  padding: 7px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.cd-mode:hover:not(:disabled) {
+  border-color: var(--border-violet);
+  color: var(--text-primary);
+}
+
+.cd-mode.active {
+  background: var(--accent-violet-glow);
+  border-color: var(--accent-violet);
+  color: var(--accent-violet);
+  font-weight: 600;
+}
+
+.cd-mode:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 1px;
+}
+
+.cd-mode:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cd-hint,
+.cd-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.cd-note {
+  padding-top: 8px;
+  border-top: 1px solid var(--border-secondary);
+}
+
+.cd-count {
+  color: var(--text-secondary);
+}
+
+@media (max-width: 600px) {
+  .cd-modes {
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cd-toggle,
+  .cd-close,
+  .cd-textarea,
+  .cd-mode {
+    transition: none;
+  }
+}

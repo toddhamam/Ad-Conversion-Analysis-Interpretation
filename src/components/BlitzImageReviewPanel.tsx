@@ -1,22 +1,43 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { RefreshCw, Loader, AlertTriangle } from 'lucide-react';
 import type { GeneratedImageResult } from '../services/openaiApi';
+import CustomDirectionField from './CustomDirectionField';
+import {
+  EMPTY_CUSTOM_DIRECTION,
+  draftToInput,
+  type CustomDirectionDraft,
+  type CustomDirectionInput,
+  type CustomDirectionMode,
+} from '../lib/customDirection';
 
 // Blitz image-review step: review the small image pool and reroll any single image BEFORE it
 // gets paired across the copy matrix. The pool is intentionally smaller than the copy set so the
 // Angle × Hook copy stays the test variable — these images are shared across the copy variants.
-// Presentational — all state/handlers live in AdGenerator. Uses the .blitz-img-* classes in
-// AdGenerator.css (global stylesheet).
+// All batch state/handlers live in AdGenerator; the one exception is the per-slot brief drafts
+// below, which are ephemeral view state with no meaning outside this step. Uses the .blitz-img-*
+// classes in AdGenerator.css (global stylesheet).
 interface BlitzImageReviewPanelProps {
   images: (GeneratedImageResult | null)[];   // slot-aligned; null = that slot's render failed
   slotLabels: string[];       // what each pool image represents (e.g. an angle/hook), per strategy
   adCount: number;            // how many ads this becomes (one per kept copy cell)
   regeneratingIndex: number | null;
   imageError?: string;
-  onRegenerate: (index: number) => void;
+  /** A per-slot brief is optional; omitted, the reroll runs on account intelligence alone. */
+  onRegenerate: (index: number, customDirection?: CustomDirectionInput) => void;
   onBack: () => void;
   onPublish: () => void;
 }
+
+/** Per-slot brief drafts, keyed by slot index. Deliberately NOT lifted into AdGenerator: a note
+ *  describes one reroll of one image, is never persisted, and dies with this step — so it is
+ *  local view state, not part of the batch session. */
+type SlotBriefs = Record<number, CustomDirectionDraft>;
+
+/** DERIVED from the image's `customDirectionMode` — nothing about the badge is stored. */
+const BRIEF_BADGE: Record<CustomDirectionMode, string> = {
+  blend: 'Your brief + ConversionIQ™',
+  override: 'Your brief only',
+};
 
 function BlitzImageReviewPanel({
   images,
@@ -28,6 +49,9 @@ function BlitzImageReviewPanel({
   onBack,
   onPublish,
 }: BlitzImageReviewPanelProps) {
+  const [briefs, setBriefs] = useState<SlotBriefs>({});
+  const briefFor = (index: number) => briefs[index] ?? EMPTY_CUSTOM_DIRECTION;
+
   const busy = regeneratingIndex !== null;
   const count = images.length;
   const failedCount = images.filter(img => img === null).length;
@@ -66,6 +90,8 @@ function BlitzImageReviewPanel({
       <div className="blitz-img-grid">
         {images.map((image, index) => {
           const rerolling = regeneratingIndex === index;
+          const brief = briefFor(index);
+          const slotDirection = draftToInput(brief);
           return (
             <div key={index} className="blitz-img-card">
               <div className="blitz-img-frame">
@@ -84,21 +110,37 @@ function BlitzImageReviewPanel({
                   </div>
                 )}
                 <span className="blitz-img-index">{slotLabels[index] || `Image ${index + 1}`}</span>
+                {/* An image built from a brief must not read as one derived from proven winners —
+                    especially in override mode, where no reference informed it at all. */}
+                {image?.customDirectionMode && (
+                  <span className="blitz-img-brief-badge">{BRIEF_BADGE[image.customDirectionMode]}</span>
+                )}
               </div>
               <button
                 type="button"
                 className="blitz-img-reroll"
-                onClick={() => onRegenerate(index)}
+                onClick={() => onRegenerate(index, slotDirection)}
                 disabled={busy}
-                title="Generate a fresh image for this slot"
+                title={
+                  slotDirection
+                    ? 'Generate a fresh image for this slot using your brief'
+                    : 'Generate a fresh image for this slot'
+                }
               >
                 {rerolling ? (
                   <Loader size={14} strokeWidth={1.5} className="spinning" />
                 ) : (
                   <RefreshCw size={14} strokeWidth={1.5} />
                 )}
-                {rerolling ? 'Rerolling...' : 'Regenerate'}
+                {rerolling ? 'Rerolling...' : slotDirection ? 'Regenerate with brief' : 'Regenerate'}
               </button>
+              <CustomDirectionField
+                variant="inline"
+                draft={brief}
+                onChange={next => setBriefs(prev => ({ ...prev, [index]: next }))}
+                disabled={busy}
+                placeholder="What should this image show instead?"
+              />
             </div>
           );
         })}

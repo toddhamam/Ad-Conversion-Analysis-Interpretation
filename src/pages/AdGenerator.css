@@ -2238,6 +2238,23 @@
   background: rgba(30, 41, 59, 0.72);
   border-radius: 100px;
 }
+/* Derived from the image's customDirectionMode — marks a creative the operator briefed, so it
+   is never mistaken for one derived from proven winners. */
+.blitz-img-brief-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  max-width: calc(100% - 16px);
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(168, 85, 247, 0.85);
+  border-radius: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .blitz-img-overlay {
   position: absolute;
   inset: 0;
