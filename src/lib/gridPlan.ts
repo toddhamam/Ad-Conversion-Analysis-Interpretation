@@ -206,3 +206,32 @@ export function effectiveHooks(shape: GridShape, config: GridConfig): HookType[]
   const requested = GRID_SHAPES[shape].copyRequest(config).hooks;
   return requested.length > 0 ? requested : [...DEFAULT_GRID_HOOKS];
 }
+
+// ---------------------------------------------------------------------------
+// Slot → angle
+// ---------------------------------------------------------------------------
+
+/**
+ * The angle each rendered image may be directed toward, index-aligned with the image pool.
+ *
+ * ONE RULE: a slot gets an angle iff the cells using that image resolve to exactly ONE distinct
+ * angle. Otherwise it gets `undefined` and the prompt omits the angle block entirely.
+ *
+ * That rule is not a convenience — it is what keeps the experiment readable. Under `per_angle` the
+ * image IS part of the angle treatment, so directing it is correct and hooks remain the isolated
+ * variable within each angle. Under `single` or `per_hook` one image is shared across cells that
+ * disagree about their angle, and pushing any one angle's scene into it would bias every other
+ * cell that borrows it — so no angle is asserted. Expressed as a property of the mapping rather
+ * than as a switch on the strategy, this needs no per-strategy branching and stays correct for
+ * shapes that plan their own slots: a callout matrix pins one angle across every cell, so its base
+ * image is legitimately directed, and a single-angle grid on any strategy is too.
+ */
+export function resolveSlotAngles(cells: GridCell[], plan: BlitzImagePlan): (GridAngle | undefined)[] {
+  const anglesPerSlot = Array.from({ length: plan.slotCount }, () => new Set<GridAngle>());
+
+  // Optional chaining IS the bounds check: an out-of-range or missing slot indexes to undefined
+  // and the add is a no-op.
+  cells.forEach((cell, i) => anglesPerSlot[plan.slotForCell[i]]?.add(cell.angle));
+
+  return anglesPerSlot.map(angles => (angles.size === 1 ? [...angles][0] : undefined));
+}

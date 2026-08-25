@@ -1,5 +1,77 @@
 # Changelog
 
+## 2026-08-25 — CreativeIQ™: the angle axis now reaches the image, as directable photography
+
+### What
+A BlitzScale grid tests **angle × hook**. The angle reached copy generation and the Veo video prompt. It never reached image generation.
+
+`regenerateAllImages` took one config for the whole pool, so every slot got a byte-identical request whose only per-image difference was a single sentence:
+
+> `This is variation 2 of 4 - create a unique variation while maintaining brand consistency with the references.`
+
+That is a *cosmetic* diversity instruction, not a semantic one. The model reads "maintain brand consistency", keeps the scene, and moves the lamp. A four-angle grid came back as four re-lightings of one photograph — and the `Pain Point` / `Transformation Promise` / `Social Proof` / `Contrarian POV` captions on the review step were labels `planBlitzImageSlots` attached **after** the fact, in first-seen order, to images that knew nothing about them.
+
+The fix is not "pass the angle through". The angle strings that already existed were the second half of the problem.
+
+### Added
+- **`src/lib/angleScene.ts`** — the ONE definition of what each angle *looks like*. `CONCEPT_ANGLES` carried a `visualDirection` one-liner (e.g. *"Bold statement-driven visuals, myth-vs-reality contrasts"*) that was referenced in exactly **one** place in the codebase: the Veo prompt. It was also unusable. An image model cannot place a "myth-vs-reality contrast" in a frame; handed an abstraction, it falls back on the reference images — which are identical across slots, **which is the convergence**. Replaced with a scene grammar:
+
+  | Field | Constraint on the picture |
+  |---|---|
+  | `SUBJECT` | who or what is in frame |
+  | `MOMENT` | the instant the shutter fired — the field that makes two angles different *photographs* |
+  | `COMPOSITION` | framing, crop, arrangement |
+  | `LIGHT & PALETTE` | lighting and grade |
+  | `AVOID` | the angle's specific collapse mode |
+
+  `AVOID` does most of the work. Every angle degenerates into a *particular* generic shot when under-specified — pain into a calm product hero, urgency into a countdown graphic, authority into a lab coat holding a certificate — and naming that collapse mode is what holds the slots apart. All nine angles, with distinctness asserted per field.
+
+- **`resolveSlotAngles`** (`lib/gridPlan.ts`) — **which** images may be directed, expressed as a property of the mapping rather than a switch on the strategy: *a slot gets an angle iff the cells using that image resolve to exactly one distinct angle.*
+
+  | Strategy | Directed? | Why |
+  |---|---|---|
+  | `per_angle` | yes | the image **is** part of the angle treatment; hooks stay the isolated variable within it |
+  | `per_ad` | yes | one cell per image |
+  | `single` | no | one image shared by cells that disagree — biasing it toward one angle confounds every cell that borrows it |
+  | `per_hook` | no | same, unless the grid runs a single angle |
+  | callout matrix | yes | the shape pins one angle across every cell, so the base image is legitimately directed |
+
+  Stated as one rule it needs no per-strategy branching, and it stays correct for shapes that plan their own slots — the last two rows fall out rather than being special-cased.
+
+- **28 new tests** (250 → 278). Ordering is asserted by **index comparison**, matching the brief's guarantee in ADR #23 — the angle block must sit *after* nothing it may not override and *before* every contract block. Substring presence would pass on a prompt where the product lock came first and lost.
+
+### Fixed
+- **The angle now ships on both engines.** `generateAdImage` fails over between Gemini and gpt-image **per image**, so a directive on one builder means the cells the other engine answered silently lose the axis under test. The block text lives in `angleScene.ts` and only there; both builders import it. This is the same drift class as the format directive fixed in the previous release, and the same rule prevents it.
+- **The review-step captions are now true.** `Pain Point` on an image means that image was directed at the pain scene — not that a label was assigned to it afterwards.
+
+### Changed
+- **The angle directive is DERIVED DIRECTION**, in ADR #23's sense, so it is emitted immediately **before** the operator-brief seam: a `blend` brief outranks it, an `override` brief drops it (`generateAdImage` empties `angle` alongside `analysisData`, the same way it empties every other derived input), and the product identity lock, in-image text rules, format directive and `IMAGE_SAFETY_DIRECTIVE` all still follow it. Ordering remains the enforcement.
+- **`CONCEPT_ANGLES` lost `visualDirection`** and now owns only the angle's *messaging* identity. The Veo prompt reads `visualDirectionFor()`, derived from the scene — so one angle can never be described as two different pictures, and video gets the more directable line as a side effect.
+- **`angles` on `regenerateAllImages` is INDEXED, not rotated** the way `imageHeadlines` is. Rotation adds variety, which is the point for a headline and wrong for an angle: it would direct an image toward a scene no ad using that image actually carries.
+- If a `FORMAT` directive calls for a screenshot, the angle block tells the model to express the angle through what is on the screen rather than a photographed scene. Ordering already guaranteed format wins; this stops the two reading as a flat contradiction the model resolves arbitrarily.
+
+### Internal
+Five structural defects were found in a self-review **after** the feature worked, and fixed before commit:
+
+- **Two sources of truth for the angle's display name.** `ANGLE_SCENES[a].name` and `CONCEPT_ANGLES[a].name` both held `'Pain Point'`, kept in sync by a JSDoc comment reading *"matches CONCEPT_ANGLES[angle].name"* — an unenforced invariant written as prose, in a change whose entire thesis is *one angle, one definition*. `CONCEPT_ANGLES.name` now derives from the scene record. `angleScene` cannot import `openaiApi` without a runtime cycle, so lib → services is the only legal direction, and also the right one. Drift is now structurally impossible, so it needs no test.
+- **A sticky tri-state sentinel where the rule could just be written down.** `resolveSlotAngles` used `(GridAngle | undefined | null)[]` with `null` meaning "already mixed", plus a bounds check and a comment explaining why mixed had to be *sticky* — a hand-rolled state machine for "are these all the same?". Now one `Set` per slot and `size === 1`. 13 lines → 6; the sentinel, the stickiness subtlety and the bounds branch all vanish (optional chaining covers out-of-range). Every test passed unchanged, including the stickiness case, which now holds **structurally** rather than by a guard.
+- **The `ConceptType → GridAngle` narrowing was introduced three times and disagreed with itself** — two returned `undefined`, one `null`, for one concept. Extracted `concreteAngle()` into `axisTags.ts`, directly beneath the `GridAngle = Exclude<ConceptType, 'auto'>` type it is the runtime counterpart of.
+- **The file's own idiom was contradicted.** `resolveSlotAngles(...)` was recomputed inline in two handlers, in a file where the `keptCells` memo carries the comment *"dedupes the `gridCells.filter(keptCellIds)` that previously ran in three places"*. Now a `slotAngles` memo beside `blitzPlan`, inheriting the frozen-between-generation-and-publish invariant already documented there.
+- **Two scalar callers built the same array two different ways** — one guarded by a ternary, one not. An all-`undefined` array is indistinguishable from passing nothing, so the guard bought only divergence.
+
+**Considered and rejected:**
+
+- **Folding `angle` + `formatHint` into the existing `AxisTag`.** It already models `{angle, hook, format}`, so this looks like the obvious move. It does not work: `AxisTag.angle` is **required**, so it cannot express "format but no angle" — which is exactly the single-flow-on-`auto` and undirected-pool case. Two independent optional params is the honest model.
+- **A shared registry over the three prompt-block builders.** Actively harmful. They are emitted at deliberately different positions relative to the seam (angle before, brief at, format after), and ADR #23 says that ordering *is* the enforcement. A registry would hide the single property the design rests on.
+
+**Flagged, not fixed** — `ConceptType` and `CONCEPT_ANGLES` are pure data with zero runtime dependencies, sitting in `openaiApi.ts` (6849 lines) and imported by four consumers. Moving them into the pure lib layer would delete the type-only-import dance in `axisTags.ts`, collapse the two angle records into one (making the name derivation above unnecessary), and shrink the repo's largest file by ~90 lines. Deliberately not bundled: it is a cross-cutting refactor unrelated to the angle axis, and folding it in would obscure both. It wants its own PR. The ~90% duplication between the two image-prompt builders, flagged last release, also still stands — and remains the root cause of the both-engines class of bug.
+
+**Net structural effect**: no file crossed 1000 lines; the bulk of new logic went into a new 177-line pure module. `AdGenerator.tsx` 4277 → 4295, `openaiApi.ts` 6817 → 6849, `axisTags.ts` 253 → 266, `gridPlan.ts` 208 → 237. `npm test` (278 passing), `tsc -b --force` and `npm run build` clean; **lint 96 problems, byte-identical to baseline** — every new module clean.
+
+**Not verified**: nothing has been run in a browser and no request has gone to a live Gemini or gpt-image endpoint carrying an angle directive. The exact prompt text that ships is asserted end-to-end against the real outbound request body in `imagePrompt.test.ts`, but whether four directed prompts actually *produce* four visually distinct images is an empirical question this change cannot answer on its own.
+
+**Worth watching**: `similarityLevel`. At the low (reference-faithful) end the prompt tells the model to stay close to past winners, and a strong angle directive will still get clamped. The block splits the tie explicitly — angle owns subject/moment/composition, references own production quality and grade — but if a regenerated grid still converges, that slider is the next thing to move.
+
 ## 2026-08-25 — CreativeIQ™: an operator creative brief for image generation
 
 ### What

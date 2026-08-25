@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveGridPlan, GRID_SHAPES, GRID_SHAPE_VALUES } from './gridPlan';
+import { resolveGridPlan, resolveSlotAngles, GRID_SHAPES, GRID_SHAPE_VALUES } from './gridPlan';
 import { GRID_CELL_CAP } from './axisTags';
 import type { GridCell, BlitzImageStrategy } from '../services/openaiApi';
 
@@ -206,5 +206,83 @@ describe('resolveGridPlan', () => {
     expect(plan.blockReason).toBeNull();
     expect(plan.cellCount).toBe(4);
     expect(plan.overCap).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Slot → angle: an image may be directed only if every ad using it shares that angle
+// ---------------------------------------------------------------------------
+
+describe('resolveSlotAngles', () => {
+  const plan = (slotForCell: number[], slotCount: number) => ({
+    slotCount,
+    slotForCell,
+    slotLabels: Array(slotCount).fill('x'),
+  });
+
+  it('directs a per-angle slot at its angle', () => {
+    // The case the feature exists for: one image per angle, so the image IS part of the angle
+    // treatment and hooks stay the isolated variable within it.
+    const cells = [
+      cell('a', { angle: 'pain', hook: 'question' }),
+      cell('b', { angle: 'pain', hook: 'stat' }),
+      cell('c', { angle: 'transformation', hook: 'question' }),
+    ];
+    expect(resolveSlotAngles(cells, plan([0, 0, 1], 2))).toEqual(['pain', 'transformation']);
+  });
+
+  it('directs nothing when one image is shared by cells that disagree', () => {
+    // `single` strategy. Pushing either angle's scene into the shared image would bias every
+    // other cell that borrows it, so the copy — not the picture — stays the variable.
+    const cells = [
+      cell('a', { angle: 'pain' }),
+      cell('b', { angle: 'transformation' }),
+      cell('c', { angle: 'social_proof' }),
+    ];
+    expect(resolveSlotAngles(cells, plan([0, 0, 0], 1))).toEqual([undefined]);
+  });
+
+  it('keeps a slot undirected once mixed, even if later cells agree with the first', () => {
+    // "Mixed" has to be sticky: a third cell matching cell 0 must not reset the slot back to
+    // agreement, or a 3-cell mix would resolve to whichever angle happened to appear twice.
+    const cells = [
+      cell('a', { angle: 'pain' }),
+      cell('b', { angle: 'transformation' }),
+      cell('c', { angle: 'pain' }),
+    ];
+    expect(resolveSlotAngles(cells, plan([0, 0, 0], 1))).toEqual([undefined]);
+  });
+
+  it('directs a shared image when the whole grid runs one angle', () => {
+    // Falls out of the rule rather than being special-cased: a single-angle grid on ANY strategy
+    // has no other angle to bias, and a callout matrix pins one angle across every cell.
+    const cells = [cell('a', { angle: 'authority' }), cell('b', { angle: 'authority' })];
+    expect(resolveSlotAngles(cells, plan([0, 0], 1))).toEqual(['authority']);
+  });
+
+  it('leaves per-hook slots undirected when angles vary within a hook', () => {
+    const cells = [
+      cell('a', { angle: 'pain', hook: 'question' }),
+      cell('b', { angle: 'transformation', hook: 'question' }),
+      cell('c', { angle: 'pain', hook: 'stat' }),
+      cell('d', { angle: 'transformation', hook: 'stat' }),
+    ];
+    expect(resolveSlotAngles(cells, plan([0, 0, 1, 1], 2))).toEqual([undefined, undefined]);
+  });
+
+  it('returns one entry per slot, index-aligned with the image pool', () => {
+    // regenerateAllImages indexes this array directly by variation index, so a slot nothing maps
+    // to must still hold a position rather than shifting its neighbours.
+    const cells = [cell('a', { angle: 'pain' })];
+    expect(resolveSlotAngles(cells, plan([2], 3))).toEqual([undefined, undefined, 'pain']);
+  });
+
+  it('ignores cells whose slot is out of range instead of throwing', () => {
+    const cells = [cell('a', { angle: 'pain' }), cell('b', { angle: 'transformation' })];
+    expect(resolveSlotAngles(cells, plan([0, 9], 1))).toEqual(['pain']);
+  });
+
+  it('is empty for an empty plan', () => {
+    expect(resolveSlotAngles([], plan([], 0))).toEqual([]);
   });
 });

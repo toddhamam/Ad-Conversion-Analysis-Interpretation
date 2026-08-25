@@ -11,7 +11,8 @@ import { getAuthToken } from '../lib/authToken';
 import { getBusinessTypeConfig, getCampaignIntentConfig } from '../lib/businessTypeConfig';
 import { META_AD_POLICY_PROMPT, IMAGE_SAFETY_DIRECTIVE, POLICY_SANITIZE_PATTERNS } from './adPolicyGuard';
 import { buildAnalysisContextString, condensedCopyFor, healthScoreLine } from './analysisContext';
-import { isValidHook, isValidAngle, DEFAULT_GRID_ANGLES, DEFAULT_GRID_HOOKS, HOOKS, HOOK_PROMPT_MENU, HOOK_LABELS, slugifyCallout, type HookType, type AxisTag, type GridAngle, type FormatType } from '../lib/axisTags';
+import { isValidHook, isValidAngle, concreteAngle, DEFAULT_GRID_ANGLES, DEFAULT_GRID_HOOKS, HOOKS, HOOK_PROMPT_MENU, HOOK_LABELS, slugifyCallout, type HookType, type AxisTag, type GridAngle, type FormatType } from '../lib/axisTags';
+import { ANGLE_SCENES, buildAngleDirectiveBlock, visualDirectionFor } from '../lib/angleScene';
 import { buildReferenceBlock, type StyleReference } from '../lib/referenceProvenance';
 import { resolveReferenceSet, projectProductImages } from './referenceSet';
 import { mergeStyleDescriptors, isDescriptorCacheEnabled, isUsableDescriptor, type StyleDescriptor } from '../lib/styleDescriptor';
@@ -750,12 +751,16 @@ export type ConceptType =
   | 'pain'
   | 'contrarian_pov';
 
-// Concept configuration for psychological messaging angles
+/**
+ * The messaging identity of each angle. What an angle LOOKS like is not here — that lives in
+ * `lib/angleScene.ts`, which both image engines and the video prompt read, so a single angle can
+ * never be described as two different pictures. `name` is derived from the same place for the
+ * same reason; only the `auto` sentinel, which has no scene, states its own.
+ */
 export const CONCEPT_ANGLES: Record<ConceptType, {
   name: string;
   icon: string;
   description: string;
-  visualDirection: string;
   messagingStyle: string;
   promptHints: string[];
 }> = {
@@ -763,79 +768,69 @@ export const CONCEPT_ANGLES: Record<ConceptType, {
     name: 'C.I. Intelligence',
     icon: '◎',
     description: 'Auto-select based on your channel analysis insights',
-    visualDirection: 'Derived from top-performing patterns in your ads',
     messagingStyle: 'Informed by what already works in your campaigns',
     promptHints: ['analysis-driven', 'data-informed', 'optimized']
   },
   cognitive_dissonance: {
-    name: 'Cognitive Dissonance',
+    name: ANGLE_SCENES.cognitive_dissonance.name,
     icon: '◇',
     description: 'Address the gap between what people know and what they do',
-    visualDirection: 'Before/after transformations, breakthrough moments, relief imagery',
     messagingStyle: 'Challenge current state, highlight the internal conflict, offer resolution',
     promptHints: ['internal conflict', 'you already know', 'alignment', 'what you know vs what you do', 'breakthrough']
   },
   social_proof: {
-    name: 'Social Proof',
+    name: ANGLE_SCENES.social_proof.name,
     icon: '◈',
     description: 'Leverage crowd behavior, testimonials, and popularity',
-    visualDirection: 'Groups of people, testimonial quotes, numbers/statistics, trust badges',
     messagingStyle: 'Numbers, testimonials, community, popularity indicators',
     promptHints: ['thousands of people', 'join the community', 'trusted by', 'reviews', 'others like you']
   },
   fear_elimination: {
-    name: 'Fear Elimination',
+    name: ANGLE_SCENES.fear_elimination.name,
     icon: '◆',
     description: 'Remove anxiety, risk, and barriers to action',
-    visualDirection: 'Safety imagery, guarantees, shields, protective elements',
     messagingStyle: 'Risk reversal, guarantees, safety, reassurance',
     promptHints: ['no risk', 'guaranteed', 'worry-free', 'protected', 'safe to try']
   },
   product_benefits: {
-    name: 'Product Benefits',
+    name: ANGLE_SCENES.product_benefits.name,
     icon: '✦',
     description: 'Highlight specific features and tangible benefits',
-    visualDirection: 'Product showcase, feature highlights, detail shots',
     messagingStyle: 'Feature-benefit statements, specifications, tangible outcomes',
     promptHints: ['get access to', 'includes', 'features', 'you receive', 'comes with']
   },
   transformation: {
-    name: 'Transformation Promise',
+    name: ANGLE_SCENES.transformation.name,
     icon: '↗',
     description: 'Show the aspirational outcome and identity shift',
-    visualDirection: 'Aspirational lifestyle, success imagery, identity transformation',
     messagingStyle: 'Future pacing, identity language, aspirational outcomes',
     promptHints: ['become the person', 'imagine yourself', 'transform into', 'finally be', 'your new reality']
   },
   urgency_scarcity: {
-    name: 'Urgency & Scarcity',
+    name: ANGLE_SCENES.urgency_scarcity.name,
     icon: '⧖',
     description: 'Create time pressure and limited availability',
-    visualDirection: 'Countdown timers, limited badges, exclusive access imagery',
     messagingStyle: 'Time limits, quantity limits, exclusive access, FOMO triggers',
     promptHints: ['limited time', 'only X left', 'expires soon', 'exclusive', 'dont miss out']
   },
   authority: {
-    name: 'Authority & Expertise',
+    name: ANGLE_SCENES.authority.name,
     icon: '★',
     description: 'Build credibility through expertise and credentials',
-    visualDirection: 'Expert imagery, credentials, certifications, professional settings',
     messagingStyle: 'Expert endorsements, credentials, research-backed claims',
     promptHints: ['backed by science', 'expert-approved', 'certified', 'proven method', 'research shows']
   },
   pain: {
-    name: 'Pain Point',
+    name: ANGLE_SCENES.pain.name,
     icon: '◍',
     description: 'Name a specific frustration the prospect is living with so they feel understood',
-    visualDirection: 'The problem made visceral — the frustrating moment, the stuck state, the cost of doing nothing',
     messagingStyle: 'Name the specific frustration precisely; make them nod before any pitch. Specific over vague.',
     promptHints: ['stuck at', 'every time you', 'the real reason', 'you keep', 'that frustrating moment']
   },
   contrarian_pov: {
-    name: 'Contrarian POV',
+    name: ANGLE_SCENES.contrarian_pov.name,
     icon: '⟂',
     description: 'Lead with a non-obvious belief that reframes the problem and pre-sells the offer',
-    visualDirection: 'Bold statement-driven visuals, myth-vs-reality contrasts, a confident challenge to conventional wisdom',
     messagingStyle: 'Teach a contrarian worldview; disagree with what the industry preaches. The frame pre-sells the offer.',
     promptHints: ['most people think', 'what\'s really happening', 'the truth nobody', 'stop doing', 'it\'s not what you think']
   }
@@ -4554,6 +4549,13 @@ export async function generateAdImage(config: {
   // Format axis hint (BlitzScale grid): 'static_screenshot' | 'static_graphic'
   formatHint?: FormatType;
   /**
+   * Creative angle this image carries (Blitz grid axis, or the single flow's concept). Emitted as
+   * a scene directive before the operator-brief seam — see `lib/angleScene.ts`. Absent means no
+   * angle may be asserted for this image, which is the correct state for a pooled image shared by
+   * cells that disagree about their angle.
+   */
+  angle?: GridAngle;
+  /**
    * Operator-authored creative brief. `blend` layers it over the account-derived direction;
    * `override` replaces that direction and withholds style references. Never overrides the
    * product identity lock, text rules, format directive, or safety directive — see
@@ -4566,9 +4568,11 @@ export async function generateAdImage(config: {
   // An override brief means the account contributed nothing to this image. Rather than gating
   // every account-derived block inside both prompt builders, empty the INPUTS those blocks read
   // — each one is already conditional on its data being present, so they omit themselves.
-  // Style references are withheld the same way, in precomputeReferenceSet.
+  // Style references are withheld the same way, in precomputeReferenceSet. `angle` is emptied
+  // here too: the angle's scene directive is derived direction, and an override brief that says
+  // "do something deliberately different" cannot also be told which scene to build.
   const engineConfig = suppressesDerivedDirection(normalizeCustomDirection(config.customDirection))
-    ? { ...config, analysisData: null, adLibraryInspirations: undefined }
+    ? { ...config, analysisData: null, adLibraryInspirations: undefined, angle: undefined }
     : config;
 
   // Cross-provider fallback: try the selected engine, then automatically fall over to the other on
@@ -4693,6 +4697,8 @@ async function generateAdImageWithGemini(config: {
   businessType?: import('../types/organization').BusinessType;
   campaignIntent?: import('../types/organization').CampaignIntent;
   formatHint?: FormatType;
+  /** Creative angle for the scene directive — see lib/angleScene.ts. */
+  angle?: GridAngle;
   // Corrective feedback from a failed fidelity-gate inspection (set on gate retries only)
   fidelityFeedback?: string;
   customDirection?: CustomDirectionInput | null;
@@ -4968,6 +4974,11 @@ Explore fresh visual directions while maintaining professional quality.`,
     });
     promptParts.push('');
   }
+
+  // The angle's scene directive. DERIVED DIRECTION, so it sits immediately BEFORE the seam: a
+  // blend brief outranks it, an override brief replaces it (generateAdImage empties `angle` for
+  // exactly that reason), and every contract block still follows. See lib/angleScene.ts.
+  promptParts.push(...buildAngleDirectiveBlock(config.angle));
 
   // THE SEAM. Everything above may be overridden by the brief; everything below may not.
   // Do not move this push without re-reading lib/customDirection.ts — position is the guarantee.
@@ -5325,6 +5336,8 @@ async function generateAdImageWithGptImage(config: {
   fidelityFeedback?: string;
   customDirection?: CustomDirectionInput | null;
   formatHint?: FormatType;
+  /** Creative angle for the scene directive — see lib/angleScene.ts. */
+  angle?: GridAngle;
 }): Promise<GeneratedImageResult> {
   const similarity = config.similarityLevel ?? 30;
   const imageSize = config.imageSize ?? DEFAULT_IMAGE_SIZE;
@@ -5484,6 +5497,11 @@ USE: color palette ${refAnalysis.colorPalette}; mood ${refAnalysis.mood}; visual
     });
     promptParts.push('');
   }
+
+  // The angle's scene directive. DERIVED DIRECTION, so it sits immediately BEFORE the seam: a
+  // blend brief outranks it, an override brief replaces it (generateAdImage empties `angle` for
+  // exactly that reason), and every contract block still follows. See lib/angleScene.ts.
+  promptParts.push(...buildAngleDirectiveBlock(config.angle));
 
   // THE SEAM — same position as the Gemini builder. See lib/customDirection.ts.
   if (customDirection) {
@@ -5988,7 +6006,7 @@ export async function generateAdVideoWithVeo(config: {
   console.log(`🎬 Generating video ${variationIdx + 1}/${totalVars} with Veo (${modelId}), ${durationSec}s ${videoConfig.aspectRatio}${is4x5 ? ' (via 9:16→crop)' : ''} ${videoConfig.resolution}`);
 
   const audienceAngle = AUDIENCE_ANGLES[config.audienceType];
-  const conceptAngle = config.conceptType ? CONCEPT_ANGLES[config.conceptType] : null;
+  const videoAngle = concreteAngle(config.conceptType);
   const winningPatterns = config.analysisData?.winningPatterns;
   const visualAnalysis = config.analysisData?.visualAnalysis;
   const audienceInsights = config.analysisData?.audienceInsights;
@@ -6068,11 +6086,11 @@ export async function generateAdVideoWithVeo(config: {
   }
 
   // Concept angle
-  if (conceptAngle && config.conceptType !== 'auto') {
+  if (videoAngle) {
     promptParts.push(
-      `CONCEPT: ${conceptAngle.name}`,
-      `- Visual direction: ${conceptAngle.visualDirection}`,
-      `- Messaging style: ${conceptAngle.messagingStyle}`,
+      `CONCEPT: ${CONCEPT_ANGLES[videoAngle].name}`,
+      `- Visual direction: ${visualDirectionFor(videoAngle)}`,
+      `- Messaging style: ${CONCEPT_ANGLES[videoAngle].messagingStyle}`,
       ''
     );
   }
@@ -6321,6 +6339,17 @@ export async function regenerateAllImages(config: {
   campaignIntent?: import('../types/organization').CampaignIntent;
   imageModel?: ImageModel;
   formatHint?: FormatType;
+  /**
+   * Creative angle per rendered image: entry i directs image i, `undefined` leaves it undirected,
+   * and entries past `variationCount` are ignored (a Blitz pool is sized by slot, and a shape that
+   * composites the tail locally renders fewer images than it has slots).
+   *
+   * Deliberately INDEXED, not rotated the way `imageHeadlines` is: rotation adds variety, which is
+   * the point for a headline and wrong for an angle — it would direct an image toward a scene no
+   * ad using that image actually carries. `lib/gridPlan.ts#resolveSlotAngles` decides which images
+   * may be directed at all.
+   */
+  angles?: readonly (GridAngle | undefined)[];
   /** Operator brief — applies to every variation in the batch. See lib/customDirection.ts. */
   customDirection?: CustomDirectionInput | null;
 }): Promise<{ images: GeneratedImageResult[]; indexedResults: (GeneratedImageResult | null)[]; imageError?: string }> {
@@ -6372,6 +6401,7 @@ export async function regenerateAllImages(config: {
         campaignIntent: config.campaignIntent,
         imageModel,
         formatHint: config.formatHint,
+        angle: config.angles?.[variationIndex],
         customDirection: config.customDirection,
       });
     });
@@ -6510,6 +6540,8 @@ export async function generateAdPackage(config: {
       audienceType: config.audienceType,
       analysisData: config.analysisData,
       variationCount: config.variationCount,
+      // The single flow picks ONE concept for the whole package, so every variation carries it.
+      angles: Array(config.variationCount).fill(concreteAngle(config.conceptType)),
       similarityLevel: config.similarityLevel,
       imageSize: config.imageSize,
       productContext: config.productContext,

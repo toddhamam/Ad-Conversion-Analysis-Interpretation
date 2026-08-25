@@ -14,6 +14,7 @@ vi.mock('../lib/authToken', () => ({ getAuthToken: async () => 'test-session-tok
 
 import { generateAdImage } from './openaiApi';
 import type { StyleReference } from '../lib/referenceProvenance';
+import { ANGLE_SCENES, ANGLE_DIRECTIVE_HEADER } from '../lib/angleScene';
 
 let sentBodies: string[] = [];
 /** Position-aligned with `sentBodies` — lets a test tell the two engines apart. */
@@ -85,7 +86,8 @@ function uploadRef(id: string): StyleReference {
 
 function configWith(styleRefs: StyleReference[]) {
   return {
-    conceptType: 'social_proof' as const,
+    // No `angle` here: the default fixture is the undirected case. Tests that exercise the angle
+    // directive pass one explicitly, so `not.toContain(ANGLE_DIRECTIVE_HEADER)` stays meaningful.
     audienceType: 'prospecting' as const,
     analysisData: null,
     variationIndex: 0,
@@ -428,5 +430,109 @@ describe('image prompt — override empties the derived inputs', () => {
     expect(body).toContain(CONTRACT_MARKERS.safety);
     // Audience targeting itself is not derived direction and must survive.
     expect(body).toContain('TARGET AUDIENCE: PROSPECTING');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. The angle axis reaches the image
+//
+// The angle used to reach copy generation and the Veo video prompt but not image generation, so a
+// four-angle Blitz grid rendered four copies of one prompt whose only difference was "This is
+// variation 2 of 4". The review step's "Pain Point" / "Transformation Promise" captions were
+// therefore labels on images that knew nothing about them.
+// ---------------------------------------------------------------------------
+
+describe('image prompt — the angle directive', () => {
+  it('adds nothing when the image carries no angle', async () => {
+    // A pooled image shared by cells that disagree about their angle, and the single flow on
+    // 'auto', both land here. The feature must be inert for them.
+    const body = await bodyForBrief({});
+
+    expect(body).not.toContain(ANGLE_DIRECTIVE_HEADER);
+  });
+
+  it('carries the angle scene grammar, not just the angle name', async () => {
+    // A name alone is what `visualDirection` was, and the model could not act on it.
+    const body = await bodyForBrief({ angle: 'pain' });
+    const scene = ANGLE_SCENES.pain;
+
+    expect(body).toContain(ANGLE_DIRECTIVE_HEADER);
+    expect(body).toContain(scene.subject);
+    expect(body).toContain(scene.moment);
+    expect(body).toContain(scene.composition);
+    expect(body).toContain(scene.avoid);
+  });
+
+  it('sends a genuinely different prompt per angle', async () => {
+    // The actual regression under test: two slots of the same batch must not be the same request.
+    const painBody = await bodyForBrief({ angle: 'pain' });
+    const transformationBody = await bodyForBrief({ angle: 'transformation' });
+
+    expect(painBody).not.toBe(transformationBody);
+    expect(painBody).toContain(ANGLE_SCENES.pain.avoid);
+    expect(painBody).not.toContain(ANGLE_SCENES.transformation.avoid);
+    expect(transformationBody).toContain(ANGLE_SCENES.transformation.avoid);
+    expect(transformationBody).not.toContain(ANGLE_SCENES.pain.avoid);
+  });
+
+  it('ships on the OpenAI engine too, so an engine failover cannot drop it', async () => {
+    // The angle is an axis UNDER TEST. A directive on one builder only means the cells the other
+    // engine answered silently lose the variable being measured.
+    stubImageApi();
+    await generateAdImage({ ...configWith([]), imageModel: 'openai', angle: 'social_proof' }).catch(
+      () => {
+        /* the stub replies in Gemini's shape; only the outbound body is under test */
+      }
+    );
+
+    const openaiBodies = sentBodies.filter((_, i) => sentUrls[i].includes('/api/ai/images'));
+    expect(openaiBodies.length).toBeGreaterThan(0);
+    expect(openaiBodies.join('\n')).toContain(ANGLE_SCENES.social_proof.subject);
+  });
+});
+
+describe('image prompt — the angle directive is derived direction', () => {
+  it('is emitted BEFORE the brief, so a blend brief outranks it', async () => {
+    // Ordering is the guarantee (ADR #23). The angle is ConversionIQ's prescription for the
+    // scene, so an operator who describes a different scene must win.
+    const body = await bodyForBrief({ angle: 'pain', customDirection: { text: BRIEF, mode: 'blend' } });
+
+    const angleAt = body.indexOf(ANGLE_DIRECTIVE_HEADER);
+    const briefAt = body.indexOf('OPERATOR CREATIVE BRIEF');
+
+    expect(angleAt).toBeGreaterThan(-1);
+    expect(briefAt).toBeGreaterThan(angleAt);
+  });
+
+  it('is emitted BEFORE every contract block, which it may never override', async () => {
+    const body = await bodyForBrief({
+      angle: 'social_proof',
+      precomputedRefs: {
+        styleRefs: [ownRef('a', 42, 3.2)],
+        productImages: [{ data: 'QUFBQQ==', mimeType: 'image/jpeg' }],
+        refAnalysis: REF_ANALYSIS,
+      },
+    });
+
+    const angleAt = body.indexOf(ANGLE_DIRECTIVE_HEADER);
+
+    expect(angleAt).toBeGreaterThan(-1);
+    expect(body.indexOf(CONTRACT_MARKERS.productLock)).toBeGreaterThan(angleAt);
+    expect(body.indexOf(CONTRACT_MARKERS.safety)).toBeGreaterThan(angleAt);
+    expect(body.indexOf(CONTRACT_MARKERS.noText)).toBeGreaterThan(angleAt);
+  });
+
+  it('is dropped by an override brief, like every other derived block', async () => {
+    // "Do something deliberately different from what this account runs" and "build this specific
+    // angle's scene" cannot both be satisfied; the operator asked for the former.
+    const body = await bodyForBrief({
+      angle: 'pain',
+      customDirection: { text: BRIEF, mode: 'override' },
+    });
+
+    expect(body).not.toContain(ANGLE_DIRECTIVE_HEADER);
+    expect(body).not.toContain(ANGLE_SCENES.pain.avoid);
+    expect(body).toContain(BRIEF);
+    expect(body).toContain(CONTRACT_MARKERS.safety);
   });
 });
