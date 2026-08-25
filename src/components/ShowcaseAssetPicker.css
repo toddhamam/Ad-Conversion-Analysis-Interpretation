@@ -1,0 +1,208 @@
+/* Showcase asset picker. Targeted transitions only — these cards hold base64 thumbnails. */
+
+.picker-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1000;
+}
+
+.picker-modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 760px;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 24px 14px;
+  border-bottom: 1px solid var(--border-secondary);
+}
+
+.picker-header h2 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.picker-header p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.picker-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 4px;
+  transition: color 0.15s ease;
+}
+
+.picker-close:hover { color: var(--text-primary); }
+.picker-close:focus-visible { outline: 2px solid var(--accent-violet); outline-offset: 2px; }
+
+.picker-error {
+  margin: 14px 24px 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #b91c1c;
+}
+
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+  padding: 18px 24px;
+  overflow-y: auto;
+  contain: layout style;
+}
+
+.picker-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 0 10px;
+  background: var(--bg-primary);
+  border: 2px solid var(--border-primary);
+  border-radius: 10px;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+  font-family: inherit;
+  contain: content;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.picker-card:hover { border-color: var(--border-violet); }
+
+.picker-card.is-chosen {
+  border-color: var(--accent-violet);
+  box-shadow: var(--shadow-glow);
+}
+
+.picker-card:focus-visible { outline: 2px solid var(--accent-violet); outline-offset: 2px; }
+
+.picker-thumbs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-secondary);
+  aspect-ratio: 16 / 10;
+}
+
+.picker-thumbs img {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+}
+
+.picker-name {
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-url {
+  padding: 0 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-hidden-note {
+  margin: 0 24px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.picker-empty {
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.picker-empty h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+}
+
+.picker-empty p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 auto 18px;
+  max-width: 42ch;
+  line-height: 1.55;
+}
+
+.picker-cta {
+  display: inline-block;
+  padding: 9px 18px;
+  border-radius: 8px;
+  background: var(--accent-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+
+.picker-cta:hover { background: var(--accent-secondary); }
+
+.picker-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border-secondary);
+}
+
+.picker-count {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.picker-actions {
+  display: flex;
+  gap: 10px;
+}
+
+@media (max-width: 600px) {
+  .picker-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .picker-modal { max-height: 90vh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .picker-card, .picker-close, .picker-cta { transition: none; }
+}

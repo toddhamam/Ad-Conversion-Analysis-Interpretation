@@ -199,6 +199,13 @@ public/
 | `src/lib/nearDuplicate.ts` | Pure near-duplicate scoring. `NEAR_DUPLICATE_THRESHOLD` is uncalibrated and lives here alone |
 | `src/lib/styleDescriptor.ts` | Merges cached per-image style descriptors into the joint descriptor the engines want (flagged off) |
 | `src/pages/InspirationLibrary.tsx` | `/inspiration` — browse, ingest, tag and purge external references |
+| `src/pages/ShowcaseLibrary.tsx` | `/showcase` — the agency's OWN client work (website builds, before/afters), composited pixel-exact into ads |
+| `src/services/showcaseLibraryApi.ts` | Showcase Library client — ingest via the `showcase` normalize profile, image-count chunking, and `loadShowcaseImages` (the bridge into compositing) |
+| `api/_lib/showcase-handlers.ts` | Showcase Library API routes (dispatched from `api/meta.ts`; does not count toward the 12-function limit). `planShowcaseSave` is the pure, tested cap arithmetic |
+| `src/lib/showcaseLayout.ts` | **Pure** composite geometry — panel rects, source crops, chrome and label bands. Takes DIMENSIONS, never pixels, which is what makes it unit-testable under the node-only vitest config. Sibling of `gridPlan.ts` |
+| `src/services/showcaseCanvas.ts` | The thin renderer — walks `showcaseLayout` descriptors issuing draw calls. Emits JPEG, not PNG (see ADR #25). Never throws; returns `null` per composite |
+| `src/components/ShowcaseAssetPicker.tsx` | Asset picker that enforces template arity — a before/after template only offers assets that actually have a "before" |
+| `src/components/ShowcaseConfigPanel.tsx` | The Showcase Ad config step. Takes ONE `ShowcaseDraft` rather than seven values and seven setters — same shape `CustomDirectionDraft` settled on (ADR #23) |
 | `src/lib/analysisMode.ts` | Analysis mode model — run planning, `observed`/`seeded`/`hybrid` builders, seed-constraint extraction, hybrid merge. Pure functions, unit-tested |
 | `src/lib/manualSeed.ts` | Manual-seed parsing — coerces untrusted pasted/distilled JSON into a valid `ChannelAnalysisResult`; `parseManualSeed` is the whole ingest path in one call |
 | `src/services/analysisContext.ts` | Builds the prompt text generation reads from an analysis. Mode-keyed vocabulary (`MODE_PROMPT`) decides whether a pattern is framed as a proven winner or an untested hypothesis |
@@ -247,6 +254,8 @@ public/
 /brand          → Brand Voice & Guidelines (per-account authored voice for CreativeIQ™)
 /insights       → Channel AI analysis (ConversionIQ™)
 /inspiration    → Inspiration Library (external competitor/market creative references)
+/showcase       → Showcase Library (your own client work — builds, before/afters)
+/swipe-library  → Swipe Library (winning elements saved from your own delivered ads)
 /seo-iq         → SEO IQ dashboard (sites, keywords, articles, autopilot)
 /integrations   → Meta connection & per-account configuration
 /billing        → Billing & subscription management
@@ -300,6 +309,29 @@ public/
     **The angle directive is DERIVED DIRECTION** in ADR #23's sense, so it is emitted immediately BEFORE the brief seam: a `blend` brief outranks it, an `override` brief drops it (`generateAdImage` empties `angle` alongside `analysisData`), and every contract block still follows. Asserted by index comparison in `imagePrompt.test.ts`, like the brief.
 
     **Which images may be directed is a property of the mapping, not of the strategy.** `resolveSlotAngles` (`lib/gridPlan.ts`) gives a slot an angle iff EVERY cell that will use that image carries the same angle. Under `per_angle` the image is legitimately part of the angle treatment and hooks stay the isolated variable within it; under `single` or `per_hook` one image is shared by cells that disagree, and biasing it toward one cell's angle would confound every other cell that borrows it. Stated as one rule it needs no per-strategy branching and stays correct for shapes that plan their own slots — a callout matrix pins one angle across every cell, so its base image is directed; a single-angle grid on any strategy is too. `angles` on `regenerateAllImages` is index-aligned and deliberately NOT rotated the way `imageHeadlines` is: a rotated angle would direct a slot toward a scene no ad using that image actually carries.
+
+
+25. **Client work is a THIRD kind of image, and it is the SUBJECT of the ad, not a reference for one** — three image roles already existed, and a screenshot of a website you built fits none. A style reference (`own_upload` / `external`) is emulated, so the model invents a *different* site. An external reference is explicitly forbidden from being reproduced. A product mockup is identity-locked and reproduced 1:1 — the right mechanism, but image models garble dense UI text, so an AI-rendered client site comes back mangled, which for a visual agency is worse than not shipping.
+
+    So showcase creative is **composited on canvas, never generated**: real pixels, zero credits, zero drift. `renderCalloutMatrix` set the precedent (ADR #21); this extends it from an overlay band to whole-frame layouts.
+
+    **`adType: 'showcase'` is the discriminant — there is no parallel provenance flag.** `GeneratedAdCard` already routes regeneration on `adType`, so a composite of a real client site can never be handed to the AI regenerator. Smuggling real pixels inside `adType: 'image'` has already been tried — that is what the Swipe Library path does — and it produced exactly the bugs you would predict: the credit hint promised a charge that never happened, and Regenerate destroyed the real image. A distinct type fixes the class, not the symptoms. Showcase still gets a *re-composite* handler (`handleRecomposeShowcase`), which cycles the theme deterministically and costs nothing; `showcaseConfig` on the package exists for exactly the reason `textAdConfig` does.
+
+    **The compositor is split along the testability seam.** `lib/showcaseLayout.ts` is pure and takes only DIMENSIONS — never image data — so every geometry decision is asserted in `showcaseLayout.test.ts`; `services/showcaseCanvas.ts` walks those descriptors issuing draw calls and holds no decisions. `vitest.config.ts` is node-only by design, so anything touching `document.createElement('canvas')` is untestable; this is how the decisions stay on the testable side. Panels crop **top-anchored**, because the hero section of a page is the proof and the footer is not.
+
+    Four templates: `before_after_split`, `hero_browser`, `client_grid` (a results wall) and `device_frame`. Arity is a RANGE (`{min, max, requiresBefore}`) because a wall is meaningless with one site and unreadable past six; the picker enforces both ends and hides assets a template cannot use. A wall's cell labels carry the CLIENT'S NAME and never a metric — `showcase_assets` has no performance columns precisely so a wall cannot quietly begin asserting results. Odd counts are absorbed by the last row spanning (`gridRowCounts`), because a hole in a wall of results reads as a failed render.
+
+    **`device_frame` DRAWS the body; it does not composite a photograph.** A photographic plate puts the screen in perspective, and an affine transform maps a rectangle to a parallelogram — a screenshot fitted into a perspective quad visibly slides off the bezel, and detecting the screen quad in a generated plate fails often enough to ship visibly broken ads. A drawn body keeps the screen a true rectangle, so the site stays pixel-exact under nothing but a scale. The device is DERIVED from the asset's `device_hint` rather than chosen separately: a desktop capture in a phone body letterboxes into a sliver, and the operator already answered that question at upload.
+
+    **The renderer emits JPEG, not PNG** — a deliberate divergence from `textAdCanvas.ts`. A text ad is flat colour and compresses to nothing; a screenshot composite as PNG reaches 2-4MB and base64-inflates to ~5.3MB in the publish body, and `handleUpload` has no size guard, so an oversized body fails at the Vercel platform level before the handler runs.
+
+    **`showcase_assets` is a third table on purpose.** `swipe_library_items` holds the org's own ads WITH measured delivery data; `inspiration_library_items` holds external material with none. Client work is the org's own material with none — filing it in the first would rank a never-delivered screenshot beside a measured winner, and the second would label the agency's own build as competitor material it must not reproduce. Both taxonomies are `CHECK` constraints on tables whose headers forbid widening. It carries **no cvr/cpa/conversions column**, for migration 022's exact reason.
+
+    **A before/after is ONE asset in TWO states, not two rows sharing a key.** Two image columns on one row make an orphaned "before" unrepresentable, need no grouping UI, and delete atomically. The multi-client grid needs *selection*, not grouping, so it needs no schema at all.
+
+    **Every size budget counts IMAGES, not rows** (`planShowcaseSave`, `chunkByImageCount`): a before/after row is two payloads at showcase resolution, so a row-based cap would put double the intended bytes against Vercel's ~4.5MB body limit — which fails at the platform level, before the handler runs.
+
+    **Fidelity is the product.** The `showcase` profile in `imageNormalize.ts` is 1600px / q0.92 / `imageSmoothingQuality: 'high'`, and encodes **both PNG and JPEG, keeping whichever is smaller**. A website screenshot is JPEG's pathological case — flat colour with crisp glyphs rings around every letter — and a human judges this image, not a vision model. The default `reference` profile (800 / q0.82) is untouched, so every existing caller is byte-identical.
 
 
 ---
@@ -1642,6 +1674,7 @@ The Ad Publisher (Step 3: Configure) provides these ad-level settings that are a
 - Don't ignore Meta rate limit response headers (`X-App-Usage`, `X-Business-Use-Case-Usage`, `x-fb-ads-insights-throttle`) — these warn you before enforcement. The guard extracts them automatically
 - Don't bypass the `metaDevPolicyGuard` queue for Meta API calls — all requests must go through `guardedFetch()` to respect rate limits and caching. Direct `fetch()` to Meta endpoints is prohibited
 - Don't make Meta API calls without caching read responses — insights, campaigns, audiences, and pixels should use the guard's TTL cache to prevent redundant calls on page navigation
+- Don't put client-work screenshots through `normalizeForUpload`'s default profile, and don't route them into `swipe_library_items` or `inspiration_library_items` — 800px/q0.82 mushes UI text, and both tables would mislabel the evidence (ADR #25). Showcase creative is composited on canvas, never generated
 - Don't reintroduce a per-angle visual string outside `lib/angleScene.ts`, and don't direct an image at an angle that isn't shared by every ad using it — `resolveSlotAngles` decides that, and bypassing it confounds the axis under test (ADR #24)
 - Don't move the operator-brief block out of its seam in either image prompt builder, and don't let a brief suppress the product identity lock, text rules, format directive or safety directive — ordering is the whole guarantee (ADR #23). Don't duplicate the block text into an engine builder; it lives in `lib/customDirection.ts` so an engine failover can't drop it
 - Don't add a prompt directive to one image engine only — `generateAdImage` fails over between Gemini and gpt-image per image, so a one-sided directive silently vanishes for whichever cells the other engine answered. Shared directives belong in a helper both builders call (see `formatDirectiveFor`)

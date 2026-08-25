@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, memo } from 'react';
 import type { GeneratedAdPackage } from '../services/openaiApi';
-import { Image, Video, Type, AlertTriangle, Clock, Lightbulb, Timer, Ruler, Download, Loader, RefreshCw, Trash2 } from 'lucide-react';
+import { Image, Video, Type, Monitor, AlertTriangle, Clock, Lightbulb, Timer, Ruler, Download, Loader, RefreshCw, Trash2 } from 'lucide-react';
 import './GeneratedAdCard.css';
 
 interface GeneratedAdCardProps {
@@ -243,7 +243,7 @@ const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, o
       <div className="ad-card-header">
         <div className="ad-card-meta">
           <span className="ad-type-badge">
-            {ad.adType === 'text' ? <><Type size={14} strokeWidth={1.5} /> Text Ad</> : ad.adType === 'image' ? <><Image size={14} strokeWidth={1.5} /> Image Ad</> : <><Video size={14} strokeWidth={1.5} /> Video Ad</>}
+            {ad.adType === 'text' ? <><Type size={14} strokeWidth={1.5} /> Text Ad</> : ad.adType === 'showcase' ? <><Monitor size={14} strokeWidth={1.5} /> Showcase Ad</> : ad.adType === 'image' ? <><Image size={14} strokeWidth={1.5} /> Image Ad</> : <><Video size={14} strokeWidth={1.5} /> Video Ad</>}
           </span>
           <span className="audience-badge">{getAudienceLabel(ad.audienceType)}</span>
         </div>
@@ -251,7 +251,7 @@ const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, o
       </div>
 
       {/* Image Error Message */}
-      {(ad.adType === 'image' || ad.adType === 'text') && ad.imageError && (
+      {(ad.adType === 'image' || ad.adType === 'text' || ad.adType === 'showcase') && ad.imageError && (
         <div className="image-error-banner">
           <div className="error-content">
             <span className="error-icon"><AlertTriangle size={16} strokeWidth={1.5} /></span>
@@ -368,7 +368,7 @@ const GeneratedAdCard = memo(function GeneratedAdCard({ ad, onRegenerateImage, o
       })()}
 
       {/* Image Ads - with lazy loading toggle */}
-      {(ad.adType === 'image' || ad.adType === 'text') && imageCount > 0 && (
+      {(ad.adType === 'image' || ad.adType === 'text' || ad.adType === 'showcase') && imageCount > 0 && (
         <div className="ad-images-section">
           <div className="images-section-header">
             <h4 className="section-label">Generated Images ({imageCount})</h4>

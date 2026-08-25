@@ -736,7 +736,13 @@ export interface CampaignInsightsSummary {
 
 // Ad Generator Types
 export type AudienceType = 'prospecting' | 'retargeting' | 'retention';
-export type AdType = 'image' | 'video' | 'text';
+/**
+ * `showcase` is composited on canvas from the operator's own client screenshots — real pixels,
+ * no image model, no credits. It is a distinct AdType rather than a flavour of `image` on
+ * purpose: `GeneratedAdCard` routes regeneration on this field, so a composite of a real
+ * client site can never be silently replaced by an AI render. See ADR #25.
+ */
+export type AdType = 'image' | 'video' | 'text' | 'showcase';
 
 // Concept Types for multi-step creative generation
 export type ConceptType =
@@ -929,6 +935,22 @@ export interface TextAdConfig {
   styleIds: string[];
 }
 
+/**
+ * The arrangement that produced a showcase composite, stored on the package for the same
+ * reason `TextAdConfig` is: a re-composite days later must use the arrangement the operator
+ * chose, not whatever the live editor happens to hold now.
+ *
+ * The draft verbatim, plus which assets it consumed — NOT a flattened copy of its fields. A
+ * flattened copy is how four of them ended up written and never read, while re-compositing
+ * silently used the live draft instead. Nothing derivable from the assets (their URL, their
+ * capture device) is stored; that is recomputed at render time from the library rows.
+ */
+export interface ShowcaseAdConfig {
+  draft: import('../lib/showcaseLayout').ShowcaseDraft;
+  /** Showcase library asset ids, in the order the template consumed them. */
+  assetIds: string[];
+}
+
 export interface VideoStoryboard {
   scenes: Array<{
     sceneNumber: number;
@@ -958,6 +980,7 @@ export interface GeneratedAdPackage {
   imageHeadlines?: string[]; // Headlines rendered into images, indexed by variation
   variationCount?: number; // Original requested variation count (for retry)
   textAdConfig?: TextAdConfig; // Config used for text ad generation (for regeneration)
+  showcaseConfig?: ShowcaseAdConfig; // Arrangement used for a showcase composite (for re-compositing)
   campaignIntent?: import('../types/organization').CampaignIntent; // Hybrid: purchase or lead intent
   headlineHooks?: (HookType | null)[]; // hook label per copy.headlines entry (for per-ad axis tagging)
   axisTag?: AxisTag;      // Creative-axis tag {angle,hook,format} — grid mode or synthesized from conceptType
