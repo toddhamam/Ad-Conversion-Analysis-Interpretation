@@ -23,6 +23,7 @@
  * degradation — every op catches and returns a safe default rather than throwing).
  */
 
+import type { ShowcaseDraft } from '../lib/showcaseLayout';
 import type {
   GeneratedAdPackage, CopyOption, GridCell, GeneratedImageResult,
   AudienceType, ConceptType, AdType, ImageSize, ImageModel, BlitzImageStrategy,
@@ -62,6 +63,15 @@ export interface BatchSessionContext {
   // produced the batch, not against a default it never used. See lib/customDirection.ts.
   customDirectionText?: string;
   customDirectionMode?: CustomDirectionMode;
+  // Showcase composite arrangement. Same reason as the knobs above: a refresh mid-flow must
+  // rebuild the arrangement the operator chose, not silently fall back to a default.
+  //
+  // Stored as the DRAFT OBJECT, not seven flat fields. Flattening it would mean seven lines to
+  // snapshot and seven to restore, and a field added to ShowcaseDraft would silently stop
+  // surviving a refresh until someone remembered to widen this too.
+  showcase?: ShowcaseDraft;
+  /** Kept separate because the LIBRARY, not the session, is the source of truth for these. */
+  showcaseAssetIds?: string[];
   // Step 2 — copy options + the user's selections
   copyOptions?: {
     headlines: CopyOption[];

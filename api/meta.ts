@@ -20,6 +20,13 @@ import {
   handleInspirationCheck,
   handleInspirationImportUrl,
 } from './_lib/inspiration-handlers.js';
+import {
+  handleShowcaseList,
+  handleShowcaseSave,
+  handleShowcaseUpdate,
+  handleShowcaseDelete,
+  handleShowcaseImage,
+} from './_lib/showcase-handlers.js';
 import { authenticateRequest, type AuthContext } from './_lib/auth.js';
 // DISABLED: External API access to Meta Platform Data disabled for policy compliance.
 // import { handleExternalSummary } from './_lib/external-report.js';
@@ -258,6 +265,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleInspirationCheck(req, res);
       case 'inspiration-import-url':
         return handleInspirationImportUrl(req, res);
+      case 'showcase-list':
+        return handleShowcaseList(req, res);
+      case 'showcase-save':
+        return handleShowcaseSave(req, res);
+      case 'showcase-update':
+        return handleShowcaseUpdate(req, res);
+      case 'showcase-delete':
+        return handleShowcaseDelete(req, res);
+      case 'showcase-image':
+        return handleShowcaseImage(req, res);
       case 'external-summary':
       case 'reports-external-summary':
         // DISABLED: External API access to Meta Platform Data is not covered by

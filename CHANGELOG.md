@@ -1,5 +1,61 @@
 # Changelog
 
+## 2026-08-25 — Showcase Assets: real client work as ad creative, composited pixel-exact
+
+### What
+An agency whose offer is *visual* — website builds, before/afters of client sites — had no way to get a real screenshot into an ad **as the subject**. Three image roles existed and a client screenshot fits none of them:
+
+| Role | What it does | Why it's wrong here |
+|---|---|---|
+| Style reference (`own_upload` / `external`) | *"Emulate its visual style for the scene"* | The model invents a **different** website |
+| External reference | *"do NOT reproduce their product, brand marks, logos, faces or text"* | Reproduction explicitly forbidden |
+| Identity-locked product mockup | *"reproduce this design 1:1"* + fidelity gate | Right mechanism — but image models garble dense UI text, so an AI-rendered client site comes back **mangled**, which for a visual agency is worse than not shipping |
+| Use-as-is (Swipe Library) | Skips AI entirely | Right mechanism, but can only be fed from ads that already ran on Meta |
+
+So showcase creative is **composited on canvas, never generated**: real pixels, zero credits, zero drift. `renderCalloutMatrix` set the precedent (ADR #21); this extends it from an overlay band to whole-frame layouts.
+
+### Added
+- **`showcase_assets` (migration 023) — a THIRD library table, on purpose.** `swipe_library_items` holds the org's own ads *with* measured delivery data; `inspiration_library_items` holds external material with none. Client work is the org's own material with none — filing it in the first would rank a never-delivered screenshot beside a measured winner, and the second would label the agency's own build as competitor material it must not reproduce. Both taxonomies are `CHECK` constraints on tables whose headers forbid widening. It carries **no cvr/cpa/conversions column**, for migration 022's exact reason.
+- **A before/after is ONE asset in TWO states, not two rows sharing a key.** Two image columns on one row make an orphaned "before" *unrepresentable*, need no grouping UI, and delete atomically. The results wall needs *selection*, not grouping, so it needs no schema at all.
+- **`/showcase`** — upload a build screenshot, optionally its "before", a client name, a URL and a consent flag (recorded and displayed; gates nothing in v1 — but the agency is putting a client's site in a paid ad, and whether permission was given is a fact worth carrying next to the pixels).
+- **`adType: 'showcase'`** with four templates: Before/After split, Single Site Hero (browser chrome), Results Wall, and In a Device. Zero credits, zero AI.
+- **`api/_lib/showcase-handlers.ts`** — six routes, **zero** serverless-function cost (the project stays at 11/12).
+- **51 new tests** (296 → 347).
+
+### Changed
+- **`adType` is the discriminant — there is no parallel provenance flag.** `GeneratedAdCard` already routes regeneration on it, so a composite of a real client site can never be handed to the AI regenerator. Smuggling real pixels inside `adType: 'image'` has already been tried — that is what the Swipe Library path does — and it produced exactly the bugs you would predict. A distinct type fixes the class, not the symptoms. Showcase still gets a *re-composite* handler, which cycles the theme deterministically and costs nothing.
+- **Fidelity is the product.** A new `showcase` profile in `imageNormalize.ts`: 1600px, `imageSmoothingQuality: 'high'`, and **both PNG and JPEG encoded with the smaller kept**. A website screenshot is JPEG's pathological case — flat colour with crisp glyphs rings around every letter — and here a *human* judges the image, not a vision model. The rule adapts per image and can never do worse than JPEG alone. The default `reference` profile (800 / q0.82) is untouched, so every existing caller is byte-identical.
+- **The renderer emits JPEG, not PNG** — a deliberate divergence from `textAdCanvas.ts`. A screenshot composite as PNG reaches 2–4MB and base64-inflates to ~5.3MB in the publish body, and `handleUpload` has **no size guard**, so an oversized body fails at the Vercel platform level *before the handler runs*.
+- **Every size budget counts IMAGES, not rows.** A before/after row is two payloads at showcase resolution, so a row-based cap would put double the intended bytes against the ~4.5MB limit.
+- **Panels crop top-anchored** — the hero section of a page is the proof and the footer is not. Centring would reliably frame the middle of a page, which is the least persuasive part.
+- **`device_frame` DRAWS the body; it does not composite a photograph.** A photographic plate puts the screen in perspective, and an affine transform maps a rectangle to a *parallelogram* — a screenshot fitted into a perspective quad visibly slides off the bezel, and detecting the screen quad in a generated plate fails often enough to ship visibly broken ads. A drawn body keeps the screen a true rectangle, so the site stays pixel-exact under nothing but a scale. The device is **derived** from the asset's `device_hint`: a desktop capture in a phone body letterboxes into a sliver, and the operator already answered that question at upload.
+
+### Fixed
+Three bugs that were already live in the path this extends:
+- **`GeneratedAdCard.tsx:371`** gated the image grid on `adType === 'image' || 'text'`. A showcase package would have rendered **zero images** and a "Video Ad" badge — the difference between shipping and looking broken.
+- **`CreditCostHint`** fell through to `'image_ad'` for any unrecognised adType and promised a charge that never happens. Wrong for the Swipe Library path since it shipped.
+- **Regeneration replaced real pixels with AI output.** Solved structurally for showcase by the adType discriminant.
+
+### Internal
+A self-review pass found and fixed six defects in this branch *after* it worked:
+
+- **The module contradicted the pattern its own header cites.** `showcaseLayout.ts` names `gridPlan.ts` as its model — and `gridPlan.ts` exists precisely to kill "a ternary at every question the flow asks". It then grew **three parallel `Record<ShowcaseTemplate, …>` tables** plus a **four-branch if-chain**, so a fifth template meant four edits. Collapsed into one `SHOWCASE_TEMPLATES` spec table; `planShowcase` is now a branchless dispatcher and a new template is one entry. The test sweep derives from `SHOWCASE_TEMPLATE_VALUES`, so a new template cannot escape the invariants.
+- **A real defect in re-composite.** `ShowcaseAdConfig` flattened the draft, and four of its fields were **written and never read** — recompose pulled them from the *live* editor instead, so re-rendering an ad made days ago silently used a different arrangement. That is the exact failure storing the config was introduced to prevent. Now `{ draft, assetIds }`, with the arrangement passed in rather than closed over.
+- **A whole speculative subsystem deleted.** `PanelFit`, the `'contain'` branch and `containDestRect` were dead — every template covers, the renderer never read `.fit`, and `containDestRect` was called only by its own test. Removed with three more unused exports and `showcase-check`, which was dead end to end (the server already dedupes via `ignoreDuplicates`).
+- **`BatchSessionContext` flattened one object into seven fields**, needing seven snapshot lines and a nine-line restore. Now `showcase?: ShowcaseDraft`, so a new draft field survives a refresh automatically.
+- **`fail()` was byte-identical across two handler files** → `api/_lib/route-errors.ts`. **`computeImageHash` lived in `inspirationLibraryApi`**, forcing Showcase to depend on Inspiration to hash a screenshot → `lib/imageHash.ts`.
+- **`applyHero` mutated `image_data` the literal had already set.** Payload now built in one construction.
+
+**The compositor is split along the testability seam.** `lib/showcaseLayout.ts` is pure and takes only DIMENSIONS — never image data — so every geometry decision is asserted; `services/showcaseCanvas.ts` walks descriptors issuing draw calls and holds no decisions. `vitest.config.ts` is node-only by design, which is why `textAdCanvas.ts` has no tests; this is how the decisions stay on the testable side.
+
+**Considered and rejected:** the auth-header fetch helper is duplicated in **seven** services, six of them predating this branch. That is repo-wide convention, and refactoring it would scatter this diff across unrelated features. Flagged, not touched.
+
+**Net structural effect**: no file crossed 1000 lines; `AdGenerator.tsx` 4295 → ~4540 with the config step extracted to its own component and nine `useState` calls collapsed into one draft (the shape `CustomDirectionDraft` settled on, ADR #23). `npm test` (347 passing), `tsc -b --force` and `npm run build` clean; **lint 96 problems, byte-identical to baseline**; **11/12 serverless functions, unchanged**.
+
+**Not verified**: nothing has run in a browser and migration 023 has not been applied to a database. Everything is type-checked, unit-tested and built, but whether a 1600px screenshot actually reads crisply at feed size is an empirical question this change cannot answer on its own.
+
+**Deferred, with reasons**: capturing a client's old site from a URL needs a server-side headless browser, which `pdfPages.ts` already rules out on the record (native dependency + the 11/12 function budget) and which is a second SSRF surface — `ENABLE_URL_IMPORT` is off by default for that reason. A results-wall metric caption (*"+312% conversions"*) is deliberately absent: `showcase_assets` has no performance columns, and any such note would be operator-**asserted**, not measured, and would have to be labelled that way at every point of use.
+
 ## 2026-08-25 — CreativeIQ™: the angle axis now reaches the image, as directable photography
 
 ### What

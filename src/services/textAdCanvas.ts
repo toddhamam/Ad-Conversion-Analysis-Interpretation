@@ -32,7 +32,7 @@ export interface TextAdStyle {
 
 export type ImageSize = '1:1' | '16:9' | '9:16';
 
-interface TextSection {
+export interface TextSection {
   text: string;
   lines: string[];
   fontSize: number;
@@ -208,16 +208,20 @@ const SIZE_DIMENSIONS: Record<ImageSize, { width: number; height: number }> = {
 // Font & Layout Constants
 // ---------------------------------------------------------------------------
 
-const FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-const HORIZONTAL_PADDING_RATIO = 0.08; // 8% of width on each side
+export const FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+export const HORIZONTAL_PADDING_RATIO = 0.08; // 8% of width on each side
 const MIN_FONT_SIZE = 36;
 const BANNER_VERTICAL_PADDING = 0.03; // 3% of height above/below banner text
 
 // ---------------------------------------------------------------------------
 // Text Layout Engine
+//
+// Exported because services/showcaseCanvas.ts is the second consumer: a showcase composite
+// draws BEFORE/AFTER label bands and a caption with the same wrapping and auto-sizing rules
+// as a text ad, and a second copy of this engine would let the two drift.
 // ---------------------------------------------------------------------------
 
-function wrapText(
+export function wrapText(
   ctx: CanvasRenderingContext2D,
   text: string,
   maxWidth: number,
@@ -243,7 +247,7 @@ function wrapText(
   return lines;
 }
 
-function fitText(
+export function fitText(
   ctx: CanvasRenderingContext2D,
   text: string,
   maxWidth: number,
@@ -275,7 +279,7 @@ function fitText(
 // Background Rendering
 // ---------------------------------------------------------------------------
 
-function fillBackground(
+export function fillBackground(
   ctx: CanvasRenderingContext2D,
   style: TextAdStyle,
   width: number,
@@ -305,7 +309,7 @@ function fillBackground(
 // Section Rendering
 // ---------------------------------------------------------------------------
 
-function drawCenteredText(
+export function drawCenteredText(
   ctx: CanvasRenderingContext2D,
   section: TextSection,
   color: string,

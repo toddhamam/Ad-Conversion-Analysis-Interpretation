@@ -13,6 +13,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { captureError, flushSentry } from './sentry.js';
 import { authenticateRequest } from './auth.js';
+import { failRoute as fail } from './route-errors.js';
 import {
   isUrlImportEnabled,
   validateExternalUrl,
@@ -55,12 +56,6 @@ const LIST_COLUMNS = [
 
 const VALID_LANES = new Set(['ad_library', 'screenshot', 'deck_upload', 'url_import']);
 
-function fail(res: VercelResponse, err: unknown, route: string, organizationId?: string) {
-  captureError(err, { route: `meta/${route}`, organizationId });
-  return flushSentry().then(() =>
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Request failed' })
-  );
-}
 
 // ─── inspiration-list ────────────────────────────────────────────────────────
 

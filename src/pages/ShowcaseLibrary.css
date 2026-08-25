@@ -1,0 +1,477 @@
+/* Showcase Library — client work used as ad creative.
+   Targeted transitions only: these cards render base64 screenshots, and `transition: all`
+   forces a full property recalculation per frame when they load (see CLAUDE.md). */
+
+.showcase-page {
+  padding: 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+
+.showcase-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.showcase-header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+}
+
+.showcase-subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 0;
+  max-width: 60ch;
+  line-height: 1.5;
+}
+
+.showcase-counts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.showcase-counts .count-full { color: #f59e0b; font-weight: 600; }
+.showcase-counts .count-pairs { font-size: 12px; }
+
+/* ── Banners ────────────────────────────────────────────────────────────── */
+
+.showcase-banner {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 20px;
+  border: 1px solid var(--border-primary);
+}
+
+.showcase-banner.error {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.25);
+  color: #b91c1c;
+}
+
+.showcase-banner.notice {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+/* ── Upload panel ───────────────────────────────────────────────────────── */
+
+.showcase-upload {
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 24px;
+}
+
+.showcase-upload h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 16px;
+}
+
+.upload-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  align-items: end;
+}
+
+.upload-slot,
+.upload-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.slot-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.slot-label em {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.slot-btn,
+.upload-field input,
+.upload-field select,
+.upload-field textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  width: 100%;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.slot-btn {
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slot-btn:hover { background: var(--bg-card-hover); }
+
+.upload-field input:focus-visible,
+.upload-field select:focus-visible,
+.upload-field textarea:focus-visible,
+.slot-btn:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 1px;
+  border-color: var(--accent-violet);
+}
+
+.upload-consent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  grid-column: 1 / -1;
+}
+
+.upload-consent input { width: auto; }
+
+.upload-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.upload-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+
+.btn-primary,
+.btn-ghost,
+.btn-danger-ghost {
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-primary {
+  background: var(--accent-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--accent-primary);
+}
+
+.btn-primary:hover:not(:disabled) { background: var(--accent-secondary); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border-primary);
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+
+.btn-danger-ghost {
+  background: transparent;
+  border: 1px solid var(--border-primary);
+  color: #b91c1c;
+}
+
+.btn-danger-ghost:hover { background: rgba(239, 68, 68, 0.08); }
+
+.btn-primary:focus-visible,
+.btn-ghost:focus-visible,
+.btn-danger-ghost:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 2px;
+}
+
+/* ── Toolbar ────────────────────────────────────────────────────────────── */
+
+.showcase-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.showcase-search {
+  flex: 1;
+  min-width: 200px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.showcase-toolbar select {
+  padding: 10px 14px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+/* ── Grid + cards ───────────────────────────────────────────────────────── */
+
+.showcase-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+  /* Isolates paint when base64 screenshots render into the grid. */
+  contain: layout style;
+}
+
+.showcase-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  contain: content;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.showcase-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-violet);
+}
+
+.card-thumbs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-secondary);
+}
+
+.card-thumb {
+  position: relative;
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+}
+
+.card-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center; /* the hero section is the proof; the footer is not */
+  display: block;
+}
+
+.card-thumb figcaption {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(15, 23, 42, 0.85);
+  color: #ffffff;
+}
+
+.card-thumb.is-before img { filter: saturate(0.75); }
+
+.thumb-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.card-body {
+  padding: 14px 16px 10px;
+  flex: 1;
+}
+
+.card-body h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 2px;
+}
+
+.card-url {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 100px;
+  border: 1px solid var(--border-primary);
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+}
+
+.chip-pair {
+  border-color: var(--border-violet);
+  color: var(--accent-violet);
+  background: var(--accent-violet-glow);
+}
+
+.chip-device { text-transform: capitalize; }
+.chip-consent { color: #15803d; border-color: rgba(21, 128, 61, 0.3); }
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px 14px;
+  flex-wrap: wrap;
+}
+
+.card-actions button {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* ── Empty state ────────────────────────────────────────────────────────── */
+
+.showcase-empty {
+  text-align: center;
+  padding: 64px 24px;
+  background: var(--bg-card);
+  border: 1px dashed var(--border-primary);
+  border-radius: 12px;
+}
+
+.showcase-empty h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
+.showcase-empty p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 0 auto;
+  max-width: 46ch;
+  line-height: 1.55;
+}
+
+/* ── Modal ──────────────────────────────────────────────────────────────── */
+
+.showcase-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1000;
+}
+
+.showcase-modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  padding: 24px;
+  width: 100%;
+  max-width: 460px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.showcase-modal h3 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .showcase-page { padding: 24px 16px; }
+  .showcase-header { flex-direction: column; gap: 12px; }
+  .showcase-counts { align-items: flex-start; flex-direction: row; gap: 12px; }
+}
+
+@media (max-width: 600px) {
+  .showcase-grid { grid-template-columns: 1fr; }
+  .showcase-header h1 { font-size: 22px; }
+  .upload-grid { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .showcase-card,
+  .btn-primary,
+  .btn-ghost,
+  .btn-danger-ghost,
+  .slot-btn,
+  .showcase-search,
+  .upload-field input,
+  .upload-field select,
+  .upload-field textarea {
+    transition: none;
+  }
+}

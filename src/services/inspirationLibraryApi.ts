@@ -6,6 +6,10 @@
 // rate, because nothing here has one.
 
 import { supabase } from '../lib/supabase';
+// Re-exported for the call sites that already import it from here; the helper itself moved
+// to lib/ so a second library need not depend on this one to hash an image.
+import { computeImageHash } from '../lib/imageHash';
+export { computeImageHash };
 import { fetchImageViaBackend } from './swipeLibraryApi';
 import { describeReferenceImage } from './openaiApi';
 import { normalizeForUpload, normalizeBase64, type NormalizedImage } from '../lib/imageNormalize';
@@ -140,17 +144,6 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   return response.json();
 }
 
-/**
- * SHA-256 of the FULL normalized base64.
- *
- * Deliberately not the swipe library's `.slice(0, 1000)` shortcut: for JPEGs from the same
- * encoder at the same dimensions those leading bytes are the SOI marker, APPn segments and
- * quantization tables, which are identical across genuinely different images.
- */
-export async function computeImageHash(base64: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(base64));
-  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
 
 // ─── API functions ──────────────────────────────────────────────────────────
 

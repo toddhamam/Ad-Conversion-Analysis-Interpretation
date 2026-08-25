@@ -78,6 +78,14 @@ import {
 import { slugifyCallout, concreteAngle, GRID_CELL_CAP, type GridShape } from '../lib/axisTags';
 import { resolveGridPlan, resolveSlotAngles, GRID_SHAPES, GRID_SHAPE_VALUES } from '../lib/gridPlan';
 import {
+  SHOWCASE_TEMPLATES, emptyShowcaseDraft, draftLabels,
+  type ShowcaseDraft,
+} from '../lib/showcaseLayout';
+import { renderShowcase } from '../services/showcaseCanvas';
+import { loadShowcaseImages, fetchShowcaseAssets, type ShowcaseAsset } from '../services/showcaseLibraryApi';
+import ShowcaseAssetPicker from '../components/ShowcaseAssetPicker';
+import ShowcaseConfigPanel from '../components/ShowcaseConfigPanel';
+import {
   EMPTY_CUSTOM_DIRECTION, draftToInput,
   type CustomDirectionDraft, type CustomDirectionInput,
 } from '../lib/customDirection';
@@ -169,6 +177,13 @@ const GRID_FORMAT_OPTIONS = (Object.keys(FORMAT_LABELS) as FormatType[]).map(id 
   name: FORMAT_LABELS[id],
   description: id === 'static_screenshot' ? 'Authentic screenshot — often out-converts designed graphics' : 'Designed graphic',
 }));
+
+/** How a capture device maps to the body `device_frame` draws around it. */
+const DEVICE_BODY_FOR: Record<'desktop' | 'mobile' | 'tablet', 'laptop' | 'phone' | 'tablet'> = {
+  desktop: 'laptop',
+  mobile: 'phone',
+  tablet: 'tablet',
+};
 
 /**
  * The angle a generated package asserts, used when regenerating its images so a reroll rebuilds
@@ -275,6 +290,15 @@ const AdGenerator = () => {
   // Per-account authored Brand Voice profile — injected into every copy generation call below.
   const [brandProfile, setBrandProfile] = useState<BrandVoiceProfile | null>(null);
   const [imageSize, setImageSize] = useState<ImageSize>(DEFAULT_IMAGE_SIZE);
+  // Showcase composite. The ARRANGEMENT is one draft object (see lib/showcaseLayout.ts); the
+  // chosen assets stay separate because the library, not the session, owns those rows.
+  const [showcase, setShowcase] = useState<ShowcaseDraft>(() => emptyShowcaseDraft(getDefaultStyleId()));
+  const [showcaseAssets, setShowcaseAssets] = useState<ShowcaseAsset[]>([]);
+  const [showShowcasePicker, setShowShowcasePicker] = useState(false);
+  const patchShowcase = useCallback(
+    (patch: Partial<ShowcaseDraft>) => setShowcase(prev => ({ ...prev, ...patch })),
+    []
+  );
   const [copyLength, setCopyLength] = useState<CopyLength>(DEFAULT_COPY_LENGTH);
   const [imageModel, setImageModel] = useState<ImageModel>(() => {
     try {
@@ -499,6 +523,8 @@ const AdGenerator = () => {
       variationCount,
       customDirectionText: customDirection.text,
       customDirectionMode: customDirection.mode,
+      showcase,
+      showcaseAssetIds: showcaseAssets.map(a => a.id),
       copyOptions,
       selectedHeadlines,
       selectedBodyTexts,
@@ -540,6 +566,7 @@ const AdGenerator = () => {
     audienceType, conceptType, effectiveIntent, copySource, adType, selectedProductId,
     similarityValue, copyVariationValue, imageSize, imageModel, variationCount,
     customDirection,
+    showcase, showcaseAssets,
     copyOptions, selectedHeadlines, selectedBodyTexts, selectedCTAs,
     generationMode, gridFormat, gridShape, gridAngles, gridHooks, gridCallouts,
     blitzImageStrategy, corePromise, gridCells, keptCellIds, currentStep,
@@ -892,6 +919,11 @@ const AdGenerator = () => {
         if (s.imageSize) setImageSize(s.imageSize);
         if (s.imageModel) setImageModel(s.imageModel);
         if (typeof s.variationCount === 'number') setVariationCount(s.variationCount);
+        // Showcase arrangement. The chosen ASSETS are restored by id below, not from the
+        // session — the library is the source of truth for them and one may have been deleted.
+        // Set authoritatively rather than merged, so nothing leaks in from a previously-viewed
+        // account; the default fills any field an older stored session predates.
+        setShowcase({ ...emptyShowcaseDraft(getDefaultStyleId()), ...(s.showcase || {}) });
         // Set authoritatively so a brief never leaks in from a previously-viewed account. `open`
         // is view state and is not persisted — it is derived from whether a brief came back.
         const restoredBrief = typeof s.customDirectionText === 'string' ? s.customDirectionText : '';
@@ -1627,8 +1659,114 @@ const AdGenerator = () => {
   const [showCreditModal, setShowCreditModal] = useState(false);
   const [creditModalData, setCreditModalData] = useState({ remaining: 0, required: 0 });
 
+  /**
+   * Build the render config for the current showcase arrangement, with images already loaded.
+   *
+   * Shared by first generation and re-compositing so the two can never disagree about how a
+   * template consumes its assets — a before/after draws [before, after] from ONE asset, while
+   * a hero draws [hero].
+   */
+  const buildShowcaseRenderConfig = useCallback(async (
+    assets: ShowcaseAsset[],
+    /** The arrangement to render — passed in, never read from live state, so a re-composite
+     *  rebuilds what the operator originally chose rather than what the editor holds now. */
+    draft: ShowcaseDraft,
+  ) => {
+    const { template } = draft;
+    const arity = SHOWCASE_TEMPLATES[template].arity;
+    const loaded = await loadShowcaseImages(assets, arity.requiresBefore ? 'pair' : 'hero');
+    if (loaded.length === 0) return null;
+
+    const first = loaded[0];
+    // A before/after draws two states of ONE asset; every other template draws one image per
+    // asset. This is the only place that distinction lives.
+    const images = arity.requiresBefore
+      ? [first.beforeUrl, first.heroUrl].filter((u): u is string => !!u)
+      : loaded.map(l => l.heroUrl);
+
+    if (arity.requiresBefore && images.length < 2) return null;
+    if (images.length < arity.min) return null;
+
+    return {
+      template,
+      size: draft.size,
+      images,
+      styleId: draft.styleId,
+      labels: {
+        ...draftLabels(draft),
+        // A results wall labels each cell with the CLIENT'S NAME. Never a metric — the table
+        // has no performance columns precisely so a wall cannot start asserting results.
+        captions: template === 'client_grid' ? loaded.map(l => l.clientName) : undefined,
+      },
+      caption: draft.caption || undefined,
+      chrome: draft.chrome,
+      // Derived from the assets rather than stored, so it cannot go stale: the operator may
+      // have edited the URL, or re-captured on a different device, since this ad was made.
+      urlText: assets[0]?.project_url || undefined,
+      // A desktop capture in a phone body would letterbox into a sliver, and the operator
+      // already answered this question at upload time.
+      device: DEVICE_BODY_FOR[assets[0]?.device_hint ?? 'desktop'],
+      clientName: first.clientName,
+    };
+  }, []);
+
   // Generate final creatives
   const handleGenerateCreatives = async () => {
+    // --- Showcase path: canvas composite of the operator's own client work. No image model,
+    // no credits, no drift. Returns before generateAdPackage is ever reached — that function
+    // branches image/text/else-video, so an unrecognised adType would take the VIDEO path.
+    if (adType === 'showcase') {
+      if (showcaseAssets.length === 0) { setError('Choose at least one client asset.'); return; }
+
+      setIsGeneratingCreatives(true);
+      setError(null);
+      setGenerationProgress('ConversionIQ™ composing your showcase...');
+
+      try {
+        const renderConfig = await buildShowcaseRenderConfig(showcaseAssets, showcase);
+        if (!renderConfig) {
+          setError('Those assets could not be loaded. Check they still exist in your Showcase Library.');
+          return;
+        }
+
+        const image = await renderShowcase(renderConfig);
+        if (!image) {
+          setError('The composite could not be rendered. Try a different template or asset.');
+          return;
+        }
+
+        const result: GeneratedAdPackage = {
+          id: `show_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          generatedAt: new Date().toISOString(),
+          adType: 'showcase',
+          audienceType,
+          conceptType,
+          images: [image],
+          headlineHooks: copyOptions?.headlines
+            .filter(h => selectedHeadlines.includes(h.id))
+            .map(h => h.hook ?? null) || [],
+          copy: {
+            headlines: copyOptions?.headlines.filter(h => selectedHeadlines.includes(h.id)).map(h => h.text) || [],
+            bodyTexts: copyOptions?.bodyTexts.filter(b => selectedBodyTexts.includes(b.id)).map(b => b.text) || [],
+            callToActions: copyOptions?.callToActions.filter(c => selectedCTAs.includes(c.id)).map(c => c.text) || [],
+            rationale: 'Real client work, composited exactly as captured',
+          },
+          whyItWorks: 'The proof is the picture — this is the client\'s actual site, unaltered.',
+          campaignIntent: effectiveIntent,
+          showcaseConfig: { draft: showcase, assetIds: showcaseAssets.map(a => a.id) },
+        };
+
+        setBatchPublishedAt(null); // new batch — not yet published
+        setGeneratedAds(prev => [result, ...prev]);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to compose the showcase creative.');
+      } finally {
+        setIsGeneratingCreatives(false);
+        setGenerationProgress('');
+      }
+      return;
+    }
+
     // --- Library images path: skip AI generation & credits entirely ---
     if (libraryImages.length > 0 && adType === 'image') {
       setIsGeneratingCreatives(true);
@@ -1700,7 +1838,9 @@ const AdGenerator = () => {
       return;
     }
 
-    // Text ads use Canvas rendering — no API keys needed for image generation
+    // Text ads use Canvas rendering — no API keys needed for image generation. Showcase ads
+    // are canvas-rendered too, but they returned above, which is why they are not listed here:
+    // TypeScript narrows `adType` past them and rejects a redundant comparison.
     if (adType !== 'text') {
       const hasImageApi = isGeminiConfigured() || isOpenAIConfigured();
       const hasTextApi = isOpenAIConfigured();
@@ -2305,6 +2445,64 @@ const AdGenerator = () => {
     setGeneratedAds(updatedAds);
   }, [generatedAds]);
 
+  /**
+   * Re-compose a showcase creative with a different theme.
+   *
+   * The AI regenerate handlers must never touch a showcase package — that would replace a real
+   * client site with an invented one — but a re-composite is free, deterministic and exactly
+   * what an operator wants when a split lands wrong. Mirrors handleRegenerateTextImage, and
+   * relies on `showcaseConfig` for the same reason that one relies on `textAdConfig`.
+   */
+  const handleRecomposeShowcase = useCallback(async (adId: string) => {
+    const ad = generatedAds.find(a => a.id === adId);
+    const config = ad?.showcaseConfig;
+    if (!ad || !config) return;
+
+    try {
+      const accountId = currentAccount?.ad_account_id;
+      if (!accountId) return;
+
+      // Re-read from the library rather than trusting anything cached on the package: an asset
+      // may have been deleted, or had a "before" attached, since the composite was made.
+      const { items } = await fetchShowcaseAssets(accountId);
+      const byId = new Map(items.map(i => [i.id, i]));
+      const assets = config.assetIds
+        .map(id => byId.get(id))
+        .filter((a): a is ShowcaseAsset => !!a);
+
+      if (assets.length === 0) {
+        setError('Those assets are no longer in your Showcase Library.');
+        return;
+      }
+
+      // Cycle the theme so a re-composite is visibly different rather than identical. Every
+      // other part of the arrangement is the STORED one, not the live editor's.
+      const styleIds = TEXT_AD_STYLES.map(st => st.id);
+      const nextStyleId = styleIds[(styleIds.indexOf(config.draft.styleId) + 1) % styleIds.length];
+      const nextDraft: ShowcaseDraft = { ...config.draft, styleId: nextStyleId };
+
+      const renderConfig = await buildShowcaseRenderConfig(assets, nextDraft);
+      if (!renderConfig) {
+        setError('Those assets could not be loaded.');
+        return;
+      }
+
+      const image = await renderShowcase(renderConfig);
+      if (!image) {
+        setError('The composite could not be re-rendered.');
+        return;
+      }
+
+      setGeneratedAds(prev => prev.map(a => (
+        a.id === adId
+          ? { ...a, images: [image], showcaseConfig: { ...config, draft: nextDraft } }
+          : a
+      )));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not re-compose that creative.');
+    }
+  }, [generatedAds, currentAccount, buildShowcaseRenderConfig]);
+
   const hasAnalysisData = !!analysisData;
   const isGenerating = isGeneratingCopy || isGeneratingCreatives;
 
@@ -2313,8 +2511,13 @@ const AdGenerator = () => {
   // CTAs are optional when using import/manual copy (user sets CTA button type in publisher)
   const ctaOk = copySource === 'generate' ? selectedCTAs.length >= 1 : true;
   const canProceedToFinalConfig = selectedHeadlines.length >= 1 && selectedBodyTexts.length >= 1 && ctaOk;
-  const canGenerateCreatives = selectedHeadlines.length >= 1 && selectedBodyTexts.length >= 1 && ctaOk
-    && (adType !== 'text' || textAdPrimaryText.trim().length > 0);
+  // A showcase ad's requirement is an ASSET, not copy: the picture is the whole creative and
+  // the copy is optional beside it. Scoped to showcase deliberately — relaxing the headline and
+  // body requirement globally would change behaviour for every existing image and video ad.
+  const canGenerateCreatives = adType === 'showcase'
+    ? showcaseAssets.length > 0
+    : selectedHeadlines.length >= 1 && selectedBodyTexts.length >= 1 && ctaOk
+      && (adType !== 'text' || textAdPrimaryText.trim().length > 0);
   const canSubmitManualCopy = manualHeadlines.some(h => h.trim().length > 0) && manualBodyTexts.some(b => b.trim().length > 0);
 
   return (
@@ -3627,6 +3830,14 @@ const AdGenerator = () => {
                 <span className="ad-type-name">Text Ad</span>
                 <span className="ad-type-desc">Bold text on background</span>
               </button>
+              <button
+                className={`ad-type-btn ${adType === 'showcase' ? 'active' : ''}`}
+                onClick={() => setAdType('showcase')}
+              >
+                <span className="ad-type-icon">🖥️</span>
+                <span className="ad-type-name">Showcase Ad</span>
+                <span className="ad-type-desc">Your real client work — free</span>
+              </button>
             </div>
           </div>
 
@@ -3693,6 +3904,23 @@ const AdGenerator = () => {
                 </div>
               )}
             </div>
+          )}
+
+          {/* Showcase Ad Configuration — composited from real client work, zero credits */}
+          {adType === 'showcase' && (
+            <ShowcaseConfigPanel
+              draft={showcase}
+              onChange={patchShowcase}
+              assets={showcaseAssets}
+              onPickAssets={() => setShowShowcasePicker(true)}
+              onTemplateChange={template => {
+                patchShowcase({ template });
+                // Arity and the before-image requirement differ per template, so a selection
+                // made for one is not necessarily valid for another.
+                setShowcaseAssets([]);
+              }}
+              disabled={!currentAccount?.ad_account_id}
+            />
           )}
 
           {/* Text Ad Configuration */}
@@ -4125,7 +4353,11 @@ const AdGenerator = () => {
           )}
 
           {/* Credit Cost Hint */}
-          <CreditCostHint adType={adType} variationCount={variationCount} />
+          <CreditCostHint
+            adType={adType}
+            variationCount={variationCount}
+            zeroCost={adType === 'showcase' || libraryImages.length > 0}
+          />
 
           {/* Generate Button */}
           <button
@@ -4206,7 +4438,7 @@ const AdGenerator = () => {
               <GeneratedAdCard
                 key={ad.id}
                 ad={ad}
-                onRegenerateImage={ad.adType === 'image' ? handleRegenerateImage : ad.adType === 'text' ? handleRegenerateTextImage : undefined}
+                onRegenerateImage={ad.adType === 'image' ? handleRegenerateImage : ad.adType === 'text' ? handleRegenerateTextImage : ad.adType === 'showcase' ? handleRecomposeShowcase : undefined}
                 onRegenerateAllImages={ad.adType === 'image' ? handleRegenerateAllImages : undefined}
                 onRegenerateVideo={ad.adType === 'video' ? handleRegenerateVideo : undefined}
                 onRemoveImage={handleRemoveImage}
@@ -4232,6 +4464,15 @@ const AdGenerator = () => {
         </div>
       )}
       {/* Swipe Library Picker Modal */}
+      {showShowcasePicker && currentAccount?.ad_account_id && (
+        <ShowcaseAssetPicker
+          adAccountId={currentAccount.ad_account_id}
+          template={showcase.template}
+          selectedIds={showcaseAssets.map(a => a.id)}
+          onConfirm={picked => { setShowcaseAssets(picked); setShowShowcasePicker(false); }}
+          onClose={() => setShowShowcasePicker(false)}
+        />
+      )}
       {showSwipePicker && currentAccount?.ad_account_id && (
         <SwipeLibraryPicker
           adAccountId={currentAccount.ad_account_id}
@@ -4262,11 +4503,25 @@ const AdGenerator = () => {
   );
 };
 
-/** Inline credit cost hint shown above the Generate button */
-function CreditCostHint({ adType, variationCount }: { adType: string; variationCount: number }) {
+/**
+ * Inline credit cost hint shown above the Generate button.
+ *
+ * `zeroCost` covers the paths that charge nothing — a showcase composite and a Swipe Library
+ * reuse. Without it the action-type ternary falls through to 'image_ad' for anything it does
+ * not recognise and promises a charge that never happens, which has been wrong for the library
+ * path since it shipped.
+ */
+function CreditCostHint(
+  { adType, variationCount, zeroCost = false }:
+  { adType: string; variationCount: number; zeroCost?: boolean }
+) {
   const [creditInfo, setCreditInfo] = useState<{ remaining: number; cost: number } | null>(null);
 
   useEffect(() => {
+    // No setState here — the render guard below handles it, and calling setState synchronously
+    // inside an effect triggers a cascading render. Skipping the fetch also spares a credit
+    // API round trip for a path that cannot cost anything.
+    if (zeroCost) return;
     const actionType = adType === 'video' ? 'video_ad' : adType === 'text' ? 'text_ad' : 'image_ad';
     checkCredits(actionType as CreditActionType, variationCount)
       .then(result => {
@@ -4277,9 +4532,9 @@ function CreditCostHint({ adType, variationCount }: { adType: string; variationC
         }
       })
       .catch(() => setCreditInfo(null));
-  }, [adType, variationCount]);
+  }, [adType, variationCount, zeroCost]);
 
-  if (!creditInfo) return null;
+  if (zeroCost || !creditInfo) return null;
 
   const color = creditInfo.remaining < creditInfo.cost ? '#ef4444'
     : creditInfo.remaining < creditInfo.cost * 3 ? '#f59e0b'

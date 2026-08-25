@@ -2535,3 +2535,74 @@
     transition: none;
   }
 }
+
+/* ── Showcase Ad configuration ──────────────────────────────────────────────
+   Composited from the operator's own client screenshots. Targeted transitions only —
+   this section sits above cards holding base64 images. */
+
+.showcase-config .showcase-template-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+
+.showcase-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.showcase-picker-row .config-hint {
+  margin: 0;
+}
+
+.showcase-field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.showcase-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.showcase-field > span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.showcase-field input,
+.showcase-field select {
+  padding: 9px 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  width: 100%;
+  transition: border-color 0.15s ease;
+}
+
+.showcase-field input:focus-visible,
+.showcase-field select:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 1px;
+  border-color: var(--accent-violet);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .showcase-field input,
+  .showcase-field select {
+    transition: none;
+  }
+}

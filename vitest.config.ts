@@ -17,6 +17,12 @@ export default defineConfig({
       // isGeminiConfigured(). Read at module scope in openaiApi.ts, so vi.stubEnv after
       // import is too late — it has to be set here.
       VITE_GEMINI_API_KEY: 'test-gemini-key',
+      // Every api/_lib handler module calls createClient() at import scope, which throws
+      // "supabaseUrl is required" before a single test runs. These placeholders make the
+      // handler modules importable so their PURE exports can be tested; no test reaches the
+      // network, and an unroutable .invalid host means none can start to.
+      SUPABASE_URL: 'https://test.supabase.invalid',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
     },
   },
 });
