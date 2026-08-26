@@ -35,10 +35,14 @@ const TABLE = 'showcase_assets';
 export const MAX_SHOWCASE_ASSETS = 40;
 
 /**
- * Max IMAGES per save request, not rows. A before/after row is two images, so a naive
- * ten-row cap would put 4-18MB against Vercel's ~4.5MB body limit.
+ * Max IMAGES per save request, not rows. A before/after row is two images, so a naive ten-row
+ * cap would put many times the intended bytes against Vercel's ~4.5MB body limit.
+ *
+ * Two, not four, since the showcase profile began preserving width: a 1600x2600 capture can
+ * reach ~1.5MB, which base64-inflates to ~2MB. Two of those plus JSON overhead sits inside the
+ * limit; four would not.
  */
-export const MAX_IMAGES_PER_SAVE = 4;
+export const MAX_IMAGES_PER_SAVE = 2;
 
 const LIST_LIMIT = 500;
 
@@ -50,7 +54,7 @@ const LIST_LIMIT = 500;
  * before/after template.
  */
 const LIST_COLUMNS = [
-  'id', 'organization_id', 'ad_account_id',
+  'id', 'organization_id', 'ad_account_id', 'asset_kind',
   'client_name', 'project_url', 'client_consent',
   'image_thumbnail', 'image_mime_type', 'image_width', 'image_height',
   'before_image_thumbnail', 'before_image_mime_type', 'before_image_width', 'before_image_height',
@@ -59,11 +63,14 @@ const LIST_COLUMNS = [
 ].join(', ');
 
 const VALID_DEVICE_HINTS = new Set(['desktop', 'mobile', 'tablet']);
+const VALID_ASSET_KINDS = new Set(['source', 'finished']);
 
 
 // ─── save planning (pure, unit-tested) ───────────────────────────────────────
 
 export interface ShowcaseSaveItem {
+  /** 'source' = raw screenshot to composite. 'finished' = already-designed, publishes untouched. */
+  asset_kind?: string;
   client_name?: string;
   project_url?: string;
   client_consent?: boolean;
@@ -144,6 +151,7 @@ export async function handleShowcaseList(req: VercelRequest, res: VercelResponse
   if (!adAccountId) return res.status(400).json({ error: 'ad_account_id required' });
 
   const search = req.query.search as string | undefined;
+  const kind = req.query.kind as string | undefined;
   const sort = (req.query.sort as string) || 'newest';
   const limit = Math.min(parseInt(req.query.limit as string) || LIST_LIMIT, LIST_LIMIT);
   const offset = parseInt(req.query.offset as string) || 0;
@@ -154,6 +162,8 @@ export async function handleShowcaseList(req: VercelRequest, res: VercelResponse
       .select(LIST_COLUMNS, { count: 'exact' })
       .eq('organization_id', auth.organizationId)
       .eq('ad_account_id', adAccountId);
+
+    if (kind && VALID_ASSET_KINDS.has(kind)) query = query.eq('asset_kind', kind);
 
     if (search) {
       // Wrap ilike values in double quotes so PostgREST reads commas/parens as literal text
@@ -207,13 +217,26 @@ export async function handleShowcaseSave(req: VercelRequest, res: VercelResponse
   }
 
   const typed = items as ShowcaseSaveItem[];
-  const invalid = typed.find(
-    i => !i.image_data || !i.content_hash || !i.client_name?.trim()
-      || (i.device_hint && !VALID_DEVICE_HINTS.has(i.device_hint))
-  );
+
+  // Mirrors migration 024's CHECK constraints, so a bad payload is rejected with a readable
+  // message here rather than as a raw constraint violation from Postgres.
+  const invalid = typed.find(i => {
+    if (!i.image_data || !i.content_hash) return true;
+    if (i.asset_kind && !VALID_ASSET_KINDS.has(i.asset_kind)) return true;
+    if (i.device_hint && !VALID_DEVICE_HINTS.has(i.device_hint)) return true;
+    const kind = i.asset_kind || 'source';
+    // A source asset labels a results-wall cell with its client's name; an unnamed one would
+    // render a blank band. A finished creative has no client to name.
+    if (kind === 'source' && !i.client_name?.trim()) return true;
+    // A finished creative is whole by definition — the templates that consume a "before" all
+    // composite, and a finished creative is never composited.
+    if (kind === 'finished' && i.before_image_data) return true;
+    return false;
+  });
   if (invalid) {
     return res.status(400).json({
-      error: 'Each item needs image_data, content_hash, client_name and a valid device_hint',
+      error: 'Each item needs image_data and content_hash; a source asset also needs client_name, '
+        + 'and a finished creative cannot carry a "before" image',
     });
   }
 
@@ -241,7 +264,8 @@ export async function handleShowcaseSave(req: VercelRequest, res: VercelResponse
     const rows = accepted.map(item => ({
       organization_id: auth.organizationId,
       ad_account_id: adAccountId,
-      client_name: item.client_name!.trim(),
+      asset_kind: item.asset_kind || 'source',
+      client_name: item.client_name?.trim() || null,
       project_url: item.project_url ?? null,
       client_consent: item.client_consent ?? false,
       image_data: item.image_data,
@@ -303,10 +327,10 @@ export async function handleShowcaseUpdate(req: VercelRequest, res: VercelRespon
   // cannot affect the row's identity.
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (body.client_name !== undefined) {
-    if (!String(body.client_name).trim()) {
-      return res.status(400).json({ error: 'client_name cannot be empty' });
-    }
-    updates.client_name = String(body.client_name).trim();
+    // Nullable since 024 — a finished creative has no client. The database CHECK still refuses
+    // to blank the name on a `source` asset, so this cannot quietly break a results wall.
+    const name = String(body.client_name ?? '').trim();
+    updates.client_name = name || null;
   }
   if (body.project_url !== undefined) updates.project_url = body.project_url;
   if (body.client_consent !== undefined) updates.client_consent = body.client_consent;

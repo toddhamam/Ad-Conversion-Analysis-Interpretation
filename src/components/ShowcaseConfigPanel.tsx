@@ -8,6 +8,8 @@ import {
 } from '../lib/showcaseLayout';
 import { TEXT_AD_STYLES } from '../services/textAdCanvas';
 import type { ShowcaseAsset } from '../services/showcaseLibraryApi';
+import type { ShowcaseRenderConfig } from '../services/showcaseCanvas';
+import ShowcasePreview from './ShowcasePreview';
 
 interface Props {
   draft: ShowcaseDraft;
@@ -18,6 +20,8 @@ interface Props {
   /** Clearing on template change lives with the caller — arity differs per template. */
   onTemplateChange: (template: ShowcaseTemplate) => void;
   disabled?: boolean;
+  /** Null until enough assets are chosen to compose anything. */
+  previewConfig: ShowcaseRenderConfig | null;
 }
 
 /**
@@ -28,7 +32,7 @@ interface Props {
  * settled on for the same reason (ADR #23).
  */
 const ShowcaseConfigPanel = ({
-  draft, onChange, assets, onPickAssets, onTemplateChange, disabled,
+  draft, onChange, assets, onPickAssets, onTemplateChange, disabled, previewConfig,
 }: Props) => (
   <div className="config-section showcase-config">
     <label className="config-label">Showcase Composite</label>
@@ -123,6 +127,15 @@ const ShowcaseConfigPanel = ({
         onChange={e => onChange({ caption: e.target.value })}
       />
     </label>
+
+    <ShowcasePreview
+      config={previewConfig}
+      emptyHint={
+        assets.length === 0
+          ? 'Choose client work to see the exact creative this will publish.'
+          : 'Loading your images…'
+      }
+    />
   </div>
 );
 

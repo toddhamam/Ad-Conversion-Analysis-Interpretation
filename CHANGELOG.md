@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-08-26 — Finished creatives: a state, not a source
+
+### What
+An operator with an already-designed creative — their own before/after, an offer graphic, anything a designer finished — had nowhere to put it. Every candidate was wrong for a different reason:
+
+| Where | Why not |
+|---|---|
+| Showcase Library | Composites *for* you — a finished before/after would be framed inside a second before/after |
+| Swipe Library | "Use as-is" is exactly right, but it can only ingest ads that already ran on Meta. No upload |
+| Inspiration Library | External/competitor style references, explicitly forbidden from being reproduced |
+| Manual upload in CreativeIQ | Lands in the reference cache as `own_upload`, which tells the model to *emulate* it |
+
+The gap was not a missing source. **"Finished creative" is a STATE**: the pixels ARE the ad, so nothing may generate, composite or emulate them. The app already reached that state three ways — a Swipe Library image used as-is, a showcase composite, and (wrongly) a manual upload — each through its own half-implementation. So the fix names the state once and routes all three through it, rather than adding a fourth lane beside them.
+
+### Added
+- **`asset_kind` on `showcase_assets` (migration 024) — not a fourth table.** Library tables are separated by EVIDENCE CLASS: `swipe_library_items` is own + measured, `inspiration_library_items` is external + unmeasured, `showcase_assets` is own + unmeasured. An uploaded finished ad is own + unmeasured — the same class. A fourth table would split one evidence class in two and give the picker two places to look. `client_name` became nullable for the same reason: a creative for the operator's own offer has no client, and a NOT NULL would fill with placeholders until it meant nothing. Two `CHECK` constraints hold the invariants — a `source` asset must still name its client (a results wall labels cells with it), and a `finished` one may not carry a "before" (nothing composites it).
+- **The `as_is` template — the only one that CONTAINS rather than covers.** Every other template frames a screenshot, which is a DOCUMENT: cropping discards the tail and keeps the proof. A finished creative is COMPOSED, so a crop cuts through an arrangement somebody made on purpose. Letterboxing onto the palette is the only non-destructive answer when the chosen format and the design's aspect disagree. (This reinstates the `contain` fit deleted as speculative last release — correct then, warranted now that it has a real caller.)
+- **`isPassthrough` — when nothing would be transformed, don't re-encode.** Pushing a finished JPEG through canvas at q0.92 is a generation loss for no gain, so a matching aspect publishes the stored bytes untouched. The predicate reads the PLAN, not the template id, because `as_is` at a *mismatched* aspect genuinely does need the canvas — only the geometry knows which case this is.
+- **A live preview of the exact composite.** Everything else in CreativeIQ costs a credit and a minute, so it is configured blind and reviewed after. A composite costs neither — it is browser canvas work — so making the operator generate just to see what a template does was a cost with no cause. It also turns *"will the screenshot be legible?"* from an argument into something you look at.
+- **37 new tests** (354 → 391), including the whole scaling rule and the `as_is` fit inversion.
+
+### Changed
+- **Ingest scales by WIDTH and trims the overflow.** Bounding the LONGEST edge starved the dimension that decides legibility: a 1440×4200 full-page capture came out **549px wide** — unreadable at 1080px — and it spent that budget preserving height every template then cropped away. `planNormalize` is pure and unit-tested. The `reference` profile keeps fit-the-box semantics deliberately (a vision model wants the whole frame), and an 800×800 box is arithmetically identical to the old longest-edge rule, so those callers are **byte-identical** — asserted directly against the old formula.
+- **`MAX_IMAGES_PER_SAVE` 4 → 2.** Preserving width means a capture can reach ~1.5MB, ~2MB base64. Two fit inside Vercel's ~4.5MB body limit; four would not.
+- **The Swipe Library path is now `adType: 'showcase'`.** It wore `adType: 'image'` while containing pixels no model produced — which is precisely what let the credit hint promise a charge and let Regenerate replace a proven winner with an AI render. Retagging deletes that bug class rather than patching it. It carries no `showcaseConfig` (there is no arrangement to re-compose), and the recompose handler is only wired when one exists, so the card offers no control that would do nothing.
+- The picker filters on the template's `accepts` kind, so a framing template never offers a finished creative to wrap in a second frame, and `as_is` never offers a raw screenshot it would publish unframed.
+
+### Internal
+A self-review pass found five defects in this branch *after* it worked:
+
+- **Two pure functions wearing `useCallback([])` in a 4.5k-line page.** `loadShowcaseSources` and `showcaseConfigFrom` had no React dependencies — the empty dep array was the tell. Moved to the service layer, where `showcaseConfigFrom` is now **testable**, and the draft/sources split it encodes has six tests instead of none. Lint confirmed the move independently: three warnings appeared saying module-level functions are not valid dependencies, which only surfaces once they stop being hooks.
+- **122 lines of inline conditional JSX** bolted into the middle of `ShowcaseLibrary.tsx`, wrapped in fragments to make a ternary work. Extracted to `AddShowcaseAssetPanel` — the same move `ShowcaseConfigPanel` needed one page earlier, for the same reason.
+- **A hand-rolled deep-compare masquerading as an effect key.** The preview compared configs by `JSON.stringify` with images reduced to their *character lengths* — two different images encoding to the same length would have silently skipped a re-render. The parent already memoizes the config, so identity was always sound; the whole line was deleted.
+- **Synchronous `setState` inside an effect** (caught by lint). Restructured so nothing sets state outside the debounce, with the empty case derived at render. Side benefit: the previous frame stays visible while the next renders, instead of blanking between keystrokes.
+- **Draft constants exported from a component file**, which breaks Fast Refresh. Moved beside the builders they feed.
+
+**Net structural effect**: both pages ended up SMALLER than they started — `AdGenerator.tsx` 4550 → 4542, `ShowcaseLibrary.tsx` 498 → 455. The feature grew; the files it touched shrank. No file crossed 1000 lines; **11/12 serverless functions, unchanged**; `npm test` (391 passing), `tsc -b --force` and `npm run build` clean; **lint 96 problems, byte-identical to baseline**.
+
+**Considered and rejected**: `DeviceHint` (`desktop|mobile|tablet`) and `DeviceKind` (`laptop|tablet|phone`) look like duplication but are not — one is how a screenshot was *captured*, the other is what body gets *drawn*, with an explicit mapping between them; collapsing them would conflate two facts. The auth-header fetch helper remains duplicated across seven services, six of them predating this branch — repo-wide convention, and refactoring it would scatter this diff across unrelated features.
+
+**Not verified**: nothing has run in a browser, and **migration 024 has not been applied to a database**. The `asset_kind` column and its two CHECK constraints are what the finished-creative lane depends on; without them, saves fail (readably, since #421).
+
+**Deliberately absent**: a `claims_substantiated` column. A finished creative can bake a performance claim into its pixels — the app did not compose it and cannot vouch for it — but that is a note at ingest, which the panel now carries, not a schema field.
+
 ## 2026-08-25 — Showcase Assets: real client work as ad creative, composited pixel-exact
 
 ### What

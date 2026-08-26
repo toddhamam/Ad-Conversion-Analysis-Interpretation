@@ -49,10 +49,18 @@ const ShowcaseAssetPicker = ({ adAccountId, template, selectedIds, onConfirm, on
     return () => { cancelled = true; };
   }, [adAccountId]);
 
-  /** Assets this template can actually use. */
+  /**
+   * Assets this template can actually use.
+   *
+   * Two filters, both structural: the KIND (a framing template must never offer a finished
+   * creative to wrap in a second frame, and `as_is` must never offer a raw screenshot it would
+   * publish unframed), and the "before" a split cannot render without.
+   */
   const eligible = useMemo(
-    () => (arity.requiresBefore ? assets.filter(a => a.before_image_thumbnail) : assets),
-    [assets, arity.requiresBefore]
+    () => assets.filter(a =>
+      a.asset_kind === spec.accepts && (!arity.requiresBefore || !!a.before_image_thumbnail)
+    ),
+    [assets, spec.accepts, arity.requiresBefore]
   );
 
   const hiddenCount = assets.length - eligible.length;
@@ -101,11 +109,17 @@ const ShowcaseAssetPicker = ({ adAccountId, template, selectedIds, onConfirm, on
           <Loading size="medium" message="ConversionIQ™ loading your showcase..." />
         ) : eligible.length === 0 ? (
           <div className="picker-empty">
-            <h3>{arity.requiresBefore ? 'No before/after pairs yet' : 'No client work yet'}</h3>
+            <h3>
+              {spec.accepts === 'finished' ? 'No finished creatives yet'
+                : arity.requiresBefore ? 'No before/after pairs yet'
+                : 'No client work yet'}
+            </h3>
             <p>
-              {arity.requiresBefore
-                ? 'Add a "before" image to one of your showcase assets and it will appear here.'
-                : 'Add a screenshot of a site you built and it will appear here.'}
+              {spec.accepts === 'finished'
+                ? 'Upload an already-designed creative and it will appear here, ready to publish untouched.'
+                : arity.requiresBefore
+                  ? 'Add a "before" image to one of your showcase assets and it will appear here.'
+                  : 'Add a screenshot of a site you built and it will appear here.'}
             </p>
             <Link to="/showcase" className="picker-cta" onClick={onClose}>
               Open the Showcase Library
@@ -138,7 +152,7 @@ const ShowcaseAssetPicker = ({ adAccountId, template, selectedIds, onConfirm, on
                         />
                       )}
                     </span>
-                    <span className="picker-name">{asset.client_name}</span>
+                    <span className="picker-name">{asset.client_name || 'Untitled creative'}</span>
                     {asset.project_url && <span className="picker-url">{asset.project_url}</span>}
                   </button>
                 );
@@ -147,8 +161,8 @@ const ShowcaseAssetPicker = ({ adAccountId, template, selectedIds, onConfirm, on
 
             {hiddenCount > 0 && (
               <p className="picker-hidden-note">
-                {hiddenCount} asset{hiddenCount === 1 ? '' : 's'} hidden — this template needs a
-                “before” image.
+                {hiddenCount} asset{hiddenCount === 1 ? '' : 's'} hidden — this template needs
+                {spec.accepts === 'finished' ? ' an already-designed creative' : arity.requiresBefore ? ' a “before” image' : ' a raw screenshot'}.
               </p>
             )}
           </>

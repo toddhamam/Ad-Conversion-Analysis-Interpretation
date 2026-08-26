@@ -11,16 +11,25 @@
 import { supabase } from '../lib/supabase';
 import { normalizeForUpload, type NormalizedImage } from '../lib/imageNormalize';
 import { computeImageHash } from '../lib/imageHash';
+import {
+  SHOWCASE_TEMPLATES, draftLabels,
+  type ShowcaseAssetKind, type ShowcaseTemplate, type ShowcaseDraft, type DeviceKind,
+} from '../lib/showcaseLayout';
+import type { ShowcaseRenderConfig } from './showcaseCanvas';
 
 const API_BASE = '/api/meta';
 
 /** Mirrors MAX_SHOWCASE_ASSETS in api/_lib/showcase-handlers.ts (enforced server-side). */
 export const MAX_SHOWCASE_ASSETS = 40;
 
-/** Mirrors MAX_IMAGES_PER_SAVE. Larger batches are chunked by saveShowcaseAssets. */
-const MAX_IMAGES_PER_SAVE = 4;
+/** Mirrors MAX_IMAGES_PER_SAVE (server-enforced). Larger batches are chunked by saveShowcaseAssets. */
+const MAX_IMAGES_PER_SAVE = 2;
 
 export type DeviceHint = 'desktop' | 'mobile' | 'tablet';
+
+// Re-exported so call sites can import the whole showcase vocabulary from one place. The type
+// itself lives in the pure layout module, which is what decides which kind a template accepts.
+export type { ShowcaseAssetKind };
 export type ShowcaseSort = 'newest' | 'oldest' | 'client';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -35,7 +44,9 @@ export interface ShowcaseAsset {
   id: string;
   organization_id: string;
   ad_account_id: string;
-  client_name: string;
+  asset_kind: ShowcaseAssetKind;
+  /** Null for a finished creative, which has no client to name. */
+  client_name: string | null;
   project_url: string | null;
   client_consent: boolean;
   image_thumbnail: string | null;
@@ -58,7 +69,8 @@ export interface ShowcaseAsset {
 }
 
 export interface ShowcaseSavePayload {
-  client_name: string;
+  asset_kind?: ShowcaseAssetKind;
+  client_name?: string;
   project_url?: string;
   client_consent?: boolean;
   image_data: string;
@@ -87,6 +99,7 @@ export interface ShowcaseSaveResult {
 
 export interface ShowcaseListFilters {
   search?: string;
+  kind?: ShowcaseAssetKind;
   sort?: ShowcaseSort;
   limit?: number;
   offset?: number;
@@ -167,6 +180,7 @@ export async function fetchShowcaseAssets(
 ): Promise<{ items: ShowcaseAsset[]; total: number; limit: number }> {
   const params = new URLSearchParams({ ad_account_id: adAccountId });
   if (filters?.search) params.set('search', filters.search);
+  if (filters?.kind) params.set('kind', filters.kind);
   if (filters?.sort) params.set('sort', filters.sort);
   if (filters?.limit) params.set('limit', String(filters.limit));
   if (filters?.offset) params.set('offset', String(filters.offset));
@@ -249,6 +263,39 @@ export async function fetchShowcaseImage(
 }
 
 
+// ─── Drafts ─────────────────────────────────────────────────────────────────
+//
+// The un-normalized form of a save payload — what the operator has typed and picked, before any
+// canvas work. Two SEPARATE shapes rather than one with optional halves, because the two ingest
+// different things: a source screenshot needs a client's name and may carry a "before", while a
+// finished creative is whole and has neither. One shape with half its fields unused would be the
+// type-level version of a form with half its inputs greyed out.
+
+export interface SourceDraft {
+  hero: File | null;
+  before: File | null;
+  clientName: string;
+  projectUrl: string;
+  deviceHint: DeviceHint;
+  consent: boolean;
+}
+
+export const EMPTY_SOURCE_DRAFT: SourceDraft = {
+  hero: null,
+  before: null,
+  clientName: '',
+  projectUrl: '',
+  deviceHint: 'desktop',
+  consent: false,
+};
+
+export interface FinishedDraft {
+  file: File | null;
+  label: string;
+}
+
+export const EMPTY_FINISHED_DRAFT: FinishedDraft = { file: null, label: '' };
+
 // ─── Ingest ─────────────────────────────────────────────────────────────────
 
 /**
@@ -317,11 +364,48 @@ export async function buildShowcasePayload(
 }
 
 
+/**
+ * Normalize an already-designed creative into a save payload.
+ *
+ * Distinct from `buildShowcasePayload` because the two ingest different THINGS, not the same
+ * thing with a flag: a source screenshot is raw material that needs a client's name attached and
+ * may carry a "before"; a finished creative is whole, has no client to name, and pairs with
+ * nothing. Collapsing them would mean a function whose arguments are half-ignored depending on a
+ * mode — the shape ADR #23 warns against.
+ *
+ * Uses the same `showcase` normalize profile: a finished creative is judged by a human at full
+ * size, exactly like a screenshot.
+ */
+export async function buildFinishedCreativePayload(
+  image: File | Blob,
+  meta: { label?: string; project_url?: string; tags?: string[]; notes?: string }
+): Promise<ShowcaseSavePayload | null> {
+  const normalized = await normalizeForUpload(image, 'showcase');
+  if (!normalized) return null;
+
+  return {
+    asset_kind: 'finished',
+    // Optional by design — `client_name` doubles as a free-text label here, and a creative for
+    // the operator's own offer has no client. Migration 024's CHECK only requires it for `source`.
+    client_name: meta.label?.trim() || undefined,
+    project_url: meta.project_url,
+    tags: meta.tags ?? [],
+    notes: meta.notes,
+    content_hash: await computeImageHash(normalized.base64),
+    image_data: normalized.base64,
+    image_thumbnail: normalized.thumbnail,
+    image_mime_type: normalized.mimeType,
+    image_width: normalized.width,
+    image_height: normalized.height,
+  };
+}
+
 // ─── The bridge into generation ─────────────────────────────────────────────
 
 export interface LoadedShowcaseImages {
   assetId: string;
-  clientName: string;
+  /** Null for a finished creative. Callers that label with it must handle the absence. */
+  clientName: string | null;
   heroUrl: string;
   beforeUrl?: string;
 }
@@ -362,4 +446,94 @@ export async function loadShowcaseImages(
   }
 
   return loaded;
+}
+
+// ─── Render inputs ──────────────────────────────────────────────────────────
+
+/** How a capture device maps to the body `device_frame` draws around it. */
+const DEVICE_BODY_FOR: Record<DeviceHint, DeviceKind> = {
+  desktop: 'laptop',
+  mobile: 'phone',
+  tablet: 'tablet',
+};
+
+/**
+ * Pixels plus everything derived from the chosen ASSETS — the half of a render config that only
+ * changes when the selection does.
+ *
+ * Kept apart from the ARRANGEMENT because the two change on different clocks: assets change when
+ * the operator picks, while the arrangement changes on every keystroke in the caption box. Fusing
+ * them would refetch tens of MB of base64 per keypress to power the live preview.
+ */
+export interface ShowcaseSources {
+  template: ShowcaseTemplate;
+  images: string[];
+  captions: Array<string | undefined>;
+  urlText?: string;
+  device: DeviceKind;
+  clientName?: string;
+}
+
+/** Load the pixels a template needs. Returns null when the selection cannot fill it. */
+export async function loadShowcaseSources(
+  assets: ShowcaseAsset[],
+  template: ShowcaseTemplate,
+): Promise<ShowcaseSources | null> {
+  const arity = SHOWCASE_TEMPLATES[template].arity;
+  const loaded = await loadShowcaseImages(assets, arity.requiresBefore ? 'pair' : 'hero');
+  if (loaded.length === 0) return null;
+
+  const first = loaded[0];
+  // A before/after draws two states of ONE asset; every other template draws one image per
+  // asset. This is the only place that distinction lives.
+  const images = arity.requiresBefore
+    ? [first.beforeUrl, first.heroUrl].filter((u): u is string => !!u)
+    : loaded.map(l => l.heroUrl);
+
+  if (arity.requiresBefore && images.length < 2) return null;
+  if (images.length < arity.min) return null;
+
+  return {
+    template,
+    images,
+    // A results wall labels each cell with the CLIENT'S NAME. Never a metric — the table has no
+    // performance columns precisely so a wall cannot start asserting results.
+    captions: loaded.map(l => l.clientName ?? undefined),
+    // Derived from the assets rather than stored, so neither can go stale: the operator may have
+    // edited the URL, or re-captured on a different device, since an ad was made.
+    urlText: assets[0]?.project_url || undefined,
+    // A desktop capture in a phone body would letterbox into a sliver, and the operator already
+    // answered this question at upload time.
+    device: DEVICE_BODY_FOR[assets[0]?.device_hint ?? 'desktop'],
+    clientName: first.clientName ?? undefined,
+  };
+}
+
+/**
+ * Combine loaded pixels with an arrangement into a render config.
+ *
+ * Pure and synchronous, which is what lets the live preview re-render on every arrangement
+ * change without touching the network.
+ */
+export function showcaseConfigFrom(
+  sources: ShowcaseSources,
+  draft: ShowcaseDraft,
+): ShowcaseRenderConfig {
+  return {
+    template: sources.template,
+    size: draft.size,
+    images: sources.images,
+    styleId: draft.styleId,
+    labels: {
+      ...draftLabels(draft),
+      // Only a results wall labels its cells. Handing captions to any other template would put
+      // a client's name on a panel that has no band to draw it in.
+      captions: sources.template === 'client_grid' ? sources.captions : undefined,
+    },
+    caption: draft.caption || undefined,
+    chrome: draft.chrome,
+    urlText: sources.urlText,
+    device: sources.device,
+    clientName: sources.clientName,
+  };
 }

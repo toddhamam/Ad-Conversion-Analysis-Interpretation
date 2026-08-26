@@ -7,15 +7,21 @@ import {
   deleteShowcaseAssets,
   purgeShowcaseLibrary,
   buildShowcasePayload,
+  buildFinishedCreativePayload,
   ShowcaseLibraryFullError,
   MAX_SHOWCASE_ASSETS,
   type ShowcaseAsset,
   type ShowcaseSort,
-  type DeviceHint,
+  EMPTY_SOURCE_DRAFT,
+  EMPTY_FINISHED_DRAFT,
+  type ShowcaseAssetKind,
+  type SourceDraft,
+  type FinishedDraft,
 } from '../services/showcaseLibraryApi';
 import { isAcceptedImageType, ACCEPTED_MIME_TYPES } from '../lib/imageNormalize';
 import SEO from '../components/SEO';
 import Loading from '../components/Loading';
+import AddShowcaseAssetPanel from '../components/AddShowcaseAssetPanel';
 import './ShowcaseLibrary.css';
 
 const SORT_OPTIONS: Array<{ value: ShowcaseSort; label: string }> = [
@@ -24,32 +30,7 @@ const SORT_OPTIONS: Array<{ value: ShowcaseSort; label: string }> = [
   { value: 'client', label: 'Client A–Z' },
 ];
 
-const DEVICE_OPTIONS: Array<{ value: DeviceHint; label: string }> = [
-  { value: 'desktop', label: 'Desktop' },
-  { value: 'mobile', label: 'Mobile' },
-  { value: 'tablet', label: 'Tablet' },
-];
-
 const ACCEPT_ATTR = ACCEPTED_MIME_TYPES.join(',');
-
-/** A draft in the upload panel, before it becomes a payload. */
-interface UploadDraft {
-  hero: File | null;
-  before: File | null;
-  clientName: string;
-  projectUrl: string;
-  deviceHint: DeviceHint;
-  consent: boolean;
-}
-
-const EMPTY_DRAFT: UploadDraft = {
-  hero: null,
-  before: null,
-  clientName: '',
-  projectUrl: '',
-  deviceHint: 'desktop',
-  consent: false,
-};
 
 const ShowcaseLibrary = () => {
   const { currentAccount } = useAdAccount();
@@ -65,8 +46,17 @@ const ShowcaseLibrary = () => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sortBy, setSortBy] = useState<ShowcaseSort>('newest');
 
-  const [draft, setDraft] = useState<UploadDraft>(EMPTY_DRAFT);
+  const [draft, setDraft] = useState<SourceDraft>(EMPTY_SOURCE_DRAFT);
   const [uploading, setUploading] = useState(false);
+  /**
+   * Which kind of thing the operator is adding.
+   *
+   * Two panels rather than one with a toggle, because they ingest different THINGS: a source
+   * screenshot needs a client's name and may carry a "before"; a finished creative is whole and
+   * has neither. One form with half its fields greyed out would be lying about that.
+   */
+  const [addKind, setAddKind] = useState<ShowcaseAssetKind>('source');
+  const [finishedDraft, setFinishedDraft] = useState<FinishedDraft>(EMPTY_FINISHED_DRAFT);
 
   const [editing, setEditing] = useState<ShowcaseAsset | null>(null);
   const [editClientName, setEditClientName] = useState('');
@@ -74,8 +64,6 @@ const ShowcaseLibrary = () => {
   const [editNotes, setEditNotes] = useState('');
   const [editConsent, setEditConsent] = useState(false);
 
-  const heroInputRef = useRef<HTMLInputElement>(null);
-  const beforeInputRef = useRef<HTMLInputElement>(null);
 
   // Debounced search — same 300ms as the other library pages.
   useEffect(() => {
@@ -107,20 +95,6 @@ const ShowcaseLibrary = () => {
   useEffect(() => { load(); }, [load]);
 
   const isFull = total >= MAX_SHOWCASE_ASSETS;
-  const canSubmit = !!draft.hero && draft.clientName.trim().length > 0 && !uploading && !isFull;
-
-  const pickFile = (which: 'hero' | 'before') => (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!isAcceptedImageType(file.type)) {
-      setError(`${file.name} is not an image we can read. Use PNG, JPEG, WebP or GIF.`);
-      return;
-    }
-    setError(null);
-    setDraft(d => ({ ...d, [which]: file }));
-    // Reset so re-picking the same file fires change again.
-    e.target.value = '';
-  };
 
   const handleUpload = async () => {
     if (!adAccountId || !draft.hero) return;
@@ -150,7 +124,7 @@ const ShowcaseLibrary = () => {
             ? `Saved ${payload.client_name} with a before/after pair.`
             : `Saved ${payload.client_name}. Add a "before" later to unlock the before/after ad.`
         );
-        setDraft(EMPTY_DRAFT);
+        setDraft(EMPTY_SOURCE_DRAFT);
         await load();
       } else if (result.duplicates > 0) {
         setNotice('That screenshot is already in your library.');
@@ -165,9 +139,42 @@ const ShowcaseLibrary = () => {
     }
   };
 
+  const handleUploadFinished = async () => {
+    if (!adAccountId || !finishedDraft.file) return;
+    setUploading(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const payload = await buildFinishedCreativePayload(finishedDraft.file, {
+        label: finishedDraft.label,
+      });
+      if (!payload) {
+        setError('That image could not be read. Try a different file.');
+        return;
+      }
+
+      const result = await saveShowcaseAssets(adAccountId, [payload]);
+      if (result.saved > 0) {
+        setNotice('Saved. Use the “Use As-Is” template to publish it untouched.');
+        setFinishedDraft(EMPTY_FINISHED_DRAFT);
+        await load();
+      } else if (result.duplicates > 0) {
+        setNotice('That creative is already in your library.');
+      } else {
+        setError('Nothing was saved. Please try again.');
+      }
+    } catch (err: unknown) {
+      if (err instanceof ShowcaseLibraryFullError) setError(err.message);
+      else setError(err instanceof Error ? err.message : 'Could not save that creative.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const openEdit = (asset: ShowcaseAsset) => {
     setEditing(asset);
-    setEditClientName(asset.client_name);
+    setEditClientName(asset.client_name || '');
     setEditProjectUrl(asset.project_url || '');
     setEditNotes(asset.notes || '');
     setEditConsent(asset.client_consent);
@@ -199,7 +206,7 @@ const ShowcaseLibrary = () => {
     try {
       // Reuse the ingest path so the "before" gets the same showcase-profile treatment as a
       // hero: same resolution ceiling, same codec choice, same smoothing.
-      const staged = await buildShowcasePayload(file, null, { client_name: asset.client_name });
+      const staged = await buildShowcasePayload(file, null, { client_name: asset.client_name || 'Client' });
       if (!staged) {
         setError('That image could not be read.');
         return;
@@ -280,77 +287,20 @@ const ShowcaseLibrary = () => {
       {error && <div className="showcase-banner error">{error}</div>}
       {notice && <div className="showcase-banner notice">{notice}</div>}
 
-      <section className="showcase-upload">
-        <h2>Add client work</h2>
-        <div className="upload-grid">
-          <div className="upload-slot">
-            <span className="slot-label">The build <em>(required)</em></span>
-            <button type="button" className="slot-btn" onClick={() => heroInputRef.current?.click()}>
-              {draft.hero ? draft.hero.name : 'Choose screenshot…'}
-            </button>
-            <input
-              ref={heroInputRef} type="file" accept={ACCEPT_ATTR}
-              onChange={pickFile('hero')} hidden
-            />
-          </div>
-
-          <div className="upload-slot">
-            <span className="slot-label">The old site <em>(optional)</em></span>
-            <button type="button" className="slot-btn" onClick={() => beforeInputRef.current?.click()}>
-              {draft.before ? draft.before.name : 'Choose "before"…'}
-            </button>
-            <input
-              ref={beforeInputRef} type="file" accept={ACCEPT_ATTR}
-              onChange={pickFile('before')} hidden
-            />
-          </div>
-
-          <label className="upload-field">
-            <span className="slot-label">Client <em>(required)</em></span>
-            <input
-              type="text" value={draft.clientName} placeholder="Acme Dental"
-              onChange={e => setDraft(d => ({ ...d, clientName: e.target.value }))}
-            />
-          </label>
-
-          <label className="upload-field">
-            <span className="slot-label">Site URL</span>
-            <input
-              type="text" value={draft.projectUrl} placeholder="acmedental.com"
-              onChange={e => setDraft(d => ({ ...d, projectUrl: e.target.value }))}
-            />
-          </label>
-
-          <label className="upload-field">
-            <span className="slot-label">Captured on</span>
-            <select
-              value={draft.deviceHint}
-              onChange={e => setDraft(d => ({ ...d, deviceHint: e.target.value as DeviceHint }))}
-            >
-              {DEVICE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </label>
-
-          <label className="upload-consent">
-            <input
-              type="checkbox" checked={draft.consent}
-              onChange={e => setDraft(d => ({ ...d, consent: e.target.checked }))}
-            />
-            <span>This client is happy for their site to appear in ads</span>
-          </label>
-        </div>
-
-        <div className="upload-actions">
-          <button className="btn-primary" disabled={!canSubmit} onClick={handleUpload}>
-            {uploading ? 'Saving…' : 'Add to library'}
-          </button>
-          {isFull && (
-            <span className="upload-hint">
-              Library is full at {MAX_SHOWCASE_ASSETS}. Delete something to add more.
-            </span>
-          )}
-        </div>
-      </section>
+      <AddShowcaseAssetPanel
+        kind={addKind}
+        onKindChange={setAddKind}
+        source={draft}
+        onSourceChange={patch => setDraft(d => ({ ...d, ...patch }))}
+        onSubmitSource={handleUpload}
+        finished={finishedDraft}
+        onFinishedChange={patch => setFinishedDraft(d => ({ ...d, ...patch }))}
+        onSubmitFinished={handleUploadFinished}
+        onRejectFile={setError}
+        uploading={uploading}
+        isFull={isFull}
+        limit={MAX_SHOWCASE_ASSETS}
+      />
 
       <section className="showcase-toolbar">
         <input
@@ -434,6 +384,7 @@ function ShowcaseCard({
 }) {
   const attachRef = useRef<HTMLInputElement>(null);
   const hasBefore = !!asset.before_image_thumbnail;
+  const isFinished = asset.asset_kind === 'finished';
 
   return (
     <article className="showcase-card">
@@ -442,7 +393,7 @@ function ShowcaseCard({
           <figure className="card-thumb is-before">
             <img
               src={`data:${asset.before_image_mime_type || 'image/png'};base64,${asset.before_image_thumbnail}`}
-              alt={`${asset.client_name} before`} loading="lazy"
+              alt={`${asset.client_name || "Asset"} before`} loading="lazy"
             />
             <figcaption>Before</figcaption>
           </figure>
@@ -451,7 +402,7 @@ function ShowcaseCard({
           {asset.image_thumbnail ? (
             <img
               src={`data:${asset.image_mime_type};base64,${asset.image_thumbnail}`}
-              alt={asset.client_name} loading="lazy"
+              alt={asset.client_name || "Showcase asset"} loading="lazy"
             />
           ) : (
             <div className="thumb-missing">No preview</div>
@@ -461,19 +412,25 @@ function ShowcaseCard({
       </div>
 
       <div className="card-body">
-        <h3>{asset.client_name}</h3>
+        <h3>{asset.client_name || 'Untitled creative'}</h3>
         {asset.project_url && <p className="card-url">{asset.project_url}</p>}
         <div className="card-chips">
-          <span className={`chip ${hasBefore ? 'chip-pair' : 'chip-solo'}`}>
-            {hasBefore ? 'Before / after' : 'Hero only'}
-          </span>
-          <span className="chip chip-device">{asset.device_hint}</span>
+          {isFinished ? (
+            <span className="chip chip-finished">Finished · publishes untouched</span>
+          ) : (
+            <>
+              <span className={`chip ${hasBefore ? 'chip-pair' : 'chip-solo'}`}>
+                {hasBefore ? 'Before / after' : 'Hero only'}
+              </span>
+              <span className="chip chip-device">{asset.device_hint}</span>
+            </>
+          )}
           {asset.client_consent && <span className="chip chip-consent">Consent ✓</span>}
         </div>
       </div>
 
       <div className="card-actions">
-        {!hasBefore && (
+        {!hasBefore && !isFinished && (
           <>
             <button className="btn-ghost" onClick={() => attachRef.current?.click()}>
               Add “before”
