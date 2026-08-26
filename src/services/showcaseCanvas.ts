@@ -11,6 +11,7 @@
 
 import {
   planShowcase,
+  isPassthrough,
   paletteFromStyle,
   SHOWCASE_SIZE_DIMENSIONS,
   DEFAULT_SHOWCASE_SIZE,
@@ -273,6 +274,17 @@ export async function renderShowcase(
 
   // Nothing usable decoded — a blank rectangle is worse than an honest failure.
   if (plan.panels.length === 0) return null;
+
+  // The plan would draw one source at full frame with nothing added. Re-encoding a finished
+  // creative through canvas at q0.92 would be a generation loss for no gain, so publish the
+  // stored bytes untouched. Asked of the PLAN, not the template id: `as_is` at a mismatched
+  // aspect genuinely needs the canvas, and only the geometry knows which case this is.
+  if (isPassthrough(plan)) {
+    return {
+      imageUrl: config.images[plan.panels[0].sourceIndex],
+      revisedPrompt: `Showcase (as-is)${config.clientName ? ` — ${config.clientName}` : ''} — published untouched, no re-encode`,
+    };
+  }
 
   const canvas = document.createElement('canvas');
   canvas.width = plan.width;

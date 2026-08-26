@@ -475,3 +475,67 @@
     transition: none;
   }
 }
+
+/* ── Add-kind tabs ──────────────────────────────────────────────────────────
+   Two panels rather than one form with a mode toggle: a source screenshot and a finished
+   creative need different fields, and greying half of them out would misrepresent that. */
+
+.add-kind-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.add-kind-tab {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 16px;
+  border: 1px solid var(--border-primary);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.add-kind-tab span {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.add-kind-tab:hover { background: var(--bg-card-hover); }
+
+.add-kind-tab.active {
+  border-color: var(--accent-violet);
+  background: var(--accent-violet-glow);
+}
+
+.add-kind-tab:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 2px;
+}
+
+.finished-hint {
+  margin: 0 0 16px;
+  max-width: 70ch;
+  line-height: 1.55;
+}
+
+.chip-finished {
+  border-color: var(--border-violet);
+  color: var(--accent-violet);
+  background: var(--accent-violet-glow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .add-kind-tab { transition: none; }
+}

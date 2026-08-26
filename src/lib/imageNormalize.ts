@@ -30,21 +30,68 @@ import { calculateQualityScore } from '../services/imageCache';
  * on PNG (smaller AND lossless); a photo-heavy page wins on JPEG by a wide margin. The rule
  * adapts per image and can never do worse than JPEG alone.
  *
- * Raising `maxDimension` spends the request-body budget, so showcase saves send fewer items
- * per request rather than more — and count IMAGES, not rows, because one showcase row can
- * carry both a before and an after.
+ * `trimOverflow` is the other axis, and it matters more than the numbers.
+ *
+ * Bounding the LONGEST edge starves the dimension that decides legibility. A 1440x4200 full-page
+ * capture scaled to fit 1600 comes out 549px WIDE — unreadable in a 1080px ad — and it spends
+ * that budget preserving height the compositor then throws away, because every showcase template
+ * crops top-anchored. So the showcase profile scales by WIDTH and TRIMS the overflow height
+ * instead: full legibility, bounded payload, and it discards exactly what the composite would.
+ *
+ * The reference profile keeps fit-the-box semantics deliberately. A vision model reading a style
+ * reference wants the whole frame; cropping it would change what every existing inspiration item
+ * looks like to the model. Fitting an 800x800 box is arithmetically identical to the old
+ * longest-edge rule, so those callers are byte-identical.
+ *
+ * Raising the ceiling spends the request-body budget, so showcase saves send fewer items per
+ * request — and count IMAGES, not rows, because one showcase row can carry a before and an after.
  */
 export type NormalizeProfile = 'reference' | 'showcase';
 
 const PROFILES: Record<NormalizeProfile, {
-  maxDimension: number;
+  maxWidth: number;
+  maxHeight: number;
+  /** Trim height beyond `maxHeight` from the BOTTOM instead of scaling it away. */
+  trimOverflow: boolean;
   quality: number;
   smoothing: boolean;
   preferPng: boolean;
 }> = {
-  reference: { maxDimension: 800, quality: 0.82, smoothing: false, preferPng: false },
-  showcase: { maxDimension: 1600, quality: 0.92, smoothing: true, preferPng: true },
+  reference: { maxWidth: 800, maxHeight: 800, trimOverflow: false, quality: 0.82, smoothing: false, preferPng: false },
+  showcase: { maxWidth: 1600, maxHeight: 2600, trimOverflow: true, quality: 0.92, smoothing: true, preferPng: true },
 };
+
+/**
+ * The source region and output size a profile calls for. Pure, so the scaling rule is testable
+ * without a canvas.
+ */
+export function planNormalize(
+  source: { width: number; height: number },
+  profile: { maxWidth: number; maxHeight: number; trimOverflow: boolean }
+): { srcHeight: number; outWidth: number; outHeight: number } {
+  const { width, height } = source;
+  if (width <= 0 || height <= 0) return { srcHeight: 0, outWidth: 0, outHeight: 0 };
+
+  if (!profile.trimOverflow) {
+    // Fit inside the box. Never upscales.
+    const scale = Math.min(1, profile.maxWidth / width, profile.maxHeight / height);
+    return { srcHeight: height, outWidth: width * scale, outHeight: height * scale };
+  }
+
+  const scale = Math.min(1, profile.maxWidth / width);
+  const scaledHeight = height * scale;
+  if (scaledHeight <= profile.maxHeight) {
+    return { srcHeight: height, outWidth: width * scale, outHeight: scaledHeight };
+  }
+
+  // Keep the width, take the TOP. The hero section is the proof and the footer is not — the
+  // same reason every showcase template crops top-anchored.
+  return {
+    srcHeight: profile.maxHeight / scale,
+    outWidth: width * scale,
+    outHeight: profile.maxHeight,
+  };
+}
 
 /** Grid preview. Small enough that a 50-item list stays responsive with thumbnails inline. */
 const THUMBNAIL_WIDTH = 200;
@@ -102,7 +149,9 @@ function drawToBase64(
   height: number,
   quality: number,
   smoothing = false,
-  format: ImageMimeType = 'image/jpeg'
+  format: ImageMimeType = 'image/jpeg',
+  /** How much of the source to read, from the top. Defaults to all of it. */
+  srcHeight?: number
 ): string | null {
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(width));
@@ -113,7 +162,8 @@ function drawToBase64(
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
   }
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  const sh = Math.max(1, Math.round(srcHeight ?? img.naturalHeight));
+  ctx.drawImage(img, 0, 0, img.naturalWidth, sh, 0, 0, canvas.width, canvas.height);
   // The quality argument is ignored by toDataURL for PNG, which is lossless.
   const dataUrl = canvas.toDataURL(format, quality);
   return dataUrl.split(',')[1] || null;
@@ -128,12 +178,13 @@ function encodeBest(
   img: HTMLImageElement,
   width: number,
   height: number,
-  profile: (typeof PROFILES)[NormalizeProfile]
+  profile: (typeof PROFILES)[NormalizeProfile],
+  srcHeight: number
 ): { base64: string; mimeType: ImageMimeType } | null {
-  const jpeg = drawToBase64(img, width, height, profile.quality, profile.smoothing, 'image/jpeg');
+  const jpeg = drawToBase64(img, width, height, profile.quality, profile.smoothing, 'image/jpeg', srcHeight);
   if (!profile.preferPng) return jpeg ? { base64: jpeg, mimeType: 'image/jpeg' } : null;
 
-  const png = drawToBase64(img, width, height, profile.quality, profile.smoothing, 'image/png');
+  const png = drawToBase64(img, width, height, profile.quality, profile.smoothing, 'image/png', srcHeight);
   if (!jpeg) return png ? { base64: png, mimeType: 'image/png' } : null;
   if (!png || png.length >= jpeg.length) return { base64: jpeg, mimeType: 'image/jpeg' };
   return { base64: png, mimeType: 'image/png' };
@@ -163,8 +214,8 @@ export async function normalizeForUpload(
   if (width === 0 || height === 0) return null;
 
   const settings = PROFILES[profile];
-  const scale = Math.min(1, settings.maxDimension / Math.max(width, height));
-  const encoded = encodeBest(img, width * scale, height * scale, settings);
+  const { srcHeight, outWidth, outHeight } = planNormalize({ width, height }, settings);
+  const encoded = encodeBest(img, outWidth, outHeight, settings, srcHeight);
   if (!encoded) return null;
 
   const thumbScale = Math.min(1, THUMBNAIL_WIDTH / width);

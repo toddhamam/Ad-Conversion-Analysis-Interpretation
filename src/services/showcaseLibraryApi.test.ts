@@ -8,7 +8,8 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../lib/authToken', () => ({ getAuthToken: async () => 'test-session-token' }));
 
-import { chunkByImageCount, imageCostOf } from './showcaseLibraryApi';
+import { chunkByImageCount, imageCostOf, showcaseConfigFrom, type ShowcaseSources } from './showcaseLibraryApi';
+import { emptyShowcaseDraft, type ShowcaseDraft } from '../lib/showcaseLayout';
 
 // `before_image_data` is spelled out on both so the literals satisfy the parameter's weak
 // type — an object with only optional properties needs at least one of them present.
@@ -72,5 +73,85 @@ describe('chunkByImageCount', () => {
 
   it('is empty for an empty batch', () => {
     expect(chunkByImageCount([], 4)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Config assembly — the sync half of the render pipeline, and what the live preview calls on
+// every keystroke.
+// ---------------------------------------------------------------------------
+
+const sources = (over: Partial<ShowcaseSources> = {}): ShowcaseSources => ({
+  template: 'client_grid',
+  images: ['data:image/png;base64,AAA', 'data:image/png;base64,BBB'],
+  captions: ['Acme Dental', 'Bell Roofing'],
+  urlText: 'acmedental.com',
+  device: 'laptop',
+  clientName: 'Acme Dental',
+  ...over,
+});
+
+const draft = (over: Partial<ShowcaseDraft> = {}): ShowcaseDraft => ({
+  ...emptyShowcaseDraft('clean-orange'),
+  ...over,
+});
+
+describe('showcaseConfigFrom', () => {
+  it('labels cells only for a results wall', () => {
+    // Handing captions to any other template would put a client's name on a panel that has no
+    // band to draw it in.
+    expect(showcaseConfigFrom(sources({ template: 'client_grid' }), draft()).labels?.captions)
+      .toEqual(['Acme Dental', 'Bell Roofing']);
+
+    for (const template of ['before_after_split', 'hero_browser', 'device_frame', 'as_is'] as const) {
+      expect(showcaseConfigFrom(sources({ template }), draft()).labels?.captions, template)
+        .toBeUndefined();
+    }
+  });
+
+  it('takes the arrangement from the DRAFT and the pixels from the SOURCES', () => {
+    // The split that lets the preview re-render without refetching: nothing in the draft can
+    // change the images, and nothing in the sources can change the arrangement.
+    const config = showcaseConfigFrom(
+      sources({ template: 'hero_browser' }),
+      draft({ size: '9:16', styleId: 'navy-gold', caption: 'Rebuilt in 3 weeks', chrome: 'none' }),
+    );
+
+    expect(config.size).toBe('9:16');
+    expect(config.styleId).toBe('navy-gold');
+    expect(config.caption).toBe('Rebuilt in 3 weeks');
+    expect(config.chrome).toBe('none');
+    expect(config.images).toHaveLength(2);
+    expect(config.template).toBe('hero_browser');
+  });
+
+  it('carries the asset-derived facts through untouched', () => {
+    // URL and device come from the LIBRARY, not the draft, so neither can go stale when the
+    // operator edits an asset after making an ad from it.
+    const config = showcaseConfigFrom(sources({ urlText: 'bell.co', device: 'phone' }), draft());
+
+    expect(config.urlText).toBe('bell.co');
+    expect(config.device).toBe('phone');
+  });
+
+  it('omits an empty caption rather than passing a blank string', () => {
+    // An empty band would still occupy height and shrink the panels — planShowcase keys on
+    // undefined, not on emptiness.
+    expect(showcaseConfigFrom(sources(), draft({ caption: '' })).caption).toBeUndefined();
+  });
+
+  it('omits blank before/after labels so the template falls back to its defaults', () => {
+    const config = showcaseConfigFrom(sources({ template: 'before_after_split' }), draft());
+    expect(config.labels?.before).toBeUndefined();
+    expect(config.labels?.after).toBeUndefined();
+  });
+
+  it('passes operator-supplied labels through', () => {
+    const config = showcaseConfigFrom(
+      sources({ template: 'before_after_split' }),
+      draft({ beforeLabel: 'Their old site', afterLabel: 'What we built' }),
+    );
+    expect(config.labels?.before).toBe('Their old site');
+    expect(config.labels?.after).toBe('What we built');
   });
 });

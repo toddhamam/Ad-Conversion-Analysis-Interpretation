@@ -16,7 +16,8 @@ export type ShowcaseTemplate =
   | 'before_after_split'
   | 'hero_browser'
   | 'client_grid'
-  | 'device_frame';
+  | 'device_frame'
+  | 'as_is';
 
 /**
  * Output sizes for composited creative.
@@ -45,7 +46,27 @@ export const SHOWCASE_SIZE_LABELS: Record<ShowcaseSize, string> = {
   '9:16': 'Story / Reel (1080×1920)',
 };
 
+/**
+ * What kind of image a stored asset holds.
+ *
+ * `source` is raw material the compositor frames. `finished` is an already-designed creative —
+ * the pixels ARE the ad. Declared here, in the pure module, because the template table is what
+ * decides which kind each arrangement can consume; the service layer imports this, not the
+ * reverse.
+ */
+export type ShowcaseAssetKind = 'source' | 'finished';
+
 export interface Rect { x: number; y: number; w: number; h: number }
+
+/**
+ * How a panel resolves an aspect-ratio mismatch.
+ *
+ * `top-cover` crops; `contain` letterboxes. The choice is not cosmetic — it follows from what the
+ * image IS. A screenshot is a DOCUMENT, so cropping it discards the tail and keeps the proof. A
+ * FINISHED CREATIVE is COMPOSED, so cropping it destroys the arrangement a designer made; it
+ * must be letterboxed instead.
+ */
+export type PanelFit = 'top-cover' | 'contain';
 
 export interface ChromeSpec {
   kind: 'browser' | 'none';
@@ -65,10 +86,11 @@ export interface BandSpec {
 export interface PanelDescriptor {
   /** Index into the caller's image array. */
   sourceIndex: number;
-  /** Where this panel lands on the output canvas. */
+  /** Where this panel lands on the output canvas — already letterboxed when fit is 'contain'. */
   dest: Rect;
   /** WHICH REGION of the source is drawn — resolved here, not left to the renderer. */
   src: Rect;
+  fit: PanelFit;
   chrome: ChromeSpec;
   label?: BandSpec;
 }
@@ -195,24 +217,26 @@ export function gridRowCounts(count: number, columns: number): number[] {
 /**
  * The source region to draw.
  *
- * A website capture is far taller than any ad panel, so something must be discarded. It crops
- * from the TOP because the hero section is the proof and the footer is not — centring would
- * reliably frame the middle of a page, which is where the least persuasive content lives.
+ * Under `top-cover` a website capture is far taller than any ad panel, so something must be
+ * discarded — and it crops from the TOP because the hero section is the proof and the footer is
+ * not. Centring would reliably frame the middle of a page, which is the least persuasive part.
  *
- * There is deliberately no letterbox mode. Every template covers, and a `fit` parameter with
- * one reachable value is a branch nothing can take.
+ * Under `contain` nothing is discarded: the whole source is drawn and `containDestRect` shrinks
+ * the DESTINATION instead, so the letterboxing lands on the canvas rather than on the image.
  *
  * Returns the full source for a degenerate destination rather than dividing by zero.
  */
 export function fitSourceRect(
   source: { width: number; height: number },
-  dest: Rect
+  dest: Rect,
+  fit: PanelFit = 'top-cover'
 ): Rect {
   const sw = source.width;
   const sh = source.height;
   const full: Rect = { x: 0, y: 0, w: sw, h: sh };
 
   if (sw <= 0 || sh <= 0 || dest.w <= 0 || dest.h <= 0) return full;
+  if (fit === 'contain') return full;
 
   const sourceRatio = sw / sh;
   const destRatio = dest.w / dest.h;
@@ -263,13 +287,26 @@ function usable(source: { width: number; height: number } | undefined): boolean 
   return !!source && source.width > 0 && source.height > 0;
 }
 
+
 /**
- * Resolve a template into rectangles.
+ * Shrink a destination rect so a `contain` panel keeps the source's aspect ratio, centred.
  *
- * Degrades rather than throwing: too few sources yields fewer panels, and an unusable source is
- * omitted entirely. Callers already handle a short panel list, and a plan containing NaN would
- * fail deep inside a `drawImage` call where the cause is invisible.
+ * Separated from `fitSourceRect` because the two letterbox on OPPOSITE sides: `contain` shrinks
+ * the destination while `top-cover` crops the source. Conflating them is how panels end up
+ * stretched.
  */
+export function containDestRect(
+  source: { width: number; height: number },
+  dest: Rect
+): Rect {
+  if (source.width <= 0 || source.height <= 0 || dest.w <= 0 || dest.h <= 0) return dest;
+
+  const scale = Math.min(dest.w / source.width, dest.h / source.height);
+  const w = source.width * scale;
+  const h = source.height * scale;
+  return { x: dest.x + (dest.w - w) / 2, y: dest.y + (dest.h - h) / 2, w, h };
+}
+
 // ---------------------------------------------------------------------------
 // Templates
 //
@@ -301,6 +338,12 @@ export interface ShowcaseTemplateSpec {
    * reads as a bug rather than a missing upload.
    */
   arity: { min: number; max: number; requiresBefore: boolean };
+  /**
+   * Which kind of asset this template consumes. The picker filters on it, so a framing template
+   * never offers a finished creative to wrap in a second frame, and `as_is` never offers a raw
+   * screenshot it would publish unframed.
+   */
+  accepts: ShowcaseAssetKind;
   /** Everything below the caption band. Returns a partial plan; never mutates the context. */
   plan(ctx: TemplatePlanContext): {
     panels: PanelDescriptor[];
@@ -313,6 +356,7 @@ const BEFORE_AFTER_SPLIT: ShowcaseTemplateSpec = {
   label: 'Before / After',
   hint: 'Needs an asset with a "before"',
   arity: { min: 1, max: 1, requiresBefore: true },
+  accepts: 'source',
 
   plan({ input, palette, width, bodyHeight }) {
     const panels: PanelDescriptor[] = [];
@@ -335,6 +379,7 @@ const BEFORE_AFTER_SPLIT: ShowcaseTemplateSpec = {
         sourceIndex: half.sourceIndex,
         dest,
         src: fitSourceRect(source, dest),
+        fit: 'top-cover',
         // No browser chrome here: two chrome bars in one frame reads as a screenshot of a
         // browser, not as a comparison.
         chrome: { kind: 'none', barHeight: 0, radius: 0 },
@@ -355,6 +400,7 @@ const HERO_BROWSER: ShowcaseTemplateSpec = {
   label: 'Single Site Hero',
   hint: 'One screenshot, framed',
   arity: { min: 1, max: 1, requiresBefore: false },
+  accepts: 'source',
 
   plan({ input, width, bodyHeight }) {
     const source = input.sources[0];
@@ -374,6 +420,7 @@ const HERO_BROWSER: ShowcaseTemplateSpec = {
         sourceIndex: 0,
         dest,
         src: fitSourceRect(source, dest),
+        fit: 'top-cover',
         chrome: {
           kind: chromeKind,
           barHeight,
@@ -389,6 +436,7 @@ const CLIENT_GRID: ShowcaseTemplateSpec = {
   label: 'Results Wall',
   hint: 'Several clients at once',
   arity: { min: 2, max: 6, requiresBefore: false },
+  accepts: 'source',
 
   plan({ input, palette, width, bodyHeight }) {
     const entries = input.sources
@@ -420,6 +468,7 @@ const CLIENT_GRID: ShowcaseTemplateSpec = {
           sourceIndex: entry.sourceIndex,
           dest,
           src: fitSourceRect(entry.source, dest),
+          fit: 'top-cover',
           chrome: { kind: 'none', barHeight: 0, radius: 0 },
           // The client's NAME, never a metric. `showcase_assets` has no performance columns
           // precisely so a wall like this cannot quietly begin asserting results.
@@ -438,6 +487,7 @@ const DEVICE_FRAME: ShowcaseTemplateSpec = {
   label: 'In a Device',
   hint: 'Laptop, tablet or phone',
   arity: { min: 1, max: 1, requiresBefore: false },
+  accepts: 'source',
 
   plan({ input, width, bodyHeight }) {
     const source = input.sources[0];
@@ -469,6 +519,7 @@ const DEVICE_FRAME: ShowcaseTemplateSpec = {
         sourceIndex: 0,
         dest,
         src: fitSourceRect(source, dest),
+        fit: 'top-cover',
         chrome: { kind: 'none', barHeight: 0, radius: 0 },
       }],
       device: {
@@ -487,16 +538,74 @@ const DEVICE_FRAME: ShowcaseTemplateSpec = {
   },
 };
 
+const AS_IS: ShowcaseTemplateSpec = {
+  label: 'Use As-Is',
+  hint: 'An already-designed creative, untouched',
+  arity: { min: 1, max: 1, requiresBefore: false },
+  accepts: 'finished',
+
+  /**
+   * The null template: no frame, no inset, no bands, no crop.
+   *
+   * It CONTAINS rather than covers, which is the opposite of every other template here and the
+   * one place that rule inverts. The others frame a screenshot — a document, where discarding
+   * the tail costs nothing. This one carries a finished design, where a crop cuts through an
+   * arrangement somebody composed on purpose. Letterboxing onto the palette is the only
+   * non-destructive answer when the operator's format and the design's aspect disagree.
+   *
+   * When they AGREE, the destination is the full frame and nothing is transformed at all — see
+   * `isPassthrough`, which lets the renderer skip re-encoding entirely.
+   */
+  plan({ input, width, bodyHeight }) {
+    const source = input.sources[0];
+    if (!usable(source)) return { panels: [] };
+
+    const frame: Rect = { x: 0, y: 0, w: width, h: bodyHeight };
+    return {
+      panels: [{
+        sourceIndex: 0,
+        dest: containDestRect(source, frame),
+        src: fitSourceRect(source, frame, 'contain'),
+        fit: 'contain',
+        chrome: { kind: 'none', barHeight: 0, radius: 0 },
+      }],
+    };
+  },
+};
+
 export const SHOWCASE_TEMPLATES: Record<ShowcaseTemplate, ShowcaseTemplateSpec> = {
   before_after_split: BEFORE_AFTER_SPLIT,
   hero_browser: HERO_BROWSER,
   client_grid: CLIENT_GRID,
   device_frame: DEVICE_FRAME,
+  as_is: AS_IS,
 };
 
 export const SHOWCASE_TEMPLATE_VALUES = [
-  'before_after_split', 'hero_browser', 'client_grid', 'device_frame',
+  'before_after_split', 'hero_browser', 'client_grid', 'device_frame', 'as_is',
 ] as const satisfies readonly ShowcaseTemplate[];
+
+/**
+ * True when a plan would draw its single source at full frame with no transformation.
+ *
+ * Re-encoding a finished JPEG through canvas at q0.92 is a generation loss for nothing gained.
+ * When the operator's chosen format already matches the creative's own aspect, the honest thing
+ * is to publish the stored bytes untouched — this is what lets the renderer decide that.
+ *
+ * Deliberately derived from the PLAN rather than from the template id: `as_is` at a mismatched
+ * aspect genuinely does need a canvas, and asking the geometry is the only way to know.
+ */
+export function isPassthrough(plan: ShowcasePlan): boolean {
+  if (plan.panels.length !== 1 || plan.caption || plan.divider || plan.device) return false;
+
+  const [panel] = plan.panels;
+  if (panel.label || panel.chrome.kind !== 'none') return false;
+
+  // Sub-pixel tolerance: containDestRect divides, so an exact aspect match can land a hair off.
+  const fills = Math.abs(panel.dest.x) < 1 && Math.abs(panel.dest.y) < 1
+    && Math.abs(panel.dest.w - plan.width) < 1 && Math.abs(panel.dest.h - plan.height) < 1;
+  return fills;
+}
 
 /**
  * Resolve a template into rectangles.

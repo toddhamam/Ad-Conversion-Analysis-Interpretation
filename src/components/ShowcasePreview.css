@@ -1,0 +1,64 @@
+/* Live preview of a showcase composite. Targeted transitions only — this element swaps a
+   base64 data URL on every debounced render. */
+
+.showcase-preview {
+  margin-top: 20px;
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+  contain: content;
+}
+
+.preview-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-secondary);
+  background: var(--bg-card);
+}
+
+.preview-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary);
+}
+
+.preview-status {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.preview-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  padding: 16px;
+}
+
+.preview-stage img {
+  max-width: 100%;
+  /* Bounded so a 9:16 composite cannot push the Generate button off screen. */
+  max-height: 420px;
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  display: block;
+}
+
+.preview-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+  margin: 0;
+  max-width: 40ch;
+  line-height: 1.5;
+}
+
+@media (max-width: 600px) {
+  .preview-stage img { max-height: 300px; }
+}

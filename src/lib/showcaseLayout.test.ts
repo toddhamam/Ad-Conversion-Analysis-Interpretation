@@ -9,6 +9,8 @@ import { describe, it, expect } from 'vitest';
 
 import {
   planShowcase,
+  isPassthrough,
+  containDestRect,
   gridRowCounts,
   fitSourceRect,
   paletteFromStyle,
@@ -496,5 +498,120 @@ describe('planShowcase — device frame', () => {
 
     expect(p.panels).toHaveLength(0);
     expect(p.device).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. as_is — the null template, and the one place the fit rule inverts
+// ---------------------------------------------------------------------------
+
+describe('planShowcase — as_is', () => {
+  const square = { width: 2048, height: 2048 };
+
+  it('fills the whole frame when the aspects match, adding nothing', () => {
+    const p = plan('as_is', '1:1', [square]);
+    const [panel] = p.panels;
+
+    expect(panel.dest).toEqual({ x: 0, y: 0, w: 1080, h: 1080 });
+    expect(panel.chrome.kind).toBe('none');
+    expect(panel.label).toBeUndefined();
+    expect(p.divider).toBeNull();
+    expect(p.device).toBeNull();
+  });
+
+  it('LETTERBOXES rather than crops when they differ', () => {
+    // The inversion that matters: every other template crops a screenshot, because a document
+    // loses nothing by dropping its tail. A finished creative is composed, and a crop cuts
+    // through an arrangement somebody made on purpose.
+    const p = plan('as_is', '4:5', [square]);
+    const [panel] = p.panels;
+
+    // Whole source drawn — nothing discarded.
+    expect(panel.src).toEqual({ x: 0, y: 0, w: square.width, h: square.height });
+    expect(panel.fit).toBe('contain');
+    // Destination shrunk and centred instead.
+    expect(panel.dest.w).toBe(1080);
+    expect(panel.dest.h).toBeCloseTo(1080, 5);
+    expect(panel.dest.y).toBeCloseTo((1350 - 1080) / 2, 5);
+  });
+
+  it('keeps the source aspect exactly, so a design is never stretched', () => {
+    for (const size of SIZES) {
+      for (const src of [square, desktop, { width: 1080, height: 1920 }]) {
+        const [panel] = plan('as_is', size, [src]).panels;
+        expect(panel.dest.w / panel.dest.h, `${size}`).toBeCloseTo(src.width / src.height, 3);
+      }
+    }
+  });
+
+  it('produces no panel for an unusable source', () => {
+    const p = planShowcase({
+      template: 'as_is', size: '1:1', sources: [{ width: 0, height: 0 }], palette: PALETTE,
+    });
+    expect(p.panels).toHaveLength(0);
+  });
+});
+
+describe('isPassthrough', () => {
+  const square = { width: 2048, height: 2048 };
+
+  it('is true only when nothing would be transformed', () => {
+    expect(isPassthrough(plan('as_is', '1:1', [square]))).toBe(true);
+  });
+
+  it('is false once the frame letterboxes', () => {
+    // A canvas IS needed here — the background has to be painted around the design.
+    expect(isPassthrough(plan('as_is', '4:5', [square]))).toBe(false);
+  });
+
+  it('is false when a caption band is added', () => {
+    // The caption is drawn onto the output, so the stored bytes are no longer the whole ad.
+    expect(isPassthrough(plan('as_is', '1:1', [square], { caption: 'Rebuilt in 3 weeks' }))).toBe(false);
+  });
+
+  it('is false for every framing template', () => {
+    for (const template of TEMPLATES.filter(t => t !== 'as_is')) {
+      expect(isPassthrough(plan(template, '1:1', [desktop, desktop])), template).toBe(false);
+    }
+  });
+
+  it('is false for an empty plan', () => {
+    expect(isPassthrough(planShowcase({
+      template: 'as_is', size: '1:1', sources: [], palette: PALETTE,
+    }))).toBe(false);
+  });
+});
+
+describe('fitSourceRect — contain', () => {
+  it('returns the whole source, discarding nothing', () => {
+    const dest: Rect = { x: 0, y: 0, w: 540, h: 1200 };
+    expect(fitSourceRect(fullPage, dest, 'contain')).toEqual({
+      x: 0, y: 0, w: fullPage.width, h: fullPage.height,
+    });
+  });
+
+  it('still defaults to top-cover when no fit is given', () => {
+    // Every existing caller omits the argument and must keep cropping.
+    const dest: Rect = { x: 0, y: 0, w: 540, h: 1200 };
+    expect(fitSourceRect(fullPage, dest)).toEqual(fitSourceRect(fullPage, dest, 'top-cover'));
+    expect(fitSourceRect(fullPage, dest).h).toBeLessThan(fullPage.height);
+  });
+});
+
+describe('containDestRect', () => {
+  it('preserves the source aspect and centres inside the destination', () => {
+    const dest: Rect = { x: 100, y: 200, w: 600, h: 600 };
+    const fitted = containDestRect(desktop, dest);
+
+    expect(fitted.w / fitted.h).toBeCloseTo(desktop.width / desktop.height, 4);
+    expect(fitted.w).toBeLessThanOrEqual(dest.w + 0.5);
+    expect(fitted.h).toBeLessThanOrEqual(dest.h + 0.5);
+    expect(fitted.x - dest.x).toBeCloseTo(dest.x + dest.w - (fitted.x + fitted.w), 5);
+    expect(fitted.y - dest.y).toBeCloseTo(dest.y + dest.h - (fitted.y + fitted.h), 5);
+  });
+
+  it('returns the destination untouched for a degenerate source', () => {
+    const dest: Rect = { x: 0, y: 0, w: 100, h: 100 };
+    expect(containDestRect({ width: 0, height: 0 }, dest)).toEqual(dest);
   });
 });
